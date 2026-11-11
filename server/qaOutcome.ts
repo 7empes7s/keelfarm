@@ -28,6 +28,14 @@ export function lastQaRound(rec: QaRoundRecord): boolean {
   return rec.round - rec.retests >= MAX_QA_ROUNDS;
 }
 
+/**
+ * A retry of QA that the manager or the CEO asked for (#403). At the round cap the last report goes, so the next round
+ * is a full fresh test with a new session and a new report, not a re-test of the old findings; below it nothing changes.
+ */
+export function freshRetry(rec: QaRoundRecord): { summary: null; checks: []; commentUrl: null; fixInstructions: null; testedSha: null; fixReason: null; shots: [] } | Record<string, never> {
+  return lastQaRound(rec) ? { summary: null, checks: [], commentUrl: null, fixInstructions: null, testedSha: null, fixReason: null, shots: [] } : {};
+}
+
 /** Decide where a PR goes after QA. pr: its mergeability right now, or null when it wasn't (or couldn't be) asked. */
 export function qaOutcome(pass: boolean, rec: QaRoundRecord, pr: QaPull | null): QaNext {
   if (pass) return 'passed';
@@ -48,6 +56,16 @@ export function qaRoundResult(pass: boolean, rec: QaRoundRecord, pr: QaPull | nu
  */
 export function labErrorNext(rec: { round: number; labRetryRound: number | null }): 'retry' | 'stuck' {
   return rec.labRetryRound === rec.round ? 'stuck' : 'retry';
+}
+
+/**
+ * A QA round that lost its lab to an office restart (#333): its session lived through the restart in the terminal
+ * keeper and ended with no report, a lab-error verdict or a fail QA put down to the lab. It goes back to QA by itself
+ * once a round (retry): no failed round, no lab error counted, never needs-human. Anything else: null, as before.
+ */
+export function restartLossNext(x: { acrossRestart: boolean; stopped: boolean; verdict: 'pass' | 'fail' | 'lab-error' | null; cause?: string | null; round: number; restartRetryRound: number | null }): 'retry' | null {
+  if (!x.acrossRestart || x.stopped || x.restartRetryRound === x.round) return null;
+  return x.verdict === null || x.verdict === 'lab-error' || (x.verdict === 'fail' && x.cause === 'lab-error') ? 'retry' : null;
 }
 
 /** A conflict found before QA tested the head: the head it was found on, and the fixReason of the test QA was queued for. */

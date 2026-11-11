@@ -4,9 +4,11 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { researchTopic } from '../shared/chat.ts';
+import type { HistoryEntry } from '../shared/history.ts';
 import type { PhoneMessage } from '../shared/types.ts';
 import type { SessionHandle } from './agentRunner.ts';
 import type { CeoJob, OfficeHandlers } from './ceo.ts';
+import type { CeoJobRecord } from './ceoRedo.ts';
 
 export const DEFAULT_RESEARCH_MIN = 20;
 /** Minutes past the budget before the office stops a research session that didn't wrap up. */
@@ -18,7 +20,7 @@ export const RESEARCH_NO_FILING = 'Research files nothing. Put the options in yo
 /** Refused office tools during research, which reads untrusted pages and so acts on nothing. */
 export const RESEARCH_READ_ONLY = 'Research only reads: it changes nothing in the office and sends nothing. Put what you would change in your final message; the manager decides.';
 /** The office tools research may use: the read-only ones, and attach_file to hand the manager a file. */
-const RESEARCH_TOOLS = new Set<keyof OfficeHandlers>(['companyStatus', 'floorDetail', 'agentDetail', 'agentLog', 'qaReport', 'worktreeFile', 'prDiff', 'sessionHistory', 'attachFile']);
+const RESEARCH_TOOLS = new Set<keyof OfficeHandlers>(['companyStatus', 'floorDetail', 'agentDetail', 'agentLog', 'qaReport', 'worktreeFile', 'prDiff', 'sessionHistory', 'attachFile', 'itRun']);
 
 /** `h` with every tool but RESEARCH_TOOLS refused while `researching()` (file_issue with RESEARCH_NO_FILING). */
 export function researchReadOnly(h: OfficeHandlers, researching: () => boolean): OfficeHandlers {
@@ -109,6 +111,15 @@ async function saveBrief(file: string, artifacts: NonNullable<PhoneMessage['arti
 /** What a CEO reply posted during `job` carries: the research it answers, so a reply to it hands off. */
 export function researchRef(job: CeoJob | null): Pick<PhoneMessage, 'research'> {
   return job?.kind === 'research' ? { research: { topic: job.topic ?? '', ...(job.repoId && { repoId: job.repoId }) } } : {};
+}
+
+/**
+ * When the latest research finished, from what the office kept before it recorded that (#496): the CEO jobs log, the
+ * kept job records and research replies in the chat. Undefined when there was none.
+ */
+export function pastResearch(o: { history: readonly Pick<HistoryEntry, 'at' | 'ceo'>[]; jobs: readonly Pick<CeoJobRecord, 'at' | 'kind'>[]; messages: readonly Pick<PhoneMessage, 'at' | 'research'>[] }): number | undefined {
+  const ats = [...o.history.filter((e) => e.ceo?.kind === 'research'), ...o.jobs.filter((j) => j.kind === 'research'), ...o.messages.filter((m) => m.research)].map((x) => x.at);
+  return ats.length ? Math.max(...ats) : undefined;
 }
 
 /**

@@ -1,5 +1,5 @@
 import { expect, overflowProblems, test } from './helpers';
-import { pocket } from './layout/helpers';
+import { office, pocket } from './layout/helpers';
 
 // The notification centre (#298): every notice a cell of its own with a visible edge, title and time on one line,
 // unread ones marked, at a phone's width and a desktop's; Reply on the CEO's opens the chat.
@@ -48,3 +48,44 @@ for (const width of [390, 1280]) {
     await expect(page.getByPlaceholder(/Message .*…|Write your reply…/)).toBeVisible();
   });
 }
+
+// The bell's count (#499): fully visible beside the Sound button, with a few unread and with 99+, in pocket mode's
+// header (compact and wide) and the 3D HUD's pills.
+const unread = (n: number) => (data: string) => {
+  const ev = JSON.parse(data);
+  ev.data.notices = Array.from({ length: n }, (_, i) => ({ id: `e2e-${i}`, at: Date.now() - i, kind: 'ceo', level: 'info', title: `Note ${i}`, text: '', read: false }));
+  return JSON.stringify(ev);
+};
+for (const where of ['pocket', 'office'] as const)
+  for (const width of [390, 1280])
+    for (const [count, shown] of [[3, '3'], [120, '99+']] as const)
+      test(`${where} at ${width}px: the bell's count of ${shown} isn't under its neighbour (#499)`, async ({ page }) => {
+        await page.routeWebSocket(/\/ws$/, (ws) => {
+          const server = ws.connectToServer();
+          server.onMessage((data) => {
+            if (typeof data !== 'string') return ws.send(data);
+            const ev = JSON.parse(data);
+            if (ev.type === 'toast' && ev.id) return; // the demo's new notices would change the count
+            ws.send(ev.type === 'snapshot' ? unread(count)(data) : data);
+          });
+        });
+        await page.setViewportSize({ width, height: 844 });
+        if (where === 'pocket') await pocket(page, 'company');
+        else await office(page);
+        const badge = page.locator('.notice-bell .badge-dot');
+        await expect(badge).toHaveText(shown);
+        const problem = await badge.evaluate((el) => {
+          const b = el.getBoundingClientRect();
+          if (b.left < 0 || b.top < 0 || b.right > innerWidth) return `off screen: ${JSON.stringify(b)}`;
+          const next = el.closest('.notice-bell')!.nextElementSibling;
+          const n = next?.getBoundingClientRect();
+          const overlaps = n && n.width && b.right > n.left && b.left < n.right && b.bottom > n.top && b.top < n.bottom;
+          if (!overlaps) return '';
+          for (const [x, y] of [[b.left + 1, b.top + b.height / 2], [b.right - 1, b.top + b.height / 2], [b.left + b.width / 2, b.top + b.height / 2]]) {
+            const top = document.elementFromPoint(x, y);
+            if (!top || !el.contains(top)) return `covered at ${x},${y} by ${top?.outerHTML.slice(0, 80)}`;
+          }
+          return '';
+        });
+        expect(problem).toBe('');
+      });

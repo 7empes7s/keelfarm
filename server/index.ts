@@ -15,6 +15,7 @@ import { DEFAULT_PROJECTS_DIR, DEMO, DEMO_NO_TOUR, DEMO_SCALE, HOME_DIR, HOST, P
 import { MACHINES_DIR } from './workspace.ts';
 import { realBackend } from './backend.ts';
 import { handleHook, handleMcp, setOfficeUrl } from './cliRunner.ts';
+import { isCli } from './clis.ts';
 import { createDemoBackend } from './demo.ts';
 import { seedDemoNotes } from './demoChat.ts';
 import { fileRoutes } from './fileRoutes.ts';
@@ -166,7 +167,7 @@ app.post(
     number: await swarm.createIssue(repoId(req), str(req.body.title), str(req.body.body), str(req.body.assignTo) || undefined),
   })),
 );
-app.post('/api/repos/:repo/issues/:n/close', route((req) => swarm.closeIssueByManager(repoId(req), num(req.params.n))));
+app.post('/api/repos/:repo/issues/:n/close', route((req) => swarm.closeIssueByManager(repoId(req), num(req.params.n), undefined, str(req.body?.reason))));
 app.post('/api/repos/:repo/issues/:n/assign', route((req) => swarm.assignIssue(repoId(req), num(req.params.n), str(req.body?.agentId))));
 app.post('/api/repos/:repo/issues/:n/trust', route((req) => swarm.trustIssue(repoId(req), num(req.params.n))));
 app.post('/api/repos/:repo/plan', route((req) => swarm.planFloor(repoId(req), typeof req.body?.mission === 'string' ? req.body.mission : undefined, req.body?.research === true)));
@@ -176,6 +177,12 @@ app.put('/api/repos/:repo/charter', route((req) => swarm.setCharter(repoId(req),
 app.post('/api/repos/:repo/charter/proposal', route((req) => swarm.decideCharter(repoId(req), req.body?.approve === true, req.body?.charter ?? undefined)));
 app.put('/api/repos/:repo/charter/status', route((req) => swarm.setObjectiveStatus(repoId(req), req.body?.objective, req.body?.status ?? null)));
 app.post('/api/repos/:repo/charter/export', route((req) => swarm.exportCharter(repoId(req))));
+// The setup advisor (#366): the floor's use case, a gap's fix by its action's index, Not now, the new floor's checklist closed.
+app.put('/api/repos/:repo/setup/use-case', route((req) => swarm.setFloorUseCase(repoId(req), req.body?.useCase)));
+app.post('/api/repos/:repo/setup/apply', route((req) => swarm.applyFloorSetup(repoId(req), req.body?.gap, req.body?.action ?? 0)));
+app.post('/api/repos/:repo/setup/snooze', route((req) => swarm.snoozeFloorSetup(repoId(req), req.body?.gap)));
+app.post('/api/repos/:repo/setup/review', route((req) => swarm.closeFloorReview(repoId(req))));
+app.put('/api/company/use-cases', route((req) => swarm.setCompanyUseCases(req.body?.useCases)));
 // The floor's app, for the preview monitor
 app.post(
   '/api/repos/:repo/preview',
@@ -226,6 +233,8 @@ app.get('/api/repos/:repo/pulls/:n/qa-shots/:i', async (req, res, next) => {
     next(err);
   }
 });
+app.get('/api/repos/:repo/pulls/:n/try-it', route((req) => swarm.tryThisOf(repoId(req), num(req.params.n))));
+app.get('/api/repos/:repo/merged', route((req) => swarm.mergedPage(repoId(req), num(req.query.page))));
 app.post('/api/repos/:repo/pulls/:n/merge', route((req) => swarm.mergePull(repoId(req), num(req.params.n), req.body?.method ?? 'squash')));
 app.post('/api/repos/:repo/pulls/:n/close', route((req) => swarm.closePull(repoId(req), num(req.params.n))));
 app.post('/api/repos/:repo/pulls/:n/qa', route((req) => swarm.sendToQa(repoId(req), num(req.params.n), str(req.body?.agentId) || undefined)));
@@ -314,6 +323,7 @@ app.put(
     return swarm.setUsageAdminKey(body.provider, body.key);
   }),
 );
+app.post('/api/usage/:id/notify-back', route((req) => swarm.watchUsageBack(String(req.params.id), parse(z.object({ on: z.boolean() }), req.body).on)));
 // Settings → Providers (#362): keys and MCP servers' secrets come in here and never go back out.
 app.post(
   '/api/providers',
@@ -322,6 +332,10 @@ app.post(
     return swarm.providers.add(body.provider, body.key, body.label);
   }),
 );
+// Keys found on this computer (#367): the scan runs on the server and reports through keyScan events; values never come out.
+app.post('/api/providers/scan', route(() => (void swarm.scanKeys(), swarm.keyScanView())));
+app.post('/api/providers/scan/import', route((req) => swarm.importKeys(parse(z.object({ ids: z.array(z.string().max(20)).max(200) }), req.body).ids)));
+app.delete('/api/providers/scan', route(() => (swarm.dismissKeys(), { dismissed: true })));
 app.post('/api/providers/:id/test', route((req) => swarm.providers.test(String(req.params.id))));
 app.delete('/api/providers/:id', route(async (req) => ({ removed: await swarm.providers.remove(String(req.params.id)).then(() => true) })));
 app.post(
@@ -337,13 +351,25 @@ app.post(
 app.patch('/api/providers/mcp/:id', route((req) => swarm.providers.setMcp(String(req.params.id), parse(z.object({ on: z.boolean().optional(), agents: z.array(z.string().max(80)).max(200).optional() }), req.body))));
 app.post('/api/providers/mcp/:id/test', route((req) => swarm.providers.testMcp(String(req.params.id))));
 app.delete('/api/providers/mcp/:id', route(async (req) => ({ removed: await swarm.providers.removeMcp(String(req.params.id)).then(() => true) })));
+// Coding-agent CLIs (#493): look again, install a missing one, OpenCode's own sign-in.
+app.post('/api/clis/check', route(() => swarm.cliSetup.check()));
+app.post('/api/clis/opencode/signin', route(() => swarm.cliSetup.signIn()));
+app.post('/api/clis/:id/install', route((req) => {
+  const id = String(req.params.id);
+  if (!isCli(id)) throw new HttpError(400, 'Pick Claude Code, Codex, Gemini CLI or OpenCode.');
+  return swarm.cliSetup.install(id);
+}));
 // Providers & accounts (#247, docs/accounts.md): keys come in here and never go back out.
 app.post('/api/accounts', route((req) => swarm.accounts.add(req.body ?? {})));
 app.patch('/api/accounts/:id', route((req) => swarm.accounts.update(String(req.params.id), req.body ?? {})));
+app.post('/api/accounts/:id/default', route((req) => ({ note: swarm.makeDefaultAccount(String(req.params.id), (req.body ?? {}).now === true) })));
 app.post('/api/accounts/:id/move', route((req) => swarm.accounts.move(String(req.params.id), Number((req.body ?? {}).by))));
 app.put('/api/accounts/:id/key', route(async (req) => ({ note: await swarm.accounts.setKey(String(req.params.id), (req.body ?? {}).key) })));
+app.post('/api/accounts/:id/share', route((req) => ({ note: swarm.accounts.repairShare(String(req.params.id)) })));
 app.post('/api/accounts/:id/test', route(async (req) => ({ note: await swarm.accounts.test(String(req.params.id)) })));
 app.post('/api/accounts/:id/signin', route((req) => swarm.accounts.signIn(String(req.params.id), (req.body ?? {}).mode === 'setup-token' ? 'setup-token' : 'login')));
+app.post('/api/accounts/:id/signin/code', route((req) => swarm.accounts.signInCodeIn(String(req.params.id), (req.body ?? {}).code)));
+app.post('/api/accounts/:id/signin/answer', route((req) => swarm.accounts.signInAnswer(String(req.params.id), (req.body ?? {}).option)));
 app.delete('/api/accounts/:id', route(async (req) => ({ result: await swarm.accounts.remove(String(req.params.id)) })));
 app.post('/api/accounts/:id/use-now', route((req) => swarm.useAccountNow(String(req.params.id))));
 app.post('/api/accounts/:id/simulate-limit', route((req) => swarm.simulateAccountLimit(String(req.params.id))));
@@ -418,6 +444,14 @@ app.post('/api/health/simulate', route((req) => swarm.health.simulate(req.body?.
 app.get('/api/disk/plan', route(() => swarm.diskPlan()));
 app.post('/api/disk/clean', route(() => swarm.cleanDisk()));
 app.patch('/api/disk/settings', route((req) => swarm.setDiskSettings(req.body)));
+// The IT desk (#506): the manager's Run (one card, or Run all) and Not now on the CEO's proposed commands.
+const itIds = (body: unknown) => {
+  const ids = (body as { ids?: unknown } | undefined)?.ids;
+  if (!Array.isArray(ids) || !ids.length || ids.some((x) => typeof x !== 'string')) throw new HttpError(400, 'Pass ids: the cards to act on.');
+  return ids as string[];
+};
+app.post('/api/it/run', route((req) => swarm.itRunProposals(itIds(req.body))));
+app.post('/api/it/dismiss', route((req) => swarm.itDismiss(itIds(req.body))));
 app.post('/api/disk/simulate', route((req) => swarm.simulateDisk(req.body?.low === true)));
 // The server's load by program (#271): the 24 h trend (in memory), and Mission control's "Stop it" for a leftover process
 app.get('/api/server/trend', route(() => swarm.serverTrend()));
@@ -461,10 +495,13 @@ app.post('/api/ceo/review', route(() => swarm.requestReview()));
 // The chat closer to Claude's (#51): stop, edit and retry, conversations, and what the CEO remembers
 app.post('/api/ceo/stop', route(() => swarm.stopCeo()));
 app.post('/api/ceo/retry', route(() => swarm.retryCeo()));
+app.post('/api/ceo/switch-back', route((req) => swarm.ceoSwitchBack(req.body?.account)));
+app.post('/api/ceo/jobs/:id/redo', route((req) => swarm.redoCeoJob(Number(req.params.id))));
 app.post('/api/ceo/messages/:id/edit', route((req) => swarm.editMessage(Number(req.params.id), str(req.body?.text))));
 app.post('/api/ceo/messages/:id/react', route((req) => swarm.reactToMessage(Number(req.params.id), str(req.body?.emoji), str(req.body?.note))));
 app.get('/api/ceo/messages', route((req) => swarm.chatMessages(Number(req.query.before), Number(req.query.limit))));
 app.delete('/api/ceo/messages/:id', route((req) => swarm.removeChatMessage(Number(req.params.id))));
+app.post('/api/ceo/messages/:id/actions/:index/undo', route((req) => swarm.undoCeoAction(Number(req.params.id), Number(req.params.index))));
 app.post('/api/ceo/conversations', route((req) => swarm.newConversation(req.body?.repoId ?? null)));
 app.get('/api/ceo/conversations/search', route((req) => swarm.searchConversations(typeof req.query.q === 'string' ? req.query.q : '')));
 app.post('/api/ceo/conversations/:id/open', route((req) => swarm.openConversation(String(req.params.id))));
@@ -497,6 +534,7 @@ app.post('/api/decisions/:id', route((req) => swarm.decideOpen(String(req.params
 // The demo office only: the CEO grows (or shrinks) a floor's team on demand.
 app.post('/api/demo/proposals', route((req) => swarm.demoPropose(req.body?.kind, req.body?.floor)));
 app.post('/api/demo/new-commit', route(() => swarm.demoNewCommit()));
+app.post('/api/demo/lab-update', route(() => swarm.demoLabUpdate()));
 
 // Office progression (#210): the lobby kiosk, a floor's decorations, the player's coffees, and the demo's coins and
 // tenure for QA.

@@ -182,7 +182,11 @@ Every message box has a 🎙️ next to Send: the phone's CEO chat, an agent's p
 console. **Hold** it, or hold **V** while the caret is in the box (or anywhere on that phone or panel outside another
 field), and speak: the words fill the box as you go, and letting go leaves them there to edit before you send. A quick
 tap of V still types a "v"; only a press held for 0.3 s talks, and V never talks in other fields. A **tap** of the 🎙️
-listens until you stop talking (about 1.2 s of quiet), or until you tap it again; if nobody speaks it gives up after 8 s.
+listens until you stop talking (3 s of quiet), or until you tap it again; if nobody speaks it gives up after 8 s.
+**Pause before I'm done** (1.5, 3, 5 or 8 s, saved per device) sets that quiet, for hands-free and calls too. Words
+left hanging ("…on the, uh", "…and", a trailing comma) wait 3 times as long (15 s at most), and fillers at the end
+aren't sent. While it's quiet a ring drains round the 🎙️: keep talking to keep it open, or tap to finish now. Phone
+browsers stop recognising by themselves after a short quiet; the 🎙️ starts them again and keeps the words.
 **Esc** stops listening (without closing the phone or the panel), typing in the box takes over from the mic, and
 sending by hand stops it too. Typing works exactly as before.
 
@@ -199,7 +203,7 @@ Settings → Voice → **Talk instead of type** picks who turns speech into text
   it never reaches the browser, the logs or the snapshot.
 - **Off**: no 🎙️ anywhere.
 
-**Send automatically when I stop talking** (off by default) sends what you said after about 1.2 s of quiet, instead of
+**Send automatically when I stop talking** (off by default) sends what you said after that pause, instead of
 leaving it in the box; letting go of a hold sends it too.
 
 **Hands-free** (the 🎧 on the phone's chat, off by default; also in Settings → Voice) is a conversation without
@@ -242,8 +246,8 @@ else it still closes what's open).
   **Resume** carries on from there (the browser's voice starts that sentence again). **Skip** moves to the next
   sentence. **Speaker** off reads at about a third of the volume, like a phone's earpiece. **End** hangs up and brings
   the chat back, with every turn of the call in it.
-- **Turns:** the mic listens all through the call (with echo cancellation), with the same rules as hands-free (about
-  1.2 s of quiet ends your turn) but no chime each time. Talking over the CEO for about 0.3 s stops its voice at once
+- **Turns:** the mic listens all through the call (with echo cancellation), with the same rules as hands-free (the
+  pause before you're done ends your turn) but no chime each time. Talking over the CEO for about 0.3 s stops its voice at once
   and becomes your next message; a cough, a short noise or "mm-hm" doesn't.
 - **Away:** leaving the tab or locking the phone puts the call on hold: the mic closes (it never records in the
   background) and opens again when you're back. Closing the tab ends the call. The office's new client never loads
@@ -255,6 +259,27 @@ else it still closes what's open).
   browser's voice. It listens with Talk instead of type's provider, or the browser's recognition when that's off.
 - **No mic:** when the mic is refused or the browser can't listen, the call says why in one line and falls back to
   tap-to-talk: a **Talk** button (or Space) for each turn.
+
+### The meeting room (#369)
+
+Every call happens in the meeting room, the glass room in the lobby's west wing (south of the manager's office, round
+the west window). While a call is on the CEO walks over from the corner office and stands at the table's head in
+front of the wall screen, which shows the call's status and captions; they wave as it connects, nod while they listen,
+look down at the table while they think and talk with their hands while they speak, and walk back to their desk when
+it ends. The sign over the door says who's on the call and its light turns red.
+
+- **Join in person:** walk in and press **E** at any chair ("Join the call"; with no call on, "Sit down and call …"
+  starts one). You sit facing the CEO; on a narrow screen the call screen folds to its pill so the room shows. Walking,
+  Space or **E** gets you up: the call goes on. Leaving the lobby gets you up too.
+- **Join from the call window:** the phone's call screen and the desktop's call card show a live view of the room, the
+  CEO at the table, like a video call's tile (`world/MeetingTile.tsx`: a small renderer of its own, so it works on
+  any floor and in pocket mode). It draws 12 frames a second at most, and nothing while the window is folded to its
+  pill or orb, the tab is hidden, the tile is off screen or you sit in the room yourself.
+
+The rules are pure and tested in `client/src/world/meeting.ts` (the call's moments → where the CEO is and what they
+do, what E at a chair does and the view from it, the tile's frame throttle); the room's place is in `layout.ts`.
+The demo office shows a call there with `?meeting=call` (a call on, the CEO at the table: the call card's live view)
+or `?meeting=seat` (you sat at the far head too); `e2e/meeting.spec.ts` walks it through.
 
 Nothing else changed: the 🎧 hands-free switch, hold/tap/V to talk, saved clips, ▶ replay and the dips work as
 before, and with no call on nothing opens the mic or starts reading by itself unless those settings say so.
@@ -277,7 +302,7 @@ fetches).
 | --- | --- | --- | --- | --- |
 | Entering and leaving | the Voice icon; the exit icon ends it [1] | the sound-wave button; it stays in voice mode until **Stop** [3] | the app starts and ends a session | **Call** in the chat; only **End** (or closing the tab) ends it |
 | Where it shows | inside the chat by default, or a separate full-screen orb (Settings → Voice → Separate Mode) [2] | in the chat | the app's own | a call screen on phones, an orb and card on desktops; the chat stays one tap away |
-| Turn-taking | listens and speaks at once; how it decides you're done isn't documented [2] | "listens continuously and responds to natural pauses"; push-to-talk as an option [3] | eagerness: eager, normal or patient; "take turn after silence" 1-30 s [5] | ~1.2 s of quiet ends your turn (micSilence's hands-free rules); tap-to-talk without a mic |
+| Turn-taking | listens and speaks at once; how it decides you're done isn't documented [2] | "listens continuously and responds to natural pauses"; push-to-talk as an option [3] | eagerness: eager, normal or patient; "take turn after silence" 1-30 s [5] | 3 s of quiet ends your turn (1.5-8 s per device; longer after "uh" or "and"); tap-to-talk without a mic |
 | Interrupting | speak while it talks; noise or other voices can interrupt by mistake [1] | "just start talking. Claude will stop and listen" [3] | speaking mid-response cancels the reply [4]; interruptions can be turned off [5] | ~0.3 s of real speech stops the voice; noise and "mm-hm" don't |
 | Mute | a mic button bottom-left [1] | not documented | not documented | **Mute** or M: mic off, the call and the CEO's voice go on |
 | Switching apps, locking | goes on in the background if Background Conversations is on; Live Activity on the lock screen [1] | not documented | not documented | the call stays on across every screen; a hidden tab or locked phone stops listening and resumes on return |

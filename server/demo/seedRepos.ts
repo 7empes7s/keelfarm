@@ -2,18 +2,23 @@
 // and PR, a CI outage and a CI-only stuck PR; or the big company (--floors / --agents).
 import { FLOOR_SEATS, type PullInfo } from '../../shared/types.ts';
 import type { DemoScale } from '../config.ts';
-import { pastPulls } from '../demoMap.ts';
+import { demoTryIt, pastPulls } from '../demoMap.ts';
+import { tryItSteps } from '../../shared/tryIt.ts';
 import { stalePulls } from '../demoPreviewDesks.ts';
 import { CI_DOWN_REPO, closedFiled, fakeSha, issue, nextRunId, refusedChecks, repos, type FakeRepo } from './world.ts';
 
-function seed(fullName: string, description: string, titles: [string, string][], shipped: string[] = [], past = false) {
+function seed(fullName: string, description: string, titles: [string, string][], shipped: string[] = [], past = false, archive = 0) {
   const r: FakeRepo = { fullName, description, issues: [], pulls: [], nextNumber: 1 };
   for (const [title, body] of titles) r.issues.push(issue(r.nextNumber++, title, body, fullName));
+  // Merges from before the memory map's history, so the Kanban's Merged column has pages to go through (#411).
+  for (let i = archive; i > 0; i--) r.pulls.push(shippedPull(fullName, r.nextNumber++, `${ARCHIVE[i % ARCHIVE.length]} (${archive - i + 1})`, (21 + i / 2) * 86_400_000));
   if (past) r.pulls.push(...pastPulls(fullName, () => r.nextNumber++)); // the memory map's history (#136)
   // What the floor shipped lately: the "What's new" cards' history (#129).
   for (const [i, title] of shipped.entries()) r.pulls.push(shippedPull(fullName, r.nextNumber++, title, (i + 1) * 5 * 3_600_000));
   repos.set(fullName, r);
 }
+
+const ARCHIVE = ['Tidy the footer', 'Faster first paint', 'Bump dependencies', 'Fix a typo in the help', 'Smaller bundle', 'Sharper icons', 'Better empty list copy', 'Steadier tests'];
 
 function shippedPull(fullName: string, number: number, title: string, agoMs: number): PullInfo {
   return {
@@ -76,7 +81,7 @@ seed('demo-co/pixel-todo', 'A cheerful todo app', [
   ['Empty state illustration', 'Show a friendly illustration when the list is empty.'],
   ['Keyboard shortcuts', 'N for new todo, / to search, ? for help. The help overlay touches src/App.tsx and src/styles.css.\n\nObjective: O1'],
   ['Fix: completed count off by one', 'The footer shows one more completed item than there is.\n\nObjective: O3'],
-], ['Confetti when the list is cleared', 'Undo for deleted todos'], true);
+], ['Confetti when the list is cleared', 'Undo for deleted todos'], true, 64);
 strangers('demo-co/pixel-todo');
 repos.get('demo-co/pixel-todo')!.pulls.push(...stalePulls(['Try a darker theme', 'Experiment: drag to reorder', 'Spike: offline mode'], (title) => shippedPull('demo-co/pixel-todo', repos.get('demo-co/pixel-todo')!.nextNumber++, title, 0)));
 seed('demo-co/weather-api', 'Tiny weather REST API', [
@@ -90,10 +95,12 @@ seed('demo-co/recipe-box', 'Recipes with a shopping list', [
   ['Recipe page on a phone', 'Ingredients, then steps, at 375px.\n\nObjective: O2'],
   ['Import a recipe from a link', 'Paste a link and the form fills itself.\n\nDepends on #1'],
 ], [], true);
+// Listed but not moved in (#366): connecting it shows the setup advisor's checklist for a three.js game.
+seed('demo-co/star-hopper', 'A three.js space hopper', [['Boost pads', 'Pads that launch the ship. Touches src/level.ts.'], ['Touch controls', 'A stick and a jump button on phones.']]);
 {
   const r = repos.get(CI_DOWN_REPO)!;
   const n = r.nextNumber++;
-  const pr = { ...shippedPull(CI_DOWN_REPO, n, 'Recipe page on a phone', 0), state: 'OPEN' as const, mergedAt: null, headRefName: 'swarm/issue-3-demo', closesIssues: [3], summary: 'Ingredients first, then steps, laid out for a 375px phone.' };
+  const pr = { ...shippedPull(CI_DOWN_REPO, n, 'Recipe page on a phone', 0), state: 'OPEN' as const, mergedAt: null, headRefName: 'swarm/issue-3-demo', closesIssues: [3], summary: 'Ingredients first, then steps, laid out for a 375px phone.', tryIt: demoTryIt('Recipe page on a phone', n) };
   r.pulls.unshift(Object.assign(pr, refusedChecks(pr.url)));
 }
 
@@ -106,7 +113,7 @@ export const CI_ONLY_PR = (() => {
   const url = `https://github.com/${CI_ONLY_REPO}/pull/${n}`;
   const failedChecks = [{ name: 'CI / windows', url: `https://github.com/${CI_ONLY_REPO}/actions/runs/${nextRunId()}/job/1` }];
   const files = ['src/forecast.ts', 'src/units.ts', 'src/units.test.ts', 'package.json', 'README.md'];
-  r.pulls.unshift({ ...shippedPull(CI_ONLY_REPO, n, 'Forecast in °F on request', 0), url, state: 'OPEN', mergedAt: null, createdAt: new Date(Date.now() - 2 * 86_400_000).toISOString(), headRefName: 'swarm/units-f-demo', summary: 'Adds ?units=f to /forecast and /now; °C stays the default.', additions: 86, deletions: 12, files, checks: 'failing', failedChecks });
+  r.pulls.unshift({ ...shippedPull(CI_ONLY_REPO, n, 'Forecast in °F on request', 0), url, state: 'OPEN', mergedAt: null, createdAt: new Date(Date.now() - 2 * 86_400_000).toISOString(), headRefName: 'swarm/units-f-demo', summary: 'Adds ?units=f to /forecast and /now; °C stays the default.', tryIt: tryItSteps('## Try it\n1. Open `/forecast?city=Paris&units=f`.\n2. You should see every temperature in °F.\n3. Open `/forecast?city=Paris`: still °C, as before.'), additions: 86, deletions: 12, files, checks: 'failing', failedChecks });
   return n;
 })();
 

@@ -141,3 +141,41 @@
   font-weight: var(--ds-weight-strong);
   color: var(--ds-link);
 }
+/* A PR's card (#407): the card opens the PR's page, its "Open preview" button the preview. */
+.fb-split {
+  cursor: default;
+}
+.fb-split:hover {
+  background: var(--ds-surface-raised);
+}
+.fb-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  padding: 0;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.fb-main:focus-visible,
+.fb-open-btn:focus-visible {
+  outline: 3px solid var(--ds-focus);
+  outline-offset: 2px;
+}
+.fb-open-btn {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: var(--ds-target);
+  margin-bottom: calc(-1 * var(--ds-space-2));
+  padding: 0;
+  text-align: left;
+  font-family: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}

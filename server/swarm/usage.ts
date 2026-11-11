@@ -9,7 +9,7 @@ import { sourcesSignature, UsageBoard, type UsageKeys } from '../usageSources.ts
 import { HOME_DIR } from '../config.ts';
 import type { AccountView, ProvidersView, UsageSource } from '../../shared/types.ts';
 import { connectionSource } from '../../shared/providers.ts';
-import { worstFirst } from '../../shared/usageSources.ts';
+import { backAlerts, worstFirst } from '../../shared/usageSources.ts';
 import { SwarmProviders } from './providers.ts';
 
 const TICK_MS = 60_000;
@@ -19,6 +19,7 @@ export abstract class SwarmUsage extends SwarmProviders {
   private adminKeys: Pick<UsageKeys, 'anthropic' | 'openai'> = { anthropic: '', openai: '' };
   private usageTimer: NodeJS.Timeout | null = null;
   private sentSources = ''; // what the tabs were last sent, without read times
+  private backWatch: string[] = []; // limited sources to tell the manager about once they're back (#404), until a restart
   private readonly secretsFile = path.join(HOME_DIR, this.backend.demo ? 'demo-secrets.json' : 'secrets.json');
 
   protected readonly usageBoard = new UsageBoard({
@@ -37,7 +38,27 @@ export abstract class SwarmUsage extends SwarmProviders {
 
   /** The usage card's rows, from the accounts' view and what the board has read (the snapshot's accounts.sources). */
   protected usageSources(accounts: readonly AccountView[] = this.accounts.view().accounts): UsageSource[] {
-    return worstFirst([...this.usageBoard.sources(accounts), ...this.providers.view().connections.flatMap((c) => connectionSource(c) ?? [])]);
+    const list = worstFirst([...this.usageBoard.sources(accounts), ...this.providers.view().connections.flatMap((c) => connectionSource(c) ?? [])]);
+    return this.backWatch.length ? list.map((s) => (this.backWatch.includes(s.id) ? { ...s, watchBack: true } : s)) : list;
+  }
+
+  /** POST /api/usage/:id/notify-back: one notification when this limited source is back, or not. */
+  watchUsageBack(id: string, on: boolean): { watching: boolean } {
+    const s = this.usageSources().find((x) => x.id === id);
+    if (on && !s) throw new HttpError(404, 'That usage row is gone: it may have been removed or paused.');
+    if (on && s?.status !== 'limited') throw new HttpError(400, `${s!.label} isn't limited: it's ready now.`);
+    this.backWatch = on ? [...new Set([...this.backWatch, id])] : this.backWatch.filter((x) => x !== id);
+    this.pushSources();
+    return { watching: on };
+  }
+
+  /** The watched sources that are back: a notification each, and their watch ends. */
+  private tellBack(sources: readonly UsageSource[]) {
+    if (!this.backWatch.length) return;
+    const { alerts, watching } = backAlerts(sources, this.backWatch);
+    this.backWatch = watching;
+    for (const a of alerts) this.notice({ kind: 'usage', title: a.title, text: a.text }, { event: 'usage' });
+    if (alerts.length) this.pushSources();
   }
 
   /** Send the rows when something in them changed (a read time alone isn't a change); returns them. */
@@ -58,8 +79,10 @@ export abstract class SwarmUsage extends SwarmProviders {
     if (process.env.VITEST || this.usageTimer) return;
     const tick = () => {
       this.usageBoard.tick();
+      const sources = this.pushSources();
+      this.tellBack(sources);
       void this.usageBoard
-        .check(this.pushSources())
+        .check(sources)
         .then((alerts) => {
           for (const a of alerts) this.notice({ kind: 'usage', title: a.title, text: a.text }, { event: 'usage' });
         })

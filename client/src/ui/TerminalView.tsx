@@ -11,7 +11,7 @@ import { chatUnavailable, paneFor, useChatMode, type AgentPane } from './chatMod
 import { AgentRing } from './AgentRing';
 import { speakAgent, useLineVoice } from './agentSpeech';
 import { TaskRing } from './TaskProgress';
-import { canPickWork, sheetAfterDrag, SWIPE_PX, taskLine } from './agentWindow';
+import { canPickWork, sheetAfterDrag, showsTimer, SWIPE_PX, taskLine } from './agentWindow';
 import { clearDesk, letGo, stopAgent } from './dangerActions';
 import { LiveTerminal } from './LiveTerminal';
 import { effectiveModel } from '../../../shared/models';
@@ -29,6 +29,7 @@ import { HistoryButton } from './HistoryTab';
 import { useTermKeysPref } from './TermKeyBar';
 import { PHONE_WINDOW_QUERY, stepFont, termFontSize, unzoomedFont } from './termLayout';
 import { useA11y } from './a11y';
+import { RunChip } from './RunChip';
 import { Icon } from './Icon';
 import { copySignInLink, SignInSteps } from './SignInCard';
 import { troubleLine } from '../../../shared/keyTrouble';
@@ -204,7 +205,7 @@ export function TerminalView({ agentId, view, jump, details: requestedDetails, p
     setOpened(p);
     chatMode.set(p === 'chat');
   };
-  const time = agent.startedAt ? elapsed(agent.startedAt, working ? null : agent.endedAt) : '';
+  const time = showsTimer(agent) ? elapsed(agent.startedAt, null) : '';
   const send = (t: string) => {
     const body = t.trim();
     if (!body) return;
@@ -229,6 +230,11 @@ export function TerminalView({ agentId, view, jump, details: requestedDetails, p
       {agent.blocked && agent.status === 'working' && (
         <div className="term-error">
           <Icon name="ban" /> Blocked: {agent.blocked}. Answer it in the terminal.
+        </div>
+      )}
+      {agent.nudge && agent.status === 'working' && (
+        <div className="small muted">
+          <Icon name="git-merge" /> {agent.nudge}
         </div>
       )}
       {signIn && agent.signInWhy && (
@@ -445,6 +451,7 @@ export function TerminalView({ agentId, view, jump, details: requestedDetails, p
     <Panel wide accent={agent.color} className={`aw ${phone ? 'term-phone' : 'aw-desk'}`} title={title}>
       <div className={`aw-body ${!phone && details ? 'aw-body-side' : ''}`}>
         <div className="aw-main">
+          <RunChip run={agent.run} className="aw-run" />
           {notes}
           {noChat && chatMode.on && agent.role !== 'ceo' && <p className="ac-note">{noChat}</p>}
           {split}

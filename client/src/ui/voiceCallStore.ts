@@ -17,9 +17,14 @@ export interface CallView {
   speaker: boolean;
   /** Pocket mode's docked chat (desktop) is hidden behind the call, until it ends or you open the chat. */
   chatTucked: boolean;
+  /** You sit at the meeting room's table in the 3D office (#369): the call window's live view of the room is left out. */
+  atTable: boolean;
 }
 
-export const useCall = create<CallView>(() => ({ call: NO_CALL, heard: '', managerSpeaking: false, minimised: false, captions: true, speaker: true, chatTucked: false }));
+export const useCall = create<CallView>(() => ({ call: NO_CALL, heard: '', managerSpeaking: false, minimised: false, captions: true, speaker: true, chatTucked: false, atTable: false }));
+
+/** Screens this narrow get the phone's call screen and its pill; wider ones the orb and its card. */
+export const CALL_NARROW = '(max-width: 640px)';
 
 let onStep: ((step: CallStep, ev: CallEvent) => void) | null = null;
 

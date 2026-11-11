@@ -2,12 +2,15 @@
 import crypto from 'node:crypto';
 import { parseProgramStatus, programStatusStep } from '../programStatus.ts';
 import path from 'node:path';
-import type { LogEntry, SessionCallbacks, SessionHandle, SessionOptions } from '../agentRunner.ts';
+import type { LogEntry, SessionCallbacks, SessionHandle, SessionOptions, SessionResult } from '../agentRunner.ts';
+import { actOn, requiredKeys, SessionWatch } from '../liveState.ts';
 import { CLIS } from '../clis.ts';
+import { screenStep, signInError } from '../cliScreens.ts';
+import { demoSignedIn } from '../demoAccounts.ts';
 import { HOME_DIR } from '../config.ts';
 import { withDemoChat } from '../demoAgentChat.ts';
 import { demoConsultSession } from '../demoAwake.ts';
-import { demoPrFiles, demoPrSummary } from '../demoMap.ts';
+import { demoPrFiles, demoPrSummary, demoTryIt } from '../demoMap.ts';
 import { demoAsked, demoAsks } from '../demoPrompts.ts';
 import { withLab } from '../demoTestLab.ts';
 import { demoTranscript } from '../historySample.ts';
@@ -15,7 +18,7 @@ import type { UsageWarning } from '../pacing.ts';
 import { charTokens } from '../../shared/startup.ts';
 import { keyName } from '../../shared/termKeys.ts';
 import { toolArgsLine } from '../../shared/tooling.ts';
-import type { UsageReading } from '../../shared/types.ts';
+import type { AgentCli, UsageReading } from '../../shared/types.ts';
 import { ceoSession } from './ceo.ts';
 import { boxDeskRepo } from './cloud.ts';
 import { registerDemo } from './registry.ts';
@@ -23,7 +26,66 @@ import { DARK_MODE_TITLE } from './seedRepos.ts';
 import { fixPromptPull, fixScript, issueScript, qaScript, type Step } from './sessionScripts.ts';
 import { fakeSha, now, repos, runChecks, signOuts, stalls, takeNumber } from './world.ts';
 
+/** Claude Code's sign-in, as a session on a login nobody signed in yet opens on (the real one's words). */
+const SIGN_IN_SCREEN = ['Select login method:', '❯ 1. Claude account with subscription · Pro, Max, Team, or Enterprise', '  2. Anthropic Console account · API usage billing', "Browser didn't open? Use the url below to sign in:", 'Paste code here if prompted >'];
+
+/**
+ * A session on a login account the demo hasn't signed in (#360): it opens on the sign-in, which the office can't answer
+ * (cliScreens.ts reads it as one), so it ends signed out after a moment, the way cliRunner.ts ends a real one.
+ */
+function signInSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle | null {
+  const dir = opts.env?.CLAUDE_CONFIG_DIR ?? opts.env?.CODEX_HOME ?? '';
+  const id = /accounts[\\/]([^\\/]+)[\\/](?:claude|codex)$/.exec(dir)?.[1];
+  const cli = opts.cli ?? 'claude';
+  if (!id || demoSignedIn.has(id) || screenStep(SIGN_IN_SCREEN.join('\n'), cli)?.do !== 'sign-in') return null;
+  const label = CLIS.find((c) => c.id === cli)?.label ?? 'Claude Code';
+  cb.log(SIGN_IN_SCREEN.map((text) => ({ kind: 'system', text })));
+  const timer = setTimeout(() => {
+    cb.log([{ kind: 'error', text: `⚠ ${signInError(label, opts.account)}` }]);
+    cb.finished({ ok: false, text: '', costUsd: 0, turns: 0, errors: [signInError(label, opts.account)], signedOut: true });
+  }, 2500);
+  return {
+    send: () => undefined,
+    stop() {
+      clearTimeout(timer);
+      cb.finished({ ok: false, text: '', costUsd: 0, turns: 0, errors: ['Stopped by manager'] });
+    },
+  };
+}
+
+/** The demo's sessions and the CLI that made each: one it never made (before a restart) or another CLI's isn't there to resume (#401). */
+const made = new Map<string, AgentCli>();
+
+/** An agent's session: as cliRunner.ts ends one whose CLI can't find the session it was to resume, or the fake session. */
+function agentSession(opts: SessionOptions, cb: SessionCallbacks, fullName: string): SessionHandle {
+  const cli = opts.cli ?? 'claude';
+  const id = opts.resumeSessionId;
+  const minting: SessionCallbacks = {
+    ...cb,
+    sessionId: (sid) => {
+      if (sid) made.set(sid, cli);
+      cb.sessionId(sid);
+    },
+  };
+  if (!id?.startsWith('demo-') || made.get(id) === cli) return fakeSession(opts, minting, fullName);
+  cb.log([{ kind: 'error', text: cli === 'codex' ? `ERROR: No saved session found with ID ${id}. Run codex resume without an ID to choose from existing sessions.` : `No conversation found with session ID: ${id}` }]);
+  const label = CLIS.find((c) => c.id === cli)?.label ?? 'Claude Code';
+  const t = setTimeout(() => {
+    cb.sessionId(null);
+    cb.finished({ ok: false, text: '', costUsd: 0, turns: 0, errors: [`${label} couldn't find the session it was resuming.`], lostSession: true });
+  }, 1000);
+  return {
+    send: () => undefined,
+    stop() {
+      clearTimeout(t);
+      cb.finished({ ok: false, text: '', costUsd: 0, turns: 0, errors: ['Stopped by manager'] });
+    },
+  };
+}
+
 function fakeSession(opts: SessionOptions, cb: SessionCallbacks, fullName: string): SessionHandle {
+  const unsigned = signInSession(opts, cb);
+  if (unsigned) return unsigned;
   const timers: NodeJS.Timeout[] = [];
   let stopped = false;
   let stalled = false; // stuck: no more output, and messages go unanswered
@@ -111,6 +173,12 @@ function fakeSession(opts: SessionOptions, cb: SessionCallbacks, fullName: strin
           ],
           screenshots: ['Home page', 'The changed page at 375px', ...(full ? ['Full quality · the changed scene at 1280px'] : [])],
           fixInstructions: pass ? undefined : 'Make the toolbar wrap (flex-wrap: wrap) below 480px so every button stays visible.',
+          // QA's version of the PR's steps: the last one fails with the toolbar on a phone
+          tryIt: (repos.get(fullName)?.pulls.find((p) => p.number === number)?.tryIt ?? []).map((s, i, all) => ({
+            step: s.path ? s.text.replace(s.path, `\`${s.path}\``) : s.text,
+            result: pass || i < all.length - 1 ? 'pass' : 'fail',
+            ...(!pass && i === all.length - 1 && { note: 'At 375 px the toolbar overflows and the new button is cut off' }),
+          })),
         },
       });
       return;
@@ -158,6 +226,7 @@ function fakeSession(opts: SessionOptions, cb: SessionCallbacks, fullName: strin
         pendingChecks: [],
         files: demoPrFiles(fullName, repo.issues.find((i) => i.number === number), number),
         summary: demoPrSummary(repo.issues.find((i) => i.number === number)),
+        tryIt: demoTryIt(title, n),
       });
       runChecks(repo.pulls[0]);
       cb.log([{ kind: 'result', text: `  ⎿ ${url}` }]);
@@ -216,13 +285,55 @@ const ANSI: Record<LogEntry['kind'], (text: string) => string> = {
   done: (t) => `\x1b[32m${t}\x1b[0m`,
 };
 
+/** How a fake session gets stuck (#359): left on its sign-in screen until the manager presses Enter there, or its result printed but never reported. */
+type DemoStuck = 'sign-in' | 'result' | null;
+
+const STUCK_SIGN_IN_SCREEN = [
+  '',
+  ' Welcome to Claude Code (demo)',
+  '',
+  ' Select login method:',
+  '',
+  ' \x1b[36m❯ 1. Claude account with subscription\x1b[0m · Pro, Max, Team, or Enterprise',
+  '   2. Anthropic Console account · API usage billing',
+  '',
+  ' \x1b[2mPress Enter here to sign in (demo)\x1b[0m',
+].join('\r\n');
+
+/** What a fake session that never reports its end prints instead: the report or the pull request, as a CLI would. */
+const printedLines = (r: SessionResult): string[] => (r.structured ? ['● Here is my report.', '```json', ...JSON.stringify(r.structured, null, 2).split('\n'), '```'] : [`● ${r.text}`]);
+
 /**
  * With a terminal (the terminal runtime), the fake session's lines are drawn there the way Claude Code draws them,
- * and what the manager types into it is taken as a message.
+ * and what the manager types into it is taken as a message. The office watches it as it watches a real CLI's
+ * (liveState.ts): a sign-in screen is blocked, a result printed but never reported is completed a minute later.
  */
-function inTerminal(opts: SessionOptions, cb: SessionCallbacks, start: (cb: SessionCallbacks) => SessionHandle): SessionHandle {
+function inTerminal(opts: SessionOptions, cb: SessionCallbacks, start: (cb: SessionCallbacks) => SessionHandle, fake = false, stuck: DemoStuck = null): SessionHandle {
   const term = opts.terminal;
   if (!term) return start(cb);
+  let lastWrite = Date.now();
+  let logged = false;
+  let ended = false;
+  let held: SessionResult | null = null; // the result a 'result' session printed instead of reporting
+  const watch = new SessionWatch(Date.now(), requiredKeys(opts.outputSchema));
+  const end = (r: SessionResult) => {
+    if (ended) return;
+    ended = true;
+    clearInterval(watching);
+    term.bind(null);
+    term.note(`── ${name} session ended ──`);
+    cb.finished(r);
+  };
+  // The CEO and consults aren't builders: nothing to watch.
+  const watching = !fake ? undefined : setInterval(() => {
+    const now = Date.now();
+    actOn(watch.tick({ now, begun: logged, screen: term.screen(), tail: term.tail(120), quietMs: now - lastWrite }), name, {
+      log: (text, error) => cb.log([{ kind: error ? 'error' : 'system', text }]),
+      blocked: (s) => cb.blocked?.(s?.reason ?? null, s?.kind),
+      retry: () => undefined, // a fake session starts by itself
+      complete: (text) => end({ ok: true, text, costUsd: held?.costUsd ?? 0.4, turns: held?.turns ?? 12, errors: [] }),
+    });
+  }, 2000);
   const name = CLIS.find((c) => c.id === (opts.cli ?? 'claude'))?.label ?? 'Claude Code';
   term.note(`── ${name}${opts.label ? ` · ${opts.label}` : ''} ──`);
   term.write(
@@ -238,13 +349,16 @@ function inTerminal(opts: SessionOptions, cb: SessionCallbacks, start: (cb: Sess
   );
   let handle: SessionHandle | null = null;
   let line = '';
+  let signIn: (() => void) | null = null;
   term.bind({
     write: (data) => {
       // Keys with no character (Esc, arrows, Shift+Tab, Ctrl+C…) are echoed by name, so the key bar can be checked here.
       const key = keyName(data);
       if (key) return term.write(`\x1b[2m⟨${key}⟩\x1b[0m`);
       for (const ch of data.replace(/\x1b\[[0-9;?]*[A-Za-z~]|\x1b./g, '')) {
-        if (ch === '\r') {
+        if (ch === '\r' && signIn) {
+          signIn();
+        } else if (ch === '\r') {
           const text = line.trim();
           line = '';
           term.write('\r\n');
@@ -263,7 +377,7 @@ function inTerminal(opts: SessionOptions, cb: SessionCallbacks, start: (cb: Sess
     },
     resize: () => undefined,
   });
-  handle = start({
+  const begin = () => start({
     ...cb,
     blocked: (reason) => {
       // Fake CLI output exercises the same decoding and backup decision as a silent hook stream.
@@ -276,14 +390,28 @@ function inTerminal(opts: SessionOptions, cb: SessionCallbacks, start: (cb: Sess
     },
     log: (entries) => {
       cb.log(entries);
+      logged = true;
+      lastWrite = Date.now();
       for (const e of entries) term.write(`${e.kind === 'tool' || (e.kind === 'text' && e.text.startsWith('●')) ? '\r\n' : ''}${ANSI[e.kind](e.text)}\r\n`);
     },
     finished: (r) => {
-      term.bind(null);
-      term.note(`── ${name} session ended ──`);
-      cb.finished(r);
+      if (stuck !== 'result' || !r.ok) return end(r);
+      held = r; // printed, never reported: the office's watch completes it
+      lastWrite = Date.now();
+      term.write(`\r\n${printedLines(r).join('\r\n')}\r\n\r\n\x1b[36m❯\x1b[0m `);
     },
   });
+  if (stuck === 'sign-in') {
+    term.write(STUCK_SIGN_IN_SCREEN);
+    signIn = () => {
+      signIn = null;
+      term.write('\x1b[2J\x1b[H\x1b[32m✓ Signed in (demo)\x1b[0m\r\n');
+      handle = begin();
+    };
+    // Until then the office's Stop still ends it.
+    return { kept: true, send: (text) => handle?.send(text), stop: () => (handle ? handle.stop() : end({ ok: false, text: '', costUsd: 0, turns: 0, errors: ['Stopped by manager'] })) };
+  }
+  handle = begin();
   return Object.assign(handle, { kept: true }); // as if the keeper held it: the demo's update restarts nothing
 }
 
@@ -303,6 +431,13 @@ export function demoUsage(kind: 'warning' | 'limit', now: number): UsageWarning 
 const USAGE_WARNING_AT = 4;
 const USAGE_WARNING_MS = 5 * 60_000;
 let sessionsStarted = 0;
+const fakesStarted = { builds: 0, qa: 0 };
+
+/** Now and then a fake session gets stuck (#359): the 2nd of every 8 builders on its sign-in screen, the 2nd of every 8 QAs printing its report without reporting it. */
+function demoStuck(task: SessionOptions['task']): DemoStuck {
+  if (task === 'qa') return ++fakesStarted.qa % 8 === 2 ? 'result' : null;
+  return task === 'issue' && ++fakesStarted.builds % 8 === 2 ? 'sign-in' : null;
+}
 
 function fakeUsageWarning(cb: SessionCallbacks) {
   setTimeout(() => {
@@ -350,7 +485,9 @@ registerDemo('sessions', ({ scale, deskRepo }) => ({
     // Its first turn's size, as real sessions measured it here (#50): Claude Code's own ~23k, plus ~28k of
     // connectors and plugins unless the session is lean.
     if (!opts.resumeSessionId) cb.startup?.({ tokens: 23_500 + charTokens(opts.systemAppend.length + opts.prompt.length) + (opts.tools?.noConnectors ? 0 : 27_800), memoryChars: 24_000 });
-    return inTerminal(opts, cb, (c) => (opts.readOnly ? demoConsultSession(opts, c) : opts.role === 'ceo' ? ceoSession(opts, c) : fakeSession(opts, withDemoChat(opts, withLab(opts, c)), deskRepo.get(opts.cwd) ?? boxDeskRepo(opts.cwd) ?? [...repos.keys()][0])));
+    const fake = !opts.readOnly && opts.role !== 'ceo';
+    const stuck = fake && !scale && !opts.box && !opts.resumeSessionId && opts.terminal ? demoStuck(opts.task) : null; // a cloud agent's sign-in is the office's own (docs/cloud.md)
+    return inTerminal(opts, cb, (c) => (opts.readOnly ? demoConsultSession(opts, c) : opts.role === 'ceo' ? (signInSession(opts, c) ?? ceoSession(opts, c)) : agentSession(opts, withDemoChat(opts, withLab(opts, c)), deskRepo.get(opts.cwd) ?? boxDeskRepo(opts.cwd) ?? [...repos.keys()][0])), fake, stuck);
   },
   sessionTranscript: (_cwd, sessionId, about) => demoTranscript(path.join(HOME_DIR, 'demo-transcripts'), sessionId, about),
   terminals: true,

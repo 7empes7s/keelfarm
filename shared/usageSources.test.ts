@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { accountSource, anthropicCosts, boxSource, codexPlan, codexReadings, elevenLabsSource, openaiCosts, resetsIn, usageAlerts, usageLine, worstFirst } from './usageSources';
+import { accountSource, anthropicCosts, backAlerts, boxSource, codexPlan, codexReadings, elevenLabsSource, openaiCosts, resetsIn, usageAlerts, usageLine, windowWords, worstFirst } from './usageSources';
 import type { AccountView, UsageSource } from './types';
 
 const NOW = Date.UTC(2026, 10, 8, 12, 0, 0);
@@ -89,6 +89,17 @@ describe('adapters', () => {
     expect(s).toMatchObject({ spendUsd7d: 41.2, status: 'near', plan: 'API', accountId: 'claude-apikey' });
   });
 
+  it('shows a window whose reset has passed as 0%, waiting for a new reading (#442)', () => {
+    const s = accountSource(account({ usage: [{ type: 'seven_day', pct: 100, resetsAt: NOW - HOUR, at: NOW - 30 * HOUR }] }), 0, NOW);
+    expect(s.windows[0]).toMatchObject({ name: 'Weekly', usedPct: 0 });
+    expect(s.note).toBe('Reset, waiting for a new reading');
+  });
+
+  it("shows the plan read from a Claude login over the typed one (#460)", () => {
+    expect(accountSource(account({ label: 'Claude Ultra', plan: 'Ultra', loginPlan: 'Pro' }), 0, NOW).plan).toBe('Pro');
+    expect(accountSource(account({ label: 'Claude Ultra', plan: 'Ultra' }), 0, NOW).plan).toBe('Ultra');
+  });
+
   it('counts Boxes against the plan limit', () => {
     expect(boxSource({ total: 9, running: 2 }, 10, NOW)).toMatchObject({ status: 'near', windows: [{ used: 9, limit: 10, usedPct: 90 }] });
   });
@@ -134,5 +145,20 @@ describe('notifications', () => {
     const limited = usageAlerts([src('codex-login', 40, { status: 'limited' })], [], NOW);
     expect(limited.alerts.map((a) => a.title)).toEqual(['codex-login is at its limit']);
     expect(usageAlerts([src('codex-login', 40, { status: 'limited' })], limited.sent, NOW).alerts).toEqual([]);
+  });
+
+  it("tells the manager once when a watched limited source is back (#404), and drops a watch whose row is gone", () => {
+    const still = backAlerts([src('claude-ultra', 100)], ['claude-ultra', 'gone']);
+    expect(still).toEqual({ alerts: [], watching: ['claude-ultra'] });
+    const back = backAlerts([src('claude-ultra', 20)], still.watching);
+    expect(back.alerts.map((a) => a.title)).toEqual(['claude-ultra is back']);
+    expect(back.watching).toEqual([]);
+  });
+});
+
+describe('a balance in words (#364)', () => {
+  it("says what's left when there's no limit to measure against", () => {
+    expect(windowWords({ name: 'Balance', usedPct: null, used: 1250, unit: 'credits', resetsAt: null })).toBe('1.3k credits left');
+    expect(windowWords({ name: 'Balance', usedPct: null, used: 10.01, unit: '$', resetsAt: null })).toBe('$10.01 balance');
   });
 });

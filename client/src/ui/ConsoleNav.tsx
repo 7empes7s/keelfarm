@@ -5,6 +5,7 @@ import { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useRef,
 import { pendingRequests, useStore, type ManagerTab } from '../store';
 import { GROUPS, hashFor, loadRemembered, opening, remember, search, sectionRow, sectionsIn, stepTab, type GroupId, type Hit, type Section, type SectionId, type Where } from './consoleNavRules';
 import { CeoTab, FloorsTab, IssuesTab, TeamTab } from './ManagerConsole';
+import { ItDeskSettings } from './ItDeskCards';
 import { AboutOffice, AgentsSettings, CeoSettings, CompanySettings, PreviewsSettings, RuntimeSettings } from './SettingsSections';
 import { OpsTab } from './MissionConsole';
 import { CharterTab } from './CharterTab';
@@ -15,6 +16,7 @@ import { ProfileSettings } from './ProfileSettings';
 import { CloudSettings } from './CloudSettings';
 import { ProvidersSettings } from './ProvidersSettings';
 import { ProvidersPage } from './ProvidersPage';
+import { GuidesPage } from './GuidesPage';
 import { VoiceSettings } from './VoiceSettings';
 import { OutsideSettings } from './OutsideSettings';
 import { NotifySettings } from './NotifySettings';
@@ -42,8 +44,24 @@ function openOffice() {
   setMode('office');
 }
 
+/** A Settings card asked for by its element id (a usage row's account, #404): scrolled to and outlined once it renders. */
+function useCardFocus(card: string | undefined) {
+  useEffect(() => {
+    if (!card) return;
+    const t = setTimeout(() => {
+      const el = document.getElementById(card);
+      if (!el) return;
+      el.scrollIntoView({ block: 'center' });
+      el.classList.add('cn-found');
+      setTimeout(() => el.classList.remove('cn-found'), 2500);
+    }, 60); // lazy sections render a moment later
+    return () => clearTimeout(t);
+  }, [card]);
+}
+
 /** One section's content. */
 export function SectionBody({ id, where, focus = {} }: { id: SectionId; where: Where; focus?: SectionFocus }) {
+  useCardFocus(id === 'ops' ? undefined : focus.card);
   const one = (body: ReactNode) => <div className="cn-one">{body}</div>;
   switch (id) {
     case 'floors':
@@ -65,7 +83,12 @@ export function SectionBody({ id, where, focus = {} }: { id: SectionId; where: W
     case 'ceo':
       return <CeoTab focusRepo={focus.repoId} />;
     case 'ceo-settings':
-      return one(<CeoSettings />);
+      return one(
+        <>
+          <CeoSettings />
+          <ItDeskSettings />
+        </>,
+      );
     case 'tools':
       return <ToolsTab />;
     case 'history':
@@ -95,6 +118,8 @@ export function SectionBody({ id, where, focus = {} }: { id: SectionId; where: W
       return one(<ProfileSettings />);
     case 'providers':
       return one(<ProvidersPage />);
+    case 'guides':
+      return one(<GuidesPage />);
     case 'accounts':
       return one(<ProvidersSettings />);
     case 'cloud-agents':

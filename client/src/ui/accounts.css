@@ -64,6 +64,24 @@
 .acc-muted {
   color: var(--ds-text-muted);
 }
+.acc-flag {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ds-space-2);
+  min-width: 0;
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-sm);
+  overflow-wrap: anywhere;
+}
+.acc-flag svg {
+  flex: none;
+  width: 1em;
+  height: 1em;
+  margin-top: 0.15em;
+}
+.acc-flag-warn {
+  color: var(--ds-warn-text);
+}
 .acc-tags {
   display: flex;
   flex-wrap: wrap;

@@ -1,7 +1,8 @@
 // Notifications you can act on (#107): the toasts (rich ones with an icon, title, floor chip and up to two buttons;
 // paused while touched or hovered, swiped or ✕'d away, errors and what needs you staying), the bell with the unread
 // count, and the notification centre listing the recent ones. Tapping one jumps where it's about (noticeNav.ts).
-import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type Ref } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type Ref, type RefObject } from 'react';
+import { create } from 'zustand';
 import { api } from '../api';
 import { useStore, type Toast } from '../store';
 import { useMode } from '../pocket/mode';
@@ -10,8 +11,11 @@ import type { NoticeKind, NoticeView } from '../../../shared/types';
 import { noticeJump, noticeStep, type NoticeStep } from './noticeNav';
 import { openFrom } from './RefChips';
 import { Panel } from './Panel';
+import { Popover } from './Popover';
 import { XLabel } from './HoverCard';
 import { useToastSpot } from './useToastSpot';
+import { useKeyReview } from './keyReview';
+import { useTour } from './tour';
 import './notices.css';
 import { CloseButton, Icon } from './Icon';
 import { iconFor } from './icons';
@@ -39,6 +43,9 @@ function run(step: NoticeStep, pocket: boolean) {
       return openFrom(step.overlay, step.floor);
     case 'chat':
       return s.openOverlay({ kind: 'phone', tab: 'chat' });
+    case 'keys':
+      useKeyReview.setState({ open: true });
+      return s.openOverlay({ kind: 'manager', tab: 'providers' });
     case 'approvals':
       if (!pocket) return s.openOverlay({ kind: 'phone', tab: 'hires', requestId: step.requestId });
       s.openOverlay(null);
@@ -185,9 +192,11 @@ function ToastItem({ t, pocket }: { t: Toast; pocket: boolean }) {
 
 /** The toasts, newest at the end; `max` show and the rest collapse into "+N more", which opens the centre. */
 export function NoticeToasts({ max }: { max: number }) {
-  const toasts = useStore((s) => s.toasts);
+  const all = useStore((s) => s.toasts);
   const pocket = useMode((s) => s.mode) === 'pocket';
+  const tour = useTour((s) => s.on); // they wait behind the tour, their time starting once it's done (#408)
   useNoticeSync();
+  const toasts = tour ? [] : all;
   const { shown, more } = toastStack(toasts, max);
   const box = useRef<HTMLDivElement>(null);
   const spot = useToastSpot(box, shown.length + (more > 0 ? 1 : 0)); // never over a header or a tab row (#230)
@@ -227,21 +236,84 @@ function useNoticeSync() {
   }, [chat, ceoUnread]);
 }
 
-/** The bell: the notification centre, with how many are unread. */
-export function NoticeBell({ className }: { className: string }) {
+/** Whether the bell's popover is open (the tour's "Open the bell" step counts it). */
+export const useNoticePop = create<{ open: boolean }>(() => ({ open: false }));
+const setPop = (open: boolean) => useNoticePop.setState({ open });
+
+/** The bell, with how many are unread: a popover under it (#416), on a phone (`compact`) the notification centre. */
+export function NoticeBell({ className, compact }: { className: string; compact?: boolean }) {
   const unread = useStore((s) => unreadCount(s.notices));
+  const open = useNoticePop((s) => s.open) && !compact;
+  const ref = useRef<HTMLButtonElement>(null);
   const label = unread ? `Notifications, ${unread} unread` : 'Notifications';
   return (
-    <button type="button" data-tour="bell" className={`notice-bell xbtn ${className}`} onClick={() => useStore.getState().openOverlay({ kind: 'notices' })} aria-label={label} title={label}>
-      <Icon name="bell" />
-      <XLabel text="Notifications" />
-      {unread > 0 && <span className="badge badge-dot">{unread > 99 ? '99+' : unread}</span>}
-    </button>
+    <>
+      <button
+        ref={ref}
+        type="button"
+        data-tour="bell"
+        className={`notice-bell xbtn ${className}`}
+        onClick={() => (compact ? useStore.getState().openOverlay({ kind: 'notices' }) : setPop(!open))}
+        aria-label={label}
+        aria-haspopup="dialog"
+        aria-expanded={compact ? undefined : open}
+        title={label}
+      >
+        <Icon name="bell" />
+        <XLabel text="Notifications" />
+        {unread > 0 && <span className="badge badge-dot">{unread > 99 ? '99+' : unread}</span>}
+      </button>
+      {open && <NoticePopover anchor={ref} onClose={() => setPop(false)} />}
+    </>
   );
 }
 
-/** One cell of the centre (#298): body clamped to three lines, More opens it; the unread dot by the time. */
-function NoticeRow({ n, pocket, today }: { n: NoticeView; pocket: boolean; today: boolean }) {
+/** The bell's popover: the recent notices as the centre's cells, Mark all read, and See all for the full page. */
+function NoticePopover({ anchor, onClose }: { anchor: RefObject<HTMLElement | null>; onClose: () => void }) {
+  const notices = useStore((s) => s.notices);
+  const pocket = useMode((s) => s.mode) === 'pocket';
+  const groups = noticeGroups(notices, Date.now(), {});
+  const seeAll = () => {
+    onClose();
+    useStore.getState().openOverlay({ kind: 'notices' });
+  };
+  return (
+    <Popover
+      anchor={anchor}
+      label="Notifications"
+      title={
+        <>
+          <Icon name="bell" /> Notifications
+        </>
+      }
+      className="notice-pop"
+      onClose={onClose}
+    >
+      <div className="notice-pop-bar">
+        <button type="button" className="btn btn-small" disabled={!unreadCount(notices)} onClick={() => void api.readNotices().catch(() => undefined)}>
+          Mark all read
+        </button>
+        <button type="button" className="btn btn-small btn-ghost" onClick={seeAll}>
+          See all <Icon name="chevron-right" />
+        </button>
+      </div>
+      {groups.length === 0 && <p className="muted">Nothing yet: merges, QA verdicts and what needs you show up here.</p>}
+      {groups.map((g) => (
+        <section key={g.label} className="notice-group">
+          <h3>{g.label}</h3>
+          <ul>
+            {g.items.map((n) => (
+              <NoticeRow key={n.id} n={n} pocket={pocket} today={g.label === 'Today'} after={onClose} />
+            ))}
+          </ul>
+        </section>
+      ))}
+    </Popover>
+  );
+}
+
+/** One cell of the centre (#298): body clamped to three lines, More opens it; the unread dot by the time. `after`: it jumped somewhere. */
+function NoticeRow({ n, pocket, today, after }: { n: NoticeView; pocket: boolean; today: boolean; after?: () => void }) {
   const text = useRef<HTMLSpanElement>(null);
   const [open, setOpen] = useState(false);
   const [clamped, setClamped] = useState(false);
@@ -263,7 +335,7 @@ function NoticeRow({ n, pocket, today }: { n: NoticeView; pocket: boolean; today
   );
   return (
     <li className={`notice-row notice-${n.level} ${n.read ? '' : 'notice-unread'} ${open ? 'notice-open' : ''}`}>
-      <NoticeBody n={n} pocket={pocket} meta={meta} textRef={text} />
+      <NoticeBody n={n} pocket={pocket} after={after} meta={meta} textRef={text} />
       {(clamped || open || !!n.actions?.length) && (
         <span className="notice-foot">
           {(clamped || open) && (
@@ -271,7 +343,7 @@ function NoticeRow({ n, pocket, today }: { n: NoticeView; pocket: boolean; today
               {open ? 'Less' : 'More'}
             </button>
           )}
-          <NoticeButtons n={n} pocket={pocket} />
+          <NoticeButtons n={n} pocket={pocket} after={after} />
         </span>
       )}
     </li>

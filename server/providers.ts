@@ -5,10 +5,10 @@
 import fs from 'node:fs/promises';
 import { constants as fsConst } from 'node:fs';
 import path from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import { HttpError } from './httpError.ts';
 import { mergeSecrets, readSecrets } from './secrets.ts';
-import { keyHint, keyProblem, mcpProblem, mcpTestNote, mcpTestRequest, providerDef, sessionMcpServers, splitCommand, testNote, testRequest, testUsage, type McpInput, type ProbeRequest, type ProbeResult } from '../shared/providers.ts';
+import { keyHint, keyProblem, mcpProblem, mcpTestNote, mcpTestRequest, providerDef, sessionMcpServers, splitCommand, testNote, testPlan, testRequest, testUsage, type McpInput, type ProbeRequest, type ProbeResult } from '../shared/providers.ts';
 import type { McpServerConfig, ProviderConnection, ProvidersView, ProviderTest } from '../shared/types.ts';
 
 const keyOf = (id: string) => `provider:${id}`;
@@ -40,6 +40,17 @@ export function readProvidersFile(raw: unknown): ProvidersView {
   return { connections, mcp };
 }
 
+const b64url = (v: string | Buffer) => Buffer.from(v).toString('base64url');
+
+/** Kling's bearer: an "access:secret" pair becomes a 30-minute HS256 JWT (iss = the access key); one API key goes as is. */
+export function klingToken(key: string, now = Date.now()): string {
+  const [access, secret] = key.split(':');
+  if (secret === undefined) return key;
+  const sec = Math.floor(now / 1000);
+  const head = `${b64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))}.${b64url(JSON.stringify({ iss: access, exp: sec + 1800, nbf: sec - 5 }))}`;
+  return `${head}.${b64url(createHmac('sha256', secret).update(head).digest())}`;
+}
+
 export class Providers {
   private data: ProvidersView = { connections: [], mcp: [] };
   private keys = new Map<string, string>(); // secrets.json's provider:* and mcp:* values
@@ -62,6 +73,14 @@ export class Providers {
     return [...this.keys.values()];
   }
 
+  /** The saved keys with their connections' names, for finding duplicates (#367). Server memory only. */
+  savedKeys(): { value: string; label: string }[] {
+    return this.data.connections.flatMap((c) => {
+      const value = this.keys.get(keyOf(c.id));
+      return value ? [{ value, label: c.label }] : [];
+    });
+  }
+
   /** The MCP servers an agent's session gets (its own mcp.json). */
   mcpFor(agentId: string): Record<string, Record<string, unknown>> {
     return sessionMcpServers(this.data.mcp, agentId, (id, name) => this.keys.get(mcpKeyOf(id, name)) ?? '');
@@ -69,9 +88,11 @@ export class Providers {
 
   // ---------- keys ----------
 
-  /** A key for a catalogue provider: saved, then tested. */
+  /** A key for a catalogue provider: saved, then tested. An empty one reuses the key it shares (Google video's Gemini key). */
   async add(provider: string, rawKey: string, rawLabel = ''): Promise<ProviderConnection> {
-    const key = rawKey.trim();
+    const shared = providerDef(provider)?.sharesKeyWith;
+    const from = shared && this.data.connections.find((x) => x.provider === shared);
+    const key = rawKey.trim() || (from ? (this.keys.get(keyOf(from.id)) ?? '') : '');
     const problem = keyProblem(provider, key);
     if (problem) throw new HttpError(400, problem);
     const def = providerDef(provider)!;
@@ -97,11 +118,14 @@ export class Providers {
   async test(id: string): Promise<ProviderConnection> {
     const c = this.data.connections.find((x) => x.id === id);
     if (!c) throw new HttpError(404, 'No such connection: it may be gone already.');
-    const req = testRequest(c.provider, this.keys.get(keyOf(id)) ?? '');
+    const key = this.keys.get(keyOf(id)) ?? '';
+    const req = testRequest(c.provider, c.provider === 'kling' ? klingToken(key) : key);
     if (!req) throw new HttpError(400, `${c.label} is tested in its own settings.`);
     const r = await this.deps.probe(req);
-    const windows = testUsage(c.provider, r.body);
-    c.test = { at: Date.now(), ...testNote(r), ...(windows.length ? { windows } : {}) };
+    const ok = r.status >= 200 && r.status < 300;
+    const windows = ok ? testUsage(c.provider, r.body) : [];
+    const plan = ok ? testPlan(c.provider, r.body) : undefined;
+    c.test = { at: Date.now(), ...testNote(r), ...(windows.length ? { windows } : {}), ...(plan ? { plan } : {}) };
     await this.save();
     return { ...c };
   }

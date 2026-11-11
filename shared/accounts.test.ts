@@ -8,12 +8,18 @@ import {
   applyPatch,
   builtInAccounts,
   builtInDir,
+  cardPlan,
   checkBinding,
   cleanTags,
+  limitedBy,
   moveAccount,
+  loginPlanName,
   normaliseAccounts,
+  planRename,
+  planWarning,
   removal,
   resolveAccount,
+  sameSubscription,
 } from './accounts';
 import type { ProviderAccount } from './types';
 
@@ -86,6 +92,64 @@ describe('accountStatus', () => {
     const r = accountStatus({ ...base, account: acc({ id: 'a', kind: 'api-key', dailyCostCap: 5 }), todayUsd: 5.2 });
     expect(r.status).toBe('limited');
     expect(new Date(r.until!).getHours()).toBe(0);
+  });
+  it('counts a full window whose reset has passed as ready, not near or limited (#442)', () => {
+    const week = { type: 'seven_day', pct: 100, resetsAt: now - 2 * 3600_000, at: now - 30 * 3600_000 };
+    expect(accountStatus({ ...base, usage: [week] })).toEqual({ status: 'ready', until: null });
+    expect(accountStatus({ ...base, usage: [{ ...week, resetsAt: now + 3600_000 }] }).status).toBe('limited');
+  });
+  it('says which limit holds a limited account (#383)', () => {
+    const week = { type: 'seven_day', pct: 100, resetsAt: now + 50 * 3600_000, at: now };
+    const five = { type: 'five_hour', pct: 100, resetsAt: now + 2 * 3600_000, at: now };
+    expect(limitedBy([week, five], accountStatus({ ...base, usage: [week, five] }).until, now)).toBe('weekly');
+    expect(limitedBy([five], accountStatus({ ...base, usage: [five] }).until, now)).toBe('5-hour');
+    expect(limitedBy([], now + 60_000, now)).toBeNull(); // a session's hit: no reading says
+  });
+});
+
+describe('the plan a login really has (#442)', () => {
+  it('reads it from .credentials.json fields', () => {
+    expect(loginPlanName('max', 'default_claude_max_20x')).toBe('Max 20x');
+    expect(loginPlanName('pro', 'default_claude_ai')).toBe('Pro');
+    expect(loginPlanName(undefined, 'x')).toBeNull();
+  });
+  it('warns when it is not the plan the label, plan field or tags say', () => {
+    const ultra = { label: 'Claude Ultra', tags: [] as string[] };
+    expect(planWarning(ultra, 'Pro')).toBe('Signed in with a Pro account, not Ultra');
+    expect(planWarning({ label: 'Backup', plan: 'Max', tags: [] }, 'Pro')).toBe('Signed in with a Pro account, not Max');
+    expect(planWarning({ label: 'Backup', tags: ['max'] }, 'Pro 5x')).toBe('Signed in with a Pro 5x account, not Max');
+    expect(planWarning(ultra, 'Max 20x')).toBeNull();
+    expect(planWarning({ label: 'Max · keelops', tags: ['backup'] }, 'Max 5x')).toBeNull();
+    expect(planWarning({ label: 'Second login', tags: [] }, 'Pro')).toBeNull();
+    expect(planWarning(ultra, null)).toBeNull();
+  });
+  it('shows the login’s plan over the typed one, the typed one only without a login (#460)', () => {
+    expect(cardPlan({ plan: 'Ultra', loginPlan: 'Pro' })).toBe('Pro');
+    expect(cardPlan({ plan: 'Ultra' })).toBe('Ultra');
+    expect(cardPlan({ loginPlan: null })).toBeNull();
+  });
+  it('proposes a rename from the login’s plan, and the renamed account no longer warns (#460)', () => {
+    const ultra = { label: 'Claude Ultra', plan: 'Ultra', tags: ['ultra'] };
+    expect(planWarning(ultra, 'Pro')).toBe('Signed in with a Pro account, not Ultra');
+    expect(planRename('Pro')).toEqual({ label: 'Claude Pro', plan: 'Pro' });
+    expect(planWarning({ ...ultra, ...planRename('Pro') }, 'Pro')).toBeNull(); // its plan field wins over a leftover tag
+    const main = { label: 'Main login (temporarily Pro)', tags: [] as string[] };
+    expect(planWarning(main, 'Max 20x')).toBe('Signed in with a Max 20x account, not Pro');
+    expect(planRename('Max 20x')).toEqual({ label: 'Claude Max 20x', plan: 'Max 20x' });
+    expect(planWarning({ ...main, ...planRename('Max 20x') }, 'Max 20x')).toBeNull();
+  });
+  it('notes logins on the same subscription: same plan and owner (#460)', () => {
+    const shared = sameSubscription([
+      { id: 'main', label: 'Main login', plan: 'Pro', who: 'u1' },
+      { id: 'second', label: 'Pro secondary', plan: 'Pro', who: 'u1' },
+      { id: 'ultra', label: 'Claude Ultra', plan: 'Max 20x', who: 'u1' }, // same owner, another plan
+      { id: 'other', label: 'Other Pro', plan: 'Pro', who: 'u2' },
+      { id: 'unknown', label: 'No owner', plan: 'Pro', who: null },
+    ]);
+    expect([...shared]).toEqual([
+      ['main', 'Pro secondary'],
+      ['second', 'Main login'],
+    ]);
   });
 });
 

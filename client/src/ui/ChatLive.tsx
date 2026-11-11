@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { currentStep, liveText, type CeoLive, type LiveStep, type StepLog } from '../../../shared/ceoStream';
 import { usedLine, type UsedView } from '../../../shared/used';
 import { sayNow, talkMode } from '../../../shared/voiceTalk';
@@ -9,7 +9,7 @@ import { stepsSummary, stepTime } from './chatCardRules';
 import { Icon } from './Icon';
 import { iconFor } from './icons';
 import { Markdown } from './Markdown';
-import { isLong } from './longText';
+import { foldText } from './longText';
 import './chat.css';
 
 // The CEO chat closer to Claude's (#51): the reply streaming in with its live step line, each reply's step log (#150)
@@ -103,8 +103,8 @@ function SaidChip() {
   );
 }
 
-/** A finished reply's steps as one row ("⚙ 6 steps · 1 action · 42 s ▸") that opens the round's log; its action cards stay above it. */
-export function StepsRow({ log, actions, used, linked, onFloor }: { log: StepLog | null; actions: number; used: UsedView | undefined } & Linked) {
+/** A finished reply's steps as one row ("⚙ 6 steps · 1 action · 42 s ▸") that opens the round's log, with `summary`, its turn's folded closing text (#378), first; its action cards stay above it. */
+export function StepsRow({ log, actions, used, summary, linked, onFloor }: { log: StepLog | null; actions: number; used: UsedView | undefined; summary?: string } & Linked) {
   const [open, setOpen] = useState(false);
   return (
     <div className="steps-row-wrap">
@@ -117,6 +117,11 @@ export function StepsRow({ log, actions, used, linked, onFloor }: { log: StepLog
       </button>
       {open && (
         <div className="steps-row-log">
+          {summary && (
+            <p className="steps-row-summary">
+              <strong>Summary</strong> {summary}
+            </p>
+          )}
           {log && <StepLogList steps={log.steps} now={0} linked={linked} onFloor={onFloor} />}
           {log && log.count > log.steps.length && <p className="steps-row-foot muted">{log.steps.length ? `and ${log.count - log.steps.length} earlier steps` : 'Only the newest replies keep each step after a reload'}</p>}
           {used && <p className="steps-row-foot muted">{usedLine(used)}</p>}
@@ -126,15 +131,16 @@ export function StepsRow({ log, actions, used, linked, onFloor }: { log: StepLog
   );
 }
 
-/** A long message shows its start, with "Show more". */
-export function LongText({ text, children }: { text: string; children: ReactNode }) {
+/** A long message shows its whole first blocks (#339), with "Show more · 2 more code blocks". */
+export function LongText({ text, children }: { text: string; children: (text: string) => ReactNode }) {
   const [open, setOpen] = useState(false);
-  if (!isLong(text)) return children;
+  const fold = useMemo(() => foldText(text), [text]);
+  if (!fold) return children(text);
   return (
     <>
-      <div className={open ? undefined : 'long-folded'}>{children}</div>
+      {open ? children(text) : fold.shown === null ? <div className="long-folded">{children(text)}</div> : children(fold.shown)}
       <button type="button" className="long-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>
-        {open ? 'Show less' : 'Show more'}
+        {open ? 'Show less' : fold.more}
       </button>
     </>
   );

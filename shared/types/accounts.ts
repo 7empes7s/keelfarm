@@ -2,9 +2,10 @@
 // on. The registry holds no secret: API keys and setup tokens stay in secrets.json on the server.
 import type { UsageReading } from './office.ts';
 import type { UsageSource } from './usage.ts';
+import type { AgentCli, EffortLevel } from './agents.ts';
 
 /** The coding agents an account can be for. */
-export type AccountCli = 'claude' | 'codex';
+export type AccountCli = 'claude' | 'codex' | 'gemini';
 /** A subscription signed in in its own config folder, an API key billed per token, or a `claude setup-token` token. */
 export type AccountKind = 'subscription-login' | 'api-key' | 'setup-token';
 
@@ -28,6 +29,21 @@ export interface ProviderAccount {
   limitSpans?: [number, number][]; // when it was limited (from, until), the last 7 days: its timeline bar (#248)
 }
 
+/**
+ * What a session really runs on (#376): the account it started on (rotation can move it off its pin, #357), its coding
+ * agent, model and effort. On an agent while their session is live, and on the CEO thread its session last answered in.
+ */
+export interface SessionRun {
+  account: string; // the account's id; '' when it runs on no account of the registry (a cloud agent's, OpenCode's own setup)
+  label: string; // that account's label, or what it runs on instead
+  cli: AgentCli;
+  model: string; // '' = the coding agent's default
+  effort: EffortLevel | '';
+  at: number; // when it started
+  pinned?: string; // the pin's label (an account's, or the tag) when it isn't on its pin
+  why?: string; // why it's off its pin: "limited", "signed out", "paused"
+}
+
 /** Ready / Near limit / Limited until … / Signed out / Paused, for the chip on its card. */
 export type AccountStatus = 'ready' | 'near' | 'limited' | 'signed-out' | 'paused';
 
@@ -44,6 +60,11 @@ export interface AccountView extends ProviderAccount {
   agents: string[]; // ids of the agents (and the CEO) pinned to it, or to one of its tags
   running: number; // sessions on it right now
   signIn: SignInRun | null; // its last sign-in in its terminal since the office started (#302)
+  loginPlan?: string; // the plan a Claude login really has, from its .credentials.json ("Max 20x"), never a token (#442)
+  planWarning?: string; // that plan isn't the one its name, plan field or tags say
+  sameAs?: string; // the label of another login on the same subscription (same plan and owner), whose limits it shares (#460)
+  tokenRefresh?: boolean; // its access token expired: still signed in, its next session refreshes it
+  shareMissing?: string[]; // a Claude login with its own folder (#377): what it doesn't share yet with this computer's login ([] all)
 }
 
 /** A login's sign-in: `claude auth login` / `codex login`, or `claude setup-token` in its folder. */
@@ -55,12 +76,33 @@ export interface SignInRun {
   running: boolean;
   ok: boolean;
   note: string; // when it's over: "Sign-in failed (400). Try again…", never anything typed
+  // What its terminal shows, for the guided sign-in (#350):
+  url?: string; // the sign-in page it printed
+  deviceCode?: string; // Codex's one-time code for that page
+  waiting?: boolean; // Claude Code's prompt waits for the code
+  question?: { text: string; options: string[] }; // a menu the office didn't answer by itself
 }
 
 export interface AccountsView {
   accounts: AccountView[];
   rotation?: RotationStats; // absent in old journals
   sources?: UsageSource[]; // usage for every account and provider (#361), worst first: in the snapshot, then usageSources events
+  next?: { claude: string | null; ceo: string | null }; // the Claude account the next agent's and the CEO's session start on (#383)
+  switching?: Switching[]; // a new default while open tasks finish on the old one (#390); absent: none
+}
+
+/** One account's tasks still running on it after another became the default (#390). */
+export interface TasksLeft {
+  id: string;
+  label: string;
+  count: number;
+}
+
+/** A coding agent's new default and the tasks finishing elsewhere first. */
+interface Switching {
+  cli: AccountCli;
+  to: string; // the default's label
+  left: TasksLeft[];
 }
 
 /** Settings → Providers & accounts → Rotation (#248): automatic fallback when an account is limited or signed out. */
@@ -84,6 +126,7 @@ export interface AccountSwitch {
   until: number | null; // when the account it left is back, if known
   api: boolean; // it went to an API key
   usd: number; // what its session cost on that API key
+  carried?: 'conversation' | 'handover'; // #377: the same conversation resumed, or a fresh session told where things stand
 }
 
 /** Rotation's numbers for Providers & accounts and Mission control. */

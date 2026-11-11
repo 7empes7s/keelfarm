@@ -6,6 +6,7 @@
 import { charterOf, emptyCharter, renderCharter, type CharterParts } from '../shared/charter.ts';
 import type { AgentPromptView } from '../shared/types.ts';
 import { REACTION_PROMPT } from '../shared/reactions.ts';
+import { LAB_RESTART_LINE } from './qaPrompt.ts';
 
 export interface PromptAgent {
   name: string;
@@ -135,7 +136,7 @@ export function devSystemPrompt({ agent: a, repo, port, cwd, branch, linked, fix
     `6. Push: ${push}`,
     fixing
       ? '7. Reply with a short summary of what you fixed and a Self-review line: what it found and you fixed.'
-      : `7. Open a pull request with the GitHub CLI: gh pr create --base ${repo.defaultBranch} --head ${branch} --title "<concise title>" --body "<what changed, how you verified it, assumptions, and a Self-review line: what it found and you fixed>". The body must contain "Closes #<issue number>".`,
+      : `7. Open a pull request with the GitHub CLI: gh pr create --base ${repo.defaultBranch} --head ${branch} --title "<concise title>" --body "<what changed, how you verified it, assumptions, a Self-review line: what it found and you fixed, and a '## Try it' section: 2-5 numbered steps (where to go, what to tap, what you should see; paths in backticks)>". The body must contain "Closes #<issue number>".`,
     fixing ? '' : '8. End your final message with the pull request URL on its own line.',
     '',
     'Rules: never push to the default branch, never force-push, never merge pull requests yourself (the office merges them once QA and the checks pass), and never edit files outside your worktree. If you cannot finish, open a draft PR (gh pr create --draft) explaining what is left and why.',
@@ -162,7 +163,7 @@ export function qaSystemPrompt({ agent: a, repo, port, cwd, branch, pr, depsLine
     `2. Review the code as a careful reviewer would: git diff origin/${repo.defaultBranch}...HEAD. Look for bugs, unhandled errors and edge cases, security problems, leftover debug code, and new logic without tests. Then a code-quality pass on the diff, correctness first, then simplification (dead code, duplicates, needless complexity), with the code-review skill at low or medium effort if it is installed. Only blocking findings decide the verdict; put nits in the summary.${charterRules(repo) ? ` Check it against the charter's standards and the issue's objective too: breaking a standard fails the PR. Report it as charterCheck, one line starting "ok" or "violation:".` : ''}`,
     testStep ?? "3. Install dependencies if needed (e.g. npm install when node_modules is missing), then run the project's test suite, linters, type checks and build (whichever exist).",
     repo.browserTesting && lab
-      ? `4. If the project has a UI, start it in the background on port ${port} (reserved for you) and exercise the change with the office's test lab: lab_browser_check (clicks, typing, a phone width, edge cases, no console errors, no sideways scroll) and lab_screenshot of every important state: those screenshots are attached to the PR as evidence. ${LAB_RULE} Stop the server afterwards.`
+      ? `4. If the project has a UI, start it in the background on port ${port} (reserved for you) and exercise the change with the office's test lab: lab_browser_check (clicks, typing, a phone width, edge cases, no console errors, no sideways scroll) and lab_screenshot of every important state: those screenshots are attached to the PR as evidence. ${LAB_RULE} ${LAB_RESTART_LINE} Stop the server afterwards.`
       : repo.browserTesting
       ? `4. If the project has a UI, start it in the background on port ${port} (reserved for you) and exercise the change in a real browser with the Playwright tools: navigate, click, type, resize to a phone size, try edge cases, and check the console for errors. Take a screenshot with browser_take_screenshot (no filename) of every important state: the screenshots are attached to the PR as evidence. Stop the server afterwards.`
       : '4. Exercise the changed behaviour directly (run the program, call the API, write a quick script).',

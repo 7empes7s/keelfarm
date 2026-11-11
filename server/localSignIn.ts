@@ -1,6 +1,6 @@
 // A login account's CLI signing in on this computer (#247, docs/accounts.md), in the account's terminal: the same login
 // as a cloud agent's (cliRunner.ts startBoxSignIn), with the account's own folder in `env` (CLAUDE_CONFIG_DIR or
-// CODEX_HOME). The office only relays the terminal's keys and screen; the login stays in that folder. The keeper keeps
+// CODEX_HOME, GEMINI_CLI_HOME). The office only relays the terminal's keys and screen; the login stays in that folder. The keeper keeps
 // no record of it, so an office restart ends it.
 import os from 'node:os';
 import { signInCommand } from './boxScripts.ts';
@@ -9,10 +9,16 @@ import { spawnPty, terminalsAvailable, type Pty } from './ptyClient.ts';
 import { cliEnv } from './unblock.ts';
 import type { BoxSignIn } from './cliRunner.ts';
 import type { AgentTerminal } from './terminal.ts';
-import type { SignInMode } from '../shared/types.ts';
+import type { AgentCli, SignInMode } from '../shared/types.ts';
 
-/** `exited` hears its exit code; stop() doesn't call it. `setup-token` runs `claude setup-token` instead of its login. */
-export function startLocalSignIn(o: { cli: 'claude' | 'codex'; env: Record<string, string>; term: AgentTerminal; mode?: SignInMode }, exited: (code: number) => void): BoxSignIn {
+/**
+ * Gemini CLI has no login command: one tiny prompt with NO_BROWSER signs it in (its link, then "Enter the
+ * authorization code:") and exits once answered. --skip-trust: the home folder it runs in needn't be trusted.
+ */
+const GEMINI_SIGN_IN = { args: ['--skip-trust', '--prompt', 'Reply with the single word OK.'], env: { NO_BROWSER: 'true' } };
+
+/** `exited` hears its exit code; stop() doesn't call it. `setup-token` runs `claude setup-token` instead of its login; OpenCode runs `opencode auth login` (#493). */
+export function startLocalSignIn(o: { cli: AgentCli; env: Record<string, string>; term: AgentTerminal; mode?: SignInMode }, exited: (code: number) => void): BoxSignIn {
   const { term } = o;
   const cmd = commandFor(o.cli);
   let pty: Pty | null = null;
@@ -28,7 +34,9 @@ export function startLocalSignIn(o: { cli: 'claude' | 'codex'; env: Record<strin
   term.note(token ? `── Making a ${cliLabel(o.cli)} setup token ──` : `── Signing ${cliLabel(o.cli)} in ──`);
   try {
     if (!terminalsAvailable || !cmd) throw new Error(!terminalsAvailable ? 'the terminal module could not be loaded on this machine' : `${cliLabel(o.cli)} isn't installed`);
-    const p = spawnPty(cmd.file, [...cmd.args, ...(token ? ['setup-token'] : signInCommand(o.cli).args)], { cols: term.cols, rows: term.rows, cwd: os.homedir(), env: cliEnv(process.env, {}, { machine: o.env }) }, {});
+    const gemini = o.cli === 'gemini'; // its folder was set up first (Accounts.signIn)
+    const args = token ? ['setup-token'] : o.cli === 'gemini' ? GEMINI_SIGN_IN.args : o.cli === 'opencode' ? ['auth', 'login'] : signInCommand(o.cli).args;
+    const p = spawnPty(cmd.file, [...cmd.args, ...args], { cols: term.cols, rows: term.rows, cwd: os.homedir(), env: cliEnv(process.env, gemini ? GEMINI_SIGN_IN.env : {}, { machine: o.env }) }, {});
     pty = p;
     term.bind({ write: (d) => p.write(d), resize: (c, r) => p.resize(c, r) });
     p.onData((d) => !over && term.write(d));

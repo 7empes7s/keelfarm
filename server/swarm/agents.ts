@@ -7,6 +7,7 @@ import { redact } from '../cloud.ts';
 import { HttpError } from '../httpError.ts';
 import { issueTaken } from '../issueClaims.ts';
 import { cliLabel, isCli } from '../clis.ts';
+import { boxCli } from '../../shared/cloud.ts';
 import { Accounts } from '../accounts.ts';
 import { checkBinding } from '../../shared/accounts.ts';
 import { HOME_DIR, MODELS_FILE } from '../config.ts';
@@ -58,15 +59,17 @@ export abstract class SwarmAgents extends SwarmMerge {
     home: HOME_DIR,
     env: process.env,
     file: path.join(HOME_DIR, this.backend.demo ? 'demo-accounts.json' : 'accounts.json'),
-    check: (a, dir, secret) => this.backend.accounts.check(a, dir, secret),
-    signIn: (o, exited) => this.backend.accounts.signIn(o, exited),
+    check: (a, dir, secret) => this.backend.accounts.check(a, dir, secret), login: (a, dir) => this.backend.accounts.login(a, dir),
+    signIn: (o, exited) => this.backend.accounts.signIn(o, (code) => (code < 0 && this.recheckClis(), exited(code))), // couldn't start: is its CLI here? (#493)
     spend: () => this.spend.ledger.all().filter((r) => r.type === 'session'),
     agents: () => this.state.agents,
     builtInUsage: () => this.state.claudeUsage,
     changed: (accounts) => this.broadcast({ type: 'accounts', accounts }),
     seed: this.backend.accounts.seed,
+    shareFrom: this.backend.accounts.shareFrom?.(),
     poll: !process.env.VITEST,
     rotation: () => rotationSettings(this.state.settings.rotation, undefined),
+    tasks: () => this.runningTaskAccounts(),
   });
 
   // ---------- agents ----------
@@ -77,7 +80,7 @@ export abstract class SwarmAgents extends SwarmMerge {
   }
 
   protected agentView(a: PersistedAgent, withLog: boolean): AgentView {
-    const v = { ...super.agentView(a, withLog), ...(a.account ? { account: a.account } : {}) };
+    const v = { ...super.agentView(a, withLog), ...(a.account ? { account: a.account } : {}), run: this.agentRt.get(a.id)?.run ?? null }; // null, not absent, so a patch clears the chip
     return this.consulting(a) ? { ...v, status: 'working', issueTitle: `Consult for ${this.ceo().name}` } : v;
   }
 
@@ -168,8 +171,8 @@ export abstract class SwarmAgents extends SwarmMerge {
     if (want === 'local') return 'local';
     const why = !this.cloud.boxApi()
       ? 'Cloud agents need your Upstash Box API key first: Settings → Cloud agents.'
-      : cli === 'opencode'
-        ? "OpenCode can't run in a cloud machine yet: give this agent Claude Code or Codex."
+      : !boxCli(cli)
+        ? `${cliLabel(cli)} can't run in a cloud machine yet: give this agent Claude Code or Codex.`
         : !this.boxRoom(moving)
           ? `Your Upstash plan's Box limit (${this.state.settings.cloud.boxLimit}) is reached. Raise it in Settings → Cloud agents if your plan allows more, or delete Boxes you don't need.`
           : null;
@@ -238,7 +241,7 @@ export abstract class SwarmAgents extends SwarmMerge {
     const boxId = await this.boxMachines.ensure(machine, (text) => this.appendLog(a, [{ kind: 'system', text: `☁ ${text}` }]));
     const creds = await this.cloud.credentials(cli, this.offKey(a, cli));
     if (creds.missing.length) throw new Error(`Cloud agents can't sign in yet. Missing: ${creds.missing.join('; ')}.`);
-    if (check && creds.ownLogin && cli !== 'opencode' && (await this.boxMachines.signedIn(machine, cli).catch(() => null)) === false) throw new SignInNeeded(cli);
+    if (check && creds.ownLogin && boxCli(cli) && (await this.boxMachines.signedIn(machine, cli).catch(() => null)) === false) throw new SignInNeeded(cli);
     // The Box's own Chromium starts with a first tab; Playwright attaches to it.
     const browser = browserTesting ? await api.browser(boxId).catch(() => false) : false;
     return { api, boxId, env: creds.env, apiKeyHelper: creds.apiKeyHelper, browser, record: (rec) => this.boxCliRecord(a.id, rec), connection: (up) => this.boxMachines.connection(machine, up) };
@@ -348,7 +351,7 @@ export abstract class SwarmAgents extends SwarmMerge {
   protected async startSignIn(a: PersistedAgent) {
     const cli = a.cli || this.state.settings.defaultCli;
     const api = this.cloud.boxApi();
-    if (!a.needsSignIn || a.host !== 'box' || cli === 'opencode' || !api) return;
+    if (!a.needsSignIn || a.host !== 'box' || !boxCli(cli) || !api) return;
     const s = this.signInOf(a, cli);
     if (s.run || s.starting) return;
     s.starting = true;
@@ -424,7 +427,7 @@ export abstract class SwarmAgents extends SwarmMerge {
       s?.run?.stop();
       if (s) s.run = null;
     }
-    if (cli === 'opencode') return this.signedIn(a);
+    if (!boxCli(cli)) return this.signedIn(a);
     const creds = await this.cloud.credentials(cli, this.offKey(a, cli)).catch(() => null);
     const ok = !creds ? null : creds.ownLogin ? await this.boxMachines.signedIn(this.machineOf(a), cli).catch(() => null) : true;
     if (!this.state.agents.includes(a) || a.host !== 'box') return;
@@ -493,7 +496,7 @@ export abstract class SwarmAgents extends SwarmMerge {
     if (patch.host !== undefined && a.role !== 'ceo' && (patch.host === 'box' || patch.host === 'local')) this.moveAgent(a, patch.host);
     if (patch.cli !== undefined && a.role !== 'ceo') {
       const cli = isCli(patch.cli) ? patch.cli : '';
-      if (a.host === 'box' && (cli || this.state.settings.defaultCli) === 'opencode') throw new HttpError(400, `${a.name} works in the cloud, where OpenCode can't run yet: move them to this computer first.`);
+      if (a.host === 'box' && !boxCli(cli || this.state.settings.defaultCli)) throw new HttpError(400, `${a.name} works in the cloud, where ${cliLabel(cli || this.state.settings.defaultCli)} can't run yet: move them to this computer first.`);
       if (cli && a.host !== 'box' && !this.cliReady(cli)) throw new HttpError(400, `${cliLabel(cli)} isn't installed on this computer.`);
       const changed = cli !== a.cli;
       a.cli = cli;
@@ -669,8 +672,8 @@ export abstract class SwarmAgents extends SwarmMerge {
   protected sessionRuntime(a: PersistedAgent, resume?: string): { terminal?: AgentTerminal; cli?: AgentCli; label?: string; resumeSessionId?: string } {
     // A cloud agent's CLI always runs in a terminal: their Box's, which needs nothing from this computer.
     const inTerminal = a.host === 'box' || (this.state.settings.runtime === 'terminal' && this.backend.terminals);
-    let cli: AgentCli = a.role === 'ceo' ? 'claude' : a.cli || this.state.settings.defaultCli;
-    if (resume && a.sessionCli && a.sessionCli !== cli) {
+    let cli: AgentCli = a.role === 'ceo' ? this.ceoCliOf(a) : a.cli || this.state.settings.defaultCli;
+    if (resume && a.sessionCli && a.sessionCli !== cli && a.role !== 'ceo') {
       if (inTerminal) cli = a.sessionCli;
       else if (a.sessionCli !== 'claude') resume = undefined;
     }

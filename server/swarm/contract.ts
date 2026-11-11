@@ -3,7 +3,8 @@
 import type { Swarm } from '../swarm.ts';
 import type { CeoChat } from '../ceoChat.ts';
 import type { VoiceKeyView } from '../voice.ts';
-import type { PersistedAgent } from './model.ts';
+import type { AgentCli, UseCase } from '../../shared/types.ts';
+import type { PersistedAgent, PersistedRepo } from './model.ts';
 
 export abstract class SwarmContract {
   protected abstract ceoChat: CeoChat; // the CEO chat's live reply, office calls and threads (swarm.ts)
@@ -28,9 +29,15 @@ export abstract class SwarmContract {
   protected abstract fireAgent(...a: Parameters<Swarm['fireAgent']>): ReturnType<Swarm['fireAgent']>;
   protected abstract port(...a: Parameters<Swarm['port']>): ReturnType<Swarm['port']>;
 
+  // providers.ts
+  protected abstract recheckClis(): void;
+
   // cloudCredit.ts
   protected abstract creditSignIn(...a: Parameters<Swarm['creditSignIn']>): ReturnType<Swarm['creditSignIn']>;
   protected abstract offKey(...a: Parameters<Swarm['offKey']>): ReturnType<Swarm['offKey']>;
+
+  // rotation.ts (protected there)
+  protected abstract runningTaskAccounts(): string[];
 
   // sessions.ts
   protected abstract clearPrepStrikes(...a: Parameters<Swarm['clearPrepStrikes']>): ReturnType<Swarm['clearPrepStrikes']>;
@@ -55,11 +62,18 @@ export abstract class SwarmContract {
   protected abstract recordUsage(...a: Parameters<Swarm['recordUsage']>): ReturnType<Swarm['recordUsage']>;
   protected abstract schedule(...a: Parameters<Swarm['schedule']>): ReturnType<Swarm['schedule']>;
   protected abstract usageNow(...a: Parameters<Swarm['usageNow']>): ReturnType<Swarm['usageNow']>;
+  protected abstract usageSharesSoon(...a: Parameters<Swarm['usageSharesSoon']>): ReturnType<Swarm['usageSharesSoon']>;
 
   // update.ts
+  protected abstract labGateNow(...a: Parameters<Swarm['labGateNow']>): ReturnType<Swarm['labGateNow']>;
   protected abstract officeUpdateTick(...a: Parameters<Swarm['officeUpdateTick']>): ReturnType<Swarm['officeUpdateTick']>;
   protected abstract officeUpdateView(...a: Parameters<Swarm['officeUpdateView']>): ReturnType<Swarm['officeUpdateView']>;
   protected abstract setOfficeBehind(...a: Parameters<Swarm['setOfficeBehind']>): ReturnType<Swarm['setOfficeBehind']>;
+
+  // setup.ts (protected there)
+  protected abstract setupBlocks(agentId: string): boolean;
+  protected abstract floorSetupLine(r: PersistedRepo): string;
+  protected abstract ceoApplySetup(x: { floor: number; use_case?: UseCase; gap?: string }): string;
 
   // reactions.ts (protected there)
   protected abstract markQuiet(messageIds: number[]): void;
@@ -68,6 +82,9 @@ export abstract class SwarmContract {
   protected abstract voiceKeyChanged(view: VoiceKeyView): void;
   protected abstract voiceEveryone(): Promise<void>;
   protected abstract setAgentVoice(a: PersistedAgent, patch: { voiceId?: unknown; voiceName?: unknown }): void;
+
+  // ceoModels.ts (protected there)
+  protected abstract ceoCliOf(a: PersistedAgent): AgentCli;
 
   // ceoJobs.ts
   protected abstract ceoTold: string[]; // for the CEO's next job
@@ -90,9 +107,14 @@ export abstract class SwarmContract {
   protected abstract postMessage(...a: Parameters<Swarm['postMessage']>): ReturnType<Swarm['postMessage']>;
   protected abstract startCeoWork(...a: Parameters<Swarm['startCeoWork']>): ReturnType<Swarm['startCeoWork']>;
   protected abstract stuck(...a: Parameters<Swarm['stuck']>): ReturnType<Swarm['stuck']>;
+  protected abstract stuckRecord(...a: Parameters<Swarm['stuckRecord']>): ReturnType<Swarm['stuckRecord']>;
   protected abstract triageJob(...a: Parameters<Swarm['triageJob']>): ReturnType<Swarm['triageJob']>;
 
+  // ceoStuck.ts
+  protected abstract startCeoSession(...a: Parameters<Swarm['startCeoSession']>): ReturnType<Swarm['startCeoSession']>;
+
   // upkeep.ts
+  protected abstract alertBlocked(...a: Parameters<Swarm['alertBlocked']>): ReturnType<Swarm['alertBlocked']>;
   protected abstract careerWork(...a: Parameters<Swarm['careerWork']>): ReturnType<Swarm['careerWork']>;
   protected abstract doctorView(...a: Parameters<Swarm['doctorView']>): ReturnType<Swarm['doctorView']>;
   protected abstract ledger(...a: Parameters<Swarm['ledger']>): ReturnType<Swarm['ledger']>;
@@ -100,6 +122,7 @@ export abstract class SwarmContract {
   protected abstract progressTick(...a: Parameters<Swarm['progressTick']>): ReturnType<Swarm['progressTick']>;
   protected abstract progressView(...a: Parameters<Swarm['progressView']>): ReturnType<Swarm['progressView']>;
   protected abstract restoreDesk(...a: Parameters<Swarm['restoreDesk']>): ReturnType<Swarm['restoreDesk']>;
+  protected abstract requeue(a: PersistedAgent, why: string): void; // protected there
 
   // team.ts
   protected abstract applyTeamChanges(...a: Parameters<Swarm['applyTeamChanges']>): ReturnType<Swarm['applyTeamChanges']>;

@@ -3,6 +3,7 @@ import type { CareerView } from '../careers.ts';
 import type { AgentStyle } from '../looks.ts';
 import type { AgentQuestion } from '../questions.ts';
 import type { ToolSwitches } from '../tooling.ts';
+import type { SessionRun } from './accounts.ts';
 
 export type AgentStatus =
   | 'idle' // at desk, nothing assigned
@@ -67,7 +68,7 @@ export type AgentTask = 'issue' | 'qa' | 'fix';
 export type AgentRuntime = 'terminal' | 'sdk';
 
 /** The coding-agent CLI an agent runs in its terminal. The CEO is always Claude Code. */
-export type AgentCli = 'claude' | 'codex' | 'opencode';
+export type AgentCli = 'claude' | 'codex' | 'opencode' | 'gemini';
 
 /** Where an agent's machine is (docs/cloud.md): a folder on this computer, or an Upstash Box in the cloud. */
 export type MachineHost = 'local' | 'box';
@@ -131,6 +132,19 @@ export interface CliView {
   version: string | null;
   /** Hooks report every tool call and enforce the guard rails; the others report only when a turn ends. */
   integrated: boolean;
+  /** Its install from Settings → Providers (#493): running, or how the last one ended. */
+  install?: CliInstallRun;
+  /** OpenCode: the providers it's signed in to (`opencode auth list`), names only. */
+  providers?: string[];
+  /** OpenCode: its own sign-in (`opencode auth login`, the `cli:opencode` terminal). */
+  signIn?: { running: boolean; ok: boolean; note: string };
+}
+
+export interface CliInstallRun {
+  running: boolean;
+  ok: boolean;
+  note: string; // "Installing opencode-ai@1.19.5…", "OpenCode installed.", "Installing OpenCode failed."
+  tail: string[]; // the log's last lines when it failed
 }
 
 /** One model a coding agent can run (#198), from its live list or the office's built-in one (shared/models.ts). */
@@ -200,13 +214,16 @@ export interface AgentView {
   screenshotAt: number | null;
   lastError: string | null;
   blocked?: string | null; // waiting on a prompt the office couldn't answer (server/unblock.ts): why
+  nudge?: string; // live leases (#398): what the office last told them about a file conflict, e.g. "Told to merge main: server/swarm/core.ts"
   waiting?: AgentQuestion['to'] | null; // waiting on an answer to their question (shared/questions.ts): from whom
+  answered?: number | null; // when the answer to their latest question reached them (#508)
   reviewedBy?: string | null; // the CEO's name while it decides about a manager's change to their running work (#207)
   career: CareerView | null; // their record on the team (#226); null for the CEO
   log: LogLine[]; // the terminal log: hiring answers with it; snapshots leave it empty (tabs get lines by watch, shared/watch.ts)
   activity?: AgentActivity | null; // what they're doing right now, safe to show anyone (null: nothing, e.g. idle)
   tools?: ToolSwitches; // their own Tools & skills switches on top of Everyone's (absent for the CEO, whose are in settings)
   account?: string; // the account (id) or tag they're pinned to (#247); absent: the rotation
+  run?: SessionRun | null; // what their live session really runs on: account, coding agent, model (#376); null or absent: none running
   voiceId?: string; // their ElevenLabs voice ('' none; absent for the CEO, whose voice is settings.voice); #320
   voiceName?: string;
 }

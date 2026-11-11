@@ -7,6 +7,7 @@
   min-inline-size: 0;
 }
 .us-row {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--ds-space-1);
@@ -18,16 +19,72 @@
   border-radius: var(--ds-radius-md);
   background: var(--ds-surface-raised);
   color: var(--ds-text);
-  font: inherit;
   text-align: start;
-  cursor: pointer;
 }
-.us-row:hover {
+.us-row:has(.us-open:hover) {
   background: var(--ds-surface-hover);
 }
-.us-row:focus-visible {
+/* The whole card opens its detail (#404): a button under its content; the chip and the action sit above it. */
+.us-open {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background: none;
+  cursor: pointer;
+}
+.us-open:focus-visible {
   outline: var(--ds-border) solid var(--ds-focus);
   outline-offset: 1px;
+}
+.us-chip,
+.us-row-actions {
+  position: relative;
+}
+/* A chip-sized look with a full-size target. */
+.us-chip {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  min-inline-size: var(--ds-target);
+  min-block-size: var(--ds-target);
+  margin-block: calc((1.75rem - var(--ds-target)) / 2);
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+.us-chip:focus-visible {
+  outline: var(--ds-border) solid var(--ds-focus);
+  border-radius: var(--ds-radius-pill);
+}
+.us-row-actions,
+.us-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-2);
+}
+.us-action {
+  max-inline-size: 100%;
+  white-space: normal;
+}
+.us-agents {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-2);
+}
+.us-agent-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-2);
+}
+.us-agent-actions {
+  display: flex;
+  gap: var(--ds-space-2);
 }
 .us-head {
   display: flex;
@@ -93,6 +150,109 @@
   flex: 1;
   min-inline-size: 0;
   min-block-size: var(--ds-target);
+}
+/* Who is on it and who spent it (#409, UsageWho.tsx). */
+.us-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  min-inline-size: 0;
+}
+.us-who {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  padding: var(--ds-space-2);
+  border: 1px solid var(--ds-line);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-raised);
+  min-inline-size: 0;
+}
+.us-who-main {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-block-size: var(--ds-target);
+  min-inline-size: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ds-text);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.us-who-main:focus-visible,
+.us-task:focus-visible {
+  outline: var(--ds-border) solid var(--ds-focus);
+  outline-offset: 1px;
+}
+.us-who-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-inline-size: 0;
+}
+.us-who-text > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.us-who-since {
+  flex: none;
+}
+.us-who-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-inline-size: 0;
+}
+.us-who-chip {
+  max-inline-size: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.us-who-task {
+  overflow-wrap: anywhere;
+}
+.us-tasks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--ds-space-2);
+}
+.us-task {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-block-size: var(--ds-target);
+  min-inline-size: 0;
+  padding: var(--ds-space-2);
+  border: 1px solid var(--ds-line);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-raised);
+  color: var(--ds-text);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.us-task:hover:not(:disabled),
+.us-who-main:hover {
+  background: var(--ds-surface-hover);
+}
+.us-task-title {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+.us-slices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  min-inline-size: 0;
 }
 /* The Company page's card (pocket mode): its title opens Mission control. */
 .pk-usage-head {

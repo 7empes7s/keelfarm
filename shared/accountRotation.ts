@@ -3,7 +3,8 @@
 // numbers Providers & accounts shows.
 import { accountStatus, type StatusInput } from './accounts.ts';
 import { keyTrouble } from './keyTrouble.ts';
-import type { AccountCli, AccountSwitch, ProviderAccount, RotationSettings, RotationStats, UsageReading } from './types.ts';
+import type { TaskAccounts } from './accountDefault.ts';
+import type { AccountCli, AccountSwitch, PhoneMessage, ProviderAccount, RotationSettings, RotationStats, UsageReading } from './types.ts';
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;
@@ -28,15 +29,29 @@ export function rotationSettings(base: RotationSettings | undefined, patch: unkn
   return { on: bool(p.on, b.on), apiLast: bool(p.apiLast, b.apiLast), ceoClis: [...new Set(clis)], agentsSwitchCli: bool(p.agentsSwitchCli, b.agentsSwitchCli) };
 }
 
+/** Saved task accounts (#390, shared/accountDefault.ts), checked. */
+export function loadTaskAccounts(raw: unknown): TaskAccounts {
+  if (!raw || typeof raw !== 'object') return {};
+  const out: TaskAccounts = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    const r = v as Partial<TaskAccounts[string]> | null;
+    if (r && typeof r.account === 'string') out[k] = { account: r.account, ...(r.move ? { move: true } : {}) };
+  }
+  return out;
+}
+
 // ---------- a dead account ----------
 
 export type LimitHit = { kind: 'limited'; until: number } | { kind: 'signed-out' };
 
 const USAGE_LIMIT = [
   /usage limit reached/i, // Claude Code: "Claude AI usage limit reached|1730000000", "Claude usage limit reached. Your limit will reset at 3pm"
-  /\b(?:5-hour|five-hour|weekly|opus weekly|session) limit reached/i, // Claude Code: "5-hour limit reached ∙ resets 3pm"
-  /you've hit your (?:usage )?limit/i, // Claude Code and Codex: "You've hit your limit · resets 4pm", "You've hit your usage limit. … try again in 2 hours"
+  /\b(?:5-hour|five-hour|weekly|opus|opus weekly|weekly opus|session) limit reached/i, // Claude Code: "5-hour limit reached ∙ resets 3pm"
+  // Claude Code and Codex: "You've hit your limit · resets 4pm", "You’ve hit your weekly limit · resets Nov 13, 2pm (UTC)",
+  // "You've hit your Opus limit", "You've hit your usage limit. … try again in 2 hours"
+  /you['’]ve hit your (?:usage |weekly |(?:weekly )?opus |session |5-hour )?limit/i,
   /usage_limit_reached/i, // Codex
+  /exhausted your (?:daily )?(?:capacity|quota)/i, // Gemini CLI: "You have exhausted your capacity on this model. Your quota will reset after 10m."
   /stopped: rate limit/i, // cliRunner's StopFailure line
 ];
 const BUSY = [/(?:API Error|status):? 429\b/i, /rate_limit_error/i, /rate limit reached/i, /429 too many requests/i, /overloaded_error/i, /API Error:? 529\b/i];
@@ -52,6 +67,14 @@ const SIGNED_OUT = [
   /\b401\b[^\n]*unauthori[sz]ed/i,
 ];
 
+/** A session's last terminal lines read for a limit: Codex's message spans several, with its prompt and the session's end below (#400). */
+export const LIMIT_TAIL_LINES = 30;
+
+/** What detectLimit reads when a session ends: its errors and its terminal's last lines. */
+export function endedText(errors: readonly string[], lines: readonly string[]): string {
+  return [...errors, ...lines.slice(-LIMIT_TAIL_LINES)].join('\n');
+}
+
 /**
  * What a failed session's output says about its account: out of usage (until when), or signed out; null: something
  * else went wrong. An API key out of credit counts as limited until tomorrow, one turned away as signed out.
@@ -66,10 +89,44 @@ export function detectLimit(text: string, now: number): LimitHit | null {
   return null;
 }
 
-/** The reset a limit message names: an epoch ("|1730000000"), "resets 4pm", "reset at 16:30", "try again in 2 hours 5 minutes", "try again at 3:15 PM". */
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+
+/** A wall-clock time in an IANA time zone ("UTC", "Europe/Berlin") as epoch ms; the computer's own zone when it's unknown. */
+function zoned(y: number, mo: number, d: number, h: number, mi: number, zone: string | undefined): number {
+  const local = new Date(y, mo, d, h, mi).getTime();
+  if (!zone) return local;
+  const guess = Date.UTC(y, mo, d, h, mi);
+  try {
+    const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: zone, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric' }).formatToParts(guess).map((x) => [x.type, Number(x.value)]));
+    return guess - (Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute) - guess);
+  } catch {
+    return local;
+  }
+}
+
+/**
+ * The reset a limit message names: an epoch ("|1730000000"), "resets Nov 13, 2pm (UTC)", "resets Nov 13 at 2pm",
+ * "resets 4pm", "reset at 16:30", "try again in 2 hours 5 minutes", "try again at 3:15 PM", Gemini CLI's "reset after
+ * 19h14m47s", "retry in 44.09s" and "Access resets at 4:15 PM UTC" (its computer's own time).
+ */
 export function resetTime(text: string, now: number): number | null {
   const epoch = /limit reached\|(\d{10})\b/i.exec(text);
   if (epoch) return Number(epoch[1]) * 1000;
+  const date = /resets?\s+(?:on\s+)?([a-z]{3})[a-z]*\.?\s+(\d{1,2})(?:,|\s+at)?\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?(?:\s*\(([^)\s]{1,40})\)|\s+(UTC|GMT)\b)?/i.exec(text);
+  const month = date ? MONTHS.indexOf(date[1].toLowerCase()) : -1;
+  if (date && month >= 0) {
+    const h = (Number(date[3]) % (date[5] ? 12 : 24)) + (date[5]?.toLowerCase() === 'pm' ? 12 : 0);
+    const year = new Date(now).getFullYear();
+    const zone = date[6] ?? date[7];
+    const at = zoned(year, month, Number(date[2]), h, Number(date[4] ?? 0), zone);
+    return at < now - DAY ? zoned(year + 1, month, Number(date[2]), h, Number(date[4] ?? 0), zone) : at; // "Jan 2" read in late December
+  }
+  const after = /(?:reset after|retry in)\s+((?:\d+(?:\.\d+)?(?:ms|h|m|s))+)/i.exec(text);
+  if (after) {
+    let ms = 0;
+    for (const m of after[1].matchAll(/(\d+(?:\.\d+)?)(ms|h|m|s)/gi)) ms += Number(m[1]) * ({ ms: 1, h: HOUR, m: MIN, s: 1000 } as Record<string, number>)[m[2].toLowerCase()];
+    if (ms > 0) return now + Math.ceil(ms);
+  }
   const rel = /try again in ((?:\s*\d+\s*(?:days?|hours?|hrs?|minutes?|mins?|seconds?|secs?)[\s,]*(?:and)?)+)/i.exec(text);
   if (rel) {
     let ms = 0;
@@ -101,13 +158,14 @@ export interface PickOptions {
   cli: AccountCli;
   apiLast: boolean;
   skip?: readonly string[]; // tried already this session
+  sticky?: string; // the account the session's task started on (#390): next after the pinned one, while it's usable
 }
 
 const isApi = (a: ProviderAccount) => a.kind === 'api-key';
 
 /**
- * The account a session starts on: the binding first (the pinned account, which runs even while paused, then the
- * pinned tag's), then the rest by priority, API keys after subscriptions when `apiLast`. Accounts that are paused,
+ * The account a session starts on: the binding first (the pinned account, which runs even while paused), then its
+ * task's account (`sticky`), then the pinned tag's, then the rest by priority, API keys after subscriptions when `apiLast`. Accounts that are paused,
  * limited, signed out, over their daily cap or at NEAR_OUT_PCT of a limit are skipped; near-out ones are taken only
  * when nothing else is left. null: none is usable (the caller runs as before rotation).
  */
@@ -117,7 +175,8 @@ export function pickAccount(binding: string | undefined, candidates: readonly Ca
   const sorted = [...mine].sort((x, y) => rank(x) - rank(y) || x.account.priority - y.account.priority);
   const b = (binding ?? '').trim().toLowerCase();
   const pinned = b ? sorted.find((c) => c.account.id === b) : undefined;
-  const order = [...new Set([...(pinned ? [pinned] : []), ...(b ? sorted.filter((c) => c.account.tags.includes(b)) : []), ...sorted])];
+  const sticky = o.sticky ? sorted.find((c) => c.account.id === o.sticky) : undefined;
+  const order = [...new Set([...(pinned ? [pinned] : []), ...(sticky ? [sticky] : []), ...(b ? sorted.filter((c) => c.account.tags.includes(b)) : []), ...sorted])];
   const free = (c: Candidate) => {
     const { status } = accountStatus({ ...c, account: c === pinned ? { ...c.account, enabled: true } : c.account, now });
     return status === 'ready' || status === 'near';
@@ -125,13 +184,44 @@ export function pickAccount(binding: string | undefined, candidates: readonly Ca
   return (order.find((c) => free(c) && !nearOut(c.usage, now)) ?? order.find(free))?.account ?? null;
 }
 
+/**
+ * Whether rotation has an account of `o.cli` with room to start a session now (ready or near its limit, not near out),
+ * skipping `o.skip`: a usage warning on one account then paces only that one, not the office (#383).
+ */
+export function hasRoom(candidates: readonly Candidate[], now: number, o: PickOptions): boolean {
+  const a = pickAccount(undefined, candidates, now, o);
+  const c = a && candidates.find((x) => x.account.id === a.id);
+  return !!c && !nearOut(c.usage, now);
+}
+
 // ---------- words ----------
 
 /** "Main Max is limited until 16:00" / "Main Max is signed out". */
 const outLine = (label: string, why: AccountSwitch['why'], until: number | null, clock: (t: number) => string) => (why === 'signed-out' ? `${label} is signed out` : `${label} is limited${until ? ` until ${clock(until)}` : ''}`);
 
-/** The chat pill: "Switched to Backup Max: Main Max is limited until 16:00". */
-export const switchText = (s: Pick<AccountSwitch, 'from' | 'to' | 'why' | 'until'>, clock: (t: number) => string) => `🔀 Switched to ${s.to}: ${outLine(s.from, s.why, s.until, clock)}.`;
+const CARRIED: Record<NonNullable<AccountSwitch['carried']>, string> = {
+  conversation: ' Memory and conversation carried over.',
+  handover: ' Picked up from a handover: the latest messages, the notes and memory.',
+};
+
+/** The chat pill: "Switched to Backup Max: Main Max is limited until 16:00. Memory and conversation carried over." */
+export const switchText = (s: Pick<AccountSwitch, 'from' | 'to' | 'why' | 'until' | 'carried'>, clock: (t: number) => string) => `🔀 Switched to ${s.to}: ${outLine(s.from, s.why, s.until, clock)}.${s.carried ? CARRIED[s.carried] : ''}`;
+
+const HANDOVER_MESSAGES = 6;
+const HANDOVER_CHARS = 400;
+
+/**
+ * What a fresh CEO session starts with when its conversation couldn't come along (another coding agent): the chat's
+ * latest messages, clipped, and where its notes are. No model call.
+ */
+export function switchHandover(messages: readonly Pick<PhoneMessage, 'from' | 'text'>[], notesFile: string): string {
+  const who = { ceo: 'You', manager: 'Manager', office: 'Office' } as const;
+  const lines = messages
+    .filter((m) => m.text.trim())
+    .slice(-HANDOVER_MESSAGES)
+    .map((m) => `${who[m.from]}: ${m.text.length > HANDOVER_CHARS ? `${m.text.slice(0, HANDOVER_CHARS)}…` : m.text}`);
+  return `Your previous session hit an account limit and its conversation couldn't come along, so this is a fresh session. Your notes are in ${notesFile}. The chat's latest messages:\n${lines.join('\n') || '(none)'}`;
+}
 
 /** The one message when every account is out: when the first is back, and the API key the manager can turn on. */
 export function allOutText(cliName: string, first: number | null, clock: (t: number) => string, key: string | null): string {

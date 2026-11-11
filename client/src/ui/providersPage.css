@@ -60,6 +60,25 @@
   align-items: flex-start;
   gap: var(--ds-space-1);
 }
+/* a long name ends in an ellipsis at the card's edge, clear of its ⋯ */
+.pv-card .ds-row-title {
+  max-width: 100%;
+}
+.pv-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ds-space-2);
+  min-width: 0;
+  color: var(--ds-warn-text);
+  font-size: var(--ds-text-sm);
+  overflow-wrap: anywhere;
+}
+.pv-warning svg {
+  flex: none;
+  width: 1em;
+  height: 1em;
+  margin-top: 0.15em;
+}
 .pv-cat {
   display: flex;
   flex-direction: column;
@@ -97,4 +116,23 @@
   align-items: center;
   gap: var(--ds-space-2);
   min-height: var(--ds-target);
+}
+.pv-found {
+  flex-direction: row;
+  align-items: center;
+  min-height: var(--ds-target);
+  cursor: pointer;
+}
+.pv-found input {
+  flex: none;
+  width: 22px;
+  height: 22px;
+}
+.pv-found > svg {
+  flex: none;
+  color: var(--ds-text-muted);
+}
+.pv-found .ds-row-main {
+  flex: 1;
+  min-width: 0;
 }

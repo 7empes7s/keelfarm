@@ -15,6 +15,7 @@ import { SwarmUpdate } from './update.ts';
 export abstract class SwarmReactions extends SwarmUpdate {
   protected ceoFeedback: string[] = []; // for the CEO's next job: the manager's 👍 / 👎 on its replies
   private ceoRepliedAt = 0; // when the CEO last answered with the reply tool (ceoSpoken)
+  protected turnAnswer: { by: 'reply' | 'react'; message?: number } | null = null; // how this CEO turn answered so far: its closing text folds into it (#378)
 
   /** Read on one device: the notifications are cancelled or cleared on every other (#210). */
   protected override observe(ev: ServerEvent) {
@@ -86,6 +87,7 @@ export abstract class SwarmReactions extends SwarmUpdate {
     if (typeof m === 'string') throw new Error(m);
     this.setReactions(m, react(m.reactions, 'ceo', x.emoji));
     this.telegramReact(m);
+    this.turnAnswer ??= { by: 'react' };
     return `Reacted ${x.emoji} to message ${m.id}. If nothing more needs saying, end with no text: the manager sees the reaction.`;
   }
 
@@ -95,8 +97,9 @@ export abstract class SwarmReactions extends SwarmUpdate {
     if (!m) throw new Error(`There is no message ${x.message_id} from the manager in this conversation: use the id from "(message N)".`);
     const text = String(x.text ?? '').trim();
     if (!text) throw new Error('Write the answer.');
-    this.postMessage('ceo', text, undefined, { replyTo: m.id });
+    const reply = this.postMessage('ceo', text, undefined, { replyTo: m.id });
     this.ceoRepliedAt = Date.now();
+    this.turnAnswer = { by: 'reply', message: reply.id };
     this.markDelivery([m.id], 'replied');
     this.markStatus([m.id], 'replied');
     return `Answered message ${m.id} on the phone. Don't repeat it in your final message; end with no text when every message is answered.`;

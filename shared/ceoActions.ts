@@ -4,7 +4,7 @@
 import type { OfficeCall } from './ceoStream.ts';
 
 /** A console section an action card opens (ids from client/src/ui/consoleNavRules.ts). */
-type ActionSection = 'team' | 'ceo' | 'charter' | 'ops' | 'projects' | 'notifications';
+type ActionSection = 'team' | 'ceo' | 'charter' | 'ops' | 'projects' | 'notifications' | 'providers' | 'accounts';
 
 /** What an action card opens, and whose live status it shows. */
 export type ActionRef =
@@ -17,12 +17,20 @@ export type ActionRef =
   | { kind: 'approvals' }
   | { kind: 'decision'; id: string }; // its entry in the decision log (#208)
 
+/** How a card's Undo puts back what a call changed (#403): a floor's switches as they were, or an experiment started or stopped again. */
+export type ActionUndo =
+  | { kind: 'floor'; repoId: string; patch: { autoAssign?: boolean; autoMerge?: boolean; practices?: Record<string, unknown> } }
+  | { kind: 'experiment'; id: string; action: 'start' | 'stop' };
+
 export interface ChatAction {
   tool: string; // the office tool, e.g. file_issue
   icon: string;
   text: string; // the result in one line: "Filed floor 3 #104 · Pocket mode for desktop"
   refused?: true; // the office said no: nothing changed
   ref?: ActionRef;
+  askedIn?: number; // the manager's message that asked for it (#403)
+  undo?: ActionUndo; // what the card's Undo does, while it hasn't been used
+  undone?: true;
 }
 
 export const MAX_ACTIONS = 8;
@@ -53,12 +61,22 @@ const ACTS: Record<string, string> = {
   define_experiment: '🧪',
   set_floor_profile: '🏢',
   set_office_playbook: '📘',
+  apply_setup: '🧭',
   send_telegram: '✈️',
+  scan_keys: '🔑',
+  make_default_account: '🔀',
   wait_for: '⏳',
+  run_experiment: '🧪',
+  set_floor_switches: '🎛️',
+  set_issue_priority: '⭐',
+  set_ceo_setup: '⚙️',
+  apply_charter: '🧭',
+  merge_pull: '🔀',
+  it_propose: '🖥️',
 };
 
 /** The office tools that aren't cards: reads, and what shows in the chat itself (files, edits, reactions, questions). */
-export const NOT_CARDS = new Set(['company_status', 'floor_detail', 'agent_detail', 'agent_log', 'qa_report', 'worktree_file', 'pr_diff', 'session_history', 'consult', 'attach_file', 'keep_file', 'edit_message', 'react', 'reply', 'ask_manager']);
+export const NOT_CARDS = new Set(['company_status', 'floor_detail', 'agent_detail', 'agent_log', 'qa_report', 'worktree_file', 'pr_diff', 'session_history', 'it_run', 'consult', 'attach_file', 'keep_file', 'edit_message', 'react', 'reply', 'ask_manager']);
 
 // Tools whose card opens a console section (with the floor, when the call names one).
 const SECTIONS: Partial<Record<string, ActionSection>> = {
@@ -67,8 +85,15 @@ const SECTIONS: Partial<Record<string, ActionSection>> = {
   set_mandate: 'ceo',
   propose_charter: 'charter',
   define_experiment: 'ops',
+  run_experiment: 'ops',
+  set_floor_switches: 'projects',
+  set_ceo_setup: 'ceo',
+  apply_charter: 'charter',
   set_office_playbook: 'projects',
   send_telegram: 'notifications',
+  scan_keys: 'providers',
+  it_propose: 'ops',
+  make_default_account: 'accounts',
 };
 const DETAILS: Partial<Record<string, 'now' | 'setup'>> = { restart_agent: 'now', stop_agent: 'now', configure_agent: 'setup' };
 
@@ -116,7 +141,8 @@ export function actionCards(calls: readonly OfficeCall[], repoOf: (floor: number
     const icon = ACTS[call.tool];
     if (!icon || call.out === null) continue;
     const ref = refOf(call, repoOf, agentOf);
-    out.push({ tool: call.tool, icon, text: textOf(call), ...(!call.ok && { refused: true as const }), ...(ref && { ref }) });
+    const askedIn = typeof call.args?.asked_in === 'number' ? call.args.asked_in : null;
+    out.push({ tool: call.tool, icon, text: textOf(call), ...(!call.ok && { refused: true as const }), ...(ref && { ref }), ...(askedIn !== null && call.ok && { askedIn }), ...(call.ok && call.undo && { undo: call.undo }) });
   }
   return out.slice(0, MAX_ACTIONS);
 }

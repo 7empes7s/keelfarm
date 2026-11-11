@@ -2,6 +2,7 @@
 // finished reply keeps (#150), and what a stopped job says it did. Pure: the server folds, the phone draws.
 import { filedWords, stepNote, stepWords, type NameOf } from './ceoSteps.ts';
 import type { LogKind } from './types.ts';
+import type { ActionUndo } from './ceoActions.ts';
 
 export interface LiveStep {
   label: string; // in plain words (shared/ceoSteps.ts): "Reading PR #122's changes on floor 3"
@@ -28,8 +29,8 @@ export interface StepLog {
   ms: number;
 }
 
-/** What a session reports while the CEO writes: a text block (done: it won't grow), or one of its log lines. */
-export type StreamEvent = { kind: 'text'; text: string; done: boolean } | { kind: 'log'; entry: { kind: LogKind; text: string; tool?: string } };
+/** What a session reports while the CEO writes: a text block (done: it won't grow), or one of its log lines; the office's note on how the job started (#330). */
+export type StreamEvent = { kind: 'text'; text: string; done: boolean } | { kind: 'log'; entry: { kind: LogKind; text: string; tool?: string } } | { kind: 'note'; icon: string; label: string };
 
 export const MAX_STEPS = 50;
 const MAX_BLOCKS = 4;
@@ -47,6 +48,7 @@ export function foldStream(live: CeoLive | null, ev: StreamEvent, now: number, n
     const blocks = l.open ? [...l.blocks.slice(0, -1), text] : [...l.blocks, text];
     return { ...l, blocks: blocks.slice(-MAX_BLOCKS), open: !ev.done };
   }
+  if (ev.kind === 'note') return { ...l, steps: [...l.steps, { label: ev.label, icon: ev.icon, state: 'done' as const, at: now, ms: 0 }].slice(-MAX_STEPS), stepCount: l.stepCount + 1 };
   const e = ev.entry;
   const last = l.steps[l.steps.length - 1];
   if (e.kind === 'tool' && e.tool) {
@@ -83,6 +85,7 @@ export interface OfficeCall {
   out: string | null;
   args?: Record<string, unknown>; // its input, for the reply's action cards (shared/ceoActions.ts)
   messageId?: number; // the agent chat item it posted (message_agent, answer_agent): its card opens the chat there
+  undo?: ActionUndo; // how its card's Undo puts back what it changed (#403)
 }
 
 // The office tools that only read: a stopped job's reply leaves them out of what it did.

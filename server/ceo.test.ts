@@ -137,6 +137,7 @@ describe('office tools', () => {
       resolveDecision: () => 'closed',
       proposeDesign: async (a) => (calls.push(['propose_design', a]), 'proposed'),
       setOfficePlaybook: (a) => (calls.push(['set_office_playbook', a]), 'saved'),
+      applySetup: (a) => (calls.push(['apply_setup', a]), 'applied'),
       scaleTeam: () => '',
       configureAgent: (a) => (configured.push(a), 'ok'),
       fileIssue: async () => '',
@@ -161,6 +162,8 @@ describe('office tools', () => {
       worktreeFile: async (a) => (calls.push(['worktree_file', a]), 'file'),
       prDiff: async (a) => (calls.push(['pr_diff', a]), 'diff'),
       sendTelegram: async () => '',
+      scanKeys: async () => '',
+      makeDefaultAccount: () => '',
       editMessage: async () => '',
       waitFor: async (a) => (calls.push(['wait_for', a]), 'PR #7 on floor 1 merged.'),
       askManager: async (a) => (calls.push(['ask_manager', a]), 'The manager answered: yes'),
@@ -169,6 +172,7 @@ describe('office tools', () => {
       sessionHistory: (a) => (calls.push(['session_history', a]), 'history'),
       react: (a) => (calls.push(['react', a]), 'reacted'),
       reply: (a) => (calls.push(['reply', a]), 'answered'),
+      runExperiment: () => '', setFloorSwitches: () => '', setIssuePriority: async () => '', setCeoSetup: () => '', applyCharter: () => '', mergePull: async () => '', itRun: async () => '', itPropose: () => '',
     });
     const [serverSide, clientSide] = InMemoryTransport.createLinkedPair();
     await office.server.instance.connect(serverSide);
@@ -184,6 +188,8 @@ describe('office tools', () => {
       'agent_detail',
       'agent_log',
       'answer_agent',
+      'apply_charter',
+      'apply_setup',
       'ask_manager',
       'ask_manager_choice',
       'assign_issue',
@@ -198,7 +204,11 @@ describe('office tools', () => {
       'escalate',
       'file_issue',
       'floor_detail',
+      'it_propose',
+      'it_run',
       'keep_file',
+      'make_default_account',
+      'merge_pull',
       'message_agent',
       'pr_diff',
       'propose_charter',
@@ -210,12 +220,17 @@ describe('office tools', () => {
       'resolve_decision',
       'restart_agent',
       'retry_qa',
+      'run_experiment',
       'scale_team',
+      'scan_keys',
       'send_back',
       'send_telegram',
       'session_history',
+      'set_ceo_setup',
       'set_dependencies',
       'set_floor_profile',
+      'set_floor_switches',
+      'set_issue_priority',
       'set_mandate',
       'set_office_playbook',
       'stop_agent',
@@ -244,6 +259,7 @@ describe('office tools', () => {
     const samples: Record<string, Record<string, unknown>> = {
       set_floor_profile: { ...f, summary: 's' },
       set_office_playbook: { playbook: 'p' },
+      apply_setup: { ...f, gap: 'preview' },
       scale_team: { ...f, size: 3, reason: 'r' },
       configure_agent: { ...agent, model: 'm' },
       file_issue: { ...f, title: 't', body: 'b' },
@@ -266,7 +282,16 @@ describe('office tools', () => {
       answer_agent: { ...agent, text: 't' },
       ask_manager_choice: { ...agent, question: 'q' },
       send_telegram: { text: 't' },
+      scan_keys: {},
+      make_default_account: { account: 'claude-ultra' },
       wait_for: { conditions: [{ kind: 'pr_merged', floor: 1, pr: 7 }] },
+      run_experiment: { experiment: 'x1', action: 'start', asked_in: 4 },
+      set_floor_switches: { ...f, auto_merge: true, asked_in: 4 },
+      set_issue_priority: { ...f, number: 7, priority: true, asked_in: 4 },
+      set_ceo_setup: { model: 'claude-sonnet-5', asked_in: 4 },
+      apply_charter: { ...f, reason: 'r', asked_in: 4 },
+      merge_pull: { ...f, pr: 7, asked_in: 4 },
+      it_propose: { argv: ['journalctl', '--vacuum-size=500M'], why: 'Old logs', affects: 'frees 3 GB', undo: "can't", risk: 'low' },
     };
     const acting = tools.map((t) => t.name).filter((name) => !NOT_CARDS.has(name));
     for (const name of acting) {
@@ -363,7 +388,7 @@ describe('office tools', () => {
     expect(await ok({ name: 'Test first', hypothesis: 'Fewer rounds', variants: [v('Current'), v('Test first', { prompt: 'Write the failing test first.', effort: 'high' })] })).toBe(true);
     expect(await ok({ name: 'One', hypothesis: 'h', variants: [v('Only')] })).toBe(false);
     expect(await ok({ name: 'CEO', hypothesis: 'h', kinds: ['ceo-chat'], variants: [v('A'), v('B')] })).toBe(false);
-    expect(await ok({ name: 'Cli', hypothesis: 'h', variants: [v('A'), v('B', { qa_cli: 'gemini' })] })).toBe(false);
+    expect(await ok({ name: 'Cli', hypothesis: 'h', variants: [v('A'), v('B', { qa_cli: 'aider' })] })).toBe(false);
     expect(calls.map(([n]) => n)).toEqual(['define_experiment']);
   });
 
@@ -687,11 +712,12 @@ describe('follow-ups (#27)', () => {
     const office = createOfficeTools(
       researchReadOnly(
         {
-          companyStatus: ok, floorDetail: ok, agentDetail: ok, setFloorProfile: ok, setOfficePlaybook: ok, scaleTeam: ok, configureAgent: ok, keepFile: ok, setMandate: ok, agentLog: ok, qaReport: ok,
+          companyStatus: ok, floorDetail: ok, agentDetail: ok, setFloorProfile: ok, setOfficePlaybook: ok, applySetup: ok, scaleTeam: ok, configureAgent: ok, keepFile: ok, setMandate: ok, agentLog: ok, qaReport: ok,
           fileIssue: async () => 'filed', setDependencies: async () => 'ok', closeIssue: async () => 'ok', retryQa: async () => 'ok', sendBack: async () => 'ok', rerunChecks: async () => 'ok',
-          closePull: async () => 'ok', escalate: async () => 'ok', attachFile: async () => 'ok', worktreeFile: async () => 'ok', prDiff: async () => 'ok', sendTelegram: async () => 'ok', editMessage: async () => 'ok',
+          closePull: async () => 'ok', escalate: async () => 'ok', attachFile: async () => 'ok', worktreeFile: async () => 'ok', prDiff: async () => 'ok', sendTelegram: async () => 'ok', scanKeys: async () => 'ok', makeDefaultAccount: () => 'ok', editMessage: async () => 'ok',
           restartAgent: ok, stopAgent: ok, messageAgent: async () => 'ok', assignIssue: async () => 'ok', answerAgent: async () => 'ok', askManagerChoice: ok, defineExperiment: ok, sessionHistory: ok, proposeCharter: ok, resolveDecision: ok, proposeDesign: async () => 'ok',
           waitFor: async () => 'ok', askManager: async () => 'ok', consult: async () => 'ok', react: ok, reply: ok,
+          runExperiment: ok, setFloorSwitches: ok, setIssuePriority: async () => 'ok', setCeoSetup: ok, applyCharter: ok, mergePull: async () => 'ok', itRun: async () => 'ok', itPropose: ok,
         },
         () => researching,
       ),

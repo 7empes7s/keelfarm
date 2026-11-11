@@ -50,8 +50,7 @@
       "eslint(no-unused-expressions)": 2
     },
     "client/src/ui/mic.ts": {
-      "typescript(no-meaningless-void-operator)": 2,
-      "typescript(no-this-alias)": 1
+      "typescript(no-meaningless-void-operator)": 2
     },
     "client/src/ui/notifySteps.ts": {
       "unicorn(prefer-string-starts-ends-with)": 1
@@ -361,7 +360,6 @@
     "exports:client/src/world/coffeeBreak.ts:leaveLineSpot",
     "exports:client/src/world/decor/actions.ts:showTrophy",
     "exports:client/src/world/decor/actions.ts:thunk",
-    "exports:client/src/world/decor/decor.ts:spotOf",
     "exports:client/src/world/decor/models.ts:LIGHT_BULBS",
     "exports:client/src/world/decor/parts.ts:mergeParts",
     "exports:client/src/world/draw.ts:MONO",
@@ -521,8 +519,6 @@
     "types:client/src/ui/chatterLines.ts:GreetMood",
     "types:client/src/ui/cheerRules.ts:CheerExtra",
     "types:client/src/ui/keyboards.ts:Hit",
-    "types:client/src/ui/mic.ts:MicRecord",
-    "types:client/src/ui/mic.ts:MicState",
     "types:client/src/ui/notifySteps.ts:StepId",
     "types:client/src/world/CoffeeMachine.tsx:CoffeeSnapshot",
     "types:client/src/world/Jukebox.tsx:JukeboxSnapshot",
@@ -577,7 +573,7 @@
     "client/src/world/jukeboxSongs.ts": 916,
     "client/src/world/ritualRunner.ts": 854,
     "client/src/world/toys/dogBrain.ts": 1257,
-    "server/ceo.ts": 802,
+    "server/ceo.ts": 844,
     "server/cliRunner.ts": 989,
     "server/swarm/core.ts": 844,
     "server/workspace.ts": 909

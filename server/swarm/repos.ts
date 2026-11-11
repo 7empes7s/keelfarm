@@ -6,6 +6,7 @@ import { DEFAULT_PREVIEW, parsePreviewPatch } from '../previews.ts';
 import type { GatewayUse } from '../previewGateway.ts';
 import { qaShotsDir, readQaShot, removeQaShots } from '../qaShots.ts';
 import { clip } from '../notify.ts';
+import { managerCloseComment } from '../../shared/issues.ts';
 import { unblockedIssues } from '../../shared/followups.ts';
 import { floorOverrides } from '../../shared/practices.ts';
 import { cleanFloorTheme } from '../../shared/floorThemes.ts';
@@ -13,14 +14,17 @@ import { charterMarkdown, charterOf, cleanCharter, isEmptyCharter, isObjectiveSt
 import { STATUS_LABELS } from '../../shared/charterStats.ts';
 import { PLAYBOOK_MAX } from '../../shared/types.ts';
 import { cleanTrustedAuthors, markTrust, trustContext, TRUST_LABEL, type TrustContext } from '../../shared/trust.ts';
-import type { ManagerChangeKind, PreviewView, PrPreviewView, ProjectFolderView, PullInfo, RepoView } from '../../shared/types.ts';
+import type { ManagerChangeKind, MergedPage, PreviewView, PrPreviewView, ProjectFolderView, PullInfo, RepoView } from '../../shared/types.ts';
 import { recordChange } from '../../shared/managerChanges.ts';
+import { takeSteps, tryThis, type TryThis } from '../../shared/tryIt.ts';
 import { issuesResolvedBy } from '../issueClaims.ts';
+import { MergedPages } from '../mergedPages.ts';
 import { type PersistedRepo, type FloorOptions, type RepoRuntime, BUSY, QA_SHOTS_DIR } from './model.ts';
 import { FLOOR_COLORS } from './flavour.ts';
 import { SwarmCore } from './core.ts';
 
 export abstract class SwarmRepos extends SwarmCore {
+  private readonly mergedPages = new MergedPages();
   // ---------- GitHub / repos ----------
 
   listGithubRepos(owner?: string) {
@@ -328,6 +332,16 @@ export abstract class SwarmRepos extends SwarmCore {
     return data && { data, mime: shot.mime };
   }
 
+  /** A PR's "Try this" (#381): QA's steps, its body's, else its issue's acceptance. Read when a card opens: never in the snapshot. */
+  tryThisOf(repoId: string, pr: number): { tryThis: TryThis | null } {
+    const rt = this.repoRt.get(repoId);
+    const pull = rt?.pulls.find((p) => p.number === pr);
+    if (!rt || !pull) throw new HttpError(404, `No PR #${pr} on ${repoId}`);
+    const rec = this.state.qa.find((q) => q.repoId === repoId && q.prNumber === pr);
+    const issue = rt.issues.find((i) => pull.closesIssues.includes(i.number));
+    return { tryThis: tryThis(rt.steps?.get(pr), rec?.tryIt, issue?.body) };
+  }
+
   /**
    * Server shutdown: stop every floor's app so nothing is left holding a preview port. Agents' CLIs keep working
    * through a restart (the terminal keeper holds them for the next start) and stop when the office quits.
@@ -337,7 +351,7 @@ export abstract class SwarmRepos extends SwarmCore {
     await this.writeState().catch((err) => console.warn('could not save the state', err));
     await this.journal.close().catch((err) => console.warn('could not write the journal', err));
     await this.telegram.stop();
-    await this.closeTestLab();
+    await this.closeTestLab(restart);
     await this.backend.releaseClis(restart); // before the terminals are saved: whatever they print next waits in the keeper
     await this.saveTerminals(true);
     await this.previews.stopAll(this.state.repos);
@@ -377,6 +391,7 @@ export abstract class SwarmRepos extends SwarmCore {
       for (const i of before ? unblockedIssues(before, issues) : []) {
         this.followup({ kind: 'unblocked', key: `unblocked:${repo.id}#${i.number}`, label: `#${i.number} unblocked`, text: `#${i.number} "${clip(i.title, 100)}" on ${this.floorName(repo)} can start: what it waited for has closed.`, repoId: repo.id });
       }
+      rt.steps = takeSteps(pulls);
       rt.pulls = pulls;
       if (noteObjectives(repo.charter.log, issues, pulls, Date.now())) this.save();
       this.issueAges.learn(repo.id, issues);
@@ -507,6 +522,17 @@ export abstract class SwarmRepos extends SwarmCore {
     setTimeout(() => this.schedule(), 200);
   }
 
+  /** A page of the floor's merged PRs for the Kanban's Merged column (#411): fetched once per page until the next merge. */
+  async mergedPage(repoId: string, page: number): Promise<MergedPage> {
+    const repo = this.repo(repoId);
+    const latest = Math.max(0, ...(this.repoRt.get(repo.id)?.pulls ?? []).filter((p) => p.state === 'MERGED').map((p) => p.number));
+    try {
+      return await this.mergedPages.get(repo.id, latest, page, (n) => this.backend.listMergedPage(repo.fullName, n));
+    } catch (err) {
+      throw new HttpError(502, `Couldn't load older merged PRs from GitHub: ${clip(err instanceof Error ? err.message : String(err), 200)}`);
+    }
+  }
+
   /** The manager's Close on a PR: closed on GitHub; whoever still works on it carries on until the CEO decides (#207). */
   async closePull(repoId: string, number: number) {
     const repo = this.repo(repoId);
@@ -518,7 +544,7 @@ export abstract class SwarmRepos extends SwarmCore {
   }
 
   /** The manager's Close on an issue: closed on GitHub as not planned; whoever builds it carries on until the CEO decides (#207). */
-  async closeIssueByManager(repoId: string, number: number, resolvedBy?: number) {
+  async closeIssueByManager(repoId: string, number: number, resolvedBy?: number, reason?: string) {
     const repo = this.repo(repoId);
     const rt = this.repoRt.get(repo.id);
     const state = rt?.issues.some((i) => i.number === number) ? 'OPEN' : await this.backend.issueState(repo.fullName, number).catch(() => null);
@@ -526,7 +552,7 @@ export abstract class SwarmRepos extends SwarmCore {
     const by = this.state.settings.managerName || 'the manager';
     // From the office doctor, for an issue a merged PR resolved: closed as completed, not as not planned.
     if (resolvedBy) await this.backend.closeIssue(repo.fullName, number, `Resolved by #${resolvedBy}; closed by ${by} from the cubefarm office.`, 'completed');
-    else await this.backend.closeIssue(repo.fullName, number, `Closed as not planned by ${by} from the cubefarm office.`, 'not planned');
+    else await this.backend.closeIssue(repo.fullName, number, managerCloseComment(by, reason), 'not planned');
     const title = rt?.issues.find((i) => i.number === number)?.title;
     const affects = this.runningOn(repo, { issues: [number] });
     this.managerChange(repo, 'close-issue', { issue: number }, `closed #${number}${title ? ` "${clip(title, 60)}"` : ''}${resolvedBy ? ` as resolved by #${resolvedBy}` : ' as not planned'}`, affects);

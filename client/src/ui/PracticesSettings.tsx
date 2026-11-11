@@ -11,13 +11,14 @@ import type { IconName } from './icons';
 // floor's leases, held-back issues and hot files, and the lease chip on a held issue's Kanban card. Every switch is
 // off until the lab proves it; a proven variant becomes every project's default from its experiment's results.
 
-type Switch = 'upToDate' | 'leases' | 'autoRebase' | 'busyFiles';
+type Switch = 'upToDate' | 'leases' | 'autoRebase' | 'busyFiles' | 'liveLeases';
 
 const SWITCHES: { key: Switch; icon: IconName; label: string; hint: string }[] = [
   { key: 'upToDate', icon: 'git-merge', label: 'Up to date before merge', hint: "Before auto-merge, merge the base into the PR and wait for CI on that result; a PR that only fails then goes back as a conflict" },
   { key: 'leases', icon: 'lock', label: 'File leases', hint: "Agents declare the files they'll touch; issues overlapping work in flight wait (at most 45 minutes)" },
   { key: 'autoRebase', icon: 'repeat', label: 'Auto-rebase', hint: 'A PR waiting for QA or its merge that conflicts after main moves goes straight to a developer to update' },
   { key: 'busyFiles', icon: 'flame', label: 'Conflict-aware scheduling', hint: "Issues touching files 2+ PRs or builds already touch wait for one that doesn't (nobody idles over it; a priority label skips the wait); the PR on the hottest files merges first. Area lines in the floor playbook (area chat: client/src/ui/Chat*) help predict files" },
+  { key: 'liveLeases', icon: 'git-merge', label: 'Live file tracking', hint: "Every few minutes, see which files each agent has really changed and use those instead of guesses. When main moves onto their files, tell them to merge it now; when two agents change the same file, tell the later one who else is on it" },
 ];
 
 /** api() already toasted the error. */
@@ -67,7 +68,10 @@ function Fields({ value, inherit, set }: { value: Practices; inherit?: { from: P
             </label>
           ) : (
             <label key={s.key} className="toggle" title={s.hint}>
-              <input type="checkbox" checked={value[s.key]} onChange={(e) => set({ [s.key]: e.target.checked })} /> <Icon name={s.icon} /> {s.label}
+              <input type="checkbox" checked={value[s.key]} onChange={(e) => set({ [s.key]: e.target.checked })} />
+              <span>
+                <Icon name={s.icon} /> {s.label}
+              </span>
             </label>
           ),
         )}
@@ -129,7 +133,7 @@ export function FloorPractices({ repo }: { repo: RepoView }) {
           <Icon name="lock" /> Leases:{' '}
           {leases.map((l) => (
             <span key={l.issue} className="chip" title={l.files.join('\n')}>
-              {l.issue > 0 ? `#${l.issue}` : `PR #${l.pr}`} · {l.files.length} file{l.files.length === 1 ? '' : 's'} ({l.source})
+              {l.issue > 0 ? `#${l.issue}` : `PR #${l.pr}`} · {l.files.length} file{l.files.length === 1 ? '' : 's'} ({l.source === 'diff' ? 'real diff' : l.source})
             </span>
           ))}
         </div>

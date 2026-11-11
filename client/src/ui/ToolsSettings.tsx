@@ -1,6 +1,6 @@
 import { useId, useMemo, useState } from 'react';
 import { api } from '../api';
-import { useStore, type Agent } from '../store';
+import { useStore, type Agent, type State } from '../store';
 import { costLabel, groupItems, itemState, type Profile, type ToolItem, type ToolRole, type ToolSwitches } from '../../../shared/tooling';
 import { Icon } from './Icon';
 
@@ -193,9 +193,13 @@ export function ToolsTab() {
   );
 }
 
+const NO_TOOLS: ToolSwitches = {};
+/** An agent's own switches (the CEO's are the office's). One {} for none: a new one each read loops the store (#351). */
+export const ownTools = (s: State, agent: Agent): ToolSwitches => (agent.role === 'ceo' ? s.settings.tools.ceo : (s.agents[agent.id]?.tools ?? NO_TOOLS));
+
 /** In an agent's ⚙️ Setup: their own switches. */
 export function AgentTools({ agent }: { agent: Agent }) {
-  const own = useStore((s) => (agent.role === 'ceo' ? s.settings.tools.ceo : (s.agents[agent.id]?.tools ?? {})));
+  const own = useStore((s) => ownTools(s, agent));
   const n = Object.keys(own).length;
   return (
     <details className="agent-tools">

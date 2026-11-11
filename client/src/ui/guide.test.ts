@@ -9,7 +9,7 @@ function office(over: Partial<GuideInput> = {}): GuideInput {
     settings: { notify: { events: {} as never, channels: { desktop: true, push: true, ntfy: false, telegram: false }, officeUrl: '', telegramMirror: false, quietInApp: true }, ceoMandates: [] },
     notifyChannels: { pushDevices: 0, webhooks: { ntfy: { set: false, hint: '', last: null } }, telegram: { set: false, bot: '', linked: false, chat: '', linking: false, on: true, polling: 'off', error: '', okAt: null, advice: '', last: null } },
     experiments: { experiments: [] },
-    messages: [],
+    ceo: { job: null, queue: [], researchedAt: null },
     installed: false,
     ...over,
   };
@@ -49,10 +49,18 @@ describe('the guide checklist', () => {
     const ticked = office({
       settings: { ...base.settings, ceoMandates: [{ id: 'm1', text: 'Keep CI green', floors: [], expiresAt: null, at: 1 }] },
       experiments: { experiments: [{ id: 'e1' } as never] },
-      messages: [{}, { research: { topic: 'auth' } }],
+      ceo: { job: null, queue: [], researchedAt: 5 },
     });
     expect(done(ticked)).toMatchObject({ mandate: true, experiment: true, research: true });
     expect(guideProgress(guideItems(ticked)).done).toBe(3);
+  });
+
+  it('ticks research from the server, not the chat, and shows a running one in progress', () => {
+    const research = (ceo: GuideInput['ceo']) => guideItems(office({ ceo })).find((i) => i.id === 'research')!;
+    expect(research({ job: null, queue: [], researchedAt: 1 })).toMatchObject({ done: true, busy: false });
+    expect(research({ job: { kind: 'research', label: 'Researching' }, queue: [], researchedAt: null })).toMatchObject({ done: false, busy: true });
+    expect(research({ job: { kind: 'chat', label: 'Chatting' }, queue: [{ kind: 'research', label: 'Researching' }], researchedAt: null })).toMatchObject({ done: false, busy: true });
+    expect(research({ job: { kind: 'chat', label: 'Chatting' }, queue: [], researchedAt: null })).toMatchObject({ done: false, busy: false });
   });
 
   it('gives each item a reason and a place to go', () => {

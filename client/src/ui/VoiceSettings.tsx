@@ -1,7 +1,7 @@
 // The Settings tab's Voice section: who reads messages aloud, the ElevenLabs key (write-only), the voice, and a Test;
 // then talking instead of typing: who turns speech into text, auto-send and hands-free. The key lives on the server;
 // the browser only ever sees its last 4 characters.
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
 import { SAMPLE_LINE } from '../../../shared/speech';
@@ -11,6 +11,8 @@ import { confirmDialog } from './Confirm';
 import { Icon } from './Icon';
 import { Menu } from './Menu';
 import { micCaps, setHandsFree } from './mic';
+import { pauseLabel, useMicPause } from './micPause';
+import { PAUSE_CHOICES } from './micSilence';
 import { cantListen } from './micText';
 import { Key } from './Key';
 import { browserVoices, type BrowserVoice } from './voicePicker';
@@ -18,6 +20,7 @@ import { playClip, speakLine, stopVoice } from './voicePlayback';
 import { hintMuted, useVoiceList, VoicePicker, type Playing } from './VoiceChooser';
 import { clampSpeed, modelPrice, SPEED_MAX, SPEED_MIN, SPEED_STEP, speedLabel, VOICE_MODELS } from '../../../shared/voices';
 import { SecretInput } from './SecretInput';
+import { chooseVoicePatch } from './voiceQuickRules';
 
 const DOCS = 'https://github.com/leonvanzyl/cubefarm/blob/main/docs/voice.md';
 
@@ -34,6 +37,9 @@ const LISTENERS: [ListenProvider, string, string][] = [
 ];
 
 type Save = (patch: Partial<Voice>) => void;
+
+/** Saves a change to settings.voice over what the store has now: Settings → Voice and the Sound sheet (#500) both. */
+export const saveVoice: Save = (patch) => void api.updateSettings({ voice: { ...useStore.getState().settings.voice, ...patch } }).catch(() => undefined);
 
 /** The browser's voices, which arrive asynchronously; null where the browser can't speak. */
 function useBrowserVoices(): BrowserVoice[] | null {
@@ -153,7 +159,7 @@ function ElevenLabsVoices({ voice, save, playing, setPlaying }: { voice: Voice; 
           Voice{voice.voiceName && <span className="muted"> · {voice.voiceName}</span>} <span className="muted small">(the CEO's, also in their profile)</span>
         </span>
       </div>
-      <VoicePicker list={list} chosen={voice.voiceId} onChoose={(v) => save({ voiceId: v.id, voiceName: v.name })} name="elevenlabs-voice" playing={playing} setPlaying={setPlaying} />
+      <VoicePicker list={list} chosen={voice.voiceId} onChoose={(v) => save(chooseVoicePatch(v))} name="elevenlabs-voice" playing={playing} setPlaying={setPlaying} />
       <label className="field">
         <span>Model</span>
         <select value={voice.model} onChange={(e) => save({ model: e.target.value })}>
@@ -174,7 +180,7 @@ function ElevenLabsVoices({ voice, save, playing, setPlaying }: { voice: Voice; 
 }
 
 /** Speech speed, 0.7–1.2: ElevenLabs' voice_settings.speed, or the browser voice's rate. Saved when let go. */
-function Speed({ voice, save }: { voice: Voice; save: Save }) {
+export function Speed({ voice, save }: { voice: Voice; save: Save }) {
   const [speed, setSpeed] = useState(voice.speed);
   useEffect(() => setSpeed(voice.speed), [voice.speed]);
   const commit = () => speed !== voice.speed && save({ speed });
@@ -199,7 +205,7 @@ function Speed({ voice, save }: { voice: Voice; save: Save }) {
   );
 }
 
-function BrowserVoices({ voice, save }: { voice: Voice; save: Save }) {
+export function BrowserVoices({ voice, save }: { voice: Voice; save: Save }) {
   const voices = useBrowserVoices();
   if (!voices) return <p className="muted small">This browser can't speak. Try Chrome or Edge, or pick ElevenLabs.</p>;
   const chosen = voices.some((v) => v.name === voice.voiceName) ? voice.voiceName : '';
@@ -276,14 +282,13 @@ function SavedClips({ voice, save }: { voice: Voice; save: Save }) {
   );
 }
 
-export function VoiceSettings() {
-  const voice = useStore((s) => s.settings.voice);
-  const keySet = useStore((s) => s.voiceKeySet);
-  const cache = useStore((s) => s.voiceCache);
+/** The Test line in the voice in use, and which preview is playing; closing the screen stops it. */
+export function useVoiceTest(voice: Voice, keySet: boolean) {
   const [playing, setPlaying] = useState<Playing>(null);
-  const radioName = useId();
-  useEffect(() => stopVoice, []); // closing the console stops a preview
-  const save: Save = (patch) => void api.updateSettings({ voice: { ...voice, ...patch } }).catch(() => undefined);
+  const mine = useRef(playing);
+  mine.current = playing;
+  // Closing the screen stops its own preview or test, never another voice (an agent's line under the Sound card).
+  useEffect(() => () => void (mine.current && stopVoice()), []);
   const eleven = voice.provider === 'elevenlabs';
   const canTest = voice.provider === 'browser' || (eleven && keySet && !!voice.voiceId);
   const test = async () => {
@@ -299,6 +304,35 @@ export function VoiceSettings() {
       setPlaying(null);
     }
   };
+  return { playing, setPlaying, canTest, test };
+}
+
+/** The Test button: Stop while it plays. */
+export function TestButton({ t }: { t: ReturnType<typeof useVoiceTest> }) {
+  return (
+    <button className="btn btn-small" disabled={!t.canTest} onClick={() => void t.test()} title={t.canTest ? undefined : 'Save a key and pick a voice first'}>
+      {t.playing === 'test' ? (
+        <>
+          <Icon name="square" /> Stop
+        </>
+      ) : (
+        <>
+          <Icon name="volume-1" /> Test
+        </>
+      )}
+    </button>
+  );
+}
+
+export function VoiceSettings() {
+  const voice = useStore((s) => s.settings.voice);
+  const keySet = useStore((s) => s.voiceKeySet);
+  const cache = useStore((s) => s.voiceCache);
+  const radioName = useId();
+  const save = saveVoice;
+  const eleven = voice.provider === 'elevenlabs';
+  const t = useVoiceTest(voice, keySet);
+  const { playing, setPlaying } = t;
   return (
     <div className="card">
       <h3>
@@ -353,27 +387,38 @@ export function VoiceSettings() {
             <span className="muted small">Short spoken updates while the CEO works: milestones (an issue filed, waiting on QA), or a line about every minute too. During a call, Off means milestones.</span>
           </label>
           <div className="row">
-            <button className="btn btn-small" disabled={!canTest} onClick={() => void test()} title={canTest ? undefined : 'Save a key and pick a voice first'}>
-              {playing === 'test' ? (
-                <>
-                  <Icon name="square" /> Stop
-                </>
-              ) : (
-                <>
-                  <Icon name="volume-1" /> Test
-                </>
-              )}
-            </button>
+            <TestButton t={t} />
             <span className="muted small">Previews and tests play at your volume; M mutes them.</span>
           </div>
         </>
       )}
       <label className="toggle">
-        <input type="checkbox" checked={voice.agentsSpeak} onChange={(e) => save({ agentsSpeak: e.target.checked })} /> Agents speak when clicked
-        <span className="muted small"> · a short line in their own voice{eleven && keySet ? '' : ', with ElevenLabs and a key'}</span>
+        <input type="checkbox" checked={voice.agentsSpeak} onChange={(e) => save({ agentsSpeak: e.target.checked })} />
+        <span>
+          Agents speak when clicked<span className="muted small"> · a short line in their own voice{eleven && keySet ? '' : ', with ElevenLabs and a key'}</span>
+        </span>
       </label>
       {(eleven || cache.clips > 0) && <SavedClips voice={voice} save={save} />}
       <Listening keyShown={eleven} />
+    </div>
+  );
+}
+
+/** How long a quiet after speech means you've finished, on this device (the 🎙, hands-free and calls). */
+function PauseChoice() {
+  const { ms, set } = useMicPause();
+  const label = useId();
+  return (
+    <div className="field">
+      <span id={label}>Pause before I'm done</span>
+      <div className="seg pause-seg" role="group" aria-labelledby={label}>
+        {PAUSE_CHOICES.map((v) => (
+          <button key={v} type="button" className={`seg-btn ${ms === v ? 'seg-on' : ''}`} aria-pressed={ms === v} onClick={() => set(v)}>
+            {pauseLabel(v)}
+          </button>
+        ))}
+      </div>
+      <span className="muted small">On this device. A sentence left on "uh", "and" or a comma waits up to 3 times longer.</span>
     </div>
   );
 }
@@ -410,6 +455,7 @@ function Listening({ keyShown }: { keyShown: boolean }) {
         ))}
       </div>
       {why && <p className="term-error small">{why}</p>}
+      <PauseChoice />
       {listen.provider === 'elevenlabs' && (
         <>
           <p className="muted small">
@@ -425,8 +471,10 @@ function Listening({ keyShown }: { keyShown: boolean }) {
             <input type="checkbox" checked={listen.autoSend} onChange={(e) => save({ autoSend: e.target.checked })} /> Send automatically when I stop talking
           </label>
           <label className="toggle" title={voiceOn ? undefined : `Needs ${ceoName}'s voice: pick one under Speak messages`}>
-            <input type="checkbox" checked={listen.handsFree} disabled={!voiceOn && !listen.handsFree} onChange={(e) => void setHandsFree(e.target.checked, ceoName)} /> Hands-free on the phone: after{' '}
-            {ceoName}'s spoken reply, listen for up to 8 s and send what I say{!voiceOn && <span className="muted"> (needs Speak messages above)</span>}
+            <input type="checkbox" checked={listen.handsFree} disabled={!voiceOn && !listen.handsFree} onChange={(e) => void setHandsFree(e.target.checked, ceoName)} />
+            <span>
+              Hands-free on the phone: after {ceoName}'s spoken reply, listen for up to 8 s and send what I say{!voiceOn && <span className="muted"> (needs Speak messages above)</span>}
+            </span>
           </label>
         </>
       )}

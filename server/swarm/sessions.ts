@@ -21,7 +21,7 @@ import { agentPromptPreview, ceoPromptPreview, devBranch, devSystemPrompt } from
 import { leaseTools } from '../leaseTool.ts';
 import { normPath, overlap, practiceLines, qaPracticeLines } from '../../shared/practices.ts';
 import { recordBox, recordCost } from '../metrics.ts';
-import { BOX_SIZE_INFO } from '../../shared/cloud.ts';
+import { BOX_SIZE_INFO, boxCli } from '../../shared/cloud.ts';
 import { cliLabel } from '../clis.ts';
 import { costsRequest, taskKindOf } from '../costLedger.ts';
 import { resolveEffort, type CostsView } from '../../shared/costs.ts';
@@ -85,12 +85,13 @@ export abstract class SwarmSessions extends SwarmRotation {
     }
   }
 
-  /** A browser opened an agent's terminal (/ws/term?agent=<id>), or an account's sign-in (agent=account:<id>, #247). */
+  /** A browser opened an agent's terminal (/ws/term?agent=<id>), or an account's sign-in (agent=account:<id>, #247; OpenCode's: cli:opencode). */
   attachTerminal(agentId: string, ws: WebSocket) {
     if (agentId.startsWith('account:')) {
       const t = this.accounts.terminal(agentId.slice('account:'.length));
       return t ? t.attach(ws) : ws.close(4404, 'No such account');
     }
+    if (agentId === 'cli:opencode') return this.cliSetup.terminal.attach(ws); // OpenCode's own sign-in (#493)
     const a = this.state.agents.find((x) => x.id === agentId);
     // Opening the terminal of a cloud agent who waits for a sign-in (at their desk, or 🔑 Sign in) starts one if none runs.
     if (a?.needsSignIn && a.host === 'box') {
@@ -358,6 +359,7 @@ export abstract class SwarmSessions extends SwarmRotation {
     previewUrl: (repoId, pr, agentId) => this.labPreviewUrl(repoId, pr, agentId),
     shot: (agentId, file, page) => this.labShot(agentId, file, page),
     emit: (testLab) => this.broadcast({ type: 'testLab', testLab }),
+    updateGate: () => this.labGateNow(),
   });
 
   /** Running lab jobs, for #55's admission (health.ts). */
@@ -369,8 +371,8 @@ export abstract class SwarmSessions extends SwarmRotation {
     return this.testLab.view();
   }
 
-  protected closeTestLab() {
-    return this.testLab.close();
+  protected closeTestLab(restart: boolean) {
+    return this.testLab.close(restart);
   }
 
   /** Does this agent's session use the test lab? Claude Code on this computer (the lab's tools reach it over MCP). */
@@ -474,6 +476,7 @@ export abstract class SwarmSessions extends SwarmRotation {
       return;
     }
     a.status = 'working';
+    rt.acrossRestart = mode === 'reattach'; // its CLI kept working through an office restart (#333)
     this.activity.set(a.id, Date.now());
     this.dropQuestion(a.id); // they moved on
     const how = this.sessionRuntime(a, resumeSessionId);
@@ -540,6 +543,7 @@ export abstract class SwarmSessions extends SwarmRotation {
         sessionId: (id) => {
           a.sessionId = id;
           a.sessionCli = id ? (how.cli ?? 'claude') : null;
+          a.sessionAccount = id ? this.sessionOn.get(a.id) : undefined;
           if (id) run.sessionId = id;
         },
         browserUrl: (url) => {
@@ -551,7 +555,11 @@ export abstract class SwarmSessions extends SwarmRotation {
         usageWarning: (info) => this.paceForWarning(info),
         usage: (readings) => this.recordUsage(readings),
         startup: (st) => this.spend.startup(a.id, st.tokens, st.memoryChars),
-        blocked: (reason) => { rt.blocked = reason ? { reason, since: Date.now(), told: false } : null; this.emitAgent(a); },
+        blocked: (reason, kind) => {
+          rt.blocked = reason ? { reason, since: Date.now(), told: false, kind: kind ?? 'prompt' } : null;
+          this.emitAgent(a);
+          this.alertBlocked(a); // a sign-in, setup screen or the like: the manager and the CEO hear at once (#359)
+        },
         finished: (result) => {
           // A cloud agent's CLI whose login expired: the task carries on (the same conversation) once it's signed in again.
           const again = () => this.startAgentSession(a, repo, cwd, a.sessionId ? SIGNED_IN_AGAIN : prompt, systemAppend, a.sessionId ?? undefined, outputSchema, null);
@@ -570,9 +578,9 @@ export abstract class SwarmSessions extends SwarmRotation {
   protected async signedOutMidTask(a: PersistedAgent, repo: PersistedRepo, result: SessionResult, cli: AgentCli, again: () => void) {
     const rt = this.agentRt.get(a.id);
     if (!rt || !this.state.agents.includes(a)) return;
-    const creds = cli === 'opencode' ? null : await this.cloud.credentials(cli, !!a.ownLogin).catch(() => null);
+    const creds = !boxCli(cli) ? null : await this.cloud.credentials(cli, !!a.ownLogin).catch(() => null);
     const keyStopped = !!creds?.onKey;
-    if (cli === 'opencode' || !(creds?.ownLogin || keyStopped) || a.status === 'stopped' || this.dropping.has(a.id) || a.host !== 'box') {
+    if (!boxCli(cli) || !(creds?.ownLogin || keyStopped) || a.status === 'stopped' || this.dropping.has(a.id) || a.host !== 'box') {
       // A key from Settings that was turned away has nothing to sign in here: the session failed like any other.
       const errors = creds && !creds.ownLogin ? [`${cliLabel(cli)} turned the key it was given away: check it in Settings → Cloud agents.`] : result.errors;
       return this.onFinished(a, repo, { ...result, errors });
@@ -630,6 +638,11 @@ export abstract class SwarmSessions extends SwarmRotation {
     const ledger = { issue: a.issueNumber, pr: a.prNumber, stopped: a.status === 'stopped' || !!killed };
 
     if (killed) Object.assign(a, { status: 'stopped', lastError: killed });
+    else if (result.signedOut && a.host !== 'box' && a.status !== 'stopped' && !this.dropping.has(a.id)) {
+      // It opened on its CLI's sign-in (#360): no strike, the work goes back in line for an account that's signed in.
+      a.status = 'idle';
+      this.requeue(a, `${result.errors[0] ?? 'their coding agent needs signing in'}`.replace(/\.$/, ''));
+    } else if (result.lostSession && a.status !== 'stopped') this.dropTask(a, `↺ ${result.errors[0]}.`); // its session wasn't there and someone else has the task (#401): no strike
     else if (this.dropping.has(a.id)) this.dropTask(a, '↺ Cleared desk. Ready for new work.'); // stopped: its issue or PR closed
     else if (a.task === 'qa') await this.onQaFinished(a, repo, result);
     else if (a.task === 'fix') await this.onFixFinished(a, repo, result);

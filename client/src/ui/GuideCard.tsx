@@ -20,8 +20,8 @@ function useGuide(): GuideItem[] {
   const settings = useStore((s) => s.settings);
   const notifyChannels = useStore((s) => s.notifyChannels);
   const experiments = useStore((s) => s.experiments);
-  const messages = useStore((s) => s.messages);
-  return useMemo(() => guideItems({ repos, settings, notifyChannels, experiments, messages, installed: installed() }), [repos, settings, notifyChannels, experiments, messages]);
+  const ceo = useStore((s) => s.ceo);
+  return useMemo(() => guideItems({ repos, settings, notifyChannels, experiments, ceo, installed: installed() }), [repos, settings, notifyChannels, experiments, ceo]);
 }
 
 function Checklist({ items, onGo, open }: { items: GuideItem[]; onGo?: () => void; open?: boolean }) {
@@ -38,7 +38,8 @@ function Checklist({ items, onGo, open }: { items: GuideItem[]; onGo?: () => voi
             <b>{i.title}</b>
             {!i.done && <span className="muted small">{i.why}</span>}
           </div>
-          {!i.done && (
+          {i.busy && <span className="muted small gm-busy">In progress</span>}
+          {!i.done && !i.busy && (
             <button
               className="btn btn-small gm-go"
               onClick={() => {

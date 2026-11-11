@@ -13,6 +13,7 @@ import { clock } from './phoneParts';
 import { useMode } from '../pocket/mode';
 import { useChatFull, useChatFullBack } from './chatFull';
 import { CloseButton, Icon } from './Icon';
+import { badgeCount } from './badgeCount';
 import type { IconName } from './icons';
 import { chatDock, VIEWPORT_EVENT } from '../viewport';
 
@@ -322,7 +323,7 @@ export function Phone({ tab: initialTab, requestId }: { tab?: PhoneTab; requestI
             >
               <span className="phone-tab-icon" aria-hidden>
                 <Icon name={icon} />
-                {badge > 0 && <span className="badge badge-dot">{badge}</span>}
+                {badge > 0 && <span className="badge badge-dot">{badgeCount(badge)}</span>}
               </span>
               <span>{label}</span>
               {badge > 0 && <span className="sr-only">, {badge} new</span>}

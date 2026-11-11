@@ -3,49 +3,62 @@ import { api } from '../api';
 import { useStore } from '../store';
 import type { ChatAction } from '../../../shared/ceoActions';
 import { currentStep } from '../../../shared/ceoStream';
-import { CEO_ID, type ChatIdea, type ChatNotice } from '../../../shared/types';
+import { CEO_ID, type ChatCeoStuck, type ChatIdea, type ChatNotice } from '../../../shared/types';
 import { actionStatus, daySeparator, elapsed, starterChips, workingLine, type ActionStatus } from './chatCardRules';
 import { Icon } from './Icon';
 import { iconFor, type IconName } from './icons';
-import { useActionOpen } from './RefChips';
+import { useActionOpen, useRefOpen } from './RefChips';
+import { SignInSheet } from './SignInSheet';
 import { StepLogList } from './ChatLive';
 import './chatCards.css';
 
 // The CEO chat's cards (#108): what a reply did as action cards with a live status, its idea card (Accept / Edit /
 // Not now), the "working on it" strip with Stop and the round's live log (#150), and the starter chips of an empty message box. Rules in chatCardRules.ts.
 
-/** One office tool call that changed something; its status follows the issue, PR, floor or agent it names. */
-function ActionCard({ action }: { action: ChatAction }) {
+/** One office tool call that changed something; its status follows the issue, PR, floor or agent it names. Undo (#403) puts back what it changed. */
+function ActionCard({ action, onUndo }: { action: ChatAction; onUndo?: () => void }) {
   const world = { repos: useStore((s) => s.repos), agents: useStore((s) => s.agents), qa: useStore((s) => s.qa) };
   const openAction = useActionOpen();
   const open = action.ref ? openAction(action.ref) : null;
-  const status: ActionStatus | null = action.refused ? { label: 'refused', tone: 'bad' } : action.ref ? actionStatus(action.ref, world) : null;
+  const status: ActionStatus | null = action.refused ? { label: 'refused', tone: 'bad' } : action.undone ? { label: 'undone' } : action.ref ? actionStatus(action.ref, world) : null;
   const body = (
     <>
       <span className="action-card-icon" aria-hidden>
         <Icon name={iconFor(action.icon, 'zap')} />
       </span>
-      <span className="grow action-card-text">{action.text}</span>
+      <span className="grow action-card-text">
+        {action.text}
+        {action.askedIn !== undefined && <span className="action-card-asked"> · you asked in #{action.askedIn}</span>}
+      </span>
       {status && <span className={`action-chip ${status.tone ? `action-chip-${status.tone}` : ''}`}>{status.label}</span>}
       {status?.merged && <span className="action-confetti" aria-hidden />}
     </>
   );
   const cls = `action-card ${action.refused ? 'action-card-refused' : ''}`;
-  return open ? (
+  const card = open ? (
     <button type="button" className={cls} onClick={open} aria-label={`${action.text}${status ? `, ${status.label}` : ''}. Open it.`}>
       {body}
     </button>
   ) : (
     <div className={cls}>{body}</div>
   );
+  if (!action.undo || action.undone || !onUndo) return card;
+  return (
+    <div className="action-row">
+      {card}
+      <button type="button" className="btn action-undo" onClick={onUndo} aria-label={`Undo: ${action.text}`}>
+        Undo
+      </button>
+    </div>
+  );
 }
 
 /** What a CEO reply changed in the office. */
-export function ActionCards({ actions }: { actions: readonly ChatAction[] }) {
+export function ActionCards({ actions, messageId }: { actions: readonly ChatAction[]; messageId?: number }) {
   return (
     <div className="action-cards" role="group" aria-label="What this reply changed">
       {actions.map((a, i) => (
-        <ActionCard key={i} action={a} />
+        <ActionCard key={i} action={a} onUndo={messageId === undefined ? undefined : () => void api.undoCeoAction(messageId, i).catch(() => undefined)} />
       ))}
     </div>
   );
@@ -152,6 +165,47 @@ export function PacingCard({ text }: { text: string }) {
           {always ? 'Full speed kept' : 'Always keep full speed'}
         </button>
       </div>
+    </div>
+  );
+}
+
+/** The CEO's session is stuck (#375): the office's line, its terminal, the account's guided sign-in, and Switch back. */
+export function CeoStuckCard({ text, stuck }: { text: string; stuck: ChatCeoStuck }) {
+  const [busy, setBusy] = useState(false);
+  const [signing, setSigning] = useState(false);
+  const account = useStore((s) => s.accounts.accounts.find((a) => a.id === stuck.account));
+  const binding = useStore((s) => s.agents[CEO_ID]?.account ?? '');
+  const terminal = useRefOpen()({ kind: 'agent', agentId: CEO_ID, terminal: true, start: 0, end: 0 });
+  const back = stuck.back;
+  const backDone = back !== null && binding === back;
+  const signIn = stuck.kind === 'sign-in' && account?.kind === 'subscription-login' && !account.builtIn;
+  return (
+    <div className="notice-card" role="note">
+      <p className="notice-card-title">{text}</p>
+      <div className="notice-card-links">
+        {terminal && (
+          <button type="button" className="btn" onClick={terminal}>
+            <Icon name="terminal" /> Open terminal
+          </button>
+        )}
+        {signIn && (
+          <button type="button" className="btn" disabled={busy || account.status !== 'signed-out'} onClick={() => {
+              setBusy(true);
+              void api.signInAccount(account.id).then(() => setSigning(true), () => undefined).finally(() => setBusy(false));
+            }}>
+            <Icon name="key-round" /> {account.status === 'signed-out' ? 'Sign in' : 'Signed in'}
+          </button>
+        )}
+        {back !== null && (
+          <button type="button" className="btn" disabled={busy || backDone} onClick={() => {
+              setBusy(true);
+              void api.ceoSwitchBack(back).catch(() => undefined).finally(() => setBusy(false)); // api() already toasted the error
+            }}>
+            <Icon name="undo-2" /> {backDone ? `Back on ${stuck.backLabel ?? 'it'}` : `Switch back to ${stuck.backLabel ?? 'the last account'}`}
+          </button>
+        )}
+      </div>
+      {signing && account && <SignInSheet a={account} close={() => setSigning(false)} />}
     </div>
   );
 }

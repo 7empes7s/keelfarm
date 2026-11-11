@@ -15,8 +15,8 @@ const { Swarm } = await import('./swarm.ts');
 // must fit the snapshot a tab loads and the traffic one tab gets into budgets, so a change that makes either grow with
 // the company (terminal lines in the snapshot, every agent change sent in full) fails here, not in someone's office.
 
-const SNAPSHOT_BUDGET = 600_000; // bytes; it was 2 MB and growing with every log line before #228
-const TRAFFIC_BUDGET = 80_000; // bytes per second to a tab on one floor with the workers list out; 124 KB/s before
+const SNAPSHOT_BUDGET = 626_000; // bytes; it was 2 MB and growing with every log line before #228; +15 KB for what each busy agent's session runs on (#376); +5 KB for who spent each account's window (#409); +1 KB: main sat within CI's run-to-run noise when the disk settings gained rearmGb (#502); +5 KB for every floor's theme and 7-day QA curve (#371), Windows' longer paths at the edge
+const TRAFFIC_BUDGET = 70_000; // bytes per second to a tab on one floor with the workers list out; 124 KB/s before #228, 78-85 before #491
 
 afterAll(() => {
   vi.useRealTimers();
@@ -54,6 +54,8 @@ describe('a big company', () => {
     const lineFloors = new Set(types.flatMap((e) => (e.type === 'logs' ? Object.keys(e.tails).map((id) => floorOf.get(id)) : [])));
     expect([...lineFloors]).toEqual([1]);
     expect(types.filter((e) => e.type === 'agent').length).toBe(0);
+    // the CEO's, the test lab's and the accounts' views came as patches (#491)
+    expect(types.filter((e) => e.type === 'ceo' || e.type === 'testLab' || e.type === 'accounts').length).toBe(0);
     expect(types.filter((e) => e.type === 'agents').length).toBeLessThanOrEqual(4 * 60 + 1);
   });
 });

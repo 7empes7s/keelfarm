@@ -6,6 +6,7 @@ import fs from 'node:fs/promises';
 import { dayKey } from '../shared/journal.ts';
 import { charTokens, startupParts, startupRows, type StartupContext, type StartupPart } from '../shared/startup.ts';
 import type { EffortLevel, PullInfo } from '../shared/types.ts';
+import type { CeoJobInfo } from '../shared/ceoJobLog.ts';
 import {
   isCeoKind,
   isTaskKind,
@@ -345,6 +346,8 @@ export interface CostRun {
   sessionId?: string | null;
   title?: string;
   account?: string; // the account it ran on (#247)
+  resumed?: boolean; // a CEO job carried on in its kept session (#330)
+  ceo?: CeoJobInfo; // a CEO job's row in the CEO jobs log (#332), for the history only
 }
 
 /** The agent fields a session's line is made from. */
@@ -467,6 +470,7 @@ export class SessionCosts {
       ...(cause ? { cause } : {}),
       ...(run?.startup ? { startup: run.startup } : {}),
       ...(run?.account ? { account: run.account } : {}),
+      ...(run?.resumed !== undefined ? { resumed: run.resumed } : {}),
       ...(result.sid && result.total !== undefined ? { sid: result.sid, total: result.total } : {}),
     };
     this.onSession({ type: 'session', ...line }, run);

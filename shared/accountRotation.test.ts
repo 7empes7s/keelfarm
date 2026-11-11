@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addSpan, allOutText, detectLimit, pickAccount, resetTime, rotationSettings, rotationStats, spanBars, switchText, type Candidate } from './accountRotation';
+import { addSpan, allOutText, detectLimit, endedText, hasRoom, LIMIT_TAIL_LINES, pickAccount, resetTime, rotationSettings, rotationStats, spanBars, switchHandover, switchText, type Candidate } from './accountRotation';
 import type { AccountSwitch, ProviderAccount } from './types';
 
 const NOW = new Date(2026, 10, 7, 13, 0, 0).getTime(); // 13:00 local
@@ -16,11 +16,30 @@ describe('detectLimit', () => {
     expect(detectLimit('Claude Code stopped: rate limit (5-hour limit reached)', NOW)?.kind).toBe('limited');
   });
 
+  it("reads Claude Code's weekly and Opus limits with either apostrophe, and a dated reset in its time zone (#442)", () => {
+    const until = Date.UTC(2026, 10, 13, 14, 0);
+    expect(detectLimit("You've hit your weekly limit · resets Nov 13, 2pm (UTC)", NOW)).toEqual({ kind: 'limited', until });
+    expect(detectLimit('You’ve hit your weekly limit · resets Nov 13, 2pm (UTC)', NOW)).toEqual({ kind: 'limited', until });
+    expect(detectLimit('You’ve hit your Opus limit · resets Nov 13 at 3pm (Europe/Berlin)', NOW)).toEqual({ kind: 'limited', until });
+    expect(detectLimit("You've hit your weekly Opus limit", NOW)?.kind).toBe('limited');
+    expect(detectLimit('Opus limit reached', NOW)?.kind).toBe('limited');
+    expect(resetTime('resets Nov 13 at 2pm UTC', NOW)).toBe(until);
+    expect(resetTime('resets Nov 13 at 2pm', NOW)).toBe(new Date(2026, 10, 13, 14, 0).getTime()); // no zone: this computer's
+    expect(resetTime('resets Jan 2, 9am (UTC)', Date.UTC(2026, 11, 30))).toBe(Date.UTC(2027, 0, 2, 9, 0));
+  });
+
   it('reads Codex limits', () => {
     const text = "■ You've hit your usage limit. Upgrade to Pro (https://openai.com/chatgpt/pricing) or try again in 2 hours 15 minutes.";
     expect(detectLimit(text, NOW)).toEqual({ kind: 'limited', until: NOW + (2 * 60 + 15) * 60_000 });
     expect(detectLimit("You've hit your usage limit. Try again at 3:15 PM.", NOW)).toEqual({ kind: 'limited', until: at(15, 15) });
     expect(detectLimit('stream error: exceeded retry limit, last status: 429 Too Many Requests', NOW)).toEqual({ kind: 'limited', until: NOW + 5 * 60_000 });
+  });
+
+  it("reads Codex's limit wrapped in a narrow terminal, with its prompt and the session's end below (#400)", () => {
+    const message = ['■ You’ve hit your usage limit.', 'Upgrade to Pro (https://chatgpt.com/explore/pro),', 'visit https://chatgpt.com/settings/usage to', 'purchase more credits or try again at', '9:08 PM.'];
+    const rows = [...message.flatMap((l) => l.match(/.{1,40}/gu) ?? []), '', '› Ask Codex to do anything', '', '── Codex session ended ──'];
+    expect(detectLimit(endedText(['Codex exited with code 1 before finishing'], rows), NOW)).toEqual({ kind: 'limited', until: at(21, 8) });
+    expect(endedText([], [...Array(40).keys()].map(String)).split('\n')).toHaveLength(LIMIT_TAIL_LINES);
   });
 
   it('reads 429s and an overloaded API as a short limit', () => {
@@ -54,6 +73,18 @@ describe('detectLimit', () => {
 const acc = (id: string, o: Partial<ProviderAccount> = {}): ProviderAccount => ({ id, cli: 'claude', kind: 'subscription-login', label: id, tags: [], priority: 0, enabled: true, ...o });
 const cand = (account: ProviderAccount, o: Partial<Candidate> = {}): Candidate => ({ account, signedIn: true, usage: [], todayUsd: 0, ...o });
 const pick = (binding: string | undefined, list: Candidate[], o: { apiLast?: boolean; skip?: string[]; now?: number } = {}) => pickAccount(binding, list, o.now ?? NOW, { cli: 'claude', apiLast: o.apiLast ?? true, skip: o.skip })?.id ?? null;
+
+describe('pickAccount with a task\'s account (#390)', () => {
+  const pro = acc('pro');
+  const ultra = acc('ultra', { priority: 1 });
+  const sticky = (list: Candidate[], id: string, now = NOW) => pickAccount(undefined, list, now, { cli: 'claude', apiLast: true, sticky: id })?.id ?? null;
+  it("keeps an open task on its account though another is first, and moves it when that one is out", () => {
+    expect(sticky([cand(pro), cand(ultra)], 'ultra')).toBe('ultra');
+    expect(sticky([cand(pro), cand({ ...ultra, limitedUntil: NOW + 60_000 })], 'ultra')).toBe('pro');
+    expect(sticky([cand(pro), cand({ ...ultra, enabled: false })], 'ultra')).toBe('pro');
+  });
+  it('a pinned account still comes first', () => expect(pickAccount('pro', [cand(pro), cand(ultra)], NOW, { cli: 'claude', apiLast: true, sticky: 'ultra' })?.id).toBe('pro'));
+});
 
 describe('pickAccount', () => {
   const main = acc('main', { priority: 0, tags: ['max'] });
@@ -95,12 +126,29 @@ describe('pickAccount', () => {
   });
 });
 
+describe('hasRoom (#383)', () => {
+  const ultra = acc('ultra', { priority: 0 });
+  const pro = acc('pro', { priority: 1 });
+  const near = [{ type: 'five_hour', pct: 96, resetsAt: NOW + 3600_000, at: NOW }];
+  const room = (list: Candidate[], skip: string[]) => hasRoom(list, NOW, { cli: 'claude', apiLast: true, skip });
+  it('finds another account with room besides the warned one', () => {
+    expect(room([cand(ultra, { usage: near }), cand(pro)], ['ultra'])).toBe(true);
+  });
+  it('has none when the rest are near out, limited or another coding agent’s', () => {
+    expect(room([cand(ultra), cand(pro, { usage: near })], ['ultra'])).toBe(false);
+    expect(room([cand(ultra), cand(pro, { account: { ...pro, limitedUntil: NOW + 60_000 } })], ['ultra'])).toBe(false);
+    expect(room([cand(ultra), cand(acc('cx', { cli: 'codex' }))], ['ultra'])).toBe(false);
+  });
+});
+
 describe('words and numbers', () => {
   const clock = (t: number) => new Date(t).toISOString().slice(11, 16);
 
   it('says the switch, the way the chat pill shows it', () => {
     expect(switchText({ from: 'Main Max', to: 'Backup Max', why: 'limited', until: Date.UTC(2026, 10, 7, 16) }, clock)).toBe('🔀 Switched to Backup Max: Main Max is limited until 16:00.');
     expect(switchText({ from: 'Main Max', to: 'Backup Max', why: 'signed-out', until: null }, clock)).toBe('🔀 Switched to Backup Max: Main Max is signed out.');
+    expect(switchText({ from: 'Main Max', to: 'Pro', why: 'signed-out', until: null, carried: 'conversation' }, clock)).toBe('🔀 Switched to Pro: Main Max is signed out. Memory and conversation carried over.');
+    expect(switchText({ from: 'Main Max', to: 'Codex', why: 'signed-out', until: null, carried: 'handover' }, clock)).toMatch(/Picked up from a handover/);
   });
 
   it('says when every account is out, with the API key to turn on', () => {
@@ -124,5 +172,17 @@ describe('words and numbers', () => {
   it('checks the settings', () => {
     expect(rotationSettings(undefined, undefined)).toEqual({ on: true, apiLast: true, ceoClis: [], agentsSwitchCli: true });
     expect(rotationSettings(undefined, { on: false, ceoClis: ['codex', 'opencode', 'codex'] })).toMatchObject({ on: false, ceoClis: ['codex'] });
+  });
+});
+
+describe('switchHandover (#377)', () => {
+  it("a fresh CEO session hears the chat's latest messages, clipped, and where its notes are", () => {
+    const msgs = [...Array.from({ length: 8 }, (_, n) => ({ from: 'manager' as const, text: `m${n}` })), { from: 'ceo' as const, text: 'x'.repeat(500) }, { from: 'office' as const, text: ' ' }];
+    const h = switchHandover(msgs, '/office/ceo/NOTES.md');
+    expect(h).toContain('/office/ceo/NOTES.md');
+    expect(h).not.toContain('m2');
+    expect(h).toContain('Manager: m3');
+    expect(h).toContain(`You: ${'x'.repeat(400)}…`);
+    expect(switchHandover([], 'N')).toContain('(none)');
   });
 });

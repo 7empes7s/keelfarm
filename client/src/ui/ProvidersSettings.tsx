@@ -4,27 +4,32 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
-import { BILLING_LINKS, kindSentence } from '../../../shared/accounts';
-import { clock, usageBars } from '../../../shared/usage';
-import type { AccountCli, AccountKind, AccountView, SignInMode } from '../../../shared/types';
+import { BILLING_LINKS, cardPlan, kindSentence, limitedBy } from '../../../shared/accounts';
+import { switchingText } from '../../../shared/accountDefault';
+import { clock, isReset, readingsNote, usageBars } from '../../../shared/usage';
+import type { AccountCli, AccountKind, AccountView } from '../../../shared/types';
 import { Menu } from './Menu';
 import { Sheet } from './Sheet';
 import { ProgressBar } from './ProgressBar';
-import { LiveTerminal } from './LiveTerminal';
+import { SignInSheet } from './SignInSheet';
 import { confirmDialog } from './Confirm';
 import { workerCli } from './floorRows';
 import './accounts.css';
 import { Icon } from './Icon';
 import { SecretInput } from './SecretInput';
+import { PlanFlag } from './PlanFlag';
 import { LimitTimeline, RotationCard } from './RotationSettings';
+import { CliMissingCard, OpencodeCard } from './CliSetupCard';
 
 const DOCS = 'https://github.com/7empes7s/keelfarm/blob/main/docs/accounts.md';
 
 const CLI_INFO: { id: AccountCli | 'opencode'; name: string; signs: string }[] = [
   { id: 'claude', name: 'Claude Code', signs: 'a Claude subscription login (Pro or Max), an Anthropic API key, or a setup token' },
   { id: 'codex', name: 'Codex', signs: 'a ChatGPT plan login or an OpenAI API key' },
-  { id: 'opencode', name: 'OpenCode', signs: 'its own setup (opencode auth login): the office runs it as it is' },
+  { id: 'gemini', name: 'Gemini CLI', signs: 'a Google AI plan login (Plus or Pro), for QA second opinions, docs, research and small fixes' },
+  { id: 'opencode', name: 'OpenCode', signs: 'its own setup (opencode auth login), for any provider it supports' },
 ];
+const CLI_NAME: Record<AccountCli, string> = { claude: 'Claude Code', codex: 'Codex', gemini: 'Gemini CLI' };
 
 const KIND_NAME: Record<AccountKind, string> = { 'subscription-login': 'Subscription login', 'api-key': 'API key', 'setup-token': 'Setup token' };
 
@@ -35,8 +40,10 @@ function statusChip(a: AccountView, now: number): { text: string; tone: string }
       return { text: 'Ready', tone: 'good' };
     case 'near':
       return { text: 'Near limit', tone: 'warn' };
-    case 'limited':
-      return { text: a.until ? `Limited until ${clock(a.until, now)}` : 'Limited', tone: 'bad' };
+    case 'limited': {
+      const by = limitedBy(a.usage, a.until, now);
+      return { text: `${a.until ? `Limited until ${clock(a.until, now)}` : 'Limited'}${by ? ` (${by})` : ''}`, tone: 'bad' };
+    }
     case 'signed-out':
       return { text: a.kind === 'api-key' ? 'No key' : 'Signed out', tone: 'bad' };
     default:
@@ -80,13 +87,14 @@ function Stats({ list }: { list: AccountView[] }) {
   );
 }
 
-function AccountCard({ a, first, last, edit, signIn }: { a: AccountView; first: boolean; last: boolean; edit: () => void; signIn: () => void }) {
+function AccountCard({ a, first, last, isDefault, left, edit, signIn, missing }: { a: AccountView; first: boolean; last: boolean; isDefault: boolean; left: number; edit: () => void; signIn: () => void; missing: boolean }) {
   const agents = useStore((s) => s.agents);
   const demo = useStore((s) => s.demo);
   const now = useNow(30_000);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const chip = statusChip(a, now);
+  const asOf = a.usage.length ? (readingsNote(a.usage, now) ?? (a.usage.some((r) => isReset(r, now)) ? 'Reset, waiting for a new reading' : null)) : null;
   const names = a.agents.map((id) => agents[id]?.name ?? id);
   const billing = BILLING_LINKS[a.cli][a.kind];
   const test = async () => {
@@ -94,6 +102,17 @@ function AccountCard({ a, first, last, edit, signIn }: { a: AccountView; first: 
     setNote('');
     try {
       setNote((await api.testAccount(a.id)).note);
+    } catch {
+      // toasted
+    } finally {
+      setBusy(false);
+    }
+  };
+  const repair = async () => {
+    setBusy(true);
+    setNote('');
+    try {
+      setNote((await api.repairShare(a.id)).note);
     } catch {
       // toasted
     } finally {
@@ -110,25 +129,39 @@ function AccountCard({ a, first, last, edit, signIn }: { a: AccountView; first: 
     });
     if (ok) await api.removeAccount(a.id).catch(() => undefined);
   };
+  // Switch now (#390): open tasks on the other accounts move to this one at their next session, in a fresh session.
+  const switchNow = async () => {
+    const ok = await confirmDialog({
+      title: `Switch everyone to ${a.label} now?`,
+      body: "Open tasks on the other accounts move to it at their next session: a fresh session in the same worktree, without its conversation. Make default lets them finish where they are instead.",
+      icon: 'shuffle',
+      confirm: 'Switch now',
+      tone: 'warn',
+    });
+    if (ok) await api.makeDefaultAccount(a.id, true).catch(() => undefined);
+  };
   return (
-    <div className={`acc-card ${a.enabled ? '' : 'acc-paused'}`}>
+    <div id={`acc-card-${a.id}`} className={`acc-card ${a.enabled ? '' : 'acc-paused'}`}>
       <div className="ds-card-head">
         <div className="ds-row-main">
           <div className="ds-row-title">{a.label}</div>
           <div className="ds-row-meta">
             {KIND_NAME[a.kind]}
-            {a.plan ? ` · ${a.plan}` : ''}
+            {cardPlan(a) ? ` · ${cardPlan(a)}` : ''}
             {a.keyHint ? ` · ••••${a.keyHint}` : ''}
             {a.builtIn ? ' · already here' : ''}
+            {isDefault ? ' · default' : ''}
           </div>
         </div>
         <span className={`chip acc-chip acc-${chip.tone}`}>{chip.text}</span>
         <Menu
           label={`More for ${a.label}`}
           items={[
-            a.kind === 'subscription-login' && { label: 'Sign in again', onSelect: signIn },
+            a.kind === 'subscription-login' && { label: 'Sign in again', onSelect: signIn, disabled: missing, ...(missing && { hint: 'Install it first' }) },
             { label: 'Test', onSelect: () => void test() },
             !a.removing && { label: a.enabled ? 'Pause in the rotation' : 'Resume in the rotation', onSelect: () => void api.updateAccount(a.id, { enabled: !a.enabled }).catch(() => undefined) },
+            a.enabled && !a.removing && !isDefault && { label: 'Make default', hint: 'New tasks start on it; open ones finish first', onSelect: () => void api.makeDefaultAccount(a.id, false).catch(() => undefined) },
+            a.enabled && !a.removing && (!isDefault || left > 0) && { label: 'Switch now', hint: 'Open tasks move to it at their next session', onSelect: () => void switchNow() },
             !first && { label: 'Move up', onSelect: () => void api.moveAccount(a.id, -1).catch(() => undefined) },
             !last && { label: 'Move down', onSelect: () => void api.moveAccount(a.id, 1).catch(() => undefined) },
             { label: a.kind === 'api-key' ? 'Rename, tags, daily cap' : 'Rename and tags', onSelect: edit },
@@ -147,9 +180,26 @@ function AccountCard({ a, first, last, edit, signIn }: { a: AccountView; first: 
           ))}
         </div>
       )}
+      <PlanFlag a={a} onSignIn={signIn} />
+      {a.tokenRefresh && (
+        <div className="acc-flag" role="status">
+          <Icon name="refresh-cw" /> Token expired: it refreshes on its next session
+        </div>
+      )}
+      {a.shareMissing && (
+        <div className={`acc-flag ${a.shareMissing.length ? 'acc-flag-warn' : ''}`} role="status">
+          <Icon name={a.shareMissing.length ? 'triangle-alert' : 'link'} /> {a.shareMissing.length ? `Doesn't share ${a.shareMissing.join(', ')} with this computer's login` : "Shares memory, skills and settings with this computer's login"}
+        </div>
+      )}
+      {a.shareMissing && a.shareMissing.length > 0 && (
+        <button className="btn acc-action" onClick={() => void repair()}>
+          <Icon name="wrench" /> Repair
+        </button>
+      )}
       {usageBars(a.usage, now).map((b) => (
         <ProgressBar key={b.type} label={b.name} value={`${b.pct}%${b.resets ? `, ${b.resets}` : ''}`} pct={b.pct / 100} tone={b.tone} aria={`${a.label}: ${b.name} ${b.pct}%`} />
       ))}
+      {asOf && <div className="ds-row-meta">{asOf}</div>}
       {a.dailyCostCap ? (
         <ProgressBar label="Today" value={`${usd(a.todayUsd)} of ${usd(a.dailyCostCap)}`} pct={Math.min(1, a.todayUsd / a.dailyCostCap)} tone={a.todayUsd >= a.dailyCostCap ? 'bad' : a.todayUsd >= a.dailyCostCap * 0.75 ? 'warn' : 'good'} aria={`${a.label}: ${usd(a.todayUsd)} of a ${usd(a.dailyCostCap)} daily cap`} />
       ) : null}
@@ -162,14 +212,14 @@ function AccountCard({ a, first, last, edit, signIn }: { a: AccountView; first: 
         {names.length ? `Pinned: ${names.join(', ')}` : 'Nobody pinned'}
       </div>
       {a.status === 'signed-out' && a.kind === 'subscription-login' && (
-        <button className="btn btn-primary acc-action" onClick={signIn}>
+        <button className="btn btn-primary acc-action" disabled={missing} onClick={signIn}>
           <Icon name="key-round" /> Sign in
         </button>
       )}
       {a.status === 'signed-out' && a.kind === 'setup-token' && <p className="muted small">Set {a.tokenEnv} in the office's environment (claude setup-token prints it) and restart the office.</p>}
       {(note || busy) && (
         <span className="small muted" role="status">
-          {busy ? 'Testing…' : note}
+          {busy ? 'Working…' : note}
         </span>
       )}
     </div>
@@ -246,7 +296,7 @@ function AddSheet({ cli, close, signIn }: { cli: AccountCli; close: () => void; 
   const [tokenEnv, setTokenEnv] = useState('CUBEFARM_CLAUDE_TOKEN_2');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const kinds: AccountKind[] = cli === 'claude' ? ['subscription-login', 'api-key', 'setup-token'] : ['subscription-login', 'api-key'];
+  const kinds: AccountKind[] = cli === 'claude' ? ['subscription-login', 'api-key', 'setup-token'] : cli === 'gemini' ? ['subscription-login'] : ['subscription-login', 'api-key'];
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
@@ -263,7 +313,7 @@ function AddSheet({ cli, close, signIn }: { cli: AccountCli; close: () => void; 
     }
   };
   return (
-    <Sheet title={`Add a ${cli === 'claude' ? 'Claude Code' : 'Codex'} account`} onClose={close}>
+    <Sheet title={`Add a ${CLI_NAME[cli]} account`} onClose={close}>
       <form className="acc-form" autoComplete="off" onSubmit={(e) => void submit(e)}>
         <div role="radiogroup" aria-label="Kind of account" className="acc-kinds">
           {kinds.map((k) => (
@@ -278,7 +328,7 @@ function AddSheet({ cli, close, signIn }: { cli: AccountCli; close: () => void; 
         </div>
         <label className="field">
           <span>Name</span>
-          <input value={label} maxLength={40} placeholder={kind === 'api-key' ? 'Work API key' : 'Max · second seat'} onChange={(e) => setLabel(e.target.value)} />
+          <input value={label} maxLength={40} placeholder={kind === 'api-key' ? 'Work API key' : cli === 'gemini' ? 'Google AI Plus' : 'Max · second seat'} onChange={(e) => setLabel(e.target.value)} />
         </label>
         <label className="field">
           <span>Tags</span>
@@ -316,51 +366,9 @@ function AddSheet({ cli, close, signIn }: { cli: AccountCli; close: () => void; 
   );
 }
 
-/**
- * The login's own sign-in, in a terminal: open the link it prints and paste the code back. Once it's over it says how it
- * ended, with Try again (a fresh login in the same terminal); Claude Code can make a setup token there instead (#302).
- */
-function SignInSheet({ a, close }: { a: AccountView; close: () => void }) {
-  const run = a.signIn;
-  const token = run?.mode === 'setup-token';
-  const failed = !!run && !run.running && !run.ok;
-  const again = (mode: SignInMode) => void api.signInAccount(a.id, mode).catch(() => undefined);
-  return (
-    <Sheet title={`${token ? 'Setup token' : 'Sign in'} · ${a.label}`} onClose={close} className="acc-signin">
-      <p className="muted small">
-        {a.cli === 'claude' ? 'Open the link below, approve it, and paste the code back here.' : 'Open the link below and enter the one-time code it shows.'}{' '}
-        {token ? 'It prints a token that lasts a year: put it in an environment variable of the office and add it as a Setup token account. The office never saves it.' : "It signs in only this account's folder."}
-      </p>
-      <LiveTerminal agentId={`account:${a.id}`} cli={a.cli} compact keys signIn />
-      {run && !run.running && (
-        <div className={`small ${run.ok ? 'notify-ok' : 'term-error'}`} role="status">
-          {run.note}
-        </div>
-      )}
-      <div className="row wrap">
-        {failed && (
-          <button className="btn btn-primary" onClick={() => again(run.mode)}>
-            <Icon name="rotate-ccw" /> Try again
-          </button>
-        )}
-        {a.cli === 'claude' && (
-          <button className="btn" onClick={() => again(token ? 'login' : 'setup-token')}>
-            <Icon name="key-round" /> {token ? 'Sign in with the browser instead' : 'Sign in with a setup token instead'}
-          </button>
-        )}
-        <button className="btn" onClick={() => void api.testAccount(a.id).catch(() => undefined)}>
-          <Icon name="flask-conical" /> Test
-        </button>
-        <button className={`btn ${failed ? '' : 'btn-primary'}`} onClick={close}>
-          Done
-        </button>
-      </div>
-    </Sheet>
-  );
-}
-
 export function ProvidersSettings() {
   const list = useStore((s) => s.accounts.accounts);
+  const switchingNow = useStore((s) => s.accounts.switching);
   const agents = Object.values(useStore((s) => s.agents));
   const settings = useStore((s) => s.settings);
   const [adding, setAdding] = useState<AccountCli | null>(null);
@@ -371,6 +379,12 @@ export function ProvidersSettings() {
   };
   const onRotation = agents.filter((x) => x.host !== 'box' && !x.account).length;
   const find = (id: string | null) => list.find((a) => a.id === id);
+  const nextId = useStore((s) => s.accounts.next?.claude ?? null);
+  const nextOn = find(nextId);
+  const switching = (cli: string) => switchingNow?.find((x) => x.cli === cli);
+  const def = (cli: string) => list.find((a) => a.cli === cli && a.enabled && !a.removing)?.id;
+  const clis = useStore((s) => s.clis);
+  const anyInstalling = clis.some((c) => c.install?.running);
   return (
     <div className="card acc-page">
       <h3>
@@ -378,19 +392,21 @@ export function ProvidersSettings() {
       </h3>
       <p className="muted small">
         Every login and API key the coding agents on this computer run on. Agents and the CEO use the rotation (the first ready account, top first) unless you pin them to an account or a tag in their
-        setup; when one is out, they move to the next. {onRotation} on the rotation now. Every other provider (text, audio, cloud, MCP servers) is in <a href="#settings/providers">Providers</a>.
+        setup; when one is out, they move to the next. {onRotation} on the rotation now.{nextOn && ` The next Claude session starts on ${nextOn.label}.`} Every other provider (text, audio, cloud, MCP servers) is in <a href="#settings/providers">Providers</a>.
       </p>
       <Stats list={list} />
       <RotationCard />
       {CLI_INFO.map((c) => {
         const mine = list.filter((a) => a.cli === c.id);
         const users = agents.filter((x) => x.host !== 'box' && workerCli(x, settings) === c.id).length;
+        const cli = clis.find((x) => x.id === c.id);
+        const missing = !!cli && !cli.installed; // unknown until the office has looked
         return (
           <section key={c.id} className="acc-cli" aria-label={c.name}>
             <div className="row wrap">
               <h4 className="grow">{c.name}</h4>
               {c.id !== 'opencode' && (
-                <button className="btn btn-small" onClick={() => setAdding(c.id as AccountCli)}>
+                <button className="btn btn-small" disabled={missing} onClick={() => setAdding(c.id as AccountCli)}>
                   ＋ Add account
                 </button>
               )}
@@ -398,8 +414,16 @@ export function ProvidersSettings() {
             <p className="muted small">
               Signs in with {c.signs}.{users ? ` ${users} of the team run${users === 1 ? 's' : ''} it.` : ''}
             </p>
+            {missing && c.id !== 'opencode' && <p className="muted small">Sign in and Add account need {c.name} on this computer: install it first.</p>}
+            <CliMissingCard cli={cli} anyInstalling={anyInstalling} />
+            {c.id === 'opencode' && <OpencodeCard cli={cli} />}
+            {switching(c.id) && (
+              <p className="acc-flag" role="status">
+                <Icon name="shuffle" /> {switchingText(switching(c.id)!.left)}
+              </p>
+            )}
             {mine.map((a, i) => (
-              <AccountCard key={a.id} a={a} first={i === 0} last={i === mine.length - 1} edit={() => setEditing(a.id)} signIn={() => signIn(a.id)} />
+              <AccountCard key={a.id} a={a} first={i === 0} last={i === mine.length - 1} isDefault={a.id === def(c.id)} left={switching(c.id)?.left.reduce((n, l) => n + l.count, 0) ?? 0} edit={() => setEditing(a.id)} signIn={() => signIn(a.id)} missing={missing} />
             ))}
           </section>
         );

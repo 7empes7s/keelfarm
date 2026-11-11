@@ -6,6 +6,8 @@ import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { HttpError } from './httpError.ts';
+import { builtInPrefs, prepareLogin } from './cliSetup.ts';
+import { shareLogin, shareStatus, unshareLogin } from './sharedLogin.ts';
 import { mergeSecrets, readSecrets } from './secrets.ts';
 import { AgentTerminal } from './terminal.ts';
 import { POLL_MS } from './usagePoll.ts';
@@ -23,19 +25,23 @@ import {
   cleanTags,
   ENV_NAME,
   LABEL_MAX,
+  LOGIN_ENV,
   moveAccount,
   newAccountId,
   normaliseAccounts,
   pinnedTo,
+  planWarning,
   recentHits,
   removal,
   resolveAccount,
+  sameSubscription,
   type AccountPatch,
   type AccountSetup,
 } from '../shared/accounts.ts';
-import { addSpan, NEAR_OUT_PCT, pickAccount, rotationStats, type Candidate } from '../shared/accountRotation.ts';
+import { defaultAccount, makeDefault, tasksLeft } from '../shared/accountDefault.ts';
+import { addSpan, hasRoom, NEAR_OUT_PCT, pickAccount, rotationStats, type Candidate } from '../shared/accountRotation.ts';
 import { mergeReadings } from '../shared/usage.ts';
-import { inputShape, signInEnd } from '../shared/signIn.ts';
+import { codeProblem, inputShape, menuKeys, signInCode, signInEnd, signInScreen } from '../shared/signIn.ts';
 import { secretMismatch } from '../shared/secretFormats.ts';
 import type { AccountCli, AccountKind, AccountsView, AccountSwitch, AccountView, ProviderAccount, RotationSettings, SignInMode, SignInRun, UsageReading } from '../shared/types.ts';
 
@@ -51,12 +57,14 @@ export interface AccountsDeps {
   file: string;
   /** Test an account (accountCheck.ts; the demo's is fake). */
   check: (a: ProviderAccount, dir: string, secret: string) => Promise<AccountCheck>;
+  /** The built-in Claude login's plan and owner, read from its files without a request (#460; the demo's is fake). */
+  login?: (a: ProviderAccount, dir: string) => Promise<{ plan: string | null; who: string | null }>;
   /** A login's CLI signing in in a terminal, with its folder (localSignIn.ts; the demo's is fake). */
   signIn: (o: { cli: AccountCli; env: Record<string, string>; term: AgentTerminal; mode: SignInMode }, exited: (code: number) => void) => BoxSignIn;
   /** The cost ledger's sessions, for today's spend per account. */
   spend: () => { at: number; usd: number; account?: string }[];
   /** Agents (and the CEO) with what they're pinned to. */
-  agents: () => { id: string; account?: string }[];
+  agents: () => { id: string; account?: string; role?: string }[];
   /** The built-in Claude login's readings: the office already keeps them (claudeUsage). */
   builtInUsage: () => UsageReading[];
   changed: (view: AccountsView) => void;
@@ -66,6 +74,10 @@ export interface AccountsDeps {
   poll?: boolean;
   /** Rotation's settings (#248); absent: off, sessions run on their binding's account as before. */
   rotation?: () => RotationSettings;
+  /** The folder every Claude login shares memory, conversations and settings with (#377); absent: the built-in login's. */
+  shareFrom?: string;
+  /** The accounts the tasks running now started on (#390): Mission control's "tasks left" after Make default. */
+  tasks?: () => string[];
 }
 
 /** One session on an account: what it adds to the session's environment, and release() once it ends. */
@@ -89,6 +101,10 @@ export class Accounts {
   private secrets = new Map<string, string>();
   private usage = new Map<string, UsageReading[]>();
   private signedIn = new Map<string, boolean>();
+  private sessionOut = new Set<string>(); // a session found it signed out: a poll's expired-but-refreshable token doesn't put it back (#442)
+  private refresh = new Set<string>(); // Claude logins whose access token expired, for their next session to refresh (#442)
+  private plans = new Map<string, string | null>(); // the plan each Claude login really has (#442)
+  private owners = new Map<string, string | null>(); // who each Claude login belongs to, never sent to tabs (#460)
   private running = new Map<string, number>();
   private terms = new Map<string, AgentTerminal>();
   private signIns = new Map<string, BoxSignIn>();
@@ -114,6 +130,7 @@ export class Accounts {
       if (typeof v === 'string' && v) this.secrets.set(a.id, v);
     }
     if (seed || saved === null) void this.write(); // the built-ins are there from the first start
+    for (const a of this.list()) this.share(a.id);
     if (!this.deps.poll) return;
     // Every login but the built-in one (the office reads that one already) is checked now, then every POLL_MS.
     void this.pollAll();
@@ -165,6 +182,47 @@ export class Accounts {
     return a.builtIn ? builtInDir(path.join, a.cli, this.deps.env, this.deps.homedir ?? os.homedir()) : accountDir(path.join, this.deps.home, a);
   }
 
+  // ---------- the shared set (#377) ----------
+
+  private shareSource(): string {
+    return this.deps.shareFrom ?? builtInDir(path.join, 'claude', this.deps.env, this.deps.homedir ?? os.homedir());
+  }
+
+  /** A Claude login with a folder of its own, which shares the built-in login's set. */
+  private ownsFolder(a: ProviderAccount | undefined): a is ProviderAccount {
+    return !!a && a.cli === 'claude' && a.kind === 'subscription-login' && !a.builtIn;
+  }
+
+  /**
+   * Links a Claude login's folder to the shared set (memory, conversations, skills, settings), merging what it had into
+   * it first; logs what moved. Returns the items it couldn't share; [] for every other account (it shares already).
+   */
+  share(id: string): string[] {
+    const a = this.list().find((x) => x.id === id);
+    if (!this.ownsFolder(a)) return [];
+    try {
+      const r = shareLogin(this.dirOf(a), this.shareSource(), a.id);
+      for (const m of r.moved) console.log(`account ${a.id}: merged into the shared set: ${m}`);
+      return r.missing;
+    } catch (err) {
+      console.warn(`account ${a.id}: couldn't link its folder to the shared set: ${(err as Error).message}`);
+      return shareStatus(this.dirOf(a), this.shareSource());
+    }
+  }
+
+  /** Whether a session on this account sees the built-in login's conversations, so --resume works across accounts. */
+  sharesConversations(id: string): boolean {
+    return !this.share(id).includes('projects');
+  }
+
+  /** POST /api/accounts/:id/share: Repair, the links made again. */
+  repairShare(id: string): string {
+    this.find(id);
+    const missing = this.share(id);
+    this.emit();
+    return missing.length ? `Still not shared: ${missing.join(', ')} (see the office's log).` : '✓ Repaired: it shares everything again.';
+  }
+
   private secretOf(a: ProviderAccount): string {
     if (a.kind === 'setup-token') return (a.tokenEnv ? this.deps.env[a.tokenEnv] : '')?.trim() ?? '';
     return this.secrets.get(a.id) ?? '';
@@ -184,11 +242,13 @@ export class Accounts {
 
   view(now = Date.now()): AccountsView {
     const agents = this.deps.agents();
-    return {
-      accounts: this.candidates(now)
+    const shared = sameSubscription(this.list().filter((a) => a.enabled && !a.removing).map((a) => ({ id: a.id, label: a.label, plan: this.plans.get(a.id), who: this.owners.get(a.id) })));
+    const accounts = this.candidates(now)
         .sort((x, y) => x.account.cli.localeCompare(y.account.cli) || x.account.priority - y.account.priority)
         .map(({ account: a, signedIn, usage, todayUsd, sessions }): AccountView => {
           const secret = this.secretOf(a);
+          const plan = this.plans.get(a.id);
+          const warning = planWarning(a, plan);
           return {
             ...a,
             ...accountStatus({ account: a, signedIn, usage, todayUsd, now }),
@@ -201,9 +261,20 @@ export class Accounts {
             agents: agents.filter((x) => pinnedTo(a, x.account)).map((x) => x.id),
             running: this.running.get(a.id) ?? 0,
             signIn: this.runs.get(a.id) ?? null,
+            ...(plan ? { loginPlan: plan } : {}),
+            ...(warning ? { planWarning: warning } : {}),
+            ...(shared.has(a.id) ? { sameAs: shared.get(a.id) } : {}),
+            ...(this.refresh.has(a.id) && signedIn ? { tokenRefresh: true } : {}),
+            ...(this.ownsFolder(a) ? { shareMissing: shareStatus(this.dirOf(a), this.shareSource()) } : {}),
           };
-        }),
+        });
+    const running = this.deps.tasks?.() ?? [];
+    const switching = ACCOUNT_CLIS.map((cli) => ({ cli, to: defaultAccount(accounts, cli)?.label ?? '', left: tasksLeft(running, accounts, cli) })).filter((x) => x.left.length);
+    return {
+      accounts,
       rotation: rotationStats(this.switches, now),
+      next: { claude: this.pick(undefined, 'claude', now)?.id ?? null, ceo: this.pick(this.deps.agents().find((x) => x.role === 'ceo')?.account, 'claude', now)?.id ?? null },
+      ...(switching.length ? { switching } : {}),
     };
   }
 
@@ -222,14 +293,31 @@ export class Accounts {
   // ---------- sessions ----------
 
   /**
-   * The account a new session of an agent pinned to `binding` runs on, with what it adds to the session's
-   * environment; null: it runs as before accounts. Its running count goes up until release().
+   * The account a new session of an agent pinned to `binding` runs on (its task's account first, `sticky`, while
+   * it's usable), with what it adds to the session's environment; null: it runs as before accounts. Its running count goes up until release().
    */
-  use(binding: string | undefined, cli: AccountCli): AccountUse | null {
-    const now = Date.now();
-    const r = this.rotation();
-    const a = (r.on ? pickAccount(binding, this.candidates(now), now, { cli, apiLast: r.apiLast }) : null) ?? resolveAccount(this.list(), binding, cli);
+  use(binding: string | undefined, cli: AccountCli, sticky?: string): AccountUse | null {
+    const a = this.pick(binding, cli, Date.now(), sticky);
     return a ? this.take(a) : null;
+  }
+
+  /** The account a new session pinned to `binding` would start on (rotation's pick, else the binding's), without starting one. */
+  private pick(binding: string | undefined, cli: AccountCli, now: number, sticky?: string): ProviderAccount | null {
+    const r = this.rotation();
+    return (r.on ? pickAccount(binding, this.candidates(now), now, { cli, apiLast: r.apiLast, sticky }) : null) ?? resolveAccount(this.list(), binding, cli);
+  }
+
+  /** The account the next unpinned session of `cli` would start on, with its readings: what pacing and company.usage name (#383). */
+  upNext(cli: AccountCli, now = Date.now()): { id: string; label: string; usage: UsageReading[] } | null {
+    const a = this.pick(undefined, cli, now);
+    const c = a && this.candidates(now).find((x) => x.account.id === a.id);
+    return c ? { id: c.account.id, label: c.account.label, usage: [...c.usage] } : null;
+  }
+
+  /** Whether rotation has another account of `cli` with room, besides `except`: a warning on that one then paces only it (#383). */
+  hasRoom(cli: AccountCli, except: string, now = Date.now()): boolean {
+    const r = this.rotation();
+    return r.on && hasRoom(this.candidates(now), now, { cli, apiLast: r.apiLast, skip: [except] });
   }
 
   /** Rotation's next account for a session whose account was out (#248), skipping the ones it tried; null: none is left. */
@@ -246,6 +334,11 @@ export class Accounts {
   hasFree(cli: AccountCli, now = Date.now()): boolean {
     const r = this.rotation();
     return r.on && !!pickAccount(undefined, this.candidates(now), now, { cli, apiLast: r.apiLast });
+  }
+
+  /** Whether a session pinned to `binding` (or the rotation's) would start on an account of `cli` with room now: the CEO's own pick runs through the office's pause (#418). */
+  ready(binding: string | undefined, cli: AccountCli, now = Date.now()): boolean {
+    return !!pickAccount(binding, this.candidates(now), now, { cli, apiLast: this.rotation().apiLast });
   }
 
   rotation(): RotationSettings {
@@ -278,6 +371,7 @@ export class Accounts {
   /** A session on an account reported its usage. */
   readings(id: string, readings: UsageReading[]) {
     this.usage.set(id, mergeReadings(this.usage.get(id) ?? [], readings));
+    this.refresh.delete(id); // its session ran, so its token is fresh again
     this.emit();
   }
 
@@ -292,6 +386,8 @@ export class Accounts {
   /** A session on an account found its login expired or its key turned away: out of the rotation until a Test or sign-in says otherwise. */
   signedOut(id: string) {
     this.signedIn.set(id, false);
+    this.sessionOut.add(id);
+    this.refresh.delete(id);
     this.emit();
   }
 
@@ -331,10 +427,12 @@ export class Accounts {
   async add(x: NewAccount): Promise<{ id: string; note: string }> {
     const cli = String(x.cli ?? '') as AccountCli;
     const kind = String(x.kind ?? '') as AccountKind;
-    if (!ACCOUNT_CLIS.includes(cli)) throw new HttpError(400, 'Pick Claude Code or Codex.');
+    if (!ACCOUNT_CLIS.includes(cli)) throw new HttpError(400, 'Pick Claude Code, Codex or Gemini CLI.');
+    if (cli === 'gemini' && kind !== 'subscription-login') throw new HttpError(400, 'Gemini CLI signs in with your Google account: pick a subscription login.');
     if (!ACCOUNT_KINDS.includes(kind) || (cli === 'codex' && kind === 'setup-token')) throw new HttpError(400, 'Pick a subscription login, an API key or (Claude) a setup token.');
     const list = this.list();
-    const label = String(x.label ?? '').trim().slice(0, LABEL_MAX) || (kind === 'api-key' ? `${cli === 'claude' ? 'Anthropic' : 'OpenAI'} API key` : `${cli === 'claude' ? 'Claude' : 'Codex'} account ${list.filter((a) => a.cli === cli).length + 1}`);
+    const name = { claude: 'Claude', codex: 'Codex', gemini: 'Gemini' }[cli];
+    const label = String(x.label ?? '').trim().slice(0, LABEL_MAX) || (kind === 'api-key' ? `${cli === 'claude' ? 'Anthropic' : 'OpenAI'} API key` : `${name} account ${list.filter((a) => a.cli === cli).length + 1}`);
     const a: ProviderAccount = {
       id: newAccountId(cli),
       cli,
@@ -358,6 +456,7 @@ export class Accounts {
       a.tokenEnv = name;
     } else await fs.mkdir(this.dirOf(a), { recursive: true });
     this.save([...list, a]);
+    this.share(a.id);
     return { id: a.id, note: kind === 'subscription-login' ? 'Added: sign it in next.' : kind === 'setup-token' && !this.secretOf(a) ? `Added: set ${a.tokenEnv} in the office's environment and restart it.` : '✓ Added.' };
   }
 
@@ -379,6 +478,15 @@ export class Accounts {
     return this.view();
   }
 
+  /** Make default (#390): first of its coding agent's, so new tasks start on it. Returns it. */
+  makeDefault(id: string): ProviderAccount {
+    const a = this.list().find((x) => x.id === id);
+    if (!a) throw new HttpError(404, `No account "${id}". Accounts: ${this.list().map((x) => `${x.id} (${x.label})`).join(', ')}.`);
+    if (!a.enabled || a.removing) throw new HttpError(400, `${a.label} is paused: resume it first.`);
+    this.save(makeDefault(this.list(), id));
+    return a;
+  }
+
   /** PUT /api/accounts/:id/key: a new key for an API key account, tested first. */
   async setKey(id: string, raw: unknown): Promise<string> {
     const a = this.find(id);
@@ -397,18 +505,33 @@ export class Accounts {
   async test(id: string): Promise<string> {
     const a = this.find(id);
     const r = await this.deps.check(a, this.dirOf(a), this.secretOf(a));
-    this.signedIn.set(id, r.signedIn);
+    // An expired token to refresh counts as signed in (#442), unless a session already failed to sign in with it.
+    const out = !!r.refresh && this.sessionOut.has(id);
+    if (r.signedIn && !r.refresh) this.sessionOut.delete(id);
+    this.signedIn.set(id, r.signedIn && !out);
+    if (r.refresh && !out) this.refresh.add(id);
+    else this.refresh.delete(id);
+    if (r.plan !== undefined) this.plans.set(id, r.plan);
+    if (r.who !== undefined) this.owners.set(id, r.who);
     if (r.readings.length) this.usage.set(id, mergeReadings(this.usage.get(id) ?? [], r.readings));
     // A limit a session hit is over once the poll shows room again (#248).
     const now = Date.now();
     const cur = this.list().find((x) => x.id === id);
     if (cur?.limitedUntil && cur.limitedUntil > now && r.readings.length && r.readings.every((x) => x.pct < NEAR_OUT_PCT)) this.replace({ ...cur, limitedUntil: null });
     this.emit();
-    return r.note;
+    return out ? "Its last session couldn't sign in: tap Sign in again." : r.note;
   }
 
   private async pollAll() {
     for (const a of this.list()) if (!a.builtIn && a.kind !== 'api-key' && a.enabled) await this.test(a.id).catch(() => undefined);
+    // The built-in Claude login's plan and owner (#460): its usage the office reads already.
+    const claude = this.list().find((a) => a.builtIn && a.cli === 'claude' && a.enabled);
+    const own = claude && (await this.deps.login?.(claude, this.dirOf(claude)).catch(() => null));
+    if (claude && own) {
+      this.plans.set(claude.id, own.plan);
+      this.owners.set(claude.id, own.who);
+      this.emit();
+    }
     // The built-in Codex login's rate limits (#361): nothing else reads them. Only its readings: whether it counts as
     // signed in stays as it was (Codex may run on OPENAI_API_KEY with no login file).
     const codex = this.list().find((a) => a.builtIn && a.cli === 'codex' && a.enabled);
@@ -461,14 +584,23 @@ export class Accounts {
     if (mode === 'setup-token' && a.cli !== 'claude') throw new HttpError(400, 'Setup tokens are for Claude Code only.');
     this.signIns.get(id)?.stop();
     const dir = this.dirOf(a);
-    const env: Record<string, string> = a.builtIn ? {} : a.cli === 'claude' ? { CLAUDE_CONFIG_DIR: dir } : { CODEX_HOME: dir };
+    const env: Record<string, string> = a.builtIn ? {} : { [LOGIN_ENV[a.cli]]: dir };
+    // A new login starts with the built-in one's theme and its onboarding done (Gemini CLI's: the Google sign-in picked), so its sign-in opens on the sign-in (#360, #365).
+    if (!a.builtIn && a.cli !== 'codex') {
+      try {
+        prepareLogin(a.cli, dir, [], { prefs: builtInPrefs() });
+        this.share(id);
+      } catch (err) {
+        console.warn(`account ${id}: couldn't set up its login folder: ${(err as Error).message}`);
+      }
+    }
     const term = this.terminal(id)!;
     const run = this.deps.signIn({ cli: a.cli, env, term, mode }, (code) => {
       if (this.signIns.get(id) !== run) return; // replaced by a newer one
       this.signIns.delete(id);
       void term.flush().then(() => {
         if (this.signIns.has(id)) return;
-        const end = signInEnd(mode, code, term.tail(8));
+        const end = signInEnd(mode, code, term.unwrapped().split('\n')); // joined: a narrow phone's terminal wraps the reason (#350)
         this.runs.set(id, { mode, running: false, ...end });
         if (!end.ok) term.note(end.note);
         this.emit();
@@ -477,7 +609,73 @@ export class Accounts {
     });
     this.signIns.set(id, run);
     this.runs.set(id, { mode, running: true, ok: false, note: '' });
+    this.watchSignIn(id, term, run);
     this.emit();
+  }
+
+  /**
+   * The guided sign-in (#350): its screen read as it changes, for the link, Codex's code and whether the prompt waits,
+   * and the menus the sign-in needs answered (login method, theme, folder trust) answered by the office itself.
+   */
+  private watchSignIn(id: string, term: AgentTerminal, run: BoxSignIn) {
+    let queued = false;
+    let answered = '';
+    let answeredAt = 0;
+    term.onOutput = () => {
+      if (queued) return;
+      queued = true;
+      setTimeout(() => {
+        void term.flush().then(() => {
+          queued = false;
+          const was = this.runs.get(id);
+          if (this.signIns.get(id) !== run || !was?.running) return;
+          const s = signInScreen(term.unwrapped());
+          const menu = s.menu && `${s.menu.text}|${s.menu.at}`;
+          if (s.menu && s.pick !== null && (menu !== answered || Date.now() - answeredAt > 3000)) {
+            answered = menu!;
+            answeredAt = Date.now();
+            term.input(menuKeys(s.menu.at, s.pick, term.appCursor), false);
+          }
+          const next: SignInRun = { mode: was.mode, running: true, ok: false, note: '' };
+          if (s.url) next.url = s.url;
+          if (s.deviceCode) next.deviceCode = s.deviceCode;
+          if (s.waiting) next.waiting = true;
+          if (s.menu && s.pick === null) next.question = { text: s.menu.text, options: s.menu.options };
+          if (JSON.stringify(next) === JSON.stringify(was)) return;
+          this.runs.set(id, next);
+          this.emit();
+        });
+      }, 100);
+    };
+    term.onOutput(); // what it printed as it started
+  }
+
+  /** POST /api/accounts/:id/signin/code: the guided sign-in's pasted code to its prompt, exactly, then Enter (#350). */
+  signInCodeIn(id: string, raw: unknown): void {
+    const term = this.runningSignIn(id);
+    const text = typeof raw === 'string' ? raw : '';
+    const problem = codeProblem(text);
+    if (problem) throw new HttpError(400, problem);
+    const code = signInCode(text);
+    // As xterm's paste sends it (#302's path): wrapped when the prompt asked for bracketed paste.
+    term.input(term.bracketedPaste ? `\x1b[200~${code}\x1b[201~` : code);
+    term.input('\r');
+  }
+
+  /** POST /api/accounts/:id/signin/answer: an option of the menu the sign-in shows, chosen in the guide (#350). */
+  signInAnswer(id: string, option: unknown): void {
+    const term = this.runningSignIn(id);
+    const menu = signInScreen(term.unwrapped()).menu;
+    const n = Number(option);
+    if (!menu || !Number.isInteger(n) || n < 0 || n >= menu.options.length) throw new HttpError(409, 'That question has gone: look at the terminal for what it asks now.');
+    term.input(menuKeys(menu.at, n, term.appCursor), false);
+  }
+
+  private runningSignIn(id: string): AgentTerminal {
+    this.find(id);
+    const term = this.terms.get(id);
+    if (!this.signIns.has(id) || !term?.live) throw new HttpError(409, 'This sign-in has ended: tap Try again for a new one.');
+    return term;
   }
 
   /** DELETE /api/accounts/:id: at once, or once the sessions on it finish (paused meanwhile). */
@@ -501,10 +699,22 @@ export class Accounts {
     this.secrets.delete(a.id);
     this.usage.delete(a.id);
     this.signedIn.delete(a.id);
+    this.sessionOut.delete(a.id);
+    this.refresh.delete(a.id);
+    this.plans.delete(a.id);
+    this.owners.delete(a.id);
     this.running.delete(a.id);
     this.save(this.list().filter((x) => x.id !== a.id));
     await mergeSecrets(this.deps.secretsFile, { [secretKey(a.id)]: undefined });
-    // The login's folder (its credentials) goes with it.
+    // The login's folder (its credentials) goes with it; the shared set it links to stays.
+    if (this.ownsFolder(a)) {
+      try {
+        unshareLogin(this.dirOf(a));
+      } catch (err) {
+        console.warn(`account ${a.id}: couldn't unlink its folder from the shared set, so it's kept: ${(err as Error).message}`);
+        return;
+      }
+    }
     if (a.kind === 'subscription-login') await fs.rm(path.join(this.deps.home, 'accounts', a.id), { recursive: true, force: true, maxRetries: 5 }).catch(() => undefined);
   }
 }

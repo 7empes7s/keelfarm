@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { useStore } from '../store';
 import './threads.css';
 import { Icon } from './Icon';
+import { RunChip } from './RunChip';
 import { UNTITLED, type Conversation } from '../../../shared/conversations';
 
 // Above the chat (#132): the thread's project, a floor (its charter's focus and open issues, a tap opens its board) or
@@ -20,6 +22,7 @@ export function ThreadBar({ thread, seg, onSeg, files, onFloor }: Props) {
   const repos = useStore((s) => s.repos);
   const repo = thread?.repoId ? repos.find((r) => r.id === thread.repoId) : undefined;
   const named = (thread?.floors ?? []).flatMap((id) => repos.find((r) => r.id === id) ?? []);
+  const [whole, setWhole] = useState(false); // the Company thread's title and floors, cut to a line until tapped (#514)
   return (
     <div className="thread-bar">
       {repo ? (
@@ -31,13 +34,15 @@ export function ThreadBar({ thread, seg, onSeg, files, onFloor }: Props) {
             {repo.charter.focus ? `Focus: ${repo.charter.focus} · ` : ''}
             {repo.issues.length} open issue{repo.issues.length === 1 ? '' : 's'}
           </span>
+          <RunChip run={thread?.run} />
         </button>
       ) : (
-        <div className="thread-project">
+        <button type="button" className={`thread-project ${whole ? 'thread-project-whole' : ''}`} aria-expanded={whole} onClick={() => setWhole(!whole)} title={whole ? 'Show it on one line' : 'Show the whole title and floors'}>
           <b className="thread-project-name">
             <Icon name="message-circle" /> {thread?.title && thread.title !== UNTITLED ? thread.title : 'Company thread'}</b>
           <span className="small muted thread-project-meta">{named.length ? `Company · ${named.map((r) => `floor ${r.floor}`).join(', ')}` : 'Company: across every floor'}</span>
-        </div>
+          <RunChip run={thread?.run} />
+        </button>
       )}
       <div className="seg thread-seg" role="tablist" aria-label="Chat or files">
         {(['chat', 'files'] as const).map((s) => (

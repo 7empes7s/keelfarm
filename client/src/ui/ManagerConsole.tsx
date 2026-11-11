@@ -11,12 +11,14 @@ import { TeamCapacity } from './TeamCapacity';
 import { HostBadge } from './HostBadge';
 import { CEO_ID, PLAYBOOK_MAX, type OfficeUpdateView, type RepoView } from '../../../shared/types';
 import { ModelMissing } from './ModelPicker';
+import { CeoCliField } from './CeoRunsOn';
 import { AddAgentForm } from './AddAgentForm';
 import { AccountSelect, CliSelect, EffortSelect, LookEditor, LookSelect, ModelInput, NameInput, PromptPreview } from './AgentSettings';
 import { canPostpone, canUpdateNow, drainDeadline, officeUpdateText } from '../officeUpdate';
 import { confirmDialog } from './Confirm';
 import { letGo } from './dangerActions';
 import { IssueForm } from './KanbanView';
+import { IssueActions } from './IssueActions';
 import { LiveTerminal } from './LiveTerminal';
 import { MicButton } from './MicButton';
 import { Menu } from './Menu';
@@ -29,9 +31,11 @@ import { EmptyState } from './EmptyState';
 import { CeoMandates, CeoSession } from './CeoFollowups';
 import { FloorPractices } from './PracticesSettings';
 import { FloorThemePicker } from './FloorThemePicker';
+import { FloorSetupCard } from './FloorSetup';
 import { OfficePlaybook } from './OfficePlaybook';
 import { useMode } from '../pocket/mode';
 import { flashInto } from './jumpFlash';
+import { RunChip } from './RunChip';
 import { Icon } from './Icon';
 
 // The console's work sections (floors, the CEO, the team, issues); ConsoleNav.tsx puts them in their tabs.
@@ -118,6 +122,11 @@ function OfficeRow({ update }: { update: OfficeUpdateView }) {
           <button className="btn btn-small btn-ghost" onClick={() => void attempt(api.demoNewCommit)} title="As if the office just updated itself: open tabs keep working and show New version · Update">
             <Icon name="refresh-cw" /> Simulate an office update
           </button>
+          {update.launcher && (
+            <button className="btn btn-small btn-ghost" onClick={() => void attempt(api.demoLabUpdate)} title="A 20-second lab browser check starts, then a commit lands: the update waits for the check">
+              <Icon name="flask-conical" /> Update during a lab check
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -182,6 +191,7 @@ function FloorRow({ repo, all }: { repo: RepoView; all: RepoView[] }) {
       </details>
       {repo.cloneError && <div className="term-error small">clone failed: {repo.cloneError}</div>}
       {repo.syncError && <div className="term-error small">sync failed: {repo.syncError}</div>}
+      <FloorSetupCard repo={repo} />
       <div className="ds-switches">
         <label className="toggle floor-colour">
           <input type="color" value={repo.color} onChange={(e) => patch({ color: e.target.value })} aria-label={`Floor ${repo.floor} colour`} /> <Icon name="palette" /> Floor colour
@@ -392,6 +402,7 @@ export function CeoTab({ focusRepo }: { focusRepo?: string }) {
             <StatusPill status={ceo.status} />
           </div>
           <div className="ds-fields">
+            <CeoCliField ceo={ceo} />
             <label className="field">
               <span>Model</span>
               <ModelInput agent={ceo} className="" />
@@ -536,6 +547,7 @@ export function TeamTab({ focusRepo }: { focusRepo?: string }) {
                       <td className="small ds-cell-full roster-doing">
                         <div className="roster-line">
                           {setupLine(a, settings, clis, models)} <ModelMissing model={a.model} cli={workerCli(a, settings)} />
+                          <RunChip run={a.run} />
                         </div>
                         {a.status === 'idle' ? '' : a.task === 'qa' ? `testing PR #${a.prNumber}` : a.task === 'fix' ? `fixing PR #${a.prNumber}` : `#${a.issueNumber ?? ''} ${a.issueTitle ?? ''}`}
                         {a.career && <div className="aw-stats-line">{keyStats(a.career, Date.now())}</div>}
@@ -627,7 +639,6 @@ export function IssuesTab({ initialRepo }: { initialRepo?: string }) {
         <div className="repo-list tall issue-list">
           {repo?.issues.length === 0 && <EmptyState kind="backlog" compact target={{ kind: 'ceo', text: `Plan the next milestone for floor ${repo.floor} (${repo.fullName}) and file the issues.` }} />}
           {repo?.issues.map((i) => {
-            const holder = agents.find((a) => a.role !== 'ceo' && a.task !== 'qa' && a.issueNumber === i.number && a.status !== 'idle');
             return (
               <div key={i.number} className="ds-row issue-row">
                 <div className="ds-row-main">
@@ -638,41 +649,7 @@ export function IssuesTab({ initialRepo }: { initialRepo?: string }) {
                   {i.labels.length > 0 && <div className="ds-row-meta">{i.labels.join(', ')}</div>}
                 </div>
                 <span className="ds-row-actions">
-                  {holder ? (
-                    <span className="agent-chip">
-                      <span className="dot" style={{ background: holder.color }} />
-                      {holder.name}
-                    </span>
-                  ) : (
-                    <select value="" onChange={(e) => e.target.value && void attempt(() => api.assign(e.target.value, i.number))} aria-label={`Assign issue #${i.number}`}>
-                      <option value="">Assign…</option>
-                      {agents
-                        .filter((a) => a.role !== 'ceo' && a.status !== 'working' && a.status !== 'preparing')
-                        .map((a) => (
-                          <option key={a.id} value={a.id}>
-                            {a.name}
-                          </option>
-                        ))}
-                    </select>
-                  )}
-                  <Menu
-                    label={`More for issue #${i.number}`}
-                    title={`#${i.number} ${i.title}`}
-                    items={[
-                      {
-                        label: 'Close as not planned…',
-                        hint: 'Closes it on GitHub',
-                        danger: true,
-                        onSelect: () =>
-                          void confirmDialog({
-                            tone: 'danger',
-                            title: `Close #${i.number}?`,
-                            body: `“${i.title}” will be closed on GitHub as not planned${holder ? `, and ${holder.name} stops working on it` : ''}.`,
-                            confirm: 'Close issue',
-                          }).then((ok) => ok && attempt(() => api.closeIssue(repo.id, i.number))),
-                      },
-                    ]}
-                  />
+                  <IssueActions repo={repo} number={i.number} />
                 </span>
               </div>
             );

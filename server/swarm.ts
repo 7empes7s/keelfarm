@@ -14,10 +14,12 @@ import { DEFAULT_MEMORY, memorySettings, sessionKind } from './health.ts';
 import { DEFAULT_TEST_LAB, testLabSettings } from '../shared/testLab.ts';
 import { reconcileStep, restartMessage, workState, type ReconcileStep, type RestartCounts } from './reconcile.ts';
 import { keptWaiver, mergeReadings } from '../shared/usage.ts';
+import { loadDiskAlert } from '../shared/disk.ts';
+import { loadItDesk } from '../shared/itDesk.ts';
 import { loadHistory } from './metrics.ts';
 import { clampTrimIdleMin, TRIM_SWEEP_MS } from './deskTrim.ts';
 import { clampStuckRecheckMin } from './stuckRecheck.ts';
-import { isCli } from './clis.ts';
+import { builderCli, isCli } from './clis.ts';
 import { machineName } from './machines.ts';
 import { taskEfforts } from './costLedger.ts';
 import { loadLab } from './experiments.ts';
@@ -40,10 +42,10 @@ import { CeoChat } from './ceoChat.ts';
 import { latestPage } from '../shared/chatPage.ts';
 import { editDelivery, editNote } from '../shared/messageEdits.ts';
 import { ceoAwakeSettings } from '../shared/ceoAwake.ts';
-import { rotationSettings } from '../shared/accountRotation.ts';
+import { loadTaskAccounts, rotationSettings } from '../shared/accountRotation.ts';
 import { cleanStyle } from '../shared/looks.ts';
 import { loadRecord } from '../shared/charter.ts';
-import { clampResearchMin } from './research.ts';
+import { clampResearchMin, pastResearch } from './research.ts';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS, weatherSettings, worldEventSettings } from '../shared/outside.ts';
 import { DEFAULT_THEME_SETTINGS, themeSettings } from '../shared/themes.ts';
 import { CEO_ID, DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, DEFAULT_OFFICE_PLAYBOOK, FLOOR_SEATS, OFFICE_PLAYBOOK_MAX } from '../shared/types.ts';
@@ -68,7 +70,7 @@ import {
 } from './swarm/model.ts';
 import { FLOOR_THEMES, lookFor, LOOKS } from './swarm/flavour.ts';
 import { loadScreen } from './swarm/screens.ts';
-import { SwarmDisk } from './swarm/disk.ts';
+import { SwarmLiveLeases } from './swarm/liveLeases.ts';
 import { loadDecisions } from '../shared/decisions.ts';
 
 export { HttpError };
@@ -76,7 +78,7 @@ export { HttpError };
 // A Stop waits this long for the office tools the CEO had called to finish, so its reply can say what they did.
 const STOP_SETTLE_MS = 15_000;
 
-export class Swarm extends SwarmDisk {
+export class Swarm extends SwarmLiveLeases {
   protected ceoChat = new CeoChat(CONVERSATIONS_DIR, path.join(CEO_DIR, 'NOTES.md'), (live) => this.broadcast({ type: 'ceoChat', live }), (n) => this.state.repos.find((r) => r.floor === n)?.id ?? null, (ref) => this.state.agents.find((a) => a.id === ref || a.name.toLowerCase() === ref.trim().toLowerCase())?.id ?? null, (id) => this.state.agents.find((a) => a.id === id || a.name.toLowerCase() === id.toLowerCase())?.name ?? null, this.ceoTalk);
 
   // ---------- lifecycle ----------
@@ -151,14 +153,16 @@ export class Swarm extends SwarmDisk {
         pong: loaded.pong && typeof loaded.pong === 'object' ? loaded.pong : {},
         officeId: typeof loaded.officeId === 'string' && /^[a-z0-9]{6}$/.test(loaded.officeId) ? loaded.officeId : this.state.officeId,
         claudeUsage: Array.isArray(loaded.claudeUsage) ? mergeReadings([], loaded.claudeUsage.filter((r) => r && typeof r.type === 'string' && Number.isFinite(r.pct) && Number.isFinite(r.at))) : [],
+        diskAlert: loadDiskAlert(loaded.diskAlert),
+        itDesk: loadItDesk(loaded.itDesk),
         usageWaiver: keptWaiver(loaded.usageWaiver, loaded.settings?.usageWarnings, Date.now()),
-        experiments: loadLab(loaded.experiments, Date.now()),
+        experiments: loadLab(loaded.experiments, Date.now()), taskAccounts: loadTaskAccounts(loaded.taskAccounts),
       };
       for (const m of this.state.messages) this.messageSeq = Math.max(this.messageSeq, m.id + 1);
       void this.ceoChat.backfill(this.state.ceo.chats, unfilled(loaded.ceo?.chats)).then((n) => n && this.broadcast({ type: 'ceoChat', conversations: conversationsView(this.state.ceo.chats) })); // threads from before #132
       if (!EFFORTS.includes(this.state.settings.defaultEffort)) this.state.settings.defaultEffort = 'medium';
       if (this.state.settings.runtime !== 'sdk') this.state.settings.runtime = 'terminal';
-      if (!isCli(this.state.settings.defaultCli)) this.state.settings.defaultCli = 'claude';
+      if (!isCli(this.state.settings.defaultCli) || !builderCli(this.state.settings.defaultCli)) this.state.settings.defaultCli = 'claude';
       this.state.settings.trimIdleDesksMin = clampTrimIdleMin(this.state.settings.trimIdleDesksMin);
       this.state.settings.stuckRecheckMin = clampStuckRecheckMin(this.state.settings.stuckRecheckMin);
       this.state.settings.historyDays = clampHistoryDays(this.state.settings.historyDays);
@@ -275,12 +279,12 @@ export class Swarm extends SwarmDisk {
     if (seeded) {
       // The demo opens on a busy office; the tutorial still runs so it can be tried.
       Object.assign(this.state.settings, { setupDone: true, managerName: 'Demo Manager', companyName: 'Demo Co.' });
-      for (const r of await this.backend.listMyRepos()) {
+      for (const r of (await this.backend.listMyRepos()).filter((x) => !this.backend.demoSetup?.().spare.includes(x.nameWithOwner))) { // the spare one waits to be moved in by hand (#366)
         const repo = await this.connectRepo(r.nameWithOwner);
         const size = Math.min(this.backend.demoTeam?.(repo.floor) ?? 4, FLOOR_SEATS);
         if (size > this.state.settings.maxAgents) this.state.settings.maxAgents = size; // the big-company demo fills its floors
-        for (let i = 1; i < size; i++) this.hireAgent(repo.id, {}); // connecting hired the first
-        this.updateRepo(repo.id, { autoAssign: true, theme: FLOOR_THEMES[repo.floor - 1], ...(repo.floor === 1 ? { practices: { busyFiles: true } } : {}) }); // floor 1 shows conflict-aware scheduling (#256); floors 1-3 a floor theme each (#370)
+        for (let i = 1; i < size; i++) this.hireAgent(repo.id, repo.floor === 1 && i >= size - 2 ? { cli: i === size - 1 ? 'gemini' : 'codex' } : {}); // connecting hired the first; floor 1's last runs Gemini CLI (#365), the one before Codex on a long task (#409)
+        this.updateRepo(repo.id, { autoAssign: true, theme: FLOOR_THEMES[repo.floor - 1], ...(repo.floor === 1 ? { practices: { busyFiles: true, liveLeases: true } } : {}) }); // floor 1 shows conflict-aware scheduling (#256) and live leases (#398); floor N the Nth floor theme (#370, #371)
         const charter = this.backend.demoCharter?.(repo.fullName).charter;
         if (charter) this.setCharter(repo.id, charter);
       }
@@ -356,21 +360,16 @@ export class Swarm extends SwarmDisk {
     setTimeout(() => this.greet(), 5000);
     setInterval(() => void this.files.sweep(), SWEEP_MS).unref();
     setInterval(() => this.emitOps(), OPS_TICK_MS); // the clock moves the numbers too: the last hour, today, errors turning into alarms
-    setInterval(() => this.notifyStuck(), 60_000);
+    setInterval(() => (this.notifyStuck(), this.watchDefaults()), 60_000); // watchDefaults: a default back from its limit (#390)
     setInterval(() => this.syncDecisions(), 60_000); // issues closing, agents leaving, old ones archived, the digest
     setInterval(() => (this.watchdogTick(), void this.sweepOrphans()), WATCHDOG_MS);
     setInterval(() => void this.health.tick(), 10_000);
-    void this.backend
-      .detectClis()
-      .then((clis) => {
-        this.clis = clis;
-        this.broadcast({ type: 'clis', clis });
-      })
-      .catch((err) => console.warn('could not look for agent CLIs', err));
+    this.recheckClis();
     void Promise.all([this.refreshTooling(), this.startModels()]); // Tools & skills, and the model catalog (#198)
     await this.journal.start();
     await this.spend.ledger.load().then(() => backfillWork(this.state.progress, this.spend.ledger.all(), this.state.agents)); // careers from before #205
     await this.history.load();
+    this.state.ceo.researchedAt ??= pastResearch({ history: this.history.all(), jobs: this.state.ceo.jobs ?? [], messages: this.state.messages }); // research from before #496
     void this.sweepHistory();
     // A fresh demo office has a month of spending to look at (the first sync may have written its merges already).
     if (this.backend.demo && !this.spend.ledger.all().some((r) => r.type === 'session') && this.backend.seedCosts) {
@@ -606,7 +605,7 @@ export class Swarm extends SwarmDisk {
   /** The phone shows another conversation's thread, and the CEO carries on that conversation's session (null: a fresh one). */
   private switchThread(messages: PhoneMessage[], sessionId: string | null) {
     this.state.messages = messages;
-    Object.assign(this.ceo(), { sessionId, sessionCli: sessionId ? 'claude' : null });
+    Object.assign(this.ceo(), { sessionId, sessionCli: sessionId ? 'claude' : null, sessionAccount: undefined });
     this.state.ceo.kept = { turns: 0, costUsd: 0, startedAt: null, lastEndedAt: null }; // the kept session's count starts over (#65)
     this.broadcast({ type: 'ceoChat', ...latestPage(messages), ...this.chatView() });
     this.save();
@@ -678,7 +677,7 @@ export class Swarm extends SwarmDisk {
     if (patch.memory !== undefined) s.memory = memorySettings(s.memory, patch.memory);
     if (patch.testLab !== undefined) s.testLab = testLabSettings(s.testLab, patch.testLab);
     // The default model belongs to the default coding agent: a new agent starts on its own default.
-    if (isCli(patch.defaultCli) && patch.defaultCli !== s.defaultCli) {
+    if (isCli(patch.defaultCli) && builderCli(patch.defaultCli) && patch.defaultCli !== s.defaultCli) { // Gemini CLI isn't a builder (#365)
       s.defaultCli = patch.defaultCli;
       if (patch.defaultModel === undefined) s.defaultModel = s.defaultCli === 'claude' ? DEFAULT_MODEL : '';
     }
@@ -700,7 +699,7 @@ export class Swarm extends SwarmDisk {
     if (typeof patch.projectsDir === 'string' && patch.projectsDir.trim()) s.projectsDir = path.resolve(patch.projectsDir.trim());
     if (typeof patch.setupDone === 'boolean') s.setupDone = patch.setupDone;
     if (patch.tutorialStep !== undefined) s.tutorialStep = Math.max(-1, Math.round(Number(patch.tutorialStep)) || 0);
-    for (const k of ['autoUpdate', 'statusReactions'] as const) if (typeof patch[k] === 'boolean') s[k] = patch[k];
+    for (const k of ['autoUpdate', 'statusReactions', 'itDesk'] as const) if (typeof patch[k] === 'boolean') s[k] = patch[k];
     if (patch.updateSettleMin !== undefined) s.updateSettleMin = settleMinutes(patch.updateSettleMin);
     this.pacingSettings(patch);
     if (patch.stuckRecheckMin !== undefined) s.stuckRecheckMin = clampStuckRecheckMin(patch.stuckRecheckMin);

@@ -4,10 +4,11 @@ import { useStore } from '../store';
 import { ACCEPT } from '../../../shared/files';
 import { useDialogFocus } from './dialogFocus';
 import { Icon } from './Icon';
+import { badgeCount } from './badgeCount';
 import { handsFreeProblem, setHandsFree } from './mic';
 import { composerActions, type SheetAction } from './chatComposer';
 import { openTextPill } from './ChatZoom';
-import { canGoFullscreen, goFullscreen, useChatFull } from './chatFull';
+import { useChatFull } from './chatFull';
 import { Menu, type MenuItem } from './Menu';
 import { foldedBadge, foldTools, type ChatToolId } from './chatToolFold';
 import { keyLabel } from './keymap';
@@ -160,7 +161,7 @@ export function ChatTools({ ceoName, who, files, onChats, onFiles, onCharts, int
         <button type="button" className="chat-tool xbtn" onClick={onFiles} aria-label={`Files (${files})`} title="Every artifact and file in this thread">
           <Icon name="paperclip" />
           <XLabel text="Files" />
-          <span className="badge badge-dot chat-tool-n" aria-hidden>{files}</span>
+          <span className="badge badge-dot chat-tool-n" aria-hidden>{badgeCount(files)}</span>
         </button>
       )}
       {has('text') && (
@@ -180,6 +181,7 @@ export function ChatTools({ ceoName, who, files, onChats, onFiles, onCharts, int
       <Menu
         label="More for the chat"
         className="chat-more"
+        tour="chat-more"
         badge={foldedBadge(folded, { files })}
         items={[
           fold('charts', { label: 'Charts', hint: 'Ready prompts for a live chart', onSelect: onCharts }),
@@ -188,8 +190,7 @@ export function ChatTools({ ceoName, who, files, onChats, onFiles, onCharts, int
           fold('call', { label: `Call ${ceoName}`, onSelect: startCall }),
           handsFree && fold('handsFree', { label: handsFree.on ? 'Turn hands-free off' : 'Hands-free', hint: handsFree.why || undefined, onSelect: () => void setHandsFree(!handsFree.on, ceoName) }),
           { label: 'Threads', hint: 'A new one, an earlier one, or search them all', onSelect: onChats },
-          full && { label: fullScreen.on ? 'Leave full screen' : 'Full screen', hint: fullKey || undefined, onSelect: () => fullScreen.set(!fullScreen.on) },
-          full && canGoFullscreen() && !document.fullscreenElement && { label: 'Go full screen', hint: 'The whole screen, no browser bars', onSelect: goFullscreen },
+          full && { label: fullScreen.on ? 'Leave full screen' : 'Full screen chat', hint: `${ceoName} fills the page${fullKey ? ` · ${fullKey}` : ''}`, onSelect: () => fullScreen.set(!fullScreen.on) },
         ]}
       />
     </>
@@ -211,7 +212,7 @@ const MINIMIZE = 'M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7';
 export function FullButton() {
   const { on, set } = useChatFull();
   const key = keyLabel(useControls((s) => s.bindings.chatFull)[0] ?? '');
-  const label = on ? 'Leave full screen' : 'Full screen';
+  const label = on ? 'Leave full screen' : 'Full screen chat';
   return (
     <button type="button" data-tour="chat-full" className="chat-tool chat-full-btn xbtn" aria-pressed={on} aria-label={label} title={`${label}${key ? ` (${key})` : ''}`} onClick={() => set(!on)}>
       <svg viewBox="0 0 24 24" aria-hidden>

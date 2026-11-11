@@ -23,7 +23,7 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  border: 2px solid rgba(31, 29, 43, 0.12);
+  border: 2px solid var(--ds-line);
   border-radius: 12px;
   padding: 6px;
 }
@@ -167,4 +167,11 @@ html[data-reduce-motion] .voice-intro-wave {
   .voice-row[data-warm='loading'] .voice-warm {
     animation: none;
   }
+}
+.pause-seg {
+  align-self: flex-start;
+}
+.pause-seg .seg-btn {
+  min-width: 56px;
+  min-height: 44px;
 }

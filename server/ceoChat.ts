@@ -7,7 +7,7 @@ import path from 'node:path';
 import { Readable } from 'node:stream';
 import { finishedLog, foldStream, type CeoLive, type OfficeCall } from '../shared/ceoStream.ts';
 import type { NameOf } from '../shared/ceoSteps.ts';
-import { actionCards } from '../shared/ceoActions.ts';
+import { actionCards, type ActionUndo } from '../shared/ceoActions.ts';
 import { NOTES_VIEW_MAX } from '../shared/ceoMemory.ts';
 import { inScope, startConversation, threadStats, touchConversation, type ChatsState, type ThreadScope } from '../shared/conversations.ts';
 import { filterLibrary, libraryCounts, libraryItems, pageLibrary, type LibraryFilter, type LibraryPage } from '../shared/library.ts';
@@ -17,6 +17,7 @@ import type { LogEntry } from './agentRunner.ts';
 import type { FileStore } from './files.ts';
 import type { PhoneMessage } from '../shared/types.ts';
 import type { CeoTalk } from './ceoTalk.ts';
+import { countTools } from '../shared/ceoJobLog.ts';
 
 const EMIT_MS = 250;
 const ID = /^c[a-z0-9]{1,24}$/;
@@ -32,6 +33,7 @@ export interface DemoThread {
 
 export class CeoChat {
   live: CeoLive | null = null;
+  tools: Record<string, number> = {}; // the job's tool calls by name, for the CEO jobs log (#332)
   private calls: OfficeCall[] = [];
   private turnFrom = 0; // the current turn's first office call
   private readonly inflight = new Set<Promise<unknown>>();
@@ -55,6 +57,7 @@ export class CeoChat {
   /** A CEO job starts: nothing live, no office calls yet. */
   startJob() {
     this.calls = [];
+    this.tools = {};
     this.turnFrom = 0;
     this.lastReply = '';
     this.set(null);
@@ -69,8 +72,14 @@ export class CeoChat {
     this.set(foldStream(this.live, { kind: 'text', text, done }, Date.now()), true);
   }
 
+  /** A step of the office's own: how the job's session started, fresh or carried on (#330). */
+  note(icon: string, label: string) {
+    this.set(foldStream(this.live, { kind: 'note', icon, label }, Date.now()), true);
+  }
+
   /** The session's log lines: its tool calls become steps. */
   log(entries: readonly LogEntry[]) {
+    countTools(this.tools, entries);
     let live = this.live;
     for (const entry of entries) if (entry.kind === 'tool' || entry.kind === 'result' || entry.kind === 'error') live = foldStream(live, { kind: 'log', entry }, Date.now(), this.nameOf);
     if (live === this.live) return;
@@ -148,6 +157,12 @@ export class CeoChat {
   noteMessage(id: number) {
     const call = current.getStore();
     if (call) call.messageId = id;
+  }
+
+  /** Inside an office call: how its card's Undo puts back what it changed (#403). Elsewhere nothing. */
+  noteUndo(undo: ActionUndo) {
+    const call = current.getStore();
+    if (call) call.undo = undo;
   }
 
   /** The current job's calls once those still running have finished (or `ms` passed). */

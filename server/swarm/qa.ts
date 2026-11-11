@@ -7,7 +7,7 @@ import { fixOutcome, MAX_FIX_FAILURES } from '../fixOutcome.ts';
 import { HttpError } from '../httpError.ts';
 import { MAX_MERGE_FIXES, NEVER_STARTED, releasedAfterOutage } from '../mergeGate.ts';
 import { failedRunId, logTail, noChangeReason, QA_STOPPED, unpushedFix } from '../prOwnership.ts';
-import { conflictFixInstructions, labErrorNext, MAX_QA_ROUNDS, qaGate, qaRoundResult, type QaNext } from '../qaOutcome.ts';
+import { conflictFixInstructions, labErrorNext, MAX_QA_ROUNDS, qaGate, qaRoundResult, restartLossNext, type QaNext } from '../qaOutcome.ts';
 import { fullQualityLine, qaInstructions } from '../qaPrompt.ts';
 import { sendBackPatch } from '../sendBack.ts';
 import { qaShotsDir, saveQaShots } from '../qaShots.ts';
@@ -111,6 +111,7 @@ export abstract class SwarmQa extends SwarmSessions {
         issueNumber: pr.closesIssues[0] ?? null,
         devSessionId: null,
         fixInstructions: seed.fixInstructions,
+        tryIt: seed.tryIt,
         sessionFailures: 0,
         mergeNote: null,
         testedSha: pr.headSha,
@@ -315,6 +316,15 @@ export abstract class SwarmQa extends SwarmSessions {
       return;
     }
 
+    // The office restarted under this round and its test lab went with it (#333): QA again by itself, once, nothing counted.
+    if (rec && restartLossNext({ acrossRestart: !!rt.acrossRestart, stopped: a.status === 'stopped', verdict: report?.verdict ?? null, cause: report?.cause, round: rec.round, restartRetryRound: rec.restartRetryRound ?? null }) === 'retry') {
+      a.status = 'done';
+      this.spend.outcome(a.id, 'done');
+      this.appendLog(a, [{ kind: 'system', text: `↻ The office restarted during QA of PR #${rec.prNumber} and took the test lab with it: QA runs this round again (not a failed round).` }]);
+      this.setQa(rec, { qaAgentId: null, restartRetryRound: rec.round, status: 'queued' });
+      return;
+    }
+
     if (next === 'give-up' || !report) {
       if (a.status !== 'stopped') this.fail(a, { ...result, errors: result.errors.length ? result.errors : ['QA finished without a usable report'] }, `QA of PR #${a.prNumber}`);
       if (rec) {
@@ -395,6 +405,7 @@ export abstract class SwarmQa extends SwarmSessions {
         alerted: false,
         qaChecks: pull?.checks ?? null,
         shots,
+        tryIt: report.tryIt,
       });
       // qaRoundResult already charged this failed test; sending its findings with the conflict must not charge twice.
       if (next === 'conflict') this.sendBack(repo, rec, 'conflict', conflictFixInstructions(fixInstructions, repo.defaultBranch), false, false);
@@ -451,6 +462,7 @@ export abstract class SwarmQa extends SwarmSessions {
     if (report.commands.length) {
       lines.push('', '<details><summary>🧪 Commands run</summary>', '', '| Command | Result |', '|---|---|', ...report.commands.map((c) => `| \`${cell(c.command)}\` | ${cell(c.result)} |`), '', '</details>');
     }
+    if (report.tryIt) lines.push('', '### 👆 Try it', '', ...report.tryIt.map((s, i) => `${i + 1}. ${s.result ? `${ICON[s.result]} ` : ''}${s.text}${s.note ? ` _(${s.note})_` : ''}`));
     if (!pass && report.fixInstructions) lines.push('', '### 🔧 What needs fixing', '', report.fixInstructions);
     if (images.length) lines.push('', '### 📸 Evidence', '', ...images.flatMap((img) => [img, '']));
     else lines.push('', '_No browser screenshots were taken in this round._');

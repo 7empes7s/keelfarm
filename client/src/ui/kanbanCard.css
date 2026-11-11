@@ -1,28 +1,120 @@
-/* One anatomy for every Kanban card (#232): the title in at most 3 lines, the status sentence in 2, the who row on one
-   line, the action row on one line with ⋯ at its right end. On a narrow card the buttons are their icons. */
+/* One anatomy for every Kanban card (#232, #410): a chip row (kind and number, status, lab and lease), the title on its
+   own line in at most 3, then soft inset boxes (progress, who, checks and merge), then the foot: the state's primary
+   button over the action bar (Open · GitHub · Terminal · Preview · ⋯). The bar's buttons are an icon over a short
+   label; on a narrow card the icon alone, its label the tooltip. */
 .kcard {
   container: kcard / inline-size;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
 }
-.kcard-title,
+
+/* ---------- header ---------- */
+.kcard-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-1);
+  min-width: 0;
+}
+/* a 44 px target that takes a pill's height in the row */
+.kcard-num {
+  margin-block: calc((var(--ds-target) - 1.5rem) / -2);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.kcard-pill,
+.kcard-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-1);
+  padding: 2px var(--ds-space-2);
+  border: 1.5px solid var(--ds-line-strong);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-sunken);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-strong);
+  line-height: var(--ds-leading-tight);
+  white-space: nowrap;
+  --ds-icon: 14px;
+}
+.kcard-pill {
+  border-color: var(--ds-outline);
+  background: var(--ds-surface-raised);
+  font-variant-numeric: tabular-nums;
+}
+.kcard-num:hover .kcard-pill {
+  background: var(--ds-surface-hover);
+}
+.kcard-num:focus-visible {
+  outline: none;
+}
+.kcard-num:focus-visible .kcard-pill {
+  outline: 3px solid var(--ds-focus);
+  outline-offset: 1px;
+}
+.kcard-state {
+  font-weight: 600;
+}
+.kcard-state[data-state='ready'] {
+  background: color-mix(in srgb, var(--ds-good-fill) 30%, var(--ds-surface-raised));
+}
+.kcard-state[data-state='needs-you'] {
+  background: color-mix(in srgb, var(--ds-bad-fill) 30%, var(--ds-surface-raised));
+}
+.kcard-state[data-state='fixing'] {
+  background: color-mix(in srgb, var(--ds-warn-fill) 35%, var(--ds-surface-raised));
+}
+
+/* ---------- title ---------- */
+.kcard-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-weight-strong);
+  line-height: var(--ds-leading-tight);
+  overflow-wrap: anywhere;
+  border-radius: var(--ds-radius-sm);
+}
+.kcard-title:focus-visible {
+  outline: 3px solid var(--ds-focus);
+}
+
+/* ---------- inset boxes ---------- */
+.kcard-box {
+  min-width: 0;
+  padding: var(--ds-space-2);
+  border-radius: var(--ds-radius-sm);
+  background: color-mix(in srgb, var(--ds-surface-sunken) 80%, transparent);
+  box-shadow: inset 0 0 0 1px var(--ds-line);
+}
+.kcard .kcard-box > .pb,
+.kcard .kcard-box > .kcard-phrase {
+  margin-block: 0;
+}
+.kcard-status {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+}
 .kcard .kcard-phrase {
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.kcard-title {
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
-}
-.kcard .kcard-phrase {
   -webkit-line-clamp: 2;
   line-clamp: 2;
+  overflow: hidden;
 }
 .kcard-who {
   display: flex;
   align-items: center;
-  min-width: 0;
-  margin-top: var(--ds-space-1);
 }
 .kcard-who .agent-chip {
   min-width: 0;
@@ -37,28 +129,55 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.kcard-actions {
+
+/* ---------- foot ---------- */
+.kcard-foot {
   display: flex;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: var(--ds-space-1);
-  margin-top: var(--ds-space-1);
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  margin-top: auto;
 }
-.kcard-actions > .btn {
-  flex: none;
+.kcard .kcard-foot > .btn {
+  width: 100%;
   white-space: nowrap;
 }
-.kcard-actions > .btn > .ds-icon {
+.kbar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(var(--ds-target), 1fr));
+  gap: var(--ds-space-1);
+}
+.kbar > .ds-btn,
+.kbar > .ds-menu-wrap > .ds-btn {
+  width: 100%;
+  padding: 0 var(--ds-space-1);
+}
+.kbar-face {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  font-size: var(--ds-text-xs);
+  line-height: 1;
+  --ds-icon: 18px;
+}
+.kbar-label {
   display: none;
+  white-space: nowrap;
 }
-.kcard-actions > .ds-menu-wrap {
-  margin-left: auto;
-}
-@container kcard (max-width: 260px) {
-  .kcard-actions > .btn > .ds-icon {
-    display: inline-block;
+/* a narrow card's primary button: its words without the icon, so they stay on one line */
+@container kcard (max-width: 200px) {
+  .kcard .kcard-foot > .btn {
+    padding-inline: var(--ds-space-2);
   }
-  .kcard-actions > .btn > .kcard-act-label {
+  .kcard-foot > .btn > .ds-icon {
     display: none;
+  }
+}
+@container kcard (min-width: 250px) {
+  .kbar {
+    grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
+  }
+  .kbar-label {
+    display: inline;
   }
 }

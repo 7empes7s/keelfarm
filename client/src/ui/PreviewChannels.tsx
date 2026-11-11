@@ -1,11 +1,11 @@
-// The app viewer's channel row and the previews' upkeep (#204): main, then only the PRs that are live (an agent on
-// them, a preview up, updated lately), the rest folded under "Older (N)" in a sheet; who is testing in a preview the
+// The app viewer's channel row and the previews' upkeep (#204): the channel on screen first, then main, the other
+// running previews and a Recent group (#414), the rest under "More (N)" in a sheet; who is testing in a preview the
 // manager can't stop; how each one stands (in use, kept 📌, when it stops, #252); and the previews' stats.
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { qaKey, useStore } from '../store';
-import { CEO_ID, type PreviewView, type RepoView } from '../../../shared/types';
+import { CEO_ID, type PreviewView, type PullInfo, type RepoView } from '../../../shared/types';
 import { api } from '../api';
-import { busyPrs, channelLabel, channelLed, clockLeft, liveChannels, pinLabel, previewingPrs, PR_PREVIEW_SLOTS, qaBadge, stopsLabel, standLabel, type Channel } from './channels';
+import { busyPrs, channelLabel, channelLed, channelOrder, chipTime, clockLeft, keepOrder, pinLabel, previewingPrs, PR_PREVIEW_SLOTS, qaBadge, stopsLabel, standLabel, type Channel, type Chip } from './channels';
 import { sendToCeo } from './chatSend';
 import { ProgressBar } from './ProgressBar';
 import { Sheet } from './Sheet';
@@ -21,51 +21,96 @@ function useNow(): number {
   return now;
 }
 
-/** main, then the live PRs and an "Older (N)" chip; picking a PR starts its preview. */
+/**
+ * The strip's chips in a fixed order while it's open (#414): it re-orders only when the channel changes from outside
+ * the strip (the viewer opened or re-tuned on another one), not on a pick here, so the picked chip lights up in place.
+ */
+function useStripOrder(next: { chips: Chip[]; more: PullInfo[] }, channel: Channel) {
+  const kept = useRef<{ anchor: Channel; chips: Chip[] } | null>(null);
+  const picked = useRef<Channel | undefined>(undefined);
+  const prev = kept.current && (channel === kept.current.anchor || channel === picked.current) ? kept.current : null;
+  const order = keepOrder(prev?.chips ?? null, next);
+  const anchor = prev?.anchor ?? channel;
+  useLayoutEffect(() => {
+    if (!prev) picked.current = undefined;
+    kept.current = { anchor, chips: order.chips };
+  });
+  return { ...order, anchor, pick: (c: Channel) => (picked.current = c) };
+}
+
+/** The channel on screen, main, the running previews, Recent and a "More (N)" chip; picking a PR starts its preview. */
 export function ChannelBar({ repo, channel, onPick }: { repo: RepoView; channel: Channel; onPick: (pr: Channel) => void }) {
   const prPreviews = useStore((s) => s.prPreviews);
   const qa = useStore((s) => s.qa);
   const agents = useStore((s) => s.agents);
   const recentHours = useStore((s) => s.settings.previewRecentHours);
   const now = useNow();
-  const [showOlder, setShowOlder] = useState(false);
-  const { live, older } = liveChannels(repo.pulls, { busy: busyPrs(Object.values(agents), repo.id), previewing: previewingPrs(prPreviews, repo.id), current: channel, now, recentHours });
+  const [showMore, setShowMore] = useState(false);
+  const strip = useRef<HTMLDivElement>(null);
+  const used = new Map(Object.values(prPreviews).flatMap((p) => (p.repoId === repo.id ? [[p.pr, p.viewedAt] as const] : [])));
+  const { chips, more, anchor, pick } = useStripOrder(channelOrder(repo.pulls, { busy: busyPrs(Object.values(agents), repo.id), previewing: previewingPrs(prPreviews, repo.id), current: channel, now, recentHours, used }), channel);
+  const choose = (c: Channel) => {
+    pick(c);
+    onPick(c);
+  };
+  // Opened (or re-tuned) on a channel: its chip, first in the strip, is in view.
+  useEffect(() => {
+    strip.current?.querySelector('.channel-on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [anchor]);
+  const pulls = new Map(repo.pulls.map((p) => [p.number, p]));
   const stops = (p: { status: string; stopsAt?: number | null; pinned?: PreviewView['pinned'] } | undefined) => (p?.status === 'running' && p.pinned == null ? stopsLabel(p.stopsAt, now) : '');
   const pin = (p: { status: string; pinned?: PreviewView['pinned'] } | undefined) => p?.status === 'running' && p.pinned != null && <Icon name="pin" label={pinLabel(p.pinned)} />;
-  const mainStops = stops(repo.preview);
-  return (
-    <div className="channels" role="tablist" aria-label="Channels">
-      <button role="tab" aria-selected={channel == null} className={`channel ${channel == null ? 'channel-on' : ''}`} onClick={() => onPick(null)} title={`The floor's app on ${repo.defaultBranch}`}>
-        <span className={`led led-${channelLed(repo.preview.status)}`} aria-hidden /> {repo.defaultBranch}
-        {pin(repo.preview)}
-        {mainStops && <span className="channel-stops">· {mainStops}</span>}
+  const watching = <Icon name="check" label="On screen" />;
+  const chip = ({ channel: c }: Chip) => {
+    const on = channel === c;
+    if (c == null) {
+      const mainStops = stops(repo.preview);
+      return (
+        <button key="main" role="tab" aria-selected={on} className={`channel ${on ? 'channel-on' : ''}`} onClick={() => choose(null)} title={`The floor's app on ${repo.defaultBranch}`}>
+          {on ? watching : <span className={`led led-${channelLed(repo.preview.status)}`} aria-hidden />} {repo.defaultBranch}
+          {pin(repo.preview)}
+          {mainStops && <span className="channel-stops">· {mainStops}</span>}
+        </button>
+      );
+    }
+    const p = pulls.get(c);
+    if (!p) return null;
+    const label = channelLabel(p, qa[qaKey(repo.id, c)]);
+    const badge = qaBadge(qa[qaKey(repo.id, c)]);
+    const preview = prPreviews[qaKey(repo.id, c)];
+    const left = stops(preview);
+    return (
+      <button key={c} role="tab" aria-selected={on} className={`channel ${on ? 'channel-on' : ''}`} onClick={() => choose(c)} title={left ? `${label} · ${left}` : label}>
+        {/* the title shortens on a phone, its QA status stays readable (#294) */}
+        {on ? watching : <span className={`led led-${channelLed(preview?.status)}`} aria-hidden />} <span className="channel-name">{channelLabel(p)}</span>
+        {badge && <span>· {badge}</span>}
+        {pin(preview)}
+        {left && <span className="channel-stops">· {left}</span>}
       </button>
-      {live.map((p) => {
-        const label = channelLabel(p, qa[qaKey(repo.id, p.number)]);
-        const badge = qaBadge(qa[qaKey(repo.id, p.number)]);
-        const preview = prPreviews[qaKey(repo.id, p.number)];
-        const left = stops(preview);
-        return (
-          <button key={p.number} role="tab" aria-selected={channel === p.number} className={`channel ${channel === p.number ? 'channel-on' : ''}`} onClick={() => onPick(p.number)} title={left ? `${label} · ${left}` : label}>
-            {/* the title shortens on a phone, its QA status stays readable (#294) */}
-            <span className={`led led-${channelLed(preview?.status)}`} aria-hidden /> <span className="channel-name">{channelLabel(p)}</span>
-            {badge && <span>· {badge}</span>}
-            {pin(preview)}
-            {left && <span className="channel-stops">· {left}</span>}
-          </button>
-        );
-      })}
-      {older.length > 0 && (
-        <button className="channel channel-older" aria-haspopup="dialog" onClick={() => setShowOlder(true)} title="Open PRs nobody is working on, untouched for a while">
-          Older ({older.length})
+    );
+  };
+  const firstRecent = chips.findIndex((c) => c.recent);
+  return (
+    <div className="channels" role="tablist" aria-label="Channels" ref={strip}>
+      {chips.flatMap((c, i) => [
+        i === firstRecent && (
+          <span key="recent" className="channels-group small" aria-hidden>
+            Recent
+          </span>
+        ),
+        chip(c),
+      ])}
+      {more.length > 0 && (
+        <button className="channel channel-older" aria-haspopup="dialog" onClick={() => setShowMore(true)} title="Other open PRs: older ones nobody is working on">
+          More ({more.length})
         </button>
       )}
-      {live.length + older.length === 0 && <span className="muted small channels-empty">No open PRs: each one gets a channel here, to try it running beside {repo.defaultBranch}.</span>}
-      {showOlder && (
-        <Sheet title={`Older PRs (${older.length})`} onClose={() => setShowOlder(false)}>
-          <p className="muted small">Open, but nobody is working on them and nothing changed in {recentHours} hours. Pick one to start its preview.</p>
+      {chips.length + more.length === 1 && <span className="muted small channels-empty">No open PRs: each one gets a channel here, to try it running beside {repo.defaultBranch}.</span>}
+      {showMore && (
+        <Sheet title={`More PRs (${more.length})`} onClose={() => setShowMore(false)}>
+          <p className="muted small">Open PRs without a chip: older ones nobody is working on, unchanged in {recentHours} hours. Pick one to start its preview.</p>
           <ul className="older-prs">
-            {older.map((p) => (
+            {more.map((p) => (
               <li key={p.number} className="older-pr">
                 <span className="older-pr-title">
                   PR #{p.number} · {p.title}
@@ -75,8 +120,8 @@ export function ChannelBar({ repo, channel, onPick }: { repo: RepoView; channel:
                   className="btn btn-small"
                   aria-label={`Preview PR #${p.number}`}
                   onClick={() => {
-                    setShowOlder(false);
-                    onPick(p.number);
+                    setShowMore(false);
+                    onPick(p.number); // not under the pointer: it comes first, as on opening
                   }}
                 >
                   <Icon name="play" /> Preview
@@ -94,7 +139,8 @@ export function ChannelBar({ repo, channel, onPick }: { repo: RepoView; channel:
  * How a running preview stands (#252): "In use (own tab)", "Stops 1:00 after you leave", "📌 until 15:00" (with Unpin),
  * and in its max lifetime's last minute "Still using it?" with Keep it running. An agent's hold is HeldNote's.
  */
-export function UseNote({ preview, repo }: { preview: PreviewView; repo: RepoView }) {
+/** `chip`: its time is the slim bar's chip (`UseChip`); only the last-minute alert shows here. */
+export function UseNote({ preview, repo, chip }: { preview: PreviewView; repo: RepoView; chip?: boolean }) {
   const settings = useStore((s) => s.settings);
   const now = useNow();
   if (preview.status !== 'running' || preview.heldBy) return null;
@@ -111,7 +157,7 @@ export function UseNote({ preview, repo }: { preview: PreviewView; repo: RepoVie
           </button>
         </div>
       )}
-      {text && (
+      {text && !chip && (
         <div className="held-note small use-note" role="status">
           <span>
             {preview.pinned != null && <Icon name="pin" />} {text}
@@ -124,6 +170,22 @@ export function UseNote({ preview, repo }: { preview: PreviewView; repo: RepoVie
         </div>
       )}
     </>
+  );
+}
+
+/** A phone's slim bar (#382): when it stops on its own, as a small timer chip; the full words on hover and for screen readers. */
+export function UseChip({ preview }: { preview: PreviewView }) {
+  const settings = useStore((s) => s.settings);
+  const now = useNow();
+  if (preview.heldBy) return null;
+  const text = standLabel(preview, preview.pr == null ? settings.mainPreviewIdleMin : settings.prPreviewIdleMin, now);
+  if (!text) return null;
+  const time = chipTime(text);
+  return (
+    <span className="chip use-chip small" role="status" title={text} aria-label={text}>
+      <Icon name={preview.pinned != null ? 'pin' : 'timer'} />
+      {time && ` ${time}`}
+    </span>
   );
 }
 

@@ -69,9 +69,9 @@ The manager's console has five top tabs, and each one shows a side menu of its s
 | 🛰️ Company | Mission control (with server health and the test lab), Charter, Memory map |
 | 🧠 CEO | The CEO (chat, mandates, team changes, project briefs), CEO settings, Tools & skills |
 | 📜 History | Sessions, Daily log, Time-lapse (3D only) |
-| ⚙️ Settings | Agents, Every project, How agents run, Company, Profile, Providers & accounts, Cloud agents, Voice, Weather & world, Notifications, Themes, Accessibility, Pocket mode (phones only), About this office |
+| ⚙️ Settings | Agents, Every project, How agents run, Company, Profile, Providers, Guides, Providers & accounts, Cloud agents, Voice, Weather & world, Notifications, Themes, Accessibility, Pocket mode (phones only), About this office |
 
-- Each section links as `#<tab>/<section>` (e.g. `#settings/cloud-agents`), and each tab remembers its last section in this browser.
+- Each section links as `#<tab>/<section>` (e.g. `#settings/cloud-agents`; every other link is in docs/deep-links.md), and each tab remembers its last section in this browser.
 - The search at the top of the side menu finds sections and settings by label. A new setting adds its label to its
   section's `find` list.
 - Progressive disclosure: diagnostics (versions, paths, storage, transcript counts) never sit in a section's main flow.
@@ -201,3 +201,6 @@ npm run build && E2E_PORT=<your port> E2E_SKIP_BUILD=1 npx playwright test layou
 
 Pocket-mode screens run at all four widths; screens inside the 3D office at 390 and 1280 (WebGL is slow, and phones
 get pocket mode). `-g "phone at 390"` runs one; `LAYOUT_DEBUG=1` lists every axe node with its colours.
+
+Settings' own stylesheets (#515) are at 0 colour literals in `designTokens.test.ts`; a done or sent line's green is
+`color-mix(in srgb, var(--ds-good-fill) 35%, var(--ds-text))`, which reads on paper.

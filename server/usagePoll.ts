@@ -1,14 +1,17 @@
 // Claude's usage while the office is idle (#89): sessions report readings as they run, so when none has for a while
 // the office reads the subscription's usage itself, from the endpoint Claude Code's own /usage screen calls
 // (GET /api/oauth/usage with the login's OAuth token). No model tokens; the token is read, sent there and nowhere else,
-// and the credentials file is never refreshed or written (the agents' next session refreshes an expired login).
+// and the credentials file is never refreshed or written (the agents' next session refreshes an expired login: one with
+// a refresh token still counts as signed in, #442).
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { readingOf } from '../shared/usage.ts';
+import { loginPlanName } from '../shared/accounts.ts';
 import type { UsageCheckError, UsageReading } from '../shared/types.ts';
 
-export type UsageCheck = { readings: UsageReading[] } | { error: UsageCheckError };
+/** `refresh`: the access token is expired or turned away, but a refresh token is on file for the next session to use. */
+export type UsageCheck = { readings: UsageReading[] } | { error: UsageCheckError; refresh?: boolean };
 
 // ---------- when to check (pure) ----------
 
@@ -49,19 +52,48 @@ export function oauthReadings(body: unknown, now: number): UsageReading[] {
   });
 }
 
-/** The login's access token from .credentials.json, unless it's missing or expired. */
-export function tokenOf(raw: string, now: number): { token: string } | { error: UsageCheckError } {
-  let oauth: { accessToken?: unknown; expiresAt?: unknown } | undefined;
-  try {
-    oauth = (JSON.parse(raw) as { claudeAiOauth?: typeof oauth }).claudeAiOauth;
-  } catch {
-    return { error: 'no-login' };
-  }
-  if (typeof oauth?.accessToken !== 'string' || !oauth.accessToken) return { error: 'no-login' };
-  const exp = Number(oauth.expiresAt);
-  if (Number.isFinite(exp) && exp > 0 && exp <= now) return { error: 'expired' };
-  return { token: oauth.accessToken };
+interface OauthFields {
+  accessToken?: unknown;
+  refreshToken?: unknown;
+  expiresAt?: unknown;
+  subscriptionType?: unknown;
+  rateLimitTier?: unknown;
 }
+
+const oauthOf = (raw: string): OauthFields | undefined => {
+  try {
+    return (JSON.parse(raw) as { claudeAiOauth?: OauthFields }).claudeAiOauth;
+  } catch {
+    return undefined;
+  }
+};
+
+/** The login's access token from .credentials.json, unless it's missing or expired (`refresh`: a refresh token is there). */
+export function tokenOf(raw: string, now: number): { token: string; refresh: boolean } | { error: UsageCheckError; refresh?: boolean } {
+  const oauth = oauthOf(raw);
+  if (typeof oauth?.accessToken !== 'string' || !oauth.accessToken) return { error: 'no-login' };
+  const refresh = typeof oauth.refreshToken === 'string' && !!oauth.refreshToken;
+  const exp = Number(oauth.expiresAt);
+  if (Number.isFinite(exp) && exp > 0 && exp <= now) return { error: 'expired', refresh };
+  return { token: oauth.accessToken, refresh };
+}
+
+/** The plan a login really has, from .credentials.json ("Max 20x"); never any token. */
+export const loginPlan = (raw: string): string | null => {
+  const oauth = oauthOf(raw);
+  return oauth ? loginPlanName(oauth.subscriptionType, oauth.rateLimitTier) : null;
+};
+
+/** Who a login belongs to, from its .claude.json's oauthAccount (account id, else email), lowercased; kept on the server (#460). */
+export const loginOwner = (raw: string): string | null => {
+  try {
+    const o = (JSON.parse(raw) as { oauthAccount?: { accountUuid?: unknown; emailAddress?: unknown } }).oauthAccount;
+    const who = typeof o?.accountUuid === 'string' && o.accountUuid ? o.accountUuid : o?.emailAddress;
+    return typeof who === 'string' && who.trim() ? who.trim().toLowerCase() : null;
+  } catch {
+    return null;
+  }
+};
 
 // ---------- the real check ----------
 
@@ -79,7 +111,7 @@ export async function checkUsage(env: NodeJS.ProcessEnv = process.env): Promise<
       headers: { Authorization: `Bearer ${cred.token}`, 'anthropic-beta': 'oauth-2025-04-20', 'Content-Type': 'application/json' },
       signal: AbortSignal.timeout(10_000),
     });
-    if (res.status === 401) return { error: 'expired' };
+    if (res.status === 401) return { error: 'expired', refresh: cred.refresh };
     if (!res.ok) return { error: 'failed' };
     const readings = oauthReadings(await res.json(), Date.now());
     return readings.length ? { readings } : { error: 'failed' };

@@ -56,6 +56,10 @@
   .sheet-scrim-top {
     align-items: end;
     padding: 0;
+    /* the visible part of the page (viewport.ts): the sheet sits on the keyboard, not under it (#494) */
+    top: var(--app-top, 0px);
+    bottom: auto;
+    height: var(--app-height, 100dvh);
   }
   .sheet {
     width: 100%;
@@ -217,6 +221,9 @@
 .gm-go {
   flex: none;
   min-height: var(--ds-target);
+}
+.gm-busy {
+  flex: none;
 }
 
 /* ---------- empty states ---------- */

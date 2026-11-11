@@ -7,7 +7,7 @@ import { CEO_ID, DEFAULT_MAX_AGENTS, FLOOR_SEATS, type AgentCli, type EffortLeve
 import { usageChoice, USAGE_WARNING_CHOICES } from '../../../shared/usage';
 import { CLAUDE_MODELS, modelLabel } from '../../../shared/models';
 import { conflictFixSettings } from '../../../shared/conflicts';
-import { CEO_MODEL_KINDS, type CeoModelKind } from '../../../shared/ceoModels';
+import { CEO_MODEL_KINDS, isAutomatedJob, type CeoModelKind } from '../../../shared/ceoModels';
 import { ModelPicker } from './ModelPicker';
 import { CliOptions, cliName, EFFORTS } from './AgentSettings';
 import { DiskFields } from './DiskCard';
@@ -53,7 +53,7 @@ export function AgentsSettings() {
         <label className="field">
           <span>Default coding agent</span>
           <select value={settings.defaultCli} onChange={(e) => set({ defaultCli: e.target.value as AgentCli })}>
-            <CliOptions clis={clis} />
+            <CliOptions clis={clis} builders />
           </select>
         </label>
       )}
@@ -76,7 +76,7 @@ export function AgentsSettings() {
       <ConflictFixFields />
       <p className="muted small">
         {terminal
-          ? 'Each agent can use their own coding agent, model and effort (Team tab); the CEO always runs Claude Code. Claude Code reports every step; Codex and OpenCode are experimental: the office sees their task rather than each step. They can also run a model on this computer: name it ollama/…, lmstudio/…, llamacpp/… or omlx/….'
+          ? 'Each agent can use their own coding agent, model and effort (Team tab); the CEO picks its own on its card in The CEO. Claude Code reports every step; Codex and OpenCode are experimental: the office sees their task rather than each step. They can also run a model on this computer: name it ollama/…, lmstudio/…, llamacpp/… or omlx/….'
           : 'The Agent SDK runs Claude Code. Each agent can use their own model and effort (Team tab).'}
       </p>
       <label className="field">
@@ -169,7 +169,7 @@ function ConflictFixFields() {
 
 const JOB_NAMES: Record<CeoModelKind, string> = { chat: 'Chat with you', plan: 'Planning', research: 'Research', review: 'Company reviews', followup: 'Follow-ups', triage: 'Stuck PR triage' };
 
-/** CEO settings → Model per job (#331): routine jobs on a cheaper model, the rest on the CEO's own. */
+/** CEO settings → Model per job (#331): jobs the office starts by itself on a cheaper model, the rest always on the CEO's own (#332). */
 function CeoModelsByJob() {
   const awake = useStore((s) => s.settings.ceoAwake);
   const models = awake.models;
@@ -180,13 +180,26 @@ function CeoModelsByJob() {
       <div className="small">
         <b>Model per job</b>
       </div>
-      {CEO_MODEL_KINDS.map((kind) => (
-        <label key={kind} className="field" htmlFor={`ceo-model-${kind}`}>
-          <span>{JOB_NAMES[kind]}</span>
-          <ModelPicker id={`ceo-model-${kind}`} cli="claude" value={models[kind]} resolvedDefault={ceoModel} defaultLabel={same} label={`${JOB_NAMES[kind]}: model`} onChange={(m) => set({ ceoAwake: { ...awake, models: { ...models, [kind]: m } } })} />
-        </label>
-      ))}
-      <p className="muted small">A job starts a fresh session when its model differs from the last one's. If a model isn't available, the job runs again on the CEO model and the office chat says so.</p>
+      <label className="toggle block">
+        <input type="checkbox" checked={awake.automatedOnCeo} onChange={(e) => set({ ceoAwake: { ...awake, automatedOnCeo: e.target.checked } })} />
+        <span>
+          <b>Run all automated jobs on {modelLabel(ceoModel)}</b>: reviews, follow-ups and triage use the CEO model, whatever is picked below.
+        </span>
+      </label>
+      {CEO_MODEL_KINDS.map((kind) =>
+        isAutomatedJob(kind) ? (
+          <label key={kind} className="field" htmlFor={`ceo-model-${kind}`}>
+            <span>{JOB_NAMES[kind]}</span>
+            <ModelPicker id={`ceo-model-${kind}`} cli="claude" value={models[kind]} resolvedDefault={ceoModel} defaultLabel={same} label={`${JOB_NAMES[kind]}: model`} disabled={awake.automatedOnCeo} onChange={(m) => set({ ceoAwake: { ...awake, models: { ...models, [kind]: m } } })} />
+          </label>
+        ) : (
+          <div key={kind} className="field">
+            <span>{JOB_NAMES[kind]}</span>
+            <span className="muted small">Always the CEO model ({modelLabel(ceoModel)})</span>
+          </div>
+        ),
+      )}
+      <p className="muted small">A job starts a fresh session when its model differs from the last one's. If a model isn't available, the job runs again on the CEO model and the office chat says so. A job's reply in the chat has Redo on {modelLabel(ceoModel)} when it ran on another model; CEO → Sessions → CEO jobs logs every job.</p>
     </div>
   );
 }

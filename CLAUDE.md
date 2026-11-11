@@ -89,13 +89,18 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
   | `update.ts` | the office's own update: drain, hand-over to the launcher, the result after a restart |
   | `reactions.ts` | the chat's delivery and status reactions, the CEO's react and reply tools, the manager's reactions (#118) |
   | `ceoModels.ts` | the CEO's model per kind of job, kept sessions on the same model, the retry on its own model (#331) |
+  | `ceoFresh.ts` | background jobs in fresh sessions with the office's digest, a full chat session's handover (#330; rules in `server/ceoDigest.ts`) |
+  | `ceoLog.ts` | the CEO jobs log and Redo on Opus (#332): each job's number, log row and kept inputs, the redo on the CEO's model (rules in `server/ceoRedo.ts`, `shared/ceoJobLog.ts`; the demo's in `server/ceoJobSample.ts`) |
   | `ceoJobs.ts` | the CEO's job queue, follow-ups, triage, the phone, notifications |
+  | `ceoStuck.ts` | a stuck CEO (#375): its sessions' blocked screens and a minute's silence as a chat card (Open terminal, Sign in, Switch back) and one notification (words in `server/ceoStuck.ts`) |
   | `upkeep.ts` | idle desks, the watchdog and doctor, progress, ping-pong |
   | `team.ts` | hire and let-go requests, approvals, `scale_team` |
+  | `itDesk.ts` | the IT desk (#506): it_run's read-only commands, it_propose's cards with Run / Not now, the never-list again at Run, the log (rules pure in `server/itDesk.ts`, runner `server/itExec.ts`) |
   | `ceoTools.ts` | the CEO's office tools (`officeTools`, `company_status`, mandates, read-only tools) |
   | `voices.ts` | a voice for every agent (#320): picked on hire, or when a key is saved or ElevenLabs turned on |
   | `serverLoad.ts` | the server's load by program (#271): who's who for the grouping, the reading every 15 s, the 24 h trend, "Stop it" for leftovers |
   | `disk.ts` | the disk (#340): free space on the health strip and its hold, the hourly cleanup and "Free up space", the working copies' disk |
+  | `setup.ts` | the setup advisor (#366): each floor's use case (guessed from its repo's top files), its gaps against `shared/useCases.ts`' recommendations (rules pure in `shared/setup.ts`), one notification per gap, Not now, the fixes, the CEO's `apply_setup` |
   | `../swarm.ts` | `Swarm` itself: startup (`init`), restart recovery, chat to agents, settings and setup |
 - `outbox.ts`: what goes out on `/ws`: agents' and floors' changes batched on a 250 ms tick as patches of what
   changed, terminal lines only to the tabs that show them (`shared/watch.ts`), catch-ups when a tab's watch changes.
@@ -114,8 +119,12 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
 - `unblock.ts`: nothing waits on a human (pure): each Claude Code session's worktree permission rules, every CLI's
   non-interactive environment (`cliEnv`), the answers to PermissionRequest / Elicitation / AskUserQuestion hooks, and
   the watchdog's steps for a prompt still on screen (answer it, else the agent is `blocked`, notified after 5 minutes).
-- `clis.ts`: the CLIs (Claude Code from the SDK's bundled binary, Codex, OpenCode): detection, Windows `.cmd` shim
-  unwrapping, each one's command line, and the helper scripts they call back with.
+  `cliScreens.ts` (#360) is the table of first-run and warning screens answered at start-up (theme, trust, warnings),
+  and the sign-in that ends a session instead; `cliSetup.ts` sets up an account's login folder before each session
+  (onboarding, theme, the worktree trusted; the Box seed applies the same), never the built-in login's.
+- `clis.ts`: the CLIs (Claude Code from the SDK's bundled binary, Codex, OpenCode, Gemini CLI): detection, Windows `.cmd` shim
+  unwrapping, each one's command line, and the helper scripts they call back with. `geminiHome.ts`: a Gemini login
+  folder's first-run settings (#365); what each CLI suits is in `shared/cliNotes.ts`.
 - `terminal.ts`: `AgentTerminal`, a headless xterm mirror per agent (replay for late viewers, saved to disk), its
   `/ws/term` viewers, and keystrokes/resizes to the running CLI.
 - `ceo.ts`: the CEO's office MCP tools (`createOfficeTools`, zod-validated: `scale_team`, `configure_agent`, issues,
@@ -256,6 +265,8 @@ Client (`client/`, Vite root; React 19, R3F, drei, zustand):
 - `src/viewport.ts`: the phone's viewport (#73): `--app-height` / `--app-top` from visualViewport for every full-screen
   view (pocket mode divides them by the UI scale), put back after the keyboard, a send, a photo or `pageshow`; the
   zoom lock on touch screens; `data-insets-covered` where a browser's toolbars cover the safe areas it reports.
+- `src/routes.ts` / `routeLink.ts`: deep links to every page, tab, sheet and 3D place (docs/deep-links.md); QA waits
+  for `html[data-route-ready]` after opening one.
 - `src/net.ts`: the websocket connection with reconnect; it sends the tab's watch (`src/watch.ts`) as it changes.
   `src/perf.tsx`: render pausing, adaptive DPR, `?stats` (and `window.__swarmStats` with a census of what's drawn).
 - `src/world/batch.ts` / `Batched.tsx`: a floor's repeated parts (Toon.tsx's boxes, people's `Piece`s) drawn as

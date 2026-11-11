@@ -1,8 +1,9 @@
 // Providers & accounts (#247, docs/accounts.md), pure: the built-in accounts, which account a session runs on (pinned
 // id, tag, or the rotation), what that changes in its environment, the status chip and the manager's edits.
+import { barName, livePct } from './usage.ts';
 import type { AccountCli, AccountKind, AccountStatus, ProviderAccount, UsageReading } from './types.ts';
 
-export const ACCOUNT_CLIS: AccountCli[] = ['claude', 'codex'];
+export const ACCOUNT_CLIS: AccountCli[] = ['claude', 'codex', 'gemini'];
 export const ACCOUNT_KINDS: AccountKind[] = ['subscription-login', 'api-key', 'setup-token'];
 /** The binding that means "whichever the rotation picks" (also '' or absent). */
 const ROTATION = 'rotation';
@@ -62,14 +63,18 @@ export const pinnedTo = (a: ProviderAccount, binding: string | undefined) => !!b
 
 // ---------- a session's environment ----------
 
-/** A subscription login's own folder: <SWARM_HOME>/accounts/<id>/<claude|codex>. */
+/** A subscription login's own folder: <SWARM_HOME>/accounts/<id>/<claude|codex|gemini>. Gemini CLI keeps its files in its .gemini. */
 export const accountDir = (join: (...p: string[]) => string, home: string, a: Pick<ProviderAccount, 'id' | 'cli'>) => join(home, 'accounts', a.id, a.cli);
 
-/** The login folder a built-in account is: what Claude Code and Codex use on their own. */
+/** The login folder a built-in account is: what Claude Code, Codex and Gemini CLI (GEMINI_CLI_HOME, its .gemini under it) use on their own. */
 export function builtInDir(join: (...p: string[]) => string, cli: AccountCli, env: Record<string, string | undefined>, homedir: string): string {
   if (cli === 'claude') return env.CLAUDE_CONFIG_DIR?.trim() || join(homedir, '.claude');
+  if (cli === 'gemini') return env.GEMINI_CLI_HOME?.trim() || homedir;
   return env.CODEX_HOME?.trim() || join(homedir, '.codex');
 }
+
+/** The variable pointing each coding agent at a login's folder. */
+export const LOGIN_ENV: Record<AccountCli, string> = { claude: 'CLAUDE_CONFIG_DIR', codex: 'CODEX_HOME', gemini: 'GEMINI_CLI_HOME' };
 
 /** What a session on an account adds to its environment. `keyEnv`: Claude Code reads its key from it through apiKeyHelper. */
 export interface AccountSetup {
@@ -81,10 +86,12 @@ export interface AccountSetup {
  * What a session on an account runs with. A built-in account changes nothing; another login points the CLI at its own
  * folder; a Claude API key goes through apiKeyHelper (never ANTHROPIC_API_KEY, never on disk); a setup token through
  * CLAUDE_CODE_OAUTH_TOKEN; an OpenAI key through OPENAI_API_KEY / CODEX_API_KEY. `secret` is the key ('' for logins).
+ * Gemini CLI has only logins (a Google AI plan): GEMINI_CLI_HOME.
  */
 export function accountSetup(a: ProviderAccount, dir: string, secret: string): AccountSetup {
   if (a.builtIn) return { env: {}, keyEnv: null };
-  if (a.kind === 'subscription-login') return { env: a.cli === 'claude' ? { CLAUDE_CONFIG_DIR: dir } : { CODEX_HOME: dir }, keyEnv: null };
+  if (a.kind === 'subscription-login') return { env: { [LOGIN_ENV[a.cli]]: dir }, keyEnv: null };
+  if (a.cli === 'gemini') return { env: {}, keyEnv: null };
   if (a.cli === 'codex') return { env: secret ? { OPENAI_API_KEY: secret, CODEX_API_KEY: secret } : {}, keyEnv: null };
   if (a.kind === 'setup-token') return { env: secret ? { CLAUDE_CODE_OAUTH_TOKEN: secret } : {}, keyEnv: null };
   return secret ? { env: { [ACCOUNT_KEY_ENV]: secret }, keyEnv: ACCOUNT_KEY_ENV } : { env: {}, keyEnv: null };
@@ -109,8 +116,59 @@ export function accountStatus(x: StatusInput): { status: AccountStatus; until: n
   if (a.limitedUntil && a.limitedUntil > now) full.push(a.limitedUntil);
   if (a.dailyCostCap && x.todayUsd >= a.dailyCostCap) full.push(startOfDay(now) + DAY_MS);
   if (full.length) return { status: 'limited', until: Math.max(...full) };
-  if (x.usage.some((r) => r.pct >= NEAR_PCT)) return { status: 'near', until: null };
+  if (x.usage.some((r) => livePct(r, now) >= NEAR_PCT)) return { status: 'near', until: null };
   return { status: 'ready', until: null };
+}
+
+/** Which limit holds a limited account until `until`: "weekly", "5-hour"; null when no reading says (a session's hit, a daily cap). */
+export function limitedBy(usage: readonly UsageReading[], until: number | null, now: number): string | null {
+  const r = until === null ? undefined : usage.find((x) => x.pct >= 100 && x.resetsAt === until && until > now);
+  return r ? barName(r.type).toLowerCase() : null;
+}
+
+// ---------- the plan a login really has (#442) ----------
+
+const PLAN_WORDS = ['pro', 'max', 'ultra', 'team', 'enterprise'];
+const cap = (w: string) => w.charAt(0).toUpperCase() + w.slice(1);
+
+/** A Claude login's plan from its .credentials.json fields: subscriptionType "max" and rateLimitTier "default_claude_max_20x" → "Max 20x". */
+export function loginPlanName(subscriptionType: unknown, rateLimitTier: unknown): string | null {
+  const type = typeof subscriptionType === 'string' ? subscriptionType.trim().toLowerCase() : '';
+  if (!/^[a-z_]{1,20}$/.test(type)) return null;
+  const tier = typeof rateLimitTier === 'string' ? /_(\d{1,2}x)$/i.exec(rateLimitTier)?.[1].toLowerCase() : undefined;
+  return `${cap(type.replace(/_/g, ' '))}${tier ? ` ${tier}` : ''}`;
+}
+
+/**
+ * A warning when the plan a login really has isn't the one its name, plan field or tags say ("Claude Ultra" signed in
+ * with a Pro account); null when they agree or none names a plan. An Ultra login read Max until 2026-11-08, so Max passes for Ultra.
+ */
+export function planWarning(a: Pick<ProviderAccount, 'label' | 'plan' | 'tags'>, loginPlan: string | null | undefined): string | null {
+  if (!loginPlan) return null;
+  const words = [a.plan ?? '', a.label, ...a.tags].join(' ').toLowerCase().split(/[^a-z]+/);
+  const claimed = words.find((w) => PLAN_WORDS.includes(w));
+  const real = loginPlan.split(' ')[0].toLowerCase();
+  if (!claimed || claimed === real || (claimed === 'ultra' && real === 'max')) return null;
+  return `Signed in with a ${loginPlan} account, not ${cap(claimed)}`;
+}
+
+/** The plan a card shows (#460): the one read from its login, else the typed one. */
+export const cardPlan = (a: Pick<ProviderAccount, 'plan'> & { loginPlan?: string | null }) => a.loginPlan || a.plan || null;
+
+/** Rename to match (#460): the name and plan field from the login's plan ("Claude Max 20x" / "Max 20x"). */
+export const planRename = (loginPlan: string) => ({ label: `Claude ${loginPlan}`, plan: loginPlan });
+
+/**
+ * Logins on the same subscription (#460): each one's label of the first other with the same plan and the same owner
+ * (`who`: the login's account id or email, kept on the server), since they share one set of limits.
+ */
+export function sameSubscription(logins: readonly { id: string; label: string; plan?: string | null; who?: string | null }[]): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const a of logins) {
+    const other = a.who && a.plan ? logins.find((b) => b.id !== a.id && b.who === a.who && b.plan === a.plan) : undefined;
+    if (other) out.set(a.id, other.label);
+  }
+  return out;
 }
 
 const startOfDay = (now: number) => {
@@ -194,11 +252,12 @@ export const newAccountId = (cli: AccountCli, rand: () => number = Math.random) 
 export const BILLING_LINKS: Record<AccountCli, Partial<Record<AccountKind, string>>> = {
   claude: { 'subscription-login': 'https://claude.ai/settings/usage', 'setup-token': 'https://claude.ai/settings/usage', 'api-key': 'https://console.anthropic.com/settings/billing' },
   codex: { 'subscription-login': 'https://chatgpt.com/codex/settings/usage', 'api-key': 'https://platform.openai.com/usage' },
+  gemini: { 'subscription-login': 'https://geminicli.com/docs/resources/quota-and-pricing/' },
 };
 
 /** One plain sentence per kind: what it's billed to and what it touches. */
 export function kindSentence(cli: AccountCli, kind: AccountKind): string {
-  const plan = cli === 'claude' ? 'Claude subscription (Pro or Max)' : 'ChatGPT plan';
+  const plan = cli === 'claude' ? 'Claude subscription (Pro or Max)' : cli === 'gemini' ? 'Google AI plan (Plus or Pro)' : 'ChatGPT plan';
   if (kind === 'subscription-login') return `Uses a ${plan}'s usage limits, signed in in its own folder. Nothing is billed per token.`;
   if (kind === 'setup-token') return `A year-long token from claude setup-token: uses that subscription's limits, like its login.`;
   return `Billed per token to that ${cli === 'claude' ? 'Anthropic' : 'OpenAI'} API account. It never uses or changes your subscription.`;

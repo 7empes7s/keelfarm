@@ -3,7 +3,7 @@ import type { PongResult } from '../../shared/pong';
 import type { Charter } from '../../shared/charter';
 import type { ObjectiveStatus } from '../../shared/charterStats';
 import type { AgentStyle } from '../../shared/looks';
-import type { AccountCli, AccountKind, AgentCli, SignInMode, AgentPromptView, AgentView, CloudView, DoctorFinding, DoctorFix, EffortLevel, GhRepoSummary, NotifyChannel, NotifyChannelsView, NotifyWebhook, OfficeUpdateView, PushTestView, PreviewView, TelegramView, ProjectFolderView, PrPreviewView, RefFileView, RepoView, SwarmSettings, UsageView, VoiceCacheView, VoiceOption, MachineHost, McpServerConfig, ProviderConnection } from '../../shared/types';
+import type { AccountCli, AccountKind, AgentCli, SignInMode, AgentPromptView, AgentView, CloudView, DoctorFinding, DoctorFix, EffortLevel, GhRepoSummary, MergedPage, NotifyChannel, NotifyChannelsView, NotifyWebhook, OfficeUpdateView, PushTestView, PreviewView, TelegramView, ProjectFolderView, PrPreviewView, RefFileView, RepoView, SwarmSettings, UsageView, VoiceCacheView, VoiceOption, MachineHost, McpServerConfig, ProviderConnection, KeyScanView, UseCase } from '../../shared/types';
 import type { JournalChunk, JournalDayView } from '../../shared/journal';
 import type { CostsView, TaskKind } from '../../shared/costs';
 import type { ServerPoint } from '../../shared/serverLoad';
@@ -19,6 +19,7 @@ import type { LibraryFilter, LibraryPage } from '../../shared/library';
 import type { CleanPlan, CleanResult, DiskSettings } from '../../shared/disk';
 import type { HealthView } from '../../shared/health';
 import type { ChatPage } from '../../shared/chatPage';
+import type { TryThis } from '../../shared/tryIt';
 
 async function call<T = unknown>(method: string, url: string, body?: unknown, toast = true): Promise<T> {
   // The time-lapse shows a recorded day: nothing in it can be acted on.
@@ -110,9 +111,10 @@ export const api = {
   previewSync: (repoId: string, pr: number | null) => call<{ url: string }>('POST', `${r(repoId)}/preview/sync`, { pr }),
   disconnectRepo: (repoId: string) => call('DELETE', r(repoId)),
   syncRepo: (repoId: string) => call('POST', `${r(repoId)}/sync`),
+  mergedPage: (repoId: string, page: number) => call<MergedPage>('GET', `${r(repoId)}/merged?page=${page}`, undefined, false),
   syncFolder: (repoId: string) => call<{ folderSync: string | null }>('POST', `${r(repoId)}/sync-folder`),
   createIssue: (repoId: string, title: string, body: string, assignTo?: string) => call<{ number: number }>('POST', `${r(repoId)}/issues`, { title, body, assignTo }),
-  closeIssue: (repoId: string, n: number) => call('POST', `${r(repoId)}/issues/${n}/close`),
+  closeIssue: (repoId: string, n: number, reason?: string) => call('POST', `${r(repoId)}/issues/${n}/close`, { reason }),
   /** Assign to… (#265): a free agent starts it now, a busy one gets it as their next task. */
   assignIssue: (repoId: string, n: number, agentId: string) => call<{ started: boolean; text: string }>('POST', `${r(repoId)}/issues/${n}/assign`, { agentId }),
   trustIssue: (repoId: string, n: number) => call('POST', `${r(repoId)}/issues/${n}/trust`),
@@ -124,6 +126,12 @@ export const api = {
   /** The manager's word on an objective (#105); null clears it. */
   setObjectiveStatus: (repoId: string, objective: string, status: ObjectiveStatus | null) => call<RepoView>('PUT', `${r(repoId)}/charter/status`, { objective, status }),
   exportCharter: (repoId: string) => call<{ url: string }>('POST', `${r(repoId)}/charter/export`),
+  /** The setup advisor (#366): the floor's use case, a gap's fix (by its action's index), Not now, the checklist closed. */
+  setUseCase: (repoId: string, useCase: UseCase) => call<RepoView>('PUT', `${r(repoId)}/setup/use-case`, { useCase }),
+  applySetup: (repoId: string, gap: string, action: number) => call<RepoView>('POST', `${r(repoId)}/setup/apply`, { gap, action }),
+  snoozeSetup: (repoId: string, gap: string) => call<RepoView>('POST', `${r(repoId)}/setup/snooze`, { gap }),
+  closeSetupReview: (repoId: string) => call<RepoView>('POST', `${r(repoId)}/setup/review`),
+  setCompanyUseCases: (useCases: UseCase[]) => call<UseCase[]>('PUT', '/api/company/use-cases', { useCases }),
   mergePull: (repoId: string, n: number, method: 'squash' | 'merge' | 'rebase' = 'squash') => call('POST', `${r(repoId)}/pulls/${n}/merge`, { method }),
   closePull: (repoId: string, n: number) => call('POST', `${r(repoId)}/pulls/${n}/close`),
   /** Queues the PR for QA; with `agentId`, that (free) agent tests it now. */
@@ -167,6 +175,8 @@ export const api = {
   /** The disk (#340): "Free up space"'s preview and run, the disk settings, the demo's low disk. */
   diskPlan: () => call<CleanPlan>('GET', '/api/disk/plan'),
   cleanDisk: () => call<CleanResult>('POST', '/api/disk/clean'),
+  itRun: (ids: string[]) => call('POST', '/api/it/run', { ids }),
+  itDismiss: (ids: string[]) => call('POST', '/api/it/dismiss', { ids }),
   diskSettings: (patch: Partial<DiskSettings>) => call<DiskSettings>('PATCH', '/api/disk/settings', patch),
   simulateDisk: (low: boolean) => call<HealthView>('POST', '/api/disk/simulate', { low }),
   /** The office doctor: a finding's one-click fix, or Ignore. */
@@ -183,8 +193,11 @@ export const api = {
   // The chat closer to Claude's (#51)
   ceoStop: () => call('POST', '/api/ceo/stop'),
   ceoRetry: () => call('POST', '/api/ceo/retry'),
+  ceoSwitchBack: (account: string) => call('POST', '/api/ceo/switch-back', { account }),
+  redoCeoJob: (job: number) => call<{ job: number }>('POST', `/api/ceo/jobs/${job}/redo`),
   editMessage: (id: number, text: string) => call('POST', `/api/ceo/messages/${id}/edit`, { text }),
   reactToMessage: (id: number, emoji: string, note?: string) => call('POST', `/api/ceo/messages/${id}/react`, { emoji, note }),
+  undoCeoAction: (id: number, index: number) => call('POST', `/api/ceo/messages/${id}/actions/${index}/undo`),
   chatMessages: (before: number) => call<ChatPage>('GET', `/api/ceo/messages?before=${before}`),
   removeMessage: (id: number) => call('DELETE', `/api/ceo/messages/${id}`),
   newConversation: (repoId: string | null = null) => call<{ id: string }>('POST', '/api/ceo/conversations', { repoId }),
@@ -210,15 +223,20 @@ export const api = {
   /** Demo office only: the CEO asks for a new agent (or for one to leave) on demand. */
   demoPropose: (kind: 'hire' | 'let-go', floor?: number) => call<{ text: string }>('POST', '/api/demo/proposals', { kind, floor }),
   demoNewCommit: () => call<{ commit: string }>('POST', '/api/demo/new-commit'),
+  demoLabUpdate: () => call<OfficeUpdateView>('POST', '/api/demo/lab-update'),
   /** Saves an Anthropic or OpenAI Admin key for the usage card's organisation spend (#361); '' removes it. */
   // Settings → Providers (#362): keys and MCP servers' secrets go in and never come back out.
   addProvider: (provider: string, key: string, label?: string) => call<ProviderConnection>('POST', '/api/providers', { provider, key, label }, false),
   testProvider: (id: string) => call<ProviderConnection>('POST', `/api/providers/${encodeURIComponent(id)}/test`),
   removeProvider: (id: string) => call('DELETE', `/api/providers/${encodeURIComponent(id)}`),
+  scanKeys: () => call<KeyScanView>('POST', '/api/providers/scan'),
+  importKeys: (ids: string[]) => call<{ imported: number; skipped: string[] }>('POST', '/api/providers/scan/import', { ids }),
+  dismissKeys: () => call('DELETE', '/api/providers/scan'),
   addMcpServer: (m: { name: string; command?: string; url?: string; secrets?: Record<string, string>; agents?: string[] }) => call<McpServerConfig>('POST', '/api/providers/mcp', m, false),
   setMcpServer: (id: string, patch: { on?: boolean; agents?: string[] }) => call<McpServerConfig>('PATCH', `/api/providers/mcp/${encodeURIComponent(id)}`, patch),
   testMcpServer: (id: string) => call<McpServerConfig>('POST', `/api/providers/mcp/${encodeURIComponent(id)}/test`),
   removeMcpServer: (id: string) => call('DELETE', `/api/providers/mcp/${encodeURIComponent(id)}`),
+  notifyUsageBack: (id: string, on: boolean) => call<{ watching: boolean }>('POST', `/api/usage/${encodeURIComponent(id)}/notify-back`, { on }),
   setUsageAdminKey: (provider: 'anthropic' | 'openai', key: string) => call<{ set: boolean }>('PUT', '/api/usage/admin-key', { provider, key }),
   /** Saves (or with '' removes) the ElevenLabs key. No toast: the settings show why a key was rejected. */
   setVoiceKey: (key: string) => call<{ voiceKeySet: boolean; voiceKeyHint: string }>('PUT', '/api/voice/key', { key }, false),
@@ -227,6 +245,7 @@ export const api = {
   clearVoiceCache: () => call<VoiceCacheView>('DELETE', '/api/voice/cache'),
   journalDays: () => call<JournalDayView[]>('GET', '/api/journal/days'),
   history: (f: HistoryFilter, toast = true) => call<HistoryPage>('GET', `/api/history?${new URLSearchParams(Object.entries(f).flatMap(([k, v]) => (v === undefined || v === '' ? [] : [[k === 'repoId' ? 'repo' : k, String(v)]])))}`, undefined, toast),
+  tryIt: (repoId: string, pr: number) => call<{ tryThis: TryThis | null }>('GET', `/api/repos/${encodeURIComponent(repoId)}/pulls/${pr}/try-it`, undefined, false),
   historyEntry: (id: string) => call<HistoryDetail>('GET', `/api/history/${encodeURIComponent(id)}`),
   historyUsage: () => call<HistoryUsage>('GET', '/api/history/usage'),
   serverTrend: () => call<ServerPoint[]>('GET', '/api/server/trend'),
@@ -250,13 +269,21 @@ export const api = {
   expireSignIns: () => call('POST', '/api/cloud/demo-expire'),
   useKeyAgain: (kind: 'anthropic' | 'openai') => call<CloudView>('POST', '/api/cloud/key-again', { kind }),
   simulateOutOfCredit: () => call<CloudView>('POST', '/api/cloud/demo-credit'),
+  // Coding-agent CLIs (#493): look again, install a missing one, OpenCode's own sign-in. The result comes as a `clis` event.
+  checkClis: () => call('POST', '/api/clis/check'),
+  installCli: (id: AgentCli) => call('POST', `/api/clis/${id}/install`),
+  opencodeSignIn: () => call('POST', '/api/clis/opencode/signin'),
   // Settings → Providers & accounts (#247, docs/accounts.md). Keys go in; only their last 4 come back.
   addAccount: (a: { cli: AccountCli; kind: AccountKind; label?: string; tags?: string; key?: string; tokenEnv?: string }) => call<{ id: string; note: string }>('POST', '/api/accounts', a, false),
   updateAccount: (id: string, patch: { label?: string; tags?: string; enabled?: boolean; plan?: string; dailyCostCap?: number | null }) => call('PATCH', `/api/accounts/${encodeURIComponent(id)}`, patch),
+  makeDefaultAccount: (id: string, now: boolean) => call<{ note: string }>('POST', `/api/accounts/${encodeURIComponent(id)}/default`, { now }),
   moveAccount: (id: string, by: -1 | 1) => call('POST', `/api/accounts/${encodeURIComponent(id)}/move`, { by }),
   setAccountKey: (id: string, key: string) => call<{ note: string }>('PUT', `/api/accounts/${encodeURIComponent(id)}/key`, { key }, false),
+  repairShare: (id: string) => call<{ note: string }>('POST', `/api/accounts/${encodeURIComponent(id)}/share`),
   testAccount: (id: string) => call<{ note: string }>('POST', `/api/accounts/${encodeURIComponent(id)}/test`),
   signInAccount: (id: string, mode: SignInMode = 'login') => call('POST', `/api/accounts/${encodeURIComponent(id)}/signin`, { mode }),
+  signInCode: (id: string, code: string) => call('POST', `/api/accounts/${encodeURIComponent(id)}/signin/code`, { code }),
+  signInAnswer: (id: string, option: number) => call('POST', `/api/accounts/${encodeURIComponent(id)}/signin/answer`, { option }),
   useAccountNow: (id: string) => call('POST', `/api/accounts/${encodeURIComponent(id)}/use-now`),
   simulateAccountLimit: (id: string) => call('POST', `/api/accounts/${encodeURIComponent(id)}/simulate-limit`),
   removeAccount: (id: string) => call<{ result: 'removed' | 'waiting' }>('DELETE', `/api/accounts/${encodeURIComponent(id)}`),

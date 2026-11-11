@@ -12,7 +12,7 @@ const SCREENS: Screen[] = [
     widths: [390, 1280],
     open: async (page) => {
       const root = await pocket(page, 'chat');
-      await root.getByRole('button', { name: 'Full screen', exact: true }).click();
+      await root.getByRole('button', { name: 'Full screen chat', exact: true }).click();
       await expect(root).toHaveClass(/pk-chat-full/);
       return root;
     },
@@ -75,6 +75,18 @@ const SCREENS: Screen[] = [
       return dialog(page, /^Threads$/);
     },
     tabs: [],
+  },
+  {
+    // what the CEO remembers (#417): NOTES.md as section cards with chips, then searched into the folded archive
+    name: 'pocket chat memory',
+    widths: [390, 1280],
+    open: async (page) => {
+      const root = await pocket(page, 'chat');
+      if ((page.viewportSize()?.width ?? 0) < 1200) await root.getByRole('button', { name: 'Threads and search' }).click();
+      await page.getByRole('button', { name: /remembers/ }).click();
+      return dialog(page, /remembers/);
+    },
+    tabs: ['', { name: 'search', go: (root) => root.getByRole('searchbox', { name: /notes/ }).fill('hiring') }],
   },
   {
     // the Chat | Files segment, its cards, and the reader opened from one (#132)
@@ -243,7 +255,7 @@ for (const width of [1024, 1280, 1440, 1920]) {
     await page.goto('/?pocket=1&tab=chat');
     const root = page.locator('.pocket');
     if (!(await root.locator('.pk-dock').isVisible())) await root.locator('.pk-chat-btn').click();
-    await root.locator('.pk-dock').getByRole('button', { name: 'Full screen', exact: true }).click();
+    await root.locator('.pk-dock').getByRole('button', { name: 'Full screen chat', exact: true }).click();
     await expect(root).toHaveClass(/pk-chat-full/);
     const rail = root.locator('.pk-tabs');
     await expect(rail).toBeVisible();
@@ -255,7 +267,7 @@ for (const width of [1024, 1280, 1440, 1920]) {
     await rail.getByRole('button', { name: /Team/ }).click();
     await expect(root).not.toHaveClass(/pk-chat-full/);
     await expect(rail.getByRole('button', { name: /Team/ })).toHaveAttribute('aria-current', 'page');
-    await root.locator('.pk-dock').getByRole('button', { name: 'Full screen', exact: true }).click();
+    await root.locator('.pk-dock').getByRole('button', { name: 'Full screen chat', exact: true }).click();
     await expect(root).toHaveClass(/pk-chat-full/);
     await rail.getByRole('button', { name: /Console/ }).click();
     await expect(root).not.toHaveClass(/pk-chat-full/);
@@ -269,7 +281,7 @@ for (const width of [360, 390, 1280]) {
     await page.setViewportSize({ width, height: 844 });
     await page.goto('/?pocket=1&tab=chat');
     const block = page.locator('.md-code-shell').filter({ hasText: 'merge.ts server/swarm/qa.ts' }).last();
-    await expect(block.locator('.md-code-lang')).toHaveText('Terminal');
+    await expect(block.locator('.md-code-lang')).toHaveText(/^Terminal · \d+ lines?$/);
     const problems = await block.evaluate((el) => {
       const out: string[] = [];
       const vw = document.documentElement.clientWidth;

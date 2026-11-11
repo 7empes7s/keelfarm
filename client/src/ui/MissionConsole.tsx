@@ -17,11 +17,13 @@ import { Menu } from './Menu';
 import { UsageBars } from './UsageBars';
 import { UsageSources } from './UsageSources';
 import { DiskCard } from './DiskCard';
+import { ItDeskCards } from './ItDeskCards';
 import { HealthStrip } from './HealthStrip';
 import { ServerCard } from './ServerCard';
 import { CloudToday } from './CloudToday';
 import { TestLabCard } from './TestLab';
 import { WaitTile } from './WaitTile';
+import { WhoRunsCard } from './WhoRunsCard';
 
 // The manager's console → Mission control: Claude's usage with "Resume full speed", the server and what uses it, what needs you (the alarms the
 // lobby wall's beacon rings for), the office doctor's findings with their one-click fixes, every floor's numbers
@@ -386,8 +388,10 @@ export function OpsTab({ card }: { card?: string }) {
         >
           <UsageSources />
         </Section>
+        <WhoRunsCard />
         <UsageCard hot={card === 'usage'} />
         <HealthStrip />
+        <ItDeskCards />
         <DiskCard />
         <ServerCard />
         <CloudToday />

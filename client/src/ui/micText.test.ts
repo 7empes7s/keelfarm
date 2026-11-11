@@ -1,5 +1,38 @@
 import { describe, expect, it } from 'vitest';
-import { cantListen, cleanTranscript, micErrorLine, phrasesText, withTranscript } from './micText';
+import { cantListen, cleanTranscript, joinHeard, micErrorLine, phrasesText, unfinished, withoutTrailingFillers, withTranscript } from './micText';
+
+describe('unfinished', () => {
+  it('is true for a sentence left on a filler, a joiner or a comma', () => {
+    for (const t of ['Clicking on the, uh', 'Fix the login and', 'It works so,', 'I was using the', 'um', 'Hmm', 'Move it to', 'because']) expect(unfinished(t), t).toBe(true);
+  });
+
+  it('is false for a finished sentence', () => {
+    for (const t of ['The button breaks the page.', 'I think it works', 'Ship it!', 'Theme', 'Underscore', '']) expect(unfinished(t), t).toBe(false);
+  });
+});
+
+describe('withoutTrailingFillers', () => {
+  it('drops the fillers at the end only', () => {
+    expect(withoutTrailingFillers('It breaks the page, uh')).toBe('It breaks the page');
+    expect(withoutTrailingFillers('Um so the page, uh, um.')).toBe('Um so the page');
+    expect(withoutTrailingFillers('Clicking on the, uh')).toBe('Clicking on the');
+    expect(withoutTrailingFillers('uh')).toBe('');
+    expect(withoutTrailingFillers('It works. ')).toBe('It works.');
+  });
+});
+
+describe('joinHeard', () => {
+  it('puts a new recognition after the earlier ones', () => {
+    expect(joinHeard('', 'hello')).toBe('hello');
+    expect(joinHeard('Clicking on the, uh', '')).toBe('Clicking on the, uh');
+    expect(joinHeard('Clicking on the, uh', 'settings button breaks it')).toBe('Clicking on the, uh settings button breaks it');
+  });
+
+  it("keeps words the browser repeats after starting again once", () => {
+    expect(joinHeard('Clicking on the settings', 'the settings button')).toBe('Clicking on the settings button');
+    expect(joinHeard('Open the', 'the door')).toBe('Open the the door'); // one word could be said twice
+  });
+});
 
 describe('cleanTranscript', () => {
   it('tidies spaces and starts with a capital', () => {

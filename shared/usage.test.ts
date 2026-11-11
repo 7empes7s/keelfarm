@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { ago, mergeReadings, readingOf, readingsChanged, readingsLabel, readingsNote, usageBars } from './usage.ts';
-import type { UsageReading } from './types.ts';
+import { accountUsageLabel, ago, mergeReadings, usageMeters, readingOf, readingsChanged, readingsLabel, readingsNote, usageBars } from './usage.ts';
+import type { AccountsView, AccountView, UsageReading } from './types.ts';
 
 const MIN = 60_000;
 const NOW = new Date(2026, 10, 4, 12, 0).getTime();
@@ -50,6 +50,24 @@ describe('mergeReadings', () => {
   it('ignores a reading older than the one kept', () => {
     expect(mergeReadings([at('five_hour', 50)], [at('five_hour', 30, NOW - MIN)])).toEqual([at('five_hour', 50)]);
   });
+
+  // #383: a reading of a window that was already over never outlives one of the window after, whatever their stamps.
+  it('lets the current window replace a stale one, and a moved reset show at once', () => {
+    const over = NOW - 2 * 60 * MIN; // the last window's reset
+    const fri = NOW + 5 * 24 * 60 * MIN;
+    expect(mergeReadings([at('seven_day', 99, NOW, over)], [at('seven_day', 11, NOW - MIN, fri)])).toEqual([at('seven_day', 11, NOW - MIN, fri)]);
+    expect(mergeReadings([at('seven_day', 11, NOW - MIN, fri)], [at('seven_day', 99, NOW, over)])).toEqual([at('seven_day', 11, NOW - MIN, fri)]);
+    // Anthropic moved the weekly reset earlier: the newer reading wins straight away.
+    const tue = NOW + 2 * 24 * 60 * MIN;
+    expect(mergeReadings([at('seven_day', 40, NOW - MIN, fri)], [at('seven_day', 5, NOW, tue)])).toEqual([at('seven_day', 5, NOW, tue)]);
+  });
+
+  it("keeps two accounts' readings apart", () => {
+    const ultra = mergeReadings([], [at('five_hour', 67), at('seven_day', 11)]);
+    const pro = mergeReadings([], [at('five_hour', 36, NOW + MIN), at('seven_day', 99, NOW + MIN)]);
+    expect(accountUsageLabel('Ultra', ultra, NOW + MIN)).toBe('Ultra: 5h 67% · week 11%');
+    expect(accountUsageLabel('Pro', pro, NOW + MIN)).toBe('Pro: 5h 36% · week 99%');
+  });
 });
 
 describe('readingsChanged', () => {
@@ -96,7 +114,32 @@ describe('labels', () => {
     expect(bars).toEqual([
       { type: 'five_hour', name: '5-hour', pct: 42, tone: 'good', resets: 'resets 18:30' },
       { type: 'seven_day', name: 'Weekly', pct: 80, tone: 'warn', resets: null },
-      { type: 'seven_day_opus', name: 'Weekly Opus', pct: 95, tone: 'bad', resets: 'reset 11:59' },
+      { type: 'seven_day_opus', name: 'Weekly Opus', pct: 0, tone: 'good', resets: 'reset' },
     ]);
+  });
+
+  it('counts a window that has reset as 0% until a new reading comes (#442)', () => {
+    const old = [at('five_hour', 30, NOW - 26 * 60 * MIN, NOW + 60 * MIN), at('seven_day', 100, NOW - 26 * 60 * MIN, NOW - 2 * 60 * MIN)];
+    expect(usageBars(old, NOW).map((b) => [b.pct, b.resets])).toEqual([
+      [30, 'resets 13:00'],
+      [0, 'reset'],
+    ]);
+    expect(readingsLabel(old, NOW)).toMatch(/^5h 30% · week 0% /);
+  });
+});
+
+describe('usageMeters (#383)', () => {
+  const view = (o: Partial<AccountView>[], next?: AccountsView['next']) => ({ accounts: o.map((x, n) => ({ id: `a${n}`, cli: 'claude', kind: 'subscription-login', label: `A${n}`, enabled: true, usage: [], ...x }) as AccountView), next });
+  const builtIn = [at('five_hour', 67)];
+  it('gives each Claude login its own row, the next session’s first, the CEO’s marked', () => {
+    const v = view([{ id: 'login', label: 'Ultra', builtIn: true, usage: [at('five_hour', 1)] }, { id: 'pro', label: 'Pro', usage: [at('five_hour', 36)] }, { id: 'key', kind: 'api-key' }, { id: 'cx', cli: 'codex' }], { claude: 'pro', ceo: 'login' });
+    const rows = usageMeters(v, builtIn);
+    expect(rows.map((m) => [m.name, m.readings[0]?.pct, m.next, m.ceo])).toEqual([
+      ['Pro', 36, true, false],
+      ['Ultra', 67, false, true], // the built-in login's readings are the office's own, the freshest
+    ]);
+  });
+  it('falls back to the built-in readings without accounts', () => {
+    expect(usageMeters({ accounts: [] }, builtIn)).toMatchObject([{ name: 'Claude', readings: builtIn, builtIn: true }]);
   });
 });

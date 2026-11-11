@@ -19,6 +19,16 @@ const CEILING: Record<string, number> = {
   'ui/experiments.css': 14,
   'ui/finder.css': 0,
   'ui/details.css': 0,
+  // Settings' own sheets (#515)
+  'ui/notifySettings.css': 0,
+  'ui/notifyGuide.css': 0,
+  'ui/toolsSettings.css': 0,
+  'ui/voiceSettings.css': 0,
+  'ui/agentSettings.css': 0,
+  'ui/helpSettings.css': 0,
+  'ui/accounts.css': 0,
+  'ui/providersPage.css': 0,
+  'ui/signInSheet.css': 0,
 };
 
 /** styles.css counts with the feature sheets split out of it (#257), which sheets.css imports. */

@@ -180,6 +180,12 @@
   margin: var(--ds-space-1) 0 0;
   font-size: var(--ds-text-xs);
 }
+.steps-row-summary {
+  margin: 0 0 var(--ds-space-1);
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-xs);
+  overflow-wrap: anywhere;
+}
 
 /* a floor named in the chat: one line high, the text's own size (#150) */
 .floor-chip {
@@ -356,8 +362,7 @@
   box-sizing: border-box;
 }
 .conv-list,
-.memory-notes,
-.memory-found {
+.memory-notes {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -454,17 +459,6 @@
   font-size: 16px;
   box-sizing: border-box;
   resize: vertical;
-}
-.memory-found li {
-  padding: var(--ds-space-2);
-  border-radius: var(--ds-radius-sm);
-  background: var(--ds-surface-sunken);
-  overflow-wrap: anywhere;
-}
-.memory-file {
-  padding: var(--ds-space-3);
-  border-radius: var(--ds-radius-md);
-  background: var(--ds-surface-sunken);
 }
 
 /* the chat's header holds one line: the CEO's name and what they're doing truncate, never wrap into the buttons */

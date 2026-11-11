@@ -26,6 +26,7 @@ const demoOffice: OfficeHost = {
     lastFakeUpdate.to = fakeSha();
     return { from, to: lastFakeUpdate.to, ok: true, installed: true, built: true, at: Date.now() };
   },
+  fakeCommit: () => void mergedSinceSync.set(OFFICE_REPO, (mergedSinceSync.get(OFFICE_REPO) ?? 0) + 1),
 };
 
 /** A fresh demo office's chat: an update the preflight held back, with vitest's colour codes and rules in its output (#138). */

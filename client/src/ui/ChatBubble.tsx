@@ -13,8 +13,9 @@ import { ArtifactCard } from './ChatArtifacts';
 import { who, type Item } from './ChatActions';
 import { Reactions } from './ChatReactions';
 import { LongText, StepsRow } from './ChatLive';
-import { replyLog } from './chatCardRules';
-import { ActionCards, NoticeCard, NoticePill, PacingCard, UseKeyCard } from './ChatCards';
+import { replyLog, rowLog } from './chatCardRules';
+import { ActionCards, CeoStuckCard, NoticeCard, NoticePill, PacingCard, UseKeyCard } from './ChatCards';
+import { CeoRunsPill } from './CeoRunsOn';
 import { FileCard, UsedLine } from './ChatFiles';
 import type { FileRef } from '../../../shared/files';
 import { replayKind } from './voiceQueue';
@@ -27,6 +28,7 @@ import { Icon } from './Icon';
 import { SignInCard } from './SignInCard';
 import { toolsInRow, toolsOffset } from './bubbleTools';
 import { XLabel } from './HoverCard';
+import { CeoJobLine } from './CeoJobRedo';
 
 // One message in the chat with the CEO: its bubble, swipe to reply, long press for actions, replay and the delivery tick.
 
@@ -145,7 +147,8 @@ export const Bubble = memo(function Bubble({ item, ceoName, quoted, highlight, l
   const log = m ? replyLog(m) : null;
 
   // Touch: swipe right to reply, hold for the actions. A mouse uses the hover buttons (or right-click). A second
-  // finger anywhere in the chat makes it a pinch of the text size (ChatZoom.tsx), never a reply or the menu.
+  // finger anywhere in the chat makes it a pinch of the text size (ChatZoom.tsx), never a reply or the menu. A press on
+  // code is the browser's: it selects the text to copy (#438).
   const end = () => {
     const p = press.current;
     press.current = null;
@@ -156,7 +159,7 @@ export const Bubble = memo(function Bubble({ item, ceoName, quoted, highlight, l
   };
   const gestures = {
     onPointerDown: (e: ReactPointerEvent) => {
-      if (e.pointerType === 'mouse' || isPinching() || (e.target as HTMLElement).closest('a, button')) return;
+      if (e.pointerType === 'mouse' || isPinching() || (e.target as HTMLElement).closest('a, button, code, pre')) return;
       const p = { x: e.clientX, y: e.clientY, at: performance.now(), long: false, swipe: false, timer: 0 };
       p.timer = window.setTimeout(() => {
         if (pinchCancels(p.at, lastPinchAt())) return;
@@ -179,20 +182,22 @@ export const Bubble = memo(function Bubble({ item, ceoName, quoted, highlight, l
     onPointerUp: end,
     onPointerCancel: end,
     onContextMenu: (e: ReactMouseEvent) => {
-      if ((e.target as HTMLElement).closest('a')) return;
+      if ((e.target as HTMLElement).closest('a, code, pre')) return;
       e.preventDefault();
       if (!press.current?.long) onActions(item);
     },
   };
 
   // An office note: hold or right-click it for its actions (Delete).
-  if (m && (look === 'pill' || m.switch?.useKey || m.pacing || ((m.notice || m.signIn) && look === 'card')))
+  if (m && (look === 'pill' || m.switch?.useKey || m.pacing || m.ceoStuck || ((m.notice || m.signIn) && look === 'card')))
     return (
       <div className="bubble-row-office" data-msg={id} {...gestures}>
         {m.signIn && look === 'card' ? <SignInCard card={m.signIn} />
           : m.notice && look === 'card' ? <NoticeCard text={officeText(m.text)} notice={m.notice} />
           : m.switch?.useKey ? <UseKeyCard text={officeText(m.text)} account={m.switch.useKey} />
           : m.pacing ? <PacingCard text={officeText(m.text)} />
+          : m.ceoStuck ? <CeoStuckCard text={officeText(m.text)} stuck={m.ceoStuck} />
+          : m.ceoRuns ? <CeoRunsPill text={officeText(m.text)} back={m.ceoRuns.back} />
           : <NoticePill text={officeText(m.text)} />}
       </div>
     );
@@ -249,7 +254,7 @@ export const Bubble = memo(function Bubble({ item, ceoName, quoted, highlight, l
             )}
           </div>
         ) : (
-          text && <LongText text={text}><Markdown className="bubble-md" text={linked((m && struckText(m, m.from)) ?? refsMarkdown(text, m?.refs))} onFloor={onFloor} renderRef={renderRef} /></LongText>
+          text && <LongText text={linked((m && struckText(m, m.from)) ?? refsMarkdown(text, m?.refs))}>{(md) => <Markdown className="bubble-md" text={md} onFloor={onFloor} renderRef={renderRef} />}</LongText>
         )}
         {files.map((f) => (
           <FileCard key={f.id} file={f} onOpen={onFile} />
@@ -260,12 +265,13 @@ export const Bubble = memo(function Bubble({ item, ceoName, quoted, highlight, l
           </Suspense>
         )}
         {m?.artifacts?.map((a) => <ArtifactCard key={a.id} artifact={a} onOpen={() => onArtifact(m.id, a.id)} />)}
-        {!!m?.actions?.length && <ActionCards actions={m.actions} />}
-        {m && log && <StepsRow log={log} actions={m.actions?.length ?? 0} used={m.used} linked={linked} onFloor={onFloor} />}
+        {!!m?.actions?.length && <ActionCards actions={m.actions} messageId={m.id} />}
+        {m && (log || m.summary) && <StepsRow log={rowLog(m)} actions={m.actions?.length ?? 0} used={m.used} summary={m.summary} linked={linked} onFloor={onFloor} />}
+        {m?.ceoJob && <CeoJobLine tag={m.ceoJob} onJump={onQuote} />}
         {req && req.status === 'pending' && m?.from === 'ceo' && <Resume req={req} />}
         {/* one compact meta row (#215): Used (when there's no steps row to carry it) folds open across it, the time on its right */}
         <div className="bubble-meta">
-          {!log && m?.used && <UsedLine used={m.used} />}
+          {!log && !m?.summary && m?.used && <UsedLine used={m.used} />}
           <div className="bubble-time">
             {m && !mine && <ReplayButton m={m} />}
             {m?.telegram === 'in' && <span className="bubble-via">via Telegram · </span>}

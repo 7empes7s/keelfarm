@@ -47,6 +47,8 @@ export class AgentTerminal {
   onIdlePrompt: ((text: string) => boolean) | null = null;
   /** Keys a viewer typed, after they went to the CLI (the runtime watches for Esc interrupting a turn). */
   onInput: ((data: string) => void) | null = null;
+  /** Output arrived (a guided sign-in reads its screen then, #350). */
+  onOutput: (() => void) | null = null;
   private term = new Terminal({ cols: TERM_COLS, rows: TERM_ROWS, scrollback: SCROLLBACK, allowProposedApi: true, scrollOnEraseInDisplay: true });
   private ser = new SerializeAddon();
   private viewers = new Map<WebSocket, { stale: boolean; queued: string[] | null }>();
@@ -71,6 +73,7 @@ export class AgentTerminal {
     this.dirty = true;
     this.outputAt = Date.now();
     this.send({ t: 'data', data });
+    this.onOutput?.();
   }
 
   /** A dim line from the office itself, e.g. between sessions. */
@@ -90,6 +93,22 @@ export class AgentTerminal {
   /** The CLI asked for application cursor keys: arrows are sent as ESC O A… rather than ESC [ A… */
   get appCursor() {
     return this.term.modes.applicationCursorKeysMode;
+  }
+
+  /** The CLI is in bracketed paste mode: a paste goes wrapped in ESC [200~ … ESC [201~, as xterm's paste sends it. */
+  get bracketedPaste() {
+    return this.term.modes.bracketedPasteMode;
+  }
+
+  /**
+   * Keys from the office itself (a guided sign-in's code, #350), as a viewer's arrive: false when nothing runs.
+   * `heard: false` keeps them from onInput (a menu's answer isn't a code to log).
+   */
+  input(data: string, heard = true): boolean {
+    if (heard) this.onInput?.(data);
+    if (!this.sink) return false;
+    this.sink.write(data);
+    return true;
   }
 
   /** The running CLI, or null when it exits. */
@@ -134,13 +153,20 @@ export class AgentTerminal {
     return out;
   }
 
-  /** The last `n` rows of scrollback and screen as plain text, blank rows at the bottom left out (the CEO's agent_log). */
-  tail(n: number): string[] {
+  /**
+   * The last `n` rows of scrollback and screen as plain text, blank rows at the bottom left out (the CEO's agent_log).
+   * `unwrap`: rows the terminal wrapped are joined back, and `n` counts those lines (a narrow terminal's limit message, #400).
+   */
+  tail(n: number, unwrap = false): string[] {
     const b = this.term.buffer.active;
     let end = b.length;
     while (end > 0 && !(b.getLine(end - 1)?.translateToString(true) ?? '').trim()) end--;
     const rows: string[] = [];
-    for (let i = Math.max(0, end - n); i < end; i++) rows.push(b.getLine(i)?.translateToString(true) ?? '');
+    for (let i = end - 1; i >= 0 && rows.length < n; i--) {
+      let row = b.getLine(i)?.translateToString(true) ?? '';
+      while (unwrap && i > 0 && b.getLine(i)?.isWrapped) row = (b.getLine(--i)?.translateToString(false) ?? '') + row;
+      rows.unshift(row);
+    }
     return rows;
   }
 

@@ -30,6 +30,15 @@ export interface UsageReading {
   at: number; // when it was read
 }
 
+/** A usage bar's hover (#334, shared/usageShares.ts): the floors' and the CEO's shares of the office's spend in that bar's window. */
+export interface UsageShares {
+  type: string; // the reading's limit type
+  since: number; // when the window began
+  usd: number; // the office's spend in it
+  rows: { repoId: string; usd: number; pct: number }[]; // repoId '' is the CEO; whole percentages, with others' summing to 100
+  others: { count: number; usd: number; pct: number } | null; // the rest past the fourth row
+}
+
 /** Why the office's own idle check of Claude's usage (#89) found nothing: no login on file, an expired one, or it failed. */
 export type UsageCheckError = 'no-login' | 'expired' | 'failed';
 
@@ -64,6 +73,7 @@ export interface OfficeUpdateView {
   launcher: boolean; // started by npm run dev / npm start, which can install the update and restart the office
   drainingSince: number | null;
   running: number; // sessions still running that an office restart would stop (CLIs in the terminal keeper or a Box carry on)
+  lab?: number; // test-lab checks the update waits for (#333): running jobs and QA rounds between lab calls
   updateAt: number | null; // settling: when the update goes ahead unless another commit lands
   holds: boolean; // nothing new starts until the office has restarted
   detail: string | null;

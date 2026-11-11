@@ -2,23 +2,25 @@
 // phone a call screen like a phone call's, which folds into a pill at the top while you use the app; on a desktop or
 // tablet a CEO orb that follows across every page, drags to a corner, and opens into a small call card. Unmounting
 // any of them (a page change, the 3D/pocket switch) never touches the call. App.tsx loads this once a call starts.
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+// Open, both show a live view of the meeting room the call happens in (world/MeetingTile.tsx, #369), the CEO at its
+// table; folded, or while you sit at that table yourself, it isn't drawn.
+import { lazy, Suspense, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { CEO_ID } from '../../../shared/types';
-import { messageSpeech } from '../../../shared/speech';
 import { useStore } from '../store';
 import { Icon } from './Icon';
 import type { IconName } from './icons';
-import { callClock, callStatus, inCall, splitSentences, type Call } from './voiceCall';
+import { useCallCaptions } from './callCaptions';
+import { callClock, callStatus, inCall, type Call } from './voiceCall';
 import { endCall, setMinimised, skipSentence, talkOnce, toggleCaptions, toggleMute, togglePause, toggleSpeaker } from './voiceCallEngine';
-import { useCall } from './voiceCallStore';
+import { CALL_NARROW, useCall } from './voiceCallStore';
 import './voiceCall.css';
 
-const NARROW = '(max-width: 640px)';
+const MeetingTile = lazy(() => import('../world/MeetingTile'));
 
 function useNarrow() {
-  const [narrow, setNarrow] = useState(() => window.matchMedia(NARROW).matches);
+  const [narrow, setNarrow] = useState(() => window.matchMedia(CALL_NARROW).matches);
   useEffect(() => {
-    const mq = window.matchMedia(NARROW);
+    const mq = window.matchMedia(CALL_NARROW);
     const on = () => setNarrow(mq.matches);
     mq.addEventListener('change', on);
     return () => mq.removeEventListener('change', on);
@@ -34,13 +36,6 @@ function useClock(startedAt: number) {
     return () => clearInterval(t);
   }, []);
   return callClock(now - startedAt);
-}
-
-/** The sentence the CEO is saying, from the reply's words. */
-function useSaying(call: Call): string {
-  const message = useStore((s) => (call.reply ? s.messages.find((m) => m.id === call.reply!.id) : undefined));
-  if (!message || !call.reply) return '';
-  return splitSentences(messageSpeech(message))[call.reply.sentence] ?? '';
 }
 
 export default function CallScreens() {
@@ -97,11 +92,9 @@ function Keys({ small }: { small?: boolean }) {
 
 /** Live captions: the CEO's sentence, or what you're saying. */
 function CaptionsLine() {
-  const { call, heard, captions } = useCall();
-  const saying = useSaying(call);
-  const ceo = useStore((s) => s.agents[CEO_ID]?.name ?? 'CEO');
+  const captions = useCall((s) => s.captions);
+  const { line } = useCallCaptions();
   if (!captions) return null;
-  const line = call.phase === 'speaking' && saying ? `${ceo}: ${saying}` : heard ? `You: ${heard}` : '';
   return (
     <p className="vcall-captions" aria-live="polite">
       {line || ' '}
@@ -120,6 +113,17 @@ function TapToTalk() {
         <Icon name="mic" /> Talk
       </button>
     </div>
+  );
+}
+
+/** The live view of the meeting room, `fallback` while it loads (or while you sit in the room yourself). */
+function RoomView({ ceo, fallback }: { ceo: string; fallback: ReactNode }) {
+  const atTable = useCall((s) => s.atTable);
+  if (atTable) return fallback;
+  return (
+    <Suspense fallback={fallback}>
+      <MeetingTile label={`${ceo} at the meeting room's table`} />
+    </Suspense>
   );
 }
 
@@ -165,7 +169,7 @@ function PhoneCall() {
         </button>
       </header>
       <div className="vcall-middle">
-        <Orb call={call} initial={ceo.charAt(0)} size="big" />
+        <RoomView ceo={ceo} fallback={<Orb call={call} initial={ceo.charAt(0)} size="big" />} />
         <h2 className="vcall-name">{ceo}</h2>
         <p className="vcall-status">{callStatus(call, ceo)}</p>
         <TapToTalk />
@@ -253,6 +257,7 @@ function CallOrb() {
               <Icon name="chevron-down" />
             </button>
           </header>
+          <RoomView ceo={ceo} fallback={null} />
           <TapToTalk />
           <CaptionsLine />
           <Keys small />

@@ -22,6 +22,7 @@ async function openTerminal(page: Page, kind: 'agent' | 'ceo' | 'signin') {
   if (kind === 'ceo') return settings.locator('.live-term');
   await settings.getByRole('button', { name: 'More for Max · keelops' }).tap();
   await page.getByRole('menuitem', { name: /Sign in again/ }).tap();
+  await page.locator('.acc-signin').getByRole('button', { name: 'Show terminal' }).tap(); // folded under the guided sign-in (#350)
   return page.locator('.acc-signin');
 }
 

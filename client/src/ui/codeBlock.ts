@@ -18,6 +18,9 @@ export function languageLabel(lang: string): string {
   return LABELS[lang] ?? (lang ? lang.toUpperCase() : 'Code');
 }
 
+/** The header's title (#339): the language and how many lines, "Terminal · 3 lines". */
+export const codeTitle = (lang: string, lines: number) => `${languageLabel(lang)} · ${lines} line${lines === 1 ? '' : 's'}`;
+
 export const isShell = (lang: string) => SHELLS.has(lang);
 
 export interface CodeLine {
@@ -47,3 +50,38 @@ export function copiedText(code: string, lang: string): string {
 
 /** Blocks longer than this start collapsed behind "Show all N lines". */
 export const COLLAPSE_LINES = 12;
+
+// ---------- commands in a message (#438) ----------
+
+// CLIs a short inline span may start with and still be a command
+const CLIS = new Set(['git', 'gh', 'npm', 'npx', 'node', 'pnpm', 'yarn', 'cd', 'ls', 'cat', 'tail', 'head', 'grep', 'rg', 'ps', 'kill', 'df', 'du', 'free', 'top', 'ss', 'curl', 'ssh', 'sudo', 'systemctl', 'journalctl', 'docker', 'tmux', 'claude', 'codex', 'opencode', 'pip', 'python', 'python3', 'make', 'vmstat', 'swapon', 'pgrep', 'mkdir', 'rm', 'mv', 'cp', 'chmod', 'tsc', 'vitest']);
+
+/** An inline code span the chat offers Copy on: longer than 20 characters, or starting with `!`, `$`, a path or a known CLI. */
+export function looksLikeCommand(code: string): boolean {
+  const t = code.trim();
+  if (!t || t.includes('\n')) return false;
+  if (t.length > 20) return true;
+  if (/^[!$]\s*\S/.test(t) || /^(~|\.{0,2})\/\S/.test(t)) return true;
+  const first = t.split(/\s+/)[0];
+  return CLIS.has(first) && t.includes(' ');
+}
+
+/**
+ * The commands in a message's Markdown, in order, for "Copy all commands": every shell block's commands (as its Copy
+ * copies them) and every inline span that looks like one.
+ */
+export function messageCommands(md: string): string[] {
+  const out: string[] = [];
+  const fence = /^(`{3,}|~{3,})[ \t]*([\w+#-]*)[^\n]*\n([\s\S]*?)^\1[ \t]*$/gm;
+  let last = 0;
+  for (let f = fence.exec(md); f; f = fence.exec(md)) {
+    out.push(...inlineCommands(md.slice(last, f.index)));
+    last = f.index + f[0].length;
+    const lang = f[2].toLowerCase();
+    if (isShell(lang)) out.push(copiedText(f[3], lang));
+  }
+  out.push(...inlineCommands(md.slice(last)));
+  return out.filter(Boolean);
+}
+
+const inlineCommands = (text: string) => [...text.matchAll(/(`+)([^`]|[^`][\s\S]*?[^`])\1(?!`)/g)].map((m) => m[2].trim()).filter(looksLikeCommand);

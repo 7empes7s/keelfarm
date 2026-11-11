@@ -15,12 +15,14 @@ import { copyText } from './clipboard';
 import { Actions, AgentChip, ChecksList, ChecksStat, Chip, DetailsHeader, LinkButton, Section, Stat as Tile, StatStrip, StatusRows, Verdict } from './DetailsPage';
 import { mergeRows, stateChip, type ChipTone } from './detailsRules';
 import { go } from './goTo';
-import { acceptanceProgress, issueCost, issueTimeline, splitSections, stageAt, STAGES, STATUS } from './issueCard';
+import { acceptanceProgress, goneCard, issueCost, issueTimeline, splitSections, stageAt, STAGES, STATUS } from './issueCard';
 import { Key } from './Key';
-import { AssignButton } from './AssignSheet';
+import { IssueActions } from './IssueActions';
 import { Markdown } from './Markdown';
 import { Panel } from './Panel';
+import { TryThisList, useTryThis } from './TryThis';
 import { ProgressBar } from './ProgressBar';
+import { prPreview } from './prNav';
 import './cardView.css';
 
 // One issue or PR card up close (#206), the same from a chat ref, the Kanban and a 3D sticky (E): a header card with the
@@ -54,6 +56,7 @@ export function CardView({ repoId, cardKey, number, pr }: { repoId: string; card
   const at = cols ? locateCard(cols, cardKey, number, pr) : null;
 
   if (!repo || !at) {
+    const gone = repo && goneCard(repo.fullName, repo.pulls, number, pr);
     return (
       <Panel
         title={
@@ -63,7 +66,26 @@ export function CardView({ repoId, cardKey, number, pr }: { repoId: string; card
         }
         className="cardview"
       >
-        <p className="muted">That card isn't on the board any more.</p>
+        {gone ? (
+          <>
+            <DetailsHeader
+              eyebrow={`${cardLabel({ number, pr })} · floor ${repo.floor} · ${repo.fullName.split('/')[1]}`}
+              title={gone.title ?? cardLabel({ number, pr })}
+              chips={<Chip tone={gone.state === 'merged' ? 'good' : 'plain'}>{gone.state === 'merged' ? 'Merged' : gone.state === 'closed' ? 'Closed' : 'Off the board'}</Chip>}
+            >
+              <div className="dp-meta">{gone.at ? `${gone.state === 'merged' ? 'Merged' : 'Closed'} ${ago(gone.at)}. ` : 'Closed on GitHub, or on another floor. '}Its links are below.</div>
+            </DetailsHeader>
+            <Actions>
+              <LinkButton href={gone.issueUrl}>Issue on GitHub <Icon name="external-link" /></LinkButton>
+              {gone.prUrl && <LinkButton href={gone.prUrl}>PR on GitHub <Icon name="external-link" /></LinkButton>}
+              <button type="button" className="ds-btn" onClick={() => useStore.getState().openOverlay({ kind: 'kanban', repoId: repo.id })}>
+                Floor {repo.floor}'s board
+              </button>
+            </Actions>
+          </>
+        ) : (
+          <p className="muted">That floor isn't in the office any more.</p>
+        )}
       </Panel>
     );
   }
@@ -167,7 +189,7 @@ function Card({ repo, card, col, allAgents, ceo }: { repo: RepoView; card: Kanba
           </Stat>
         )}
         {pull?.state === 'OPEN' && !pull.untrusted && (
-          <Stat icon={<Icon name="play" />} title="Preview" onTap={() => go({ kind: 'overlay', overlay: { kind: 'app', repoId: repo.id, pr: pull.number } })}>
+          <Stat icon={<Icon name="play" />} title="Preview" onTap={() => go({ kind: 'overlay', overlay: prPreview(repo, pull.number) })}>
             Run PR #{pull.number} beside {repo.defaultBranch}
           </Stat>
         )}
@@ -238,7 +260,7 @@ function Card({ repo, card, col, allAgents, ceo }: { repo: RepoView; card: Kanba
           </>
         }
       >
-        {issue && !pull && col === 'backlog' && !card.untrusted && <AssignButton repoId={repo.id} number={issue.number} title={issue.title} />}
+        {!card.prNumber && <IssueActions repo={repo} number={card.number} />}
         {url && <LinkButton href={url}>Open on GitHub <Icon name="external-link" /></LinkButton>}
         {q?.commentUrl && <LinkButton href={q.commentUrl}>QA report <Icon name="external-link" /></LinkButton>}
         <button type="button" className="ds-btn" onClick={() => go({ kind: 'ceo', text: ask })}>
@@ -336,8 +358,14 @@ function PrDetails({ repo, card, pull, id }: { repo: RepoView; card: KanbanCard;
   const rows = pull ? mergeRows(pull, repo.defaultBranch) : [];
   const blocked = rows.some((r) => r.tone === 'bad');
   const opened = age(pull?.createdAt);
+  const steps = useTryThis(repo.id, pull, q);
   return (
     <>
+      {pull && steps && (
+        <Section title="Try this">
+          <TryThisList repoId={repo.id} pull={pull} steps={steps} titled={false} onOpen={pull.untrusted ? undefined : (path) => go({ kind: 'overlay', overlay: { kind: 'app', repoId: repo.id, pr: pull.number, path } })} />
+        </Section>
+      )}
       {q && pull?.state === 'OPEN' && (
         <Section title="The decision">
           <p>{q.status === 'testing' ? 'QA is running.' : q.status === 'fixing' ? 'An agent is fixing it.' : q.status === 'queued' ? 'Waiting for a free agent to test it.' : q.status === 'passed' && repo.autoMerge ? (q.mergeNote ?? 'QA passed. Waiting for automatic merge.') : prDecision(prWhy(q, pull), q.round, repo.autoMerge, pull.checks).text}</p>

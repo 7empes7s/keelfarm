@@ -5,6 +5,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { pushLayer } from './backStack';
 import { Icon } from './Icon';
+import { badgeCount } from './badgeCount';
 import { menuKey, menuPlacement, menuSections, openKey, type MenuItem } from './menuLogic';
 
 export type { MenuItem } from './menuLogic';
@@ -19,6 +20,7 @@ export function Menu({
   className,
   badge = 0,
   initialOpen = false,
+  tour,
 }: {
   /** The ⋯ button's accessible name, e.g. "More for Ada". */
   label: string;
@@ -31,6 +33,8 @@ export function Menu({
   /** A count on the ⋯ for what's inside it (#270: a folded tool's badge), none at 0. */
   badge?: number;
   initialOpen?: boolean;
+  /** The ⋯'s `data-tour` id, for a tour step that points at it. */
+  tour?: string;
 }) {
   const [open, setOpen] = useState(initialOpen);
   const button = useRef<HTMLButtonElement>(null);
@@ -134,6 +138,7 @@ export function Menu({
       <button
         ref={button}
         type="button"
+        data-tour={tour}
         className={`ds-btn ds-btn-ghost ${text ? '' : 'ds-btn-icon'}`}
         aria-haspopup="menu"
         aria-expanded={open}
@@ -153,7 +158,7 @@ export function Menu({
         </span>
         {badge > 0 && (
           <span className="badge badge-dot ds-menu-badge" aria-hidden>
-            {badge}
+            {badgeCount(badge)}
           </span>
         )}
       </button>

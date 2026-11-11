@@ -10,6 +10,7 @@ import type { TestLabSettings } from '../testLab.ts';
 import type { ThemeSettings } from '../themes.ts';
 import type { ToolSettings } from '../tooling.ts';
 import type { RotationSettings } from './accounts.ts';
+import type { UseCase } from './setup.ts';
 import type { AgentCli, AgentRuntime, CloudSettings, EffortLevel } from './agents.ts';
 import type { NotifySettings } from './notify.ts';
 import type { UsageWarningChoice } from './office.ts';
@@ -33,6 +34,7 @@ export interface SwarmSettings {
   ceoAwake: CeoAwakeSettings; // Settings → The CEO: its kept session, waits and consults (shared/ceoAwake.ts)
   managerName: string; // what the office calls you
   companyName: string;
+  companyUseCases?: UseCase[]; // what the company mainly makes (#366): floors of another kind get a setup checklist
   dogName: string; // the office dog's name, on its tag and in the hint when you aim at it
   projectsDir: string; // where your project folders live; new projects are created here
   setupDone: boolean; // the first-run setup wizard has been completed or skipped
@@ -59,6 +61,7 @@ export interface SwarmSettings {
   cloud: CloudSettings;
   tools: ToolSettings; // Tools & skills: what Everyone's and the CEO's sessions load (shared/tooling.ts)
   everyProject: EveryProject; // Settings → Every project: the practice switches every floor inherits (#24)
+  itDesk?: boolean; // the CEO's IT desk (#506): commands on this machine; absent: on
   statusReactions?: boolean; // the office's 👀 ⏳ ✅ under the manager's messages as the CEO or an agent works on them (#193: off by default)
   rotation?: RotationSettings; // Providers & accounts → Rotation (#248); absent: the defaults (shared/accountRotation.ts)
   officePlaybook: string; // above every floor's playbook in builders', fixers' and QA's prompts (up to OFFICE_PLAYBOOK_MAX)

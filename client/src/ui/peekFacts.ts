@@ -1,7 +1,8 @@
 // What the hover cards (#213) say, pure: who's on an issue or PR, a check's first failing line, an issue body's first
 // lines, "how long ago", today's merges. Read from what the store already has: no fetches.
 import type { CareerView } from '../../../shared/careers';
-import type { QaCheck, QaView } from '../../../shared/types';
+import type { QaCheck, QaView, UsageShares } from '../../../shared/types';
+import { clock } from '../../../shared/usage';
 
 interface Worker {
   id: string;
@@ -65,16 +66,15 @@ export function mergesToday(c: Pick<CareerView, 'week'>, now: number): number {
   return c.week.filter((t) => t >= midnight && t <= now).length;
 }
 
-/** Each floor's share of what the agents' running sessions have spent, the biggest first (the usage meters' peek). */
-export function floorShares(agents: { repoId: string | null; costUsd: number }[], floorOf: (repoId: string) => string | undefined): { name: string; share: number }[] {
-  const by = new Map<string, number>();
-  for (const a of agents) {
-    const name = a.repoId ? floorOf(a.repoId) : undefined;
-    if (name && a.costUsd > 0) by.set(name, (by.get(name) ?? 0) + a.costUsd);
-  }
-  const total = [...by.values()].reduce((n, v) => n + v, 0);
-  return total ? [...by].map(([name, v]) => ({ name, share: v / total })).sort((a, b) => b.share - a.share) : [];
+/** A usage bar's floor shares (#334) as the hover card's rows: "Floor 3 · keelfarm" → "61% · $412", the CEO's, then others. */
+export function shareStats(s: Pick<UsageShares, 'rows' | 'others'>, floorOf: (repoId: string) => string | undefined, usd: (n: number) => string): [string, string][] {
+  const rows = s.rows.map((r): [string, string] => [r.repoId ? (floorOf(r.repoId) ?? 'A removed floor') : 'CEO (lobby)', `${r.pct}% · ${usd(r.usd)}`]);
+  return s.others ? [...rows, [`Others (${s.others.count})`, `${s.others.pct}% · ${usd(s.others.usd)}`]] : rows;
 }
+
+/** Under the shares: whose spend they divide, since when, and that use outside the office isn't in it. */
+export const sharesNote = (s: Pick<UsageShares, 'since' | 'usd'>, now: number, usd: (n: number) => string) =>
+  `Office share of the office’s spend since ${clock(s.since, now)} (${usd(s.usd)} in all). Other (outside the office): your own Claude use isn’t counted.`;
 
 /** What a PR waiting on the manager needs, and the action to take (the Approvals list's peek). */
 export function prAdvice(qa: Pick<QaView, 'status' | 'round' | 'ceoLooking'>, ready: boolean): { why: string; recommend: string } {

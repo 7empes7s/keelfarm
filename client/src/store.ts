@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { DEFAULT_FOLLOWUPS } from '../../shared/followups';
-import { DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AccountsView, type ProvidersView, type AgentView, type CeoChatView, type CeoInfo, type CliView, type ModelCatalogView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type ManagerChange, type NoticeView, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PreviewStatsView, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageCheckError, type UsageReading, type UsageView, type VisitorView, type VoiceCacheView, type VoiceLine } from '../../shared/types';
+import { DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AccountsView, type ProvidersView, type KeyScanView, type AgentView, type CeoChatView, type CeoInfo, type CliView, type ModelCatalogView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type ManagerChange, type NoticeView, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PreviewStatsView, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageCheckError, type UsageReading, type UsageShares, type UsageView, type VisitorView, type VoiceCacheView, type VoiceLine } from '../../shared/types';
 import type { PastCareer } from '../../shared/careers';
 import { blockers } from '../../shared/issues';
 import { OUTSIDE_PR, UNTRUSTED_ISSUE } from '../../shared/trust';
@@ -10,6 +10,7 @@ import { DEFAULT_NOTIFY } from '../../shared/notify';
 import { DEFAULT_MEMORY, type HealthView } from '../../shared/health';
 import type { ServerNow } from '../../shared/serverLoad';
 import { DEFAULT_TEST_LAB, type TestLabView } from '../../shared/testLab';
+import type { ItDeskView } from '../../shared/itDesk';
 import { DEFAULT_CEO_AWAKE } from '../../shared/ceoAwake';
 import { DEFAULT_CLOUD, EMPTY_CLOUD } from '../../shared/cloud';
 import { DEFAULT_TOOL_SETTINGS, EMPTY_INVENTORY, type ToolInventory } from '../../shared/tooling';
@@ -24,6 +25,7 @@ import { EMPTY_OPS } from './ops';
 import type { DecorItem, ProgressView } from '../../shared/progress';
 import { qaCardNote, type CardTone } from './qaCard';
 import { announce } from './ui/announce';
+import { gateAllows } from './ui/tourGate';
 import { APPLY, snapshotState } from './store/apply';
 import type { ApplyCtx } from './store/apply/types';
 import type { SnackId } from './world/fridge';
@@ -81,8 +83,12 @@ export interface Focus {
     | { kind: 'greet'; agentId: string }
     /** E on a holiday theme's thing (themes/active.ts). */
     | { kind: 'theme'; id: string }
+    /** Take the elevator to that floor (the lobby's directory, #371). */
+    | { kind: 'floor'; floor: number }
     /** Pick up a paddle at that end of the ping-pong table (toys/pongState.ts). */
-    | { kind: 'pong'; end: 'west' | 'east' };
+    | { kind: 'pong'; end: 'west' | 'east' }
+    /** Sit at the meeting room's table (world/MeetingRoom.tsx), joining or starting a call with the CEO. */
+    | { kind: 'meeting'; seat: number };
 }
 
 /** What the player is carrying. Other items (a blaster, say) join the union with their own kind. */
@@ -151,8 +157,10 @@ export interface State {
   health: HealthView | null; // memory, load and sessions for the health strip (null: a server without it, or a replay)
   serverLoad: ServerNow | null; // the server's latest reading by program (#271)
   testLab: TestLabView | null; // the test lab desk (#56); null: a server without it, or a replay
+  itDesk: ItDeskView | null; // the CEO's IT desk (#506); null: a server without it, or a replay
   claudeUsage: UsageReading[]; // Claude's latest reading per usage limit (empty until a session reports)
   claudeUsageCheck: UsageCheckError | null; // why the office's idle check couldn't read it (#89), null when it could
+  claudeUsageShares: UsageShares[]; // each usage bar's floor shares of the office's spend in its window (#334)
   ops: OpsView; // mission control: every floor's numbers and what needs the manager
   doctor: DoctorFinding[]; // the office doctor's findings (server/watchdog.ts)
   voiceKeySet: boolean; // an ElevenLabs key is saved on the server
@@ -168,6 +176,7 @@ export interface State {
   cloud: CloudView; // Settings → Cloud agents: the Upstash account and what cloud agents sign in with (never a key)
   accounts: AccountsView; // Settings → Providers & accounts (#247): logins and keys (never a key)
   providers: ProvidersView; // Settings → Providers (#362): keys added there and MCP servers (never a key)
+  keyScan: KeyScanView; // keys found on this computer (#367): last 4 and test results (never a key)
   tooling: ToolInventory; // Tools & skills: what a Claude Code session on the office's machine loads
   experiments: LabView; // the lab (#23): experiments, their results, and the running ones' issues
   managerChanges: ManagerChange[]; // the manager's board actions and what the CEO did about them (#207)
@@ -320,8 +329,10 @@ export const useStore = create<State>((set, get) => ({
   health: null,
   serverLoad: null,
   testLab: null,
+  itDesk: null,
   claudeUsage: [],
   claudeUsageCheck: null,
+  claudeUsageShares: [],
   ops: EMPTY_OPS,
   doctor: [],
   voiceKeySet: false,
@@ -344,6 +355,7 @@ export const useStore = create<State>((set, get) => ({
   cloud: EMPTY_CLOUD,
   accounts: { accounts: [] },
   providers: { connections: [], mcp: [] },
+  keyScan: { state: 'idle', at: null, keys: [] },
   tooling: EMPTY_INVENTORY,
   experiments: emptyLabView(),
   managerChanges: [],
@@ -380,6 +392,8 @@ export const useStore = create<State>((set, get) => ({
   setRestarting: (restarting) => set({ restarting }),
   setOfficeUpdate: (officeUpdate) => set({ officeUpdate }),
   openOverlay(overlay) {
+    // While the tour shows a step, only what that step asks for opens (#406).
+    if (overlay && !gateAllows({ kind: 'overlay', overlay })) return;
     // Terminals and the floor's app are live, whatever the time-lapse shows.
     if (overlay && get().replaying && (overlay.kind === 'terminal' || overlay.kind === 'app' || overlay.kind === 'previews')) {
       get().pushToast('info', 'That shows the live office: press Esc to leave the replay first.');
@@ -474,6 +488,8 @@ export interface KanbanCard {
   note?: string;
   tone?: CardTone;
   prNumber?: number;
+  /** A PR card's issues it closes: a ref to one of them opens this card (#505). */
+  closes?: number[];
   qa?: QaView;
   /** The 3D board draws it as an outline: its sticky is off the board, with the agent testing it (StickyNotes.tsx). */
   ghost?: boolean;
@@ -512,6 +528,7 @@ export function kanbanFor(repo: RepoView, agents: Agent[], qaRecords: Record<str
       key: `a-${a.id}`,
       number: a.issueNumber,
       title: a.issueTitle ?? '',
+      url: repo.issues.find((i) => i.number === a.issueNumber)?.url,
       agent: a,
       note,
       tone: a.status === 'error' ? 'bad' : a.status === 'stopped' || a.status === 'done' ? 'warn' : undefined,
@@ -524,7 +541,7 @@ export function kanbanFor(repo: RepoView, agents: Agent[], qaRecords: Record<str
     const rec = qaRecords[qaKey(repo.id, p.number)];
     const dev = (rec?.devAgentId ? byId.get(rec.devAgentId) : undefined) ?? authorOf(p.number, p.headRefName);
     const tester = rec?.qaAgentId ? byId.get(rec.qaAgentId) : undefined;
-    const base = { key: `pr-${p.number}`, number: p.number, prNumber: p.number, title: p.title, url: p.url, qa: rec, untrusted: p.untrusted };
+    const base = { key: `pr-${p.number}`, number: p.number, prNumber: p.number, closes: p.closesIssues, title: p.title, url: p.url, qa: rec, untrusted: p.untrusted };
     const card = { ...base, ...(p.untrusted ? { note: OUTSIDE_PR, tone: 'warn' as const } : qaCardNote(rec, p, repo.autoMerge)) };
     if (rec?.status === 'passed') ready.push({ ...card, agent: dev });
     else qa.push({ ...card, agent: rec?.status === 'testing' ? tester : dev });
@@ -549,7 +566,7 @@ export function kanbanFor(repo: RepoView, agents: Agent[], qaRecords: Record<str
   const merged: KanbanCard[] = repo.pulls
     .filter((p) => p.state === 'MERGED')
     .sort((a, b) => (b.mergedAt ?? '').localeCompare(a.mergedAt ?? ''))
-    .map((p) => ({ key: `m-${p.number}`, number: p.number, prNumber: p.number, title: p.title, url: p.url, agent: authorOf(p.number, p.headRefName) }));
+    .map((p) => ({ key: `m-${p.number}`, number: p.number, prNumber: p.number, closes: p.closesIssues, title: p.title, url: p.url, agent: authorOf(p.number, p.headRefName) }));
 
   return { backlog, progress, qa, ready, merged };
 }

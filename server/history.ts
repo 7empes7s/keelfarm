@@ -31,6 +31,7 @@ import {
   type HistoryUsage,
 } from '../shared/history.ts';
 import { redact } from '../shared/journal.ts';
+import { transcriptTokens, type CeoJobInfo } from '../shared/ceoJobLog.ts';
 
 /** The CEO's session_history (server/ceo.ts): what it does, and its filters. */
 export const SESSION_HISTORY_TOOL = "Past sessions from the office's history, newest first, 20 a page: who worked on what, when (UTC), the outcome and why, time and cost. Every filter narrows. Read-only.";
@@ -153,6 +154,13 @@ async function readStart(file: string): Promise<{ text: string; more: boolean }>
   return { text: Buffer.concat(parts).toString('utf8'), more: false };
 }
 
+/** A CEO job's input and output tokens from its transcript (a kept session's holds earlier jobs: only this one's count). */
+async function jobTokens(file: string, since: number): Promise<Partial<Pick<CeoJobInfo, 'inputTokens' | 'outputTokens'>>> {
+  const big = (await fsp.stat(file).catch(() => null))?.size ?? Infinity;
+  const t = big <= READ_BYTES * 4 ? transcriptTokens(await fsp.readFile(file, 'utf8').catch(() => ''), since) : null;
+  return t ? { inputTokens: t.input, outputTokens: t.output } : {};
+}
+
 interface Meta {
   totalled: string | null; // the last day whose totals are in the daily log
 }
@@ -212,6 +220,7 @@ export class SessionHistory {
       const rel = transcriptPath(e, e.sessionId);
       const ok = await this.copy(source, this.file(rel)).then(() => true, (err) => (console.warn(`could not keep the transcript ${source}`, err), false));
       e.transcript = ok ? rel : null;
+      if (e.ceo) e.ceo = { ...e.ceo, ...(await jobTokens(source, e.startedAt)) }; // the CEO jobs log's tokens (#332)
     }
     this.entries.push(e);
     await Promise.all([this.writes.append(this.index, () => `${JSON.stringify(e)}\n`), this.daily(e)]);

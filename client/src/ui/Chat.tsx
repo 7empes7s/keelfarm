@@ -15,13 +15,17 @@ import { itemOf, MessageActions, who, type Item } from './ChatActions';
 import { applyChatPage, fetchChatPage, OlderSpinner, useOlderPages, useRemovals } from './ChatPaging';
 import { firstPaintFrom, firstUnread as firstUnreadId } from '../../../shared/chatPage';
 import { messageActions } from './chatMessageActions';
+import { messageCommands } from './codeBlock';
+import { copyText } from './clipboard';
 import { MessageBox } from './MessageBox';
 import { LiveBubble } from './ChatLive';
 import { DaySeparator, IdeaCard, Starters, WorkingStrip } from './ChatCards';
+import { ItDeskCards } from './ItDeskCards';
 import { DecisionTray } from './Decisions';
 import { continuesGroup } from './chatCardRules';
 import { keepsFollowing } from './chatFollow';
 import { Conversations } from './ChatHistory';
+import { openOnce } from './surfaces';
 import { CeoMemory } from './CeoMemory';
 import { MEMORY_NOTE_MAX } from '../../../shared/ceoMemory';
 import { AttachTray, FileViewer, useDropZone, useSlash } from './ChatFiles';
@@ -293,6 +297,8 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true, away
       removal: removals.action(m),
       // The voice reads the CEO's short summary (#282); this reads all of it.
       readWhole: useStore.getState().settings.voice.provider !== 'off' ? () => void import('./voiceMessages').then((v) => v.replayMessage(m, 'whole')) : undefined,
+      commands: messageCommands(m.text),
+      copy: (t) => void copyText(t).then((ok) => useStore.getState().pushToast(ok ? 'success' : 'error', ok ? 'Copied all commands' : "Couldn't reach the clipboard")),
     });
   };
   const chatQueued = info.queue.some((j) => j.kind === 'chat');
@@ -434,7 +440,7 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true, away
         )}
         {versions && <MessageVersions m={byId.get(versions.id) ?? versions} author={versions.from === 'manager' ? 'you' : ceo.name} onClose={() => setVersions(null)} />}
         {menu && <MessageActions item={menu} ceoName={ceo.name} more={actionsFor(menu)} onReply={reply} onClose={() => setMenu(null)} />}
-        {sheet === 'chats' && <Conversations ceoName={ceo.name} onClose={() => setSheet(null)} onMemory={() => setSheet('memory')} />}
+        {sheet === 'chats' && <Conversations ceoName={ceo.name} onClose={() => setSheet(null)} onMemory={() => (setSheet(null), openOnce('memory', () => setSheet('memory')))} />}
         {sheet === 'memory' && <CeoMemory ceoName={ceo.name} onClose={() => setSheet(null)} />}
         {shown && artifact && (
           <ArtifactView messageId={artifact.messageId} artifact={shown} linked={linked} onFloor={openFloor} onReplyAbout={artifact.doc ? undefined : replyAbout} onOpenInThread={seg === 'files' ? inThread(artifact.from, artifact.messageId) : undefined} onClose={() => setArtifact(null)} />
@@ -485,6 +491,7 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true, away
           <Icon name="pause" /> {heldBanner(info.held)}
         </div>
       )}
+      <ItDeskCards inChat />
       <WorkingStrip onStop={stop} open={logOpen} onToggle={() => setLogOpen(!logOpen)} linked={linked} onFloor={openFloor} />
       <AttachTray pending={att.pending} onRemove={att.remove} onRetry={att.retry} />
       {mention.picks}

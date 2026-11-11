@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
-import { MEMORY_MAX_NOTES, MEMORY_NOTE_MAX, MEMORY_TOTAL_MAX, searchNotes, type MemoryNote } from '../../../shared/ceoMemory';
+import { MEMORY_MAX_NOTES, MEMORY_NOTE_MAX, MEMORY_TOTAL_MAX, type MemoryNote } from '../../../shared/ceoMemory';
+import { CeoNotes } from './CeoNotes';
 import { Sheet } from './ChatArtifacts';
 import { confirmDialog } from './Confirm';
 import { Icon } from './Icon';
-import { Markdown } from './Markdown';
 import { Menu } from './Menu';
 
 // "What the CEO remembers" (#51): the manager's pinned notes, in every CEO job (editable), and the CEO's own
-// NOTES.md (read-only, with search).
+// NOTES.md (read-only, in sections: CeoNotes.tsx).
 
 function NoteRow({ n }: { n: MemoryNote }) {
   const [text, setText] = useState<string | null>(null);
@@ -56,13 +56,11 @@ export function CeoMemory({ ceoName, onClose }: { ceoName: string; onClose: () =
   const notes = useStore((s) => s.chat.memory);
   const [draft, setDraft] = useState('');
   const [file, setFile] = useState<{ text: string; truncated: boolean } | null>(null);
-  const [q, setQ] = useState('');
   useEffect(() => void api.ceoNotes().then(setFile).catch(() => setFile({ text: '', truncated: false })), []);
   const used = notes.reduce((n, x) => n + x.text.length, 0);
   const add = () => void api.addMemory(draft).then(() => setDraft('')).catch(() => undefined);
-  const found = file && q.trim() ? searchNotes(file.text, q) : null;
   return (
-    <Sheet label={`What ${ceoName} remembers`} onClose={onClose} className="memory-sheet">
+    <Sheet label={`What ${ceoName} remembers`} onClose={onClose} className="memory-sheet" surface="memory">
       <div className="artifact-body memory-body">
         <h3 className="memory-h">Your notes for {ceoName}</h3>
         <p className="muted small">
@@ -89,29 +87,12 @@ export function CeoMemory({ ceoName, onClose }: { ceoName: string; onClose: () =
         </form>
         <h3 className="memory-h">{ceoName}'s own notes</h3>
         <p className="muted small">The notes file {ceoName} keeps about the company (NOTES.md), read-only.</p>
-        <input className="conv-search" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search the notes…" aria-label={`Search ${ceoName}'s notes`} />
         {file === null ? (
           <p className="muted">Loading…</p>
         ) : !file.text ? (
           <p className="muted">{ceoName} hasn't written any notes yet.</p>
-        ) : found ? (
-          found.length ? (
-            <ul className="memory-found">
-              {found.map((f, i) => (
-                <li key={i}>
-                  {f.heading && <span className="muted small">{f.heading} · </span>}
-                  {f.line}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="muted">Nothing matches.</p>
-          )
         ) : (
-          <>
-            <Markdown className="memory-file" text={file.text} />
-            {file.truncated && <p className="muted small">The file is longer than this; the start is shown.</p>}
-          </>
+          <CeoNotes ceoName={ceoName} text={file.text} truncated={file.truncated} />
         )}
       </div>
     </Sheet>

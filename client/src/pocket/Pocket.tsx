@@ -10,11 +10,13 @@ import { UpdatePill } from '../ui/UpdatePill';
 import { loadUpdate } from '../updateLoad';
 import { BacklogBar } from '../ui/FloorProgress';
 import { KanbanView } from '../ui/KanbanView';
+import { FloorPicker } from '../ui/FloorPicker';
 import { FloorBuilds } from '../ui/FloorBuilds';
 import { CiOutageBanner } from '../ui/CiOutageBanner';
 import { Panel } from '../ui/Panel';
 import { Chat } from '../ui/Chat';
 import { ThreadsColumn } from '../ui/ChatHistory';
+import { useShowing } from '../ui/surfaces';
 import { useCall } from '../ui/voiceCallStore';
 import { setMode, useLayout, useMode } from './mode';
 import { switchOffice, typingIn } from './switchOffice';
@@ -24,9 +26,9 @@ import { approvalsBadge, ceoChatHint, pipelineOf, POCKET_TABS, railTabs, waiting
 import { Approvals } from './PocketApprovals';
 import { chatDecisions } from '../../../shared/decisions';
 import { Team } from './PocketTeam';
-import { UsageSources } from '../ui/UsageSources';
+import { CompanySummary } from './CompanySummary';
 import type { ConsoleSection } from './PocketConsole';
-import { parseHash, resolve } from '../ui/consoleNavRules';
+import { resolve } from '../ui/consoleNavRules';
 import type { HistoryFocus } from '../ui/HistoryTab';
 import { EmptyState } from '../ui/EmptyState';
 import { GuideCard } from '../ui/GuideCard';
@@ -35,6 +37,7 @@ import { SearchButton, SearchPalette } from '../ui/SearchPalette';
 import { useFinder } from '../ui/goTo';
 import type { ScreenId } from '../ui/screenHelp';
 import { NoticeBell, NoticeCentre, NoticeToasts } from '../ui/Notices';
+import { BrowserFullButton } from '../ui/BrowserFullButton';
 import { QuickToggles } from '../ui/QuickToggles';
 import { useChatMode } from '../ui/chatMode';
 import { leaveFullFor, useChatFull, useChatFullBack } from '../ui/chatFull';
@@ -42,11 +45,15 @@ import { FullButton } from '../ui/ChatActionsSheet';
 import { XLabel } from '../ui/HoverCard';
 import { TourInvite, Tutorial } from '../ui/Tutorial';
 import { trackFor, type Track } from '../ui/tourSteps';
+import { useTour } from '../ui/tour';
+import { showTab, useRouteLink } from '../routeLink';
+import { linkedSection } from '../routes';
 import { heldNote } from '../../../shared/health';
 import { PreviewsHost, PreviewsRailButton, usePreviewsLink } from './PocketPreviews';
 import { pushLayer } from '../ui/backStack';
 import { markTeamLanding, pocketJump } from './pocketJump';
 import { Icon, IconText } from '../ui/Icon';
+import { badgeCount } from '../ui/badgeCount';
 import type { IconName } from '../ui/icons';
 import { floorColumns, statusLine } from './companyLayout';
 import { layerOf, panels, topPanel, usePanels, type PanelEntry, type Panels } from '../ui/panels';
@@ -171,11 +178,9 @@ function Company({ go, settings, track }: { go: (tab: PocketTab, repoId?: string
   const agents = useStore((s) => s.agents);
   const qa = useStore((s) => s.qa);
   const requests = useStore((s) => s.requests);
-  const ceoInfo = useStore((s) => s.ceo);
   const demo = useStore((s) => s.demo);
   const publicDemo = useStore((s) => s.publicDemo);
   const version = useStore((s) => s.version);
-  const ceo = agents[CEO_ID];
   const floors = useMemo(
     () =>
       repos.map((repo) => {
@@ -197,7 +202,7 @@ function Company({ go, settings, track }: { go: (tab: PocketTab, repoId?: string
     <div className="pk-page">
       <Banners settings={settings} />
       <div className="pk-company">
-      <div className="pk-company-side">
+      <CompanySummary go={go} settings={settings}>
       {waiting > 0 && (
         <button className="pk-callout" onClick={() => go('approvals')}>
           <span className="pk-callout-icon" aria-hidden>
@@ -213,35 +218,7 @@ function Company({ go, settings, track }: { go: (tab: PocketTab, repoId?: string
       )}
       <TourInvite track={track} />
       <GuideCard />
-      <div className="pk-card pk-usage">
-        <button className="pk-usage-head" onClick={() => settings('ops')} title="Open Mission control">
-          <b className="small">
-            <Icon name="gauge" /> Usage
-          </b>
-          <span className="muted small">
-            Mission control <Icon name="chevron-right" />
-          </span>
-        </button>
-        <UsageSources limit={4} />
-      </div>
-      <button className="btn pk-wide" onClick={() => settings('map')}>
-        <Icon name="map" /> Memory map
-      </button>
-      {ceo && (
-        <div className="pk-card pk-ceo">
-          <span className="avatar" style={{ background: ceo.color }}>
-            {ceo.name[0]}
-          </span>
-          <div className="grow">
-            <b>{ceo.name}</b> <span className="muted small">CEO</span>
-            <div className="small">{ceo.status === 'working' ? (ceoInfo.job?.label ?? 'Working') : ceoInfo.queue.length ? `Next: ${ceoInfo.queue[0].label}` : 'Free'}</div>
-          </div>
-          <button className="btn btn-small" onClick={() => go('chat')}>
-            <Icon name="message-circle" /> Chat
-          </button>
-        </div>
-      )}
-      </div>
+      </CompanySummary>
       <div className="pk-company-floors" ref={measureFloors} style={{ '--pk-cols': floorColumns(floorsWidth, floors.length) } as CSSProperties}>
       {floors.length === 0 && <EmptyState kind="projects" onAction={() => settings('floors')} />}
       <button className="btn pk-wide" onClick={() => settings('floors')}>
@@ -316,15 +293,7 @@ function Board({ repoId, pick }: { repoId: string | null; pick: (id: string) => 
     );
   return (
     <div className="pk-page">
-      {repos.length > 1 && (
-        <div className="pk-chips" role="tablist" aria-label="Floor">
-          {repos.map((r) => (
-            <button key={r.id} role="tab" aria-selected={r.id === id} className={`pk-chip ${r.id === id ? 'pk-chip-on' : ''}`} style={{ ['--accent' as string]: r.color }} onClick={() => pick(r.id)}>
-              {r.floor} · {name(r.fullName)}
-            </button>
-          ))}
-        </div>
-      )}
+      {repos.length > 1 && <FloorPicker repos={repos} value={id} onPick={pick} />}
       <KanbanView key={id} repoId={id} embedded />
     </div>
   );
@@ -371,7 +340,7 @@ function ChatButton({ open, toggle }: { open: boolean; toggle: () => void }) {
         {working && <span className="pk-chat-working" />}
       </span>
       {name}
-      {unread > 0 && !open && <span className="badge badge-dot">{unread}</span>}
+      {unread > 0 && !open && <span className="badge badge-dot">{badgeCount(unread)}</span>}
     </button>
   );
 }
@@ -385,7 +354,7 @@ function PocketOverlay() {
   return null;
 }
 
-function Settings({ section, pick, onClose, history, repoId, wide }: { section: ConsoleSection; pick: (s: ConsoleSection) => void; onClose: () => void; history?: HistoryFocus; repoId?: string; wide: boolean }) {
+function Settings({ section, pick, onClose, history, repoId, card, wide }: { section: ConsoleSection; pick: (s: ConsoleSection) => void; onClose: () => void; history?: HistoryFocus; repoId?: string; card?: string; wide: boolean }) {
   return (
     <Panel
       title={
@@ -397,7 +366,7 @@ function Settings({ section, pick, onClose, history, repoId, wide }: { section: 
       className="pk-settings ds-console"
     >
       <Suspense fallback={<p className="muted">Loading…</p>}>
-        <PocketConsole section={section} pick={pick} history={history} repoId={repoId} wide={wide} />
+        <PocketConsole section={section} pick={pick} history={history} repoId={repoId} card={card} wide={wide} />
       </Suspense>
     </Panel>
   );
@@ -408,7 +377,7 @@ export default function Pocket() {
   // a tab change is a safe moment for the office's new client (#216): it opens on the tab picked
   useEffect(() => void loadUpdate({ kind: 'nav' }, () => window.history.replaceState(window.history.state, '', `?${new URLSearchParams({ ...Object.fromEntries(new URLSearchParams(location.search)), tab })}`)), [tab]);
   const [repoId, setRepoId] = useState<string | null>(null);
-  const [settings, setSettings] = useState<ConsoleSection | null>(() => parseHash(location.hash, 'pocket')?.id ?? null); // #settings/cloud-agents opens that section
+  const [settings, setSettings] = useState<ConsoleSection | null>(() => linkedSection(location.hash, 'pocket')); // #settings/cloud-agents (or #console/…) opens that section
   const company = useStore((s) => s.settings.companyName);
   const loaded = useStore((s) => s.loaded);
   const setupDone = useStore((s) => s.settings.setupDone);
@@ -429,6 +398,7 @@ export default function Pocket() {
   const [dockW, setDockW] = useDockWidth();
   // the chat's width for what opens beside the docked chat and its threads column (pocket.css, #132)
   useEffect(() => document.documentElement.style.setProperty('--pk-dock-w', `${dockW}px`), [dockW]);
+  const threadsSheet = useShowing('threads'); // the column steps aside while the Threads sheet shows them (#396)
   const [drawer, setDrawer] = useState(false);
   const tucked = useCall((s) => s.chatTucked); // behind a voice call (#287)
   const dock = (layout === 'expanded' ? dockPref : layout === 'medium' && drawer) && !tucked;
@@ -449,6 +419,24 @@ export default function Pocket() {
     else setTab('chat');
     focusChatBox();
   };
+  // The tour's way back from a page it opened (#408): the tab, the console's section, the chat beside, the pane.
+  const onScreen = useRef({ tab, settings, dock });
+  onScreen.current = { tab, settings, dock };
+  useEffect(() => {
+    useTour.setState({
+      keepPage: () => {
+        const was = { ...onScreen.current, overlay: useStore.getState().overlay, full: useChatFull.getState().on };
+        return () => {
+          useChatFull.getState().set(was.full);
+          setTab(was.tab);
+          setSettings(was.settings);
+          if (onScreen.current.dock !== was.dock) setDock(was.dock);
+          useStore.getState().openOverlay(was.overlay);
+        };
+      },
+    });
+    return () => useTour.setState({ keepPage: null });
+  }, [setDock]);
 
   // The panel manager (#212): the console and the pane in the order they were opened or touched, the top one in front.
   const order = usePanels();
@@ -533,6 +521,7 @@ export default function Pocket() {
   // A console section asked for (the History from an agent's desk or a PR card, the search, the guide) opens in ⚙️ here.
   const [history, setHistory] = useState<HistoryFocus | undefined>();
   const [focusRepo, setFocusRepo] = useState<string | undefined>();
+  const [focusCard, setFocusCard] = useState<string | undefined>(); // the card to scroll to (#404: a usage row's account)
   const wantsSection = useStore((s) => (s.overlay?.kind === 'manager' ? s.overlay : null));
   // A floor's team asked for (a chat link, #151) is the Team tab here, at that floor; from the Chat tab, with a Back to it.
   const [teamJump, setTeamJump] = useState(0);
@@ -554,6 +543,7 @@ export default function Pocket() {
     }
     setHistory(wantsSection.history);
     setFocusRepo(wantsSection.repoId);
+    setFocusCard(wantsSection.card);
     setSettings(resolve(wantsSection.tab, 'pocket')?.id ?? 'menu');
     panels.focus('console'); // already open on that section: it still comes to the front
   }, [wantsSection]);
@@ -607,6 +597,8 @@ export default function Pocket() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+  useEffect(() => showTab(tab), [tab]);
+  useRouteLink('pocket'); // deep links (#413), after the listeners above
   // pocket.css's icons and look apply to the whole page while pocket mode is on (dialogs and toasts included).
   useEffect(() => {
     document.documentElement.classList.add('pocket-mode');
@@ -656,8 +648,9 @@ export default function Pocket() {
         <UpdatePill className="btn btn-small btn-good pk-update" short={!wide} />
         {/* the chat has its own 🔍 (its conversations); Ctrl+K and the other tabs reach this one */}
         {(tab !== 'chat' || wide) && <SearchButton className="pk-icon-btn" />}
-        {(wide || tab !== 'chat') && <NoticeBell className="pk-icon-btn" />}
+        {(wide || tab !== 'chat') && <NoticeBell className="pk-icon-btn" compact={!wide} />}
         <QuickToggles className="pk-icon-btn" compact={!wide} />
+        {wide && <BrowserFullButton className="pk-icon-btn" />}
         {tab !== 'chat' && <InfoButton screen={HELP[tab]} className="pk-icon-btn" />}
         {/* a phone's chat header has no room: its ⛶ sits here (#201) */}
         {!wide && tab === 'chat' && <FullButton />}
@@ -695,7 +688,7 @@ export default function Pocket() {
               >
                 <span className="pk-tab-icon">
                   <Icon name={icon} />
-                  {badge > 0 && <span className="badge badge-dot">{badge}</span>}
+                  {badge > 0 && <span className="badge badge-dot">{badgeCount(badge)}</span>}
                 </span>
                 <span className="pk-tab-label">{label}</span>
               </button>
@@ -712,7 +705,7 @@ export default function Pocket() {
           )}
         </nav>
         <div className={`pk-work ${settings ? 'pk-work-console' : ''}`}>
-          <main className={`pk-main ${tab === 'chat' ? 'pk-main-chat' : ''}`}>
+          <main className={`pk-main ${tab === 'chat' ? 'pk-main-chat' : ''}`} data-tab={tab}>
             {loaded && !setupDone ? (
               <div className="pk-page">
                 <p>The office isn't set up yet. Finish the setup in the 3D office (on a computer is easiest), then come back.</p>
@@ -754,7 +747,7 @@ export default function Pocket() {
           </main>
           {/* wide, the console takes the pages' place and a terminal, app or card opens beside them; on a phone both are full-screen panels */}
           <div ref={consoleHost} className="pk-console-host" style={layer(order, 'main')} onFocus={() => panels.focus('console')}>
-            {settings && <Settings section={settings} pick={setSettings} onClose={() => setSettings(null)} history={history} repoId={focusRepo} wide={wide} />}
+            {settings && <Settings section={settings} pick={setSettings} onClose={() => setSettings(null)} history={history} repoId={focusRepo} card={focusCard} wide={wide} />}
           </div>
           {/* the Previews page takes everything beside the chat, over the console it may have been opened from */}
           <div className="pk-page-host">
@@ -782,7 +775,7 @@ export default function Pocket() {
             </div>
             {/* wide, the threads in a column beside the chat, and what it opens beside them (#132) */}
             <div className="pk-dock-body">
-              {layout === 'expanded' && <ThreadsColumn ceoName={ceoName} />}
+              {layout === 'expanded' && <ThreadsColumn ceoName={ceoName} hidden={threadsSheet} />}
               {chat}
             </div>
           </aside>

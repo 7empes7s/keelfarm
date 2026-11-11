@@ -6,6 +6,8 @@ import type { BoxCliRecord } from '../boxCli.ts';
 import type { BoxSignIn } from '../cliRunner.ts';
 import { HOME_DIR } from '../config.ts';
 import type { CeoJob } from '../ceo.ts';
+import type { CeoHandover, CeoJobNote } from '../ceoDigest.ts';
+import type { CeoJobRecord } from '../ceoRedo.ts';
 import type { LearnedPull } from '../closeCleanup.ts';
 import type { PreQa } from '../qaOutcome.ts';
 import type { RestartCounts } from '../reconcile.ts';
@@ -21,14 +23,19 @@ import type { ToolSwitches } from '../../shared/tooling.ts';
 import type { PracticeOverrides } from '../../shared/practices.ts';
 import type { FloorTheme } from '../../shared/floorThemes.ts';
 import type { FollowupState } from '../../shared/followups.ts';
+import type { ItDeskState } from '../../shared/itDesk.ts';
 import type { ChatsState } from '../../shared/conversations.ts';
 import type { MemoryNote } from '../../shared/ceoMemory.ts';
 import { CHAT_KEEP } from '../../shared/chatPage.ts';
 import type { AgentStyle } from '../../shared/looks.ts';
 import type { CharterRecord } from '../../shared/charter.ts';
+import type { UseCase } from '../../shared/types/setup.ts';
+import type { DiskAlertMark } from '../../shared/disk.ts';
 import type { CharterInsights } from '../../shared/charterStats.ts';
+import type { TaskAccounts } from '../../shared/accountDefault.ts';
 import type { DecisionsState } from '../../shared/decisions.ts';
 import type { RoundCause } from '../../shared/rounds.ts';
+import type { BlockedState } from '../liveState.ts';
 import { DEFAULT_MAX_AGENTS, FLOOR_SEATS } from '../../shared/types.ts';
 import type {
   AgentCli,
@@ -51,7 +58,9 @@ import type {
   QaView,
   RepoView,
   ServerEvent,
+  SessionRun,
   SwarmSettings,
+  TryStep,
   UsageReading,
 } from '../../shared/types.ts';
 
@@ -83,6 +92,17 @@ export interface PersistedRepo {
   /** The charter besides its mission (#48), the CEO's pending proposal, who changed what, and the drift view's log. */
   charter: CharterRecord;
   ciOutage?: CiOutageState | null; // GitHub won't run its checks (#191)
+  setup?: FloorSetupRecord; // the setup advisor (#366); missing: not guessed yet
+}
+
+/** A floor's use case and what the manager said about its gaps (#366, shared/setup.ts). */
+export interface FloorSetupRecord {
+  useCase: UseCase | null;
+  guessed: boolean;
+  why: string;
+  snoozed: Record<string, number>; // gap id → Not now until
+  told: string[]; // gap ids notified about, while they stay open
+  review: boolean; // the new floor's checklist waits for the manager
 }
 
 /** A floor's CI outage (#191): why, since when, the last probe re-run, and when a run was last seen really starting. */
@@ -126,12 +146,14 @@ export interface PersistedAgent {
   prNumber: number | null;
   prUrl: string | null;
   nextIssue?: number | null; // Assign to… while they were busy (#265, shared/assignIssue.ts): starts when they're free
+  answeredAt?: number | null; // when the latest answer to their question reached them (#508): their card says so
   startedAt: number | null;
   endedAt: number | null;
   costUsd: number;
   turns: number;
   sessionId: string | null;
   sessionCli: AgentCli | null; // the CLI whose session sessionId is: only it can resume it
+  sessionAccount?: string; // the account whose folder holds it (#401); unset: not known
   lastError: string | null;
   logTail: LogLine[];
 }
@@ -161,8 +183,10 @@ export interface QaRecord extends Omit<QaView, 'ceoLooking'> {
   escalated: boolean; // needs-human and the manager has been told; cleared when it leaves needs-human
   recheckAt?: number | null; // the CEO's last triage from a needs-human re-check (#275, stuckRecheck.ts)
   labRetryRound: number | null; // the round QA already re-ran by itself after a lab error (#189)
+  restartRetryRound?: number | null; // the round QA already re-ran by itself after losing its lab to an office restart (#333)
   updatedSha?: string | null; // the head the office made bringing it up to date with the base before merging (#24)
   ciOutage?: number | null; // parked by the floor's CI outage since then, instead of going back for fixes (#191)
+  tryIt?: TryStep[]; // the "Try this" steps as QA followed and corrected them in its latest round (#381); read on demand, not in the view
   cheapFix?: { model: string; effort: EffortLevel | '' } | null; // its latest fix round is conflict-only on the cheaper model (#256); the next one escalates
 }
 
@@ -186,6 +210,11 @@ interface CeoState {
   chats: ChatsState; // the chat's conversations; state.messages is the current one's thread (shared/conversations.ts)
   remember: MemoryNote[]; // the manager's pinned notes, in every CEO job's prompt (shared/ceoMemory.ts)
   kept: { turns: number; costUsd: number; startedAt: number | null; lastEndedAt: number | null; model?: string }; // its kept session (#28) and the model it started on (#331)
+  handover?: CeoHandover | null; // what the full chat session left the next one, until a fresh session gets it (#330)
+  lastJob?: CeoJobNote | null; // the latest background job's reply and issues, for the digest (#330)
+  jobs?: CeoJobRecord[]; // finished jobs' inputs, for Redo on Opus (#332, server/ceoRedo.ts)
+  jobSeq?: number; // the last job's number
+  researchedAt?: number; // when the latest research job finished (#496), for the guide
 }
 
 /** An open issue whose PR was closed: auto-assign leaves it for the manager (closeCleanup.ts toHold). */
@@ -214,10 +243,13 @@ export interface Persisted {
   pong: Record<string, PongRow[]>; // each floor's ping-pong leaderboard, by repo id
   officeId: string; // this office on a shared Upstash account: its Boxes carry it (docs/cloud.md)
   claudeUsage: UsageReading[]; // Claude's latest reading per usage limit, so a restart doesn't show none
+  itDesk: ItDeskState; // the IT desk's waiting changes and its log (#506)
+  diskAlert?: DiskAlertMark | null; // the last disk notification, so a restart doesn't repeat it (#502)
   usageWaiver?: Waiver | null; // pacing the manager cleared with Resume full speed, kept for its window across restarts (#323)
   experiments: LabState; // the lab's experiments and the issues in them (experiments.ts)
   questions: AgentQuestion[]; // agents waiting on an answer (shared/questions.ts)
   decisions: DecisionsState; // questions waiting on the manager (#114, shared/decisions.ts)
+  taskAccounts: TaskAccounts; // the account each open build or fix task runs on (#390, shared/accountDefault.ts)
 }
 
 export interface Shot {
@@ -236,8 +268,10 @@ export interface AgentRuntime {
   shots: Shot[]; // every screenshot of the current session (QA evidence)
   terminal: AgentTerminal | null; // their terminal, once they've run in the terminal runtime
   qaResume?: { cwd: string; systemAppend: string } | null; // the QA run's one resume for a missing report, until used
-  blocked?: { reason: string; since: number; told: boolean } | null; // waiting on a prompt the office couldn't answer (unblock.ts)
+  acrossRestart?: boolean; // the current session's CLI kept working through an office restart (#333)
+  blocked?: BlockedState | null; // waiting on a prompt the office couldn't answer (unblock.ts), or stuck in their session's live state (liveState.ts)
   chat?: ChatLog; // their chat (#120), from their sessions' transcripts and the manager's messages; not saved
+  run?: SessionRun | null; // what their live session really runs on (#376)
 }
 
 export interface RepoRuntime {
@@ -257,6 +291,7 @@ export interface RepoRuntime {
   openAt: Map<string, number>; // `issue#<n>` / `pr#<n>` -> when GitHub said one the sync doesn't list is open
   insights?: CharterInsights; // the Charter tab's numbers, worked out at each sync and charter change (refreshInsights)
   writers?: { logins: string[]; at: number }; // collaborators with write access, as last asked (#185)
+  steps?: Map<number, TryStep[]>; // open PRs' "Try this" steps from their bodies (#381): kept off rt.pulls, so out of the snapshot
 }
 
 /** What startup reconciliation decided (reconcileRestart), for finishRestart once the floors have synced. */
@@ -294,6 +329,7 @@ export const MAX_ISSUE_FAILURES = 2;
 export const MAX_QA_FAILURES = 2;
 // How long the office waits after Claude's usage limit is hit when Claude doesn't say when it resets.
 export const LIMIT_PAUSE_MS = 15 * 60_000;
+export const SHARES_MS = 60_000; // the usage meter's floor shares after sessions end: at most once a minute, only when they change (#334)
 export const READINGS_MS = 3000; // Claude's usage readings arrive with every status line: the office gets them at most this often
 // Everyone on a floor this size or bigger busy at once is a full house (an achievement).
 export const FULL_HOUSE = 4;

@@ -18,6 +18,8 @@ export const NOTICE_KINDS: { id: NoticeKind; icon: string; label: string }[] = [
   { id: 'error', icon: '💥', label: 'Errors' },
   { id: 'usage', icon: '⏸', label: 'Usage' },
   { id: 'update', icon: '⬆️', label: 'Updates' },
+  { id: 'setup', icon: '🧭', label: 'Setup' },
+  { id: 'keys', icon: '🔑', label: 'Keys' },
 ];
 export const noticeIcon = (k: NoticeKind) => NOTICE_KINDS.find((x) => x.id === k)?.icon ?? '🔔';
 
@@ -29,6 +31,8 @@ export const ACTION_LABEL: Record<NoticeAction, string> = {
   terminal: 'Terminal',
   retry: 'Retry',
   approvals: 'Approvals',
+  setup: 'Set it up',
+  reviewKeys: 'Review',
 };
 
 const LEVEL: Partial<Record<NoticeKind, NoticeView['level']>> = { merge: 'success', qaPass: 'success', qaFail: 'error', error: 'error', stuck: 'error' };

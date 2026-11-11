@@ -1,0 +1,155 @@
+/* The IT desk's cards and settings (ui/ItDeskCards.tsx, #506). */
+.it-desk {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  align-self: center;
+  width: min(100%, 30rem);
+  min-width: 0;
+}
+/* in the chat: one row above the message box; Review opens the cards in a sheet */
+.it-desk-chat {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-width: 0;
+  padding: var(--ds-space-1) 10px;
+  border-top: var(--ds-border) solid var(--ds-line);
+  background: var(--ds-surface-raised);
+  font-size: var(--ds-text-sm);
+}
+.it-desk.artifact-body {
+  align-self: stretch;
+  width: auto;
+}
+.it-run-all {
+  align-self: flex-start;
+}
+.it-desk-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--ds-surface);
+}
+.it-desk-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-2);
+  font-size: var(--ds-text-sm);
+}
+.it-card {
+  min-width: 0;
+  padding: var(--ds-space-3);
+  border: var(--ds-border) solid var(--ds-outline);
+  border-left: 4px solid var(--ds-warn-fill);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-raised);
+  box-shadow: var(--ds-shadow-2);
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-tight);
+}
+.it-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--ds-space-2);
+}
+.it-cmd {
+  flex: 1 1 12rem;
+  min-width: 0;
+  padding: var(--ds-space-1) var(--ds-space-2);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface-sunken);
+  overflow-wrap: anywhere;
+}
+.it-risk,
+.it-exit {
+  flex: none;
+  padding: 2px var(--ds-space-2);
+  border-radius: var(--ds-radius-pill);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-strong);
+}
+.it-risk-low {
+  background: var(--ds-good-fill);
+  color: var(--ds-on-color);
+}
+.it-risk-medium {
+  background: var(--ds-warn-fill);
+  color: var(--ds-on-color);
+}
+.it-risk-high {
+  background: var(--ds-bad-fill);
+  color: var(--ds-on-color);
+}
+.it-why {
+  margin: var(--ds-space-2) 0;
+}
+.it-facts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--ds-space-1) var(--ds-space-2);
+  margin: 0;
+}
+.it-facts dt {
+  color: var(--ds-text-muted);
+}
+.it-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.it-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-2);
+  margin-top: var(--ds-space-3);
+}
+.it-allow > summary,
+.it-log-out > summary {
+  display: flex;
+  align-items: center;
+  min-height: var(--ds-target);
+  color: var(--ds-link);
+  font-weight: var(--ds-weight-strong);
+  cursor: pointer;
+}
+.it-log-h {
+  margin: var(--ds-space-3) 0 var(--ds-space-1);
+}
+.it-log {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.it-log-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  min-width: 0;
+  padding: var(--ds-space-2) 0;
+  border-top: var(--ds-border) solid var(--ds-line);
+}
+.it-log-top {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ds-space-2);
+  min-width: 0;
+}
+.it-exit {
+  background: var(--ds-surface-sunken);
+}
+.it-exit-bad {
+  color: var(--ds-danger-text);
+}
+.it-log-out pre {
+  max-height: 14rem;
+  margin: 0;
+  padding: var(--ds-space-2);
+  overflow: auto;
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface-sunken);
+  font-size: var(--ds-text-xs);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

@@ -7,9 +7,13 @@ import { CLAUDE_MODELS, effectiveModel, modelAfterCliChange } from '../../../sha
 import { ModelMissing, ModelPicker } from './ModelPicker';
 import { TALL_HAIR, appearanceFor, randomStyle } from '../world/appearance';
 import { workerCli } from './floorRows';
+import { builderCli, CLI_NOTES } from '../../../shared/cliNotes';
+import { boxCli } from '../../../shared/cloud';
+import { ceoModelOn } from '../../../shared/ceoRunsOn';
 import { confirmDialog } from './Confirm';
 import { Icon } from './Icon';
 import { AgentTools } from './ToolsSettings';
+import { CeoCliField } from './CeoRunsOn';
 
 // One agent's setup (name, look, coding agent, model, effort), edited in place: the Team tab's row cells and the
 // ⚙️ Setup section of their panel share these. Every change is a PATCH; the `agent` event updates all views.
@@ -32,10 +36,11 @@ async function save(id: string, patch: Patch) {
 }
 
 /** The coding agents to pick from, installed ones first, each saying if it's missing on this machine. */
-export function CliOptions({ clis }: { clis: CliView[] }) {
+/** `builders`: only the ones the office's default may be (not Gemini CLI). */
+export function CliOptions({ clis, builders = false }: { clis: CliView[]; builders?: boolean }) {
   return (
     <>
-      {[...clis].sort((a, b) => Number(b.installed) - Number(a.installed)).map((c) => (
+      {[...clis].filter((c) => !builders || builderCli(c.id)).sort((a, b) => Number(b.installed) - Number(a.installed)).map((c) => (
         <option key={c.id} value={c.id} disabled={!c.installed}>
           {c.label}
           {c.installed ? '' : ' (not installed)'}
@@ -99,8 +104,10 @@ export const CLOUD_STATE: Record<CloudMachineState, string> = {
 export function HostSelect({ agent, id, style }: FieldProps) {
   const settings = useStore((s) => s.settings);
   const keySet = useStore((s) => s.cloud.keySet);
+  const clis = useStore((s) => s.clis);
   const box = agent.host === 'box';
-  const opencode = workerCli(agent, settings) === 'opencode';
+  const cli = workerCli(agent, settings);
+  const noBox = !boxCli(cli);
   const busy = !!agent.task || isBusy(agent);
   const move = async (to: MachineHost) => {
     const ok = await confirmDialog({
@@ -113,8 +120,8 @@ export function HostSelect({ agent, id, style }: FieldProps) {
   return (
     <select id={id} value={box ? 'box' : 'local'} disabled={busy} style={style} title={busy ? 'Move them once their task is done' : 'Where they work'} aria-label={id ? undefined : 'Works on'} onChange={(e) => void move(e.target.value as MachineHost)}>
       <option value="local">This computer</option>
-      <option value="box" disabled={!box && (!keySet || opencode)}>
-        Upstash Box{!box && !keySet ? ' (connect Upstash in Settings first)' : !box && opencode ? " (OpenCode can't run there)" : ''}
+      <option value="box" disabled={!box && (!keySet || noBox)}>
+        Upstash Box{!box && !keySet ? ' (connect Upstash in Settings first)' : !box && noBox ? ` (${cliName(clis, cli)} can't run there)` : ''}
       </option>
     </select>
   );
@@ -124,7 +131,7 @@ export function HostSelect({ agent, id, style }: FieldProps) {
 export function ModelInput({ agent, id }: FieldProps) {
   const settings = useStore((s) => s.settings);
   const cli = workerCli(agent, settings);
-  const resolved = agent.role === 'ceo' ? CLAUDE_MODELS[0] : effectiveModel('', cli, settings, CLAUDE_MODELS[0]);
+  const resolved = agent.role === 'ceo' ? ceoModelOn(cli, '', settings, CLAUDE_MODELS[0]) : effectiveModel('', cli, settings, CLAUDE_MODELS[0]);
   return <ModelPicker id={id} cli={cli} value={agent.model} resolvedDefault={resolved} label={agent.role === 'ceo' ? "The CEO's model" : 'Model'} onChange={(model) => void save(agent.id, { model })} />;
 }
 
@@ -337,7 +344,7 @@ export function PromptPreview({ agent }: { agent: Agent }) {
   );
 }
 
-/** The ⚙️ Setup section of an agent's panel. The CEO always runs Claude Code, so they only get model and effort. */
+/** The ⚙️ Setup section of an agent's panel. The CEO gets its coding agent (#418), account, model and effort. */
 export function AgentSetup({ agent }: { agent: Agent }) {
   const settings = useStore((s) => s.settings);
   const terminal = settings.runtime === 'terminal';
@@ -372,6 +379,7 @@ export function AgentSetup({ agent }: { agent: Agent }) {
           <label className="field" htmlFor={`${id}-cli`}>
             <span>Coding agent</span>
             <CliSelect agent={agent} id={`${id}-cli`} />
+            {CLI_NOTES[workerCli(agent, settings)] && <span className="muted small">{CLI_NOTES[workerCli(agent, settings)]}</span>}
           </label>
         )}
         {!ceo && (
@@ -382,6 +390,7 @@ export function AgentSetup({ agent }: { agent: Agent }) {
             <HostSelect agent={agent} id={`${id}-host`} />
           </label>
         )}
+        {ceo && <CeoCliField ceo={agent} />}
         {agent.host !== 'box' && (
           <label className="field" htmlFor={`${id}-account`}>
             <span>Account</span>

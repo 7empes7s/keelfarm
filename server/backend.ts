@@ -9,6 +9,8 @@ import { upstashBoxes, type BoxApi } from './box.ts';
 import { run } from './exec.ts';
 import { localMachines, type MachineProvider } from './machines.ts';
 import { detectClis } from './clis.ts';
+import { npmInstall } from './cliInstall.ts';
+import { itExec, type ItExecResult } from './itExec.ts';
 import { readPicks } from './picks.ts';
 import type { QuickPicks } from '../shared/used.ts';
 import { scanTooling } from './tooling.ts';
@@ -17,7 +19,7 @@ import { checkUsage, type UsageCheck } from './usagePoll.ts';
 import { realUsageApi } from './usageApi.ts';
 import type { UsageApi } from './usageSources.ts';
 import { readCatalog } from './modelCatalog.ts';
-import { checkAccount } from './accountCheck.ts';
+import { checkAccount, readClaudeLogin } from './accountCheck.ts';
 import { startLocalSignIn } from './localSignIn.ts';
 import type { AccountsDeps } from './accounts.ts';
 import { installDesk, type DepsCallbacks, type DepsOutcome } from './deps.ts';
@@ -31,6 +33,7 @@ import type { VoiceApi } from './voice.ts';
 import { openMeteo, type WeatherApi } from './weather.ts';
 import type { AgentTerminal } from './terminal.ts';
 import { readWorktree, type WorktreeRead } from './worktreeRead.ts';
+import * as liveDiff from './liveDiff.ts';
 import { checkoutFile, readRepoFile } from './repoFile.ts';
 import type { OpsHistory } from './metrics.ts';
 import type { CostRecord } from '../shared/costs.ts';
@@ -47,9 +50,11 @@ import type { LabRunner } from './testLab.ts';
 import { createLabRunner } from './testLabRunner.ts';
 import { claudeProjectsDir, findTranscript } from './history.ts';
 import type { HistoryEntry } from '../shared/history.ts';
-import type { CliView, ModelCatalogView, GhRepoSummary, IssueInfo, NoticeView, PhoneMessage, ProviderAccount, PullInfo } from '../shared/types.ts';
+import type { AgentCli, CliView, ModelCatalogView, GhRepoSummary, IssueInfo, MergedPage, NoticeView, PhoneMessage, ProviderAccount, PullInfo, UseCase } from '../shared/types.ts';
 import type { SampleFloor } from './chatSample.ts';
 import { realProbe } from './providers.ts';
+import { realKeyScan } from './keyScan.ts';
+import type { RawKey } from '../shared/keyScan.ts';
 import type { McpInput, ProbeRequest, ProbeResult } from '../shared/providers.ts';
 
 /** Everything the swarm needs from the outside world. The demo backend fakes all of it. */
@@ -60,6 +65,8 @@ export interface Backend {
   repoMeta(fullName: string): Promise<github.RepoMeta>;
   listIssues(fullName: string): Promise<IssueInfo[]>;
   listPulls(fullName: string): Promise<PullInfo[]>;
+  /** One page of merged PRs, newest first, for the Merged column's older pages (#411). */
+  listMergedPage(fullName: string, page: number): Promise<MergedPage>;
   /** The logins of collaborators with write access, for trust (#185). */
   writers(fullName: string): Promise<string[]>;
   createIssue(fullName: string, title: string, body: string, labels?: string[]): Promise<number>;
@@ -87,6 +94,12 @@ export interface Backend {
   prDiff(fullName: string, number: number, patch: boolean): Promise<github.PrDiff>;
   /** The CEO's worktree_file: a file or diff from an agent's worktree or branch (worktreeRead.ts). */
   readWorktree(r: WorktreeRead): Promise<string>;
+  /** Live leases (#398, liveDiff.ts): the files an agent's worktree changed since its merge-base with origin/<base>, and that merge-base. Read-only. */
+  worktreeChanges(dir: string, base: string): Promise<{ files: string[]; base: string }>;
+  /** The default branch's head in the floor's clone, as its last sync fetched it. */
+  mainHead(fullName: string, base: string): Promise<string>;
+  /** The files the default branch changed between two of its commits; null when unknown. */
+  mainFilesSince(fullName: string, from: string, to: string): Promise<string[] | null>;
   /** Chat file refs (repoFile.ts): the floor's main checkout has this plain file. */
   hasRepoFile(fullName: string, rel: string): boolean;
   /** A chat file ref's text on the floor's default branch; throws with what the viewer says. */
@@ -94,6 +107,8 @@ export interface Backend {
   /** createdAt: when it was filed (absent when the demo no longer knows). */
   issueDetails(fullName: string, number: number): Promise<{ title: string; body: string; createdAt?: string }>;
   commentPull(fullName: string, number: number, body: string): Promise<string>;
+  /** A comment on an issue (#508: the manager's answer where the agent asked); returns its URL. */
+  commentIssue(fullName: string, number: number, body: string): Promise<string>;
   /** The charter's Export (#48): docs/CHARTER.md on the office's charter branch, with a pull request; returns its URL. */
   exportCharter(fullName: string, base: string, markdown: string): Promise<string>;
   uploadEvidence(fullName: string, filePath: string, data: Buffer): Promise<string>;
@@ -143,6 +158,12 @@ export interface Backend {
   releaseClis(restart: boolean): Promise<void>;
   /** The coding-agent CLIs installed on this machine. */
   detectClis(): Promise<CliView[]>;
+  /** Install a missing CLI's pinned npm package into `prefix` (#493). Never throws: how it went and its log's tail. */
+  installCli(id: AgentCli, prefix: string): Promise<{ ok: boolean; tail: string[] }>;
+  /** The IT desk (#506): one command on this machine, as argv without a shell. Never throws. */
+  itExec(argv: string[], timeoutMs: number): Promise<ItExecResult>;
+  /** OpenCode's own sign-in, `opencode auth login`, in `term` (#493). */
+  opencodeSignIn(term: AgentTerminal, exited: (code: number) => void): BoxSignIn;
   /** The chat's "/" picks: the manager's installed skills and connected apps (server/picks.ts). */
   quickPicks(): Promise<QuickPicks>;
   /** What a Claude Code session here loads (Tools & skills), read only, secrets masked; `projects`: the floors' checkouts. */
@@ -179,12 +200,16 @@ export interface Backend {
   usage: UsageApi;
   /** Settings → Providers (#362): one cheap read-only call testing a key or an MCP server; never throws. */
   providerProbe(req: ProbeRequest): Promise<ProbeResult>;
+  /** Keys found on this computer (#367): the retired projects' env and JSON files, read server-side (the demo's archive is fake). */
+  scanForKeys(): Promise<RawKey[]>;
   /** The demo only: made-up keys and MCP servers for Settings → Providers, so a fresh demo office shows every category. */
   demoProviders?(): { keys: { provider: string; key: string; label: string }[]; mcp: (McpInput & { secrets?: Record<string, string> })[] };
+  /** The demo only (#366): the company's main use cases, repos listed but not moved in (a three.js game), and a floor's agent left signed out. */
+  demoSetup?(): { company: UseCase[]; spare: string[]; signedOut: { floor: number; model: string } };
   /** The demo only: a made-up past week for mission control, so a fresh demo office has numbers from the start. */
   seedOps?(repos: string[], now: number): OpsHistory;
   /** The demo only: a made-up week of sessions and merges for the cost ledger (#18), when it's empty. */
-  seedCosts?(repos: { id: string; fullName: string }[], agents: { id: string; name: string; role: string; repoId: string }[], now: number): CostRecord[];
+  seedCosts?(repos: { id: string; fullName: string }[], agents: { id: string; name: string; role: string; repoId: string; cli?: string; account?: string }[], now: number): CostRecord[];
   /** The demo only: made-up careers for a fresh demo office's agents (#117), so their profiles have numbers. */
   seedCareers?(agentIds: string[], now: number): Record<string, CareerView>;
   /** The demo only: someone let go, under the Team tab's Past agents (#205). */
@@ -243,10 +268,14 @@ export interface CloudBackend {
 export interface AccountsBackend {
   /** Test an account: a login in its folder (and its usage), or one free request with its key. Never throws. */
   check: AccountsDeps['check'];
+  /** The built-in Claude login's plan and owner from its files (#460), no request. Never throws. */
+  login: NonNullable<AccountsDeps['login']>;
   /** A login's CLI signing in, in the account's terminal, with the account's folder in `env`. */
   signIn: AccountsDeps['signIn'];
   /** The demo only: its made-up accounts and keys, added to a registry that has only the built-in ones. */
   seed?(): { accounts: ProviderAccount[]; keys: Record<string, string> };
+  /** The demo only: a made-up built-in login folder its accounts share (#377), never the real ~/.claude. */
+  shareFrom?(): string;
 }
 
 /** The real cloud: Upstash, the manager's gh and git. */
@@ -286,6 +315,7 @@ export const realBackend: Backend = {
   repoMeta: github.repoMeta,
   listIssues: github.listIssues,
   listPulls: github.listPulls,
+  listMergedPage: github.listMergedPage,
   writers: github.writers,
   createIssue: github.createIssue,
   exportCharter: github.exportCharter,
@@ -304,10 +334,14 @@ export const realBackend: Backend = {
   prDetails: github.prDetails,
   prDiff: github.prDiff,
   readWorktree,
+  worktreeChanges: liveDiff.worktreeChanges,
+  mainHead: (fullName, base) => liveDiff.mainHead(workspace.mainDir(fullName), base),
+  mainFilesSince: (fullName, from, to) => liveDiff.mainFilesSince(workspace.mainDir(fullName), from, to),
   hasRepoFile: (fullName, rel) => checkoutFile(workspace.mainDir(fullName), rel) !== null,
   readRepoFile: (fullName, branch, rel) => readRepoFile(workspace.mainDir(fullName), `origin/${branch}`, rel),
   issueDetails: github.issueDetails,
   commentPull: github.commentPull,
+  commentIssue: github.commentIssue,
   uploadEvidence: github.uploadEvidence,
   ensureClone: workspace.ensureClone,
   syncMain: workspace.syncMain,
@@ -339,13 +373,17 @@ export const realBackend: Backend = {
   hooksReady,
   releaseClis,
   detectClis,
+  installCli: (id, prefix) => npmInstall(id, { prefix }),
+  itExec,
+  opencodeSignIn: (term, exited) => startLocalSignIn({ cli: 'opencode', env: {}, term }, exited),
   quickPicks: () => readPicks(),
   toolInventory: (projects) => scanTooling(projects),
   modelCatalog: () => readCatalog(),
   usageCheck: () => checkUsage(),
-  accounts: { check: checkAccount, signIn: startLocalSignIn },
+  accounts: { check: checkAccount, login: (_a, dir) => readClaudeLogin(dir), signIn: startLocalSignIn },
   usage: realUsageApi,
   providerProbe: realProbe,
+  scanForKeys: realKeyScan,
   survivalSignals: github.survivalSignals,
   previews: realPreviews,
   office: realOffice,

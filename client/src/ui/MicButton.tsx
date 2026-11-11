@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { useStore } from '../store';
 import { finishListening, keepListening, listen, micProblem, registerTarget, stopListening, useMic, type MicTarget, type MicView } from './mic';
 import { TAP_MS } from './micKeys';
+import { sendsWhenDone } from './micSilence';
 import { useKeyName } from './controls';
 import { Icon } from './Icon';
 
@@ -11,7 +12,7 @@ import { Icon } from './Icon';
 // form's box.
 
 /** What the bubble over the mic button says. */
-function statusLine(view: MicView, mine: boolean, chiming: boolean): ReactNode {
+function statusLine(view: MicView, mine: boolean, chiming: boolean, sends: boolean): ReactNode {
   if (!mine)
     return chiming ? (
       <>
@@ -23,6 +24,7 @@ function statusLine(view: MicView, mine: boolean, chiming: boolean): ReactNode {
   if (view.state === 'transcribing') return 'Turning your words into text…';
   if (view.state !== 'listening') return '';
   if (!view.live) return 'Starting the mic…';
+  if (view.drain) return `${sends ? 'Sending' : 'Finishing'}… keep talking, or tap to ${sends ? 'send' : 'finish'}`;
   if (view.mode === 'handsfree')
     return (
       <>
@@ -53,6 +55,7 @@ export function MicButton({ kind, value, onChange, onSend, disabled }: Props) {
   const latest = useRef({ value, onChange, onSend, disabled });
   latest.current = { value, onChange, onSend, disabled };
   const provider = useStore((s) => s.settings.listen?.provider ?? 'off');
+  const autoSend = useStore((s) => !!s.settings.listen?.autoSend);
   useStore((s) => s.voiceKeySet); // re-render when the key comes or goes: it changes micProblem()
   const mic = useMic();
   const press = useRef<number | null>(null);
@@ -106,7 +109,8 @@ export function MicButton({ kind, value, onChange, onSend, disabled }: Props) {
     else finishListening(id);
   };
 
-  const status = statusLine(mic, mine, chiming);
+  const drain = on && !warming ? mic.drain : null;
+  const status = statusLine(mic, mine, chiming, !!mic.mode && sendsWhenDone(mic.mode, autoSend));
   const title = why || (on ? 'Listening: Esc stops' : `Hold to talk (or hold ${talkKey}); tap to talk until you stop`);
 
   return (
@@ -153,6 +157,19 @@ export function MicButton({ kind, value, onChange, onSend, disabled }: Props) {
       >
         <Icon name={state === 'transcribing' ? 'hourglass' : 'mic'} />
       </button>
+      {drain && (
+        // the pause left before "done", draining; speech starts it again (a new key), tapping the 🎙 finishes now
+        <svg className="mic-drain" viewBox="0 0 44 44" aria-hidden="true">
+          <circle
+            key={`${drain.from}-${drain.ms}`}
+            cx="22"
+            cy="22"
+            r="20"
+            pathLength="100"
+            style={{ animationDuration: `${drain.ms}ms`, animationDelay: `${-Math.max(0, performance.now() - drain.from)}ms` }}
+          />
+        </svg>
+      )}
     </span>
   );
 }

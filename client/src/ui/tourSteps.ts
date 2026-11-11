@@ -10,7 +10,10 @@ import type { IconName } from './icons';
 export type Track = 'phone' | 'desk' | 'office';
 
 /** What a step's "Try it" does: always harmless (opens something, or fills the chat's box without sending). */
-export type TryIt = 'search' | 'guide' | 'bell' | 'plan' | 'console' | 'charter' | 'costs';
+export type TryIt = 'search' | 'guide' | 'bell' | 'plan' | 'console';
+
+/** Where a step's control lives when it isn't on every page: the tour opens it first and puts the page back after. */
+export type TourPage = 'chat' | 'charter' | 'costs';
 
 export interface TourStep {
   id: string;
@@ -23,6 +26,7 @@ export interface TourStep {
   /** `data-tour` ids of the control to spotlight, best first: the first one on screen gets the ring. */
   targets?: string[];
   tryIt?: TryIt;
+  page?: TourPage;
   /** The tour's version that added it: What's new replays the steps newer than what a device saw. */
   added: number;
 }
@@ -56,19 +60,19 @@ export const TOUR: TourEntry[] = [
   { id: 'desk-keys', tracks: ['desk'], title: 'Keyboard first', text: 'Keys 1 to 5 open the tabs, / jumps to the chat beside them, and {icon:building-2} 3D office walks around the building.', targets: ['switch'], added: 2 },
 
   // every track (#102 to #109)
-  { id: 'search', tracks: ALL, title: 'Find anything', text: '{icon:search} (or Ctrl K) searches floors, agents, issues, pull requests and settings, or asks {ceo} to plan or research.', targets: ['search'], tryIt: 'search', added: 1 },
-  { id: 'guide', tracks: ALL, title: 'Get the most out of it', text: 'The {icon:circle-check} guide is a checklist that ticks itself, with a Do it on each open item.', targets: ['guide'], tryIt: 'guide', added: 1 },
+  { id: 'search', tracks: ALL, title: 'Find anything', text: '{icon:search} (or Ctrl K) searches floors, agents, issues, pull requests and settings, or asks {ceo} to plan or research.', targets: ['search', 'options'], tryIt: 'search', added: 1 },
+  { id: 'guide', tracks: ALL, title: 'Get the most out of it', text: 'The {icon:circle-check} guide is a checklist that ticks itself, with a Do it on each open item.', targets: ['guide', 'options'], tryIt: 'guide', added: 1 },
   { id: 'bell', tracks: ALL, title: 'Notifications', text: "{icon:bell} keeps every notification with its buttons, so you can approve or retry right from it.", targets: ['bell'], tryIt: 'bell', added: 2 },
-  { id: 'sound', tracks: ALL, title: 'Sound and captions', text: '{icon:volume-2} by the bell mutes or unmutes ({key:mute}) and {icon:captions} turns captions on or off ({key:captions}); hover or hold either for its settings.', touchText: '{icon:volume-2} by the bell opens sound and captions: mute, the volume and captions in one sheet.', targets: ['sound'], added: 6 },
+  { id: 'sound', tracks: ALL, title: 'Sound and captions', text: '{icon:volume-2} by the bell mutes or unmutes ({key:mute}) and {icon:captions} turns captions on or off ({key:captions}); hover or hold either for its settings.', touchText: '{icon:volume-2} by the bell opens sound and captions: mute, the volume and captions in one sheet.', targets: ['sound', 'options'], added: 6 },
   { id: 'chat-cards', tracks: ALL, title: 'Ask the CEO', text: "In the chat, tap a starter or type / for commands like /plan; action cards show each job's live steps.", targets: ['chat', 'phone'], tryIt: 'plan', added: 2 },
-  { id: 'console', tracks: ALL, title: "The manager's console", text: 'Five tabs, each with a row of sections, and a {icon:search} that finds any setting.', targets: ['console-search', 'console'], tryIt: 'console', added: 2 },
-  { id: 'charter', tracks: ALL, title: 'Charters', text: "A floor's Charter leads with its numbers for each objective; editing is tucked away.", targets: ['charter', 'console'], tryIt: 'charter', added: 2 },
-  { id: 'costs', tracks: ALL, title: 'Where the plan goes', text: "Mission control's costs: insights first, the priciest issues as cards and waste grouped by cause.", targets: ['costs', 'console'], tryIt: 'costs', added: 2 },
+  { id: 'console', tracks: ALL, title: "The manager's console", text: '{icon:settings} ({key:settings}) opens the console: five tabs, each with a row of sections, and a {icon:search} that finds any setting.', touchText: '{icon:settings} opens the console: five tabs, each with a row of sections, and a {icon:search} that finds any setting.', targets: ['console'], tryIt: 'console', added: 2 },
+  { id: 'charter', tracks: ALL, title: 'Charters', text: "A floor's Charter leads with its numbers for each objective; editing is tucked away.", targets: ['charter'], page: 'charter', added: 2 },
+  { id: 'costs', tracks: ALL, title: 'Where the plan goes', text: "Mission control's costs: insights first, the priciest issues as cards and waste grouped by cause.", targets: ['costs'], page: 'costs', added: 2 },
   { id: 'info', tracks: POCKET, title: 'What can I do here?', text: "Every screen's {icon:info} says what you can do there, and brings back What's new.", targets: ['info'], added: 2 },
   { id: 'agent-chat', tracks: ALL, title: 'Their chat', text: "An agent's window shows {icon:message-circle} Chat or {icon:keyboard} Terminal, and {icon:message-circle} Chat turns chat mode on for every desk; hold a message or step to react, and your reactions reach them after their current step.", added: 3 },
-  { id: 'chat-full', tracks: ALL, title: 'Full screen chat', text: "{icon:maximize-2} in the chat's header (or {key:chatFull} in the chat) gives {ceo} room for long replies (the 2D office keeps its menu beside it); Esc or Back puts everything back.", touchText: "{icon:maximize-2} in the chat's header gives {ceo} the whole screen, tab bar and all; {icon:maximize-2} again or Back puts it back.", targets: ['chat-full', 'chat', 'phone'], added: 4 },
-  { id: 'chat-charts', tracks: ALL, title: 'Charts', text: "{icon:chart-column} in the chat's header lists ready questions {ceo} answers with a live chart; pin your favourites to the top.", targets: ['chat-charts', 'chat', 'phone'], added: 6 },
-  { id: 'switch', tracks: ['office'], title: 'The 2D office', text: 'Press {key:switchOffice} for the office as pages, with the chat beside them: quicker for getting work done.', targets: ['switch'], added: 2 },
+  { id: 'chat-full', tracks: ALL, title: 'Full screen chat', text: "{icon:maximize-2} in the chat's header, or Full screen chat in its {icon:ellipsis} ({key:chatFull} in the chat), gives {ceo} room for long replies beside the 2D office's menu; Esc or Back puts everything back. The whole app full screen is {icon:maximize} in the top bar.", touchText: "{icon:maximize-2} at the top of the chat gives {ceo} the whole screen, tab bar and all; {icon:maximize-2} again or Back puts it back.", targets: ['chat-full', 'chat-more'], page: 'chat', added: 4 },
+  { id: 'chat-charts', tracks: ALL, title: 'Charts', text: "{icon:chart-column} in the chat's header (or its {icon:ellipsis}) lists ready questions {ceo} answers with a live chart; pin your favourites to the top.", targets: ['chat-charts', 'chat-more'], page: 'chat', added: 6 },
+  { id: 'switch', tracks: ['office'], title: 'The 2D office', text: 'Press {key:switchOffice} for the office as pages, with the chat beside them: quicker for getting work done.', targets: ['switch', 'options'], added: 2 },
 
   // features still to come: their PRs replace these hooks with steps
   { id: 'memory-alerts', hook: 115 },

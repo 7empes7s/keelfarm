@@ -7,10 +7,10 @@ import { ProgressBar } from './ProgressBar';
 import type { PreviewStatus, PreviewView, RepoView } from '../../../shared/types';
 import { atPath, comparePath, newPathSync, onOfficeComputer, prAsPreview, qaShotUrl, reachable, relayPath, type Side } from './channels';
 import { sendToCeo } from './chatSend';
-import { Icon } from './Icon';
+import { CloseButton, Icon } from './Icon';
 import type { IconName } from './icons';
 import { Menu } from './Menu';
-import { ChannelBar, HeldNote, keepItems, PreviewStats, UseNote } from './PreviewChannels';
+import { ChannelBar, HeldNote, keepItems, PreviewStats, UseChip, UseNote } from './PreviewChannels';
 import { closeOverlay, Panel } from './Panel';
 import { PrChangesCard, usePrChanges } from './PrChanges';
 import { FloatingBar, RotateHint, useDesktopFit, useDesktopView, useMedia } from './DesktopView';
@@ -53,7 +53,7 @@ const NARROW_WIDTHS: [Width, IconName, string][] = [
 let lastWidth: Width = 'desktop';
 
 // A phone's screen, either way up: the viewer's controls go in a ⋯ menu and compare shows one side at a time (#129).
-const NARROW = '(max-width: 600px), (max-height: 500px) and (pointer: coarse)';
+export const NARROW = '(max-width: 600px), (max-height: 500px) and (pointer: coarse)';
 
 // A cross-origin frame never tells us it was refused, so this only catches frames that don't load at all.
 const SLOW_LOAD_MS = 12_000;
@@ -489,15 +489,15 @@ let lastCompare = false;
 function Bare({ title, className, accent, children }: { title: ReactNode; className?: string; accent?: string; children: ReactNode; wide?: boolean }) {
   return (
     <section className={`app-bare ${className ?? ''}`} style={{ ['--accent' as string]: accent }} aria-label="Preview">
-      <h3 className="app-bare-head">{title}</h3>
+      {title && <h3 className="app-bare-head">{title}</h3>}
       <div className="panel-body">{children}</div>
     </section>
   );
 }
 
 /** The floor's app on the big screen, up close: main or one of its open PRs, alone or beside main. */
-/** `qa`: open with the PR's card (and its QA report) showing (a chat chip's qa: ref). `merged`: main, opened for a merged PR (#225). `path`: at that page (#230). `bare`: inside the Previews page, which lists the channels. */
-export function AppViewer({ repoId, pr, qa, merged, path, bare }: { repoId: string; pr?: number | null; qa?: boolean; merged?: { pr: number; sha: string; path: string }; path?: string; bare?: boolean }) {
+/** `qa`: open with the PR's card (and its QA report) showing (a chat chip's qa: ref). `merged`: main, opened for a merged PR (#225). `path`: at that page (#230). `bare`: inside the Previews page, which lists the channels. `lead`: its switcher, which a phone's one slim bar holds (#382). */
+export function AppViewer({ repoId, pr, qa, merged, path, bare, lead }: { repoId: string; pr?: number | null; qa?: boolean; merged?: { pr: number; sha: string; path: string }; path?: string; bare?: boolean; lead?: ReactNode }) {
   const repo = useStore((s) => s.repos.find((r) => r.id === repoId));
   const prPreviews = useStore((s) => s.prPreviews);
   const qaRecords = useStore((s) => s.qa);
@@ -505,6 +505,7 @@ export function AppViewer({ repoId, pr, qa, merged, path, bare }: { repoId: stri
   const [width, setWidth] = useState(lastWidth);
   const [compare, setCompare] = useState(lastCompare);
   const narrow = useMedia(NARROW);
+  const slim = !!(bare && narrow && lead); // a phone's Previews page: ×, the switcher, the timer, full screen and ⋯ in one row
   const view = useDesktopView(width, narrow);
   const fit = useDesktopFit(view.immersive);
   const [side, setSide] = useState<Side>('pr'); // compare on a phone: the side on screen
@@ -606,7 +607,7 @@ export function AppViewer({ repoId, pr, qa, merged, path, bare }: { repoId: stri
   const at = (url: string | null) => url && (prView ? atPath(url, changes.path) : mergedHere ? atPath(url, mergedHere.path) : path && pr == null ? atPath(url, path) : url); // a PR (or a merged one, on main) opens at the page to look at
   // On a phone, in the viewer: what joins Start/Stop and ⋯ in the one row; the rest stays in ⋯ (immersive's ⋯ has it all).
   const wanted: BarAction[] = [...(view.forced ? [] : ['widths' as const]), ...(comparing ? ['side' as const] : []), 'reload'];
-  const bar = barFit(narrow && !view.immersive ? barWidth : 0, wanted);
+  const bar = barFit(narrow && !view.immersive && !slim ? barWidth : 0, wanted);
   const held = !!current.heldBy;
   const heldWhy = held ? `@${current.heldBy} is testing in this` : undefined;
   const startStop = active ? (
@@ -621,8 +622,9 @@ export function AppViewer({ repoId, pr, qa, merged, path, bare }: { repoId: stri
   const more = (
     <Menu
       label="More for the app"
-      title={`${name} · ${label}`}
+      title={slim ? `${name} · ${label} · ${STATUS_LABEL[current.status]}${current.commit ? ` · ${current.commit}` : ''}` : `${name} · ${label}`}
       items={[
+        slim && !active && { label: `Start ${label}`, disabled: busy || current.status === 'unconfigured', onSelect: () => void (channel == null ? startMain() : startPr()) },
         { label: 'Open in browser', disabled: !openUrl, onSelect: () => void (openUrl && window.open(openUrl, '_blank', 'noopener')) },
         bar.reload === 'menu' && { label: 'Reload', disabled: current.status !== 'running', onSelect: () => setReloads((n) => n + 1) },
         active && { label: 'Restart', disabled: held, onSelect: () => void (channel == null ? startMain() : startPr(true)) },
@@ -672,13 +674,25 @@ export function AppViewer({ repoId, pr, qa, merged, path, bare }: { repoId: stri
     </div>
   );
 
+  const slimBar = (
+    <div className="app-toolbar app-bar-narrow app-slim" role="toolbar" aria-label="App controls">
+      <CloseButton className="panel-x" onClick={() => closeOverlay()} label="Close previews" />
+      {lead}
+      <UseChip preview={current} />
+      <button className="btn btn-small app-full" onClick={view.enterFull} aria-label="Full screen" title="Full screen: hides this bar">
+        <Icon name="maximize-2" />
+      </button>
+      {more}
+    </div>
+  );
+
   return (
     <Frame
       wide
       className={`panel-app ${view.immersive ? 'panel-app-immersive' : ''}`}
       accent={repo.color}
       title={
-        <span className="app-title">
+        !slim && <span className="app-title">
           <span className="app-title-name"><Icon name="monitor" /> {name}</span>
           <PreviewPill status={current.status} />
           {current.ref && current.status !== 'stopped' && current.status !== 'unconfigured' && (
@@ -693,7 +707,7 @@ export function AppViewer({ repoId, pr, qa, merged, path, bare }: { repoId: stri
       <div ref={toolbar}>
         {!bare && <ChannelBar repo={repo} channel={channel} onPick={(n) => tuneChannel(repo.id, n)} />}
         {active && <HeldNote preview={current} label={label} repo={repo} />}
-        <UseNote preview={current} repo={repo} />
+        <UseNote preview={current} repo={repo} chip={slim} />
         {mergedHere && (
           <p className="app-merged" role="note">
             <Icon name="git-merge" /> PR #{mergedHere.pr} is merged into {repo.defaultBranch}
@@ -706,7 +720,7 @@ export function AppViewer({ repoId, pr, qa, merged, path, bare }: { repoId: stri
             : this is {repo.defaultBranch}'s preview, with that change in it.
           </p>
         )}
-        {narrow ? narrowBar : <div className="app-toolbar" role="toolbar" aria-label="App controls">
+        {slim ? slimBar : narrow ? narrowBar : <div className="app-toolbar" role="toolbar" aria-label="App controls">
           {active && (
             <button className="btn btn-small" disabled={busy || held} onClick={() => void (channel == null ? startMain() : startPr(true))} title={heldWhy ?? `Restart ${label}${channel == null ? '' : " from the PR's latest commit"}`}>
               <Icon name="rotate-cw" /> Restart

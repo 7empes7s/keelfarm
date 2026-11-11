@@ -23,7 +23,7 @@ import type { CharterProposalArgs } from '../charterTool.ts';
 import { HttpError } from '../httpError.ts';
 import { parsePreviewPatch } from '../previews.ts';
 import { qaShotFile, qaShotsDir } from '../qaShots.ts';
-import { answerPrompt, escalated, newQuestion, questionEvent, questionFromTurn, questionOf, waitingOn, type AgentQuestion } from '../../shared/questions.ts';
+import { answerComment, answerPrompt, escalated, newQuestion, questionEvent, questionFromTurn, questionOf, waitingOn, type AgentQuestion } from '../../shared/questions.ts';
 import { usageLine } from '../../shared/usageSources.ts';
 import { needsYou, needsYouTodo, shownState, type ShownState } from '../../shared/needsYou.ts';
 import { checkBinding } from '../../shared/accounts.ts';
@@ -36,15 +36,16 @@ import { blockers } from '../../shared/issues.ts';
 import { redact as scrub } from '../../shared/journal.ts';
 import { historyText } from '../../shared/history.ts';
 import { mandateFor, MAX_MANDATES } from '../../shared/followups.ts';
-import { charterOf, charterText, cleanCharter, CHARTER_PROMPT_MAX, objectiveRefusal, renderCharter } from '../../shared/charter.ts';
+import { charterOf, charterText, CHARTER_PROMPT_MAX, objectiveRefusal, renderCharter } from '../../shared/charter.ts';
 import { OFFICE_PLAYBOOK_MAX, PLAYBOOK_MAX } from '../../shared/types.ts';
 import { modelAfterCliChange, modelProblem } from '../../shared/models.ts';
-import { isCli } from '../clis.ts';
+import { cliLabel, isCli } from '../clis.ts';
+import { CLI_NOTES } from '../../shared/cliNotes.ts';
 import type { AgentView, CeoVerdict, HireRequestView, PhoneMessage } from '../../shared/types.ts';
 import { changesBlock, changesDue, markVerdict, reviewing, settle, stillOn, takeUntold } from '../../shared/managerChanges.ts';
-import { type PersistedAgent, type PersistedRepo, CEO_MODEL, CEO_EFFORT, BUSY, QA_SHOTS_DIR } from './model.ts';
+import { type PersistedAgent, type PersistedRepo, CEO_EFFORT, BUSY, QA_SHOTS_DIR } from './model.ts';
 import { clip } from '../notify.ts';
-import { SwarmTeam } from './team.ts';
+import { SwarmItDesk } from './itDesk.ts';
 import { decisionsForCeo, type DecisionAbout } from '../../shared/decisions.ts';
 import { applyEdit } from '../../shared/messageEdits.ts';
 import { excerpt } from '../../shared/chat.ts';
@@ -56,7 +57,7 @@ import { compactStatus, floorDetail, type FullStatus } from '../statusViews.ts';
 /** An agent's status in company_status (#307): "needs you" is the manager (waitsForManager says what for); finished agents are free, not "done". */
 const SHOWN_WORD: Record<ShownState, string> = { 'needs-you': 'needs you', 'waiting-ceo': 'waiting for your answer', free: 'free', preparing: 'preparing', working: 'working', error: 'error', stopped: 'stopped' };
 
-export abstract class SwarmCeoTools extends SwarmTeam {
+export abstract class SwarmCeoTools extends SwarmItDesk {
   /**
    * The CEO's office tools. Every session gets its own server: one can only be connected to one session at a time, so
    * a shared one left the next session connected but without any tools while an earlier session still held it.
@@ -69,6 +70,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
       floorDetail: (a) => JSON.stringify(floorDetail(this.fullStatus(), a.floor), null, 1),
       agentDetail: (a) => this.agentDetail(a),
       setFloorProfile: acts((a) => this.setFloorProfile(a)),
+      applySetup: acts((a) => this.ceoApplySetup(a)),
       setOfficePlaybook: acts((a) => `Saved the office playbook (${this.setOfficePlaybook(a.playbook).length} of ${OFFICE_PLAYBOOK_MAX} characters).`),
       scaleTeam: acts((a) => this.didFor(this.scaleTeam(a), a.floor, [], a.reason, `floor ${a.floor}'s team set to ${a.size}`)),
       configureAgent: acts((a) => this.didForAgent(this.configureAgent(a), a.agent_id)),
@@ -98,6 +100,8 @@ export abstract class SwarmCeoTools extends SwarmTeam {
       worktreeFile: (a) => this.worktreeFile(a),
       prDiff: (a) => this.prDiff(a),
       sendTelegram: (a) => this.sendTelegram(a),
+      scanKeys: (a) => this.keyScanForCeo(!!a.rescan),
+      makeDefaultAccount: acts((a) => this.makeDefaultAccount(a.account, !!a.switch_now)),
       editMessage: async (a) => this.editCeoMessage(a),
       waitFor: (a) => this.waitFor(a),
       askManager: (a) => this.askManager(a),
@@ -105,6 +109,14 @@ export abstract class SwarmCeoTools extends SwarmTeam {
       sessionHistory: (a) => this.sessionHistory(a),
       react: (a) => this.ceoReact(a),
       reply: (a) => this.ceoReply(a),
+      runExperiment: acts((a) => this.askRunExperiment(a)),
+      setFloorSwitches: acts((a) => this.askFloorSwitches(a)),
+      setIssuePriority: acts((a) => this.askIssuePriority(a)),
+      setCeoSetup: acts((a) => this.askCeoSetup(a)),
+      applyCharter: acts((a) => this.askApplyCharter(a)),
+      mergePull: acts((a) => this.askMergePull(a)),
+      itRun: (a) => this.itRun(a),
+      itPropose: acts((a) => this.itPropose(a)),
     }, () => this.state.ceo.job?.kind === 'research')));
   }
 
@@ -166,10 +178,10 @@ export abstract class SwarmCeoTools extends SwarmTeam {
   /** What an agent runs, defaults resolved, for the CEO. */
   protected agentSetup(a: PersistedAgent) {
     const ceo = a.role === 'ceo';
-    const cli = ceo ? 'claude' : a.cli || this.state.settings.defaultCli;
+    const cli = ceo ? this.ceoCliOf(a) : a.cli || this.state.settings.defaultCli;
     return {
       codingAgent: cli,
-      model: ceo ? a.model || CEO_MODEL : this.modelFor(a, cli) || 'the coding agent default',
+      model: (ceo ? this.ceoModel(a) : this.modelFor(a, cli)) || 'the coding agent default',
       effort: a.effort || (ceo ? CEO_EFFORT : this.state.settings.defaultEffort),
     };
   }
@@ -201,6 +213,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
           charter: renderCharter(charterOf(r.mission, r.charter)) || null,
           charterProposalWaiting: !!r.charter.proposal,
           profile: r.summary || null,
+          setup: this.floorSetupLine(r), // its use case and setup gaps (#366)
           qaBrief: r.qaBrief || null,
           playbook: r.playbook || null,
           preview: { command: r.preview.command, env: r.preview.env, status: this.previews.view(r).status },
@@ -269,8 +282,8 @@ export abstract class SwarmCeoTools extends SwarmTeam {
           maxAgentsPerFloor: s.maxAgents,
           sessionLimit: s.sessionLimit || 'none',
           sessionsRunning: this.running(),
-          usage: `${usageLabel(this.usageNow(), Date.now())} · ${usageLine(this.usageSources())}`, // every account and provider (#361); pacing follows the agents' Claude login
-          experiments: this.lab.summary(), // only the manager starts, stops and promotes them
+          usage: [usageLabel(this.usageNow(), Date.now()), this.nextUsage(), usageLine(this.usageSources())].filter(Boolean).join(' · '), // every account and provider (#361); the next session's account named (#383)
+          experiments: this.lab.summary(), // run_experiment starts, stops and promotes one when the manager asks
           providers: this.providersLine(), // every connection on Settings → Providers (#362)
           accounts: this.accounts.view().accounts.map((x) => `${x.id} (${x.cli}, ${x.kind}${x.tags.length ? `, tags ${x.tags.join('/')}` : ''}): ${x.status}`),
           officePlaybook: s.officePlaybook || null,
@@ -355,7 +368,8 @@ export abstract class SwarmCeoTools extends SwarmTeam {
     const setup = [this.setupLabel(a) || 'the office defaults', x.account !== undefined ? `on ${account ?? 'the rotation'}` : ''].filter(Boolean).join(' ');
     const tools = picked.map(({ item, on }) => `${item.name} ${on === null ? 'as the office has it' : on ? 'on' : 'off'}`).join(', ');
     this.appendLog(a, [{ kind: 'system', text: `⚙️ ${this.ceo().name} set ${a.name} up with ${setup}${tools ? `; ${tools}` : ''}.` }]);
-    return `${a.name} runs ${setup}${tools ? ` with ${tools}` : ''} from their next task.`;
+    const note = x.cli !== undefined && CLI_NOTES[cli] ? ` ${cliLabel(cli)}: ${CLI_NOTES[cli]}` : '';
+    return `${a.name} runs ${setup}${tools ? ` with ${tools}` : ''} from their next task.${note}`;
   }
 
   protected async fileIssue(x: { floor: number; title: string; body: string }) {
@@ -433,14 +447,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
   /** propose_charter: a charter for the manager to approve or edit, never applied here (decideCharter applies it). */
   protected proposeCharter(x: CharterProposalArgs) {
     const repo = this.floorRepo(x.floor);
-    const now = charterOf(repo.mission, repo.charter);
-    const charter = cleanCharter({
-      mission: x.mission ?? now.mission,
-      focus: x.focus ?? now.focus,
-      objectives: x.objectives ?? now.objectives,
-      standards: x.standards ?? now.standards,
-      nonGoals: x.non_goals ?? now.nonGoals,
-    });
+    const { now, charter } = this.charterFrom(repo, x);
     if (JSON.stringify(charter) === JSON.stringify(now)) throw new Error(`That is floor ${repo.floor}'s charter already: nothing to propose.`);
     const replaced = repo.charter.proposal ? ' It replaces your earlier proposal.' : '';
     const ceo = this.ceo().name;
@@ -546,11 +553,13 @@ export abstract class SwarmCeoTools extends SwarmTeam {
     const v = super.agentView(a, withLog);
     const waiting = waitingOn(this.state.questions, a.id);
     const reviewedBy = BUSY.includes(a.status) && reviewing(this.state.ceo.changes, a) ? this.ceo().name : null;
-    return { ...v, waiting, reviewedBy, ...(waiting && v.status !== 'working' && { activity: { kind: 'waiting' as const, detail: waiting === 'ceo' ? 'the CEO' : 'you' } }) };
+    // answered: only for agents ever answered (a big company's snapshot budget), then always, as a patch can't drop it
+    return { ...v, waiting, reviewedBy, ...(a.answeredAt !== undefined && { answered: waiting ? null : a.answeredAt }), ...(waiting && v.status !== 'working' && { activity: { kind: 'waiting' as const, detail: waiting === 'ceo' ? 'the CEO' : 'you' } }) };
   }
 
   protected clearTask(a: PersistedAgent) {
     this.dropQuestion(a.id); // their task is gone: so is what they asked about it
+    if (a.answeredAt) a.answeredAt = null;
     super.clearTask(a);
   }
 
@@ -595,8 +604,11 @@ export abstract class SwarmCeoTools extends SwarmTeam {
     this.notice({ kind: 'needsYou', title, text, target: { kind: 'agent', agentId: q.agentId }, actions: ['reply'] }, { event: 'question', line: `${q.agentName} (floor ${q.floor}): ${clip(q.text, 120)}` });
   }
 
-  /** An answer typed into the agent's session as their next message; the question closes first. */
-  protected async answerQuestion(q: AgentQuestion, text: string, who: string) {
+  /**
+   * An answer typed into the agent's session as their next message, or a session that ended resumed with it; the
+   * question closes first. The manager's also goes on the issue (or PR) they asked about (#508), where agents look.
+   */
+  protected async answerQuestion(q: AgentQuestion, text: string, who: string, manager = false) {
     this.setQuestions(this.state.questions.filter((x) => x.id !== q.id));
     try {
       await this.message(q.agentId, answerPrompt(q, text, who), false, who);
@@ -604,13 +616,30 @@ export abstract class SwarmCeoTools extends SwarmTeam {
       if (this.state.agents.some((a) => a.id === q.agentId)) this.setQuestions([...this.state.questions, q]);
       throw err;
     }
+    const now = Date.now();
+    const a = this.state.agents.find((x) => x.id === q.agentId);
+    if (a) {
+      a.answeredAt = now;
+      this.emitAgent(a);
+    }
+    const m = q.messageId === null ? undefined : this.state.messages.find((x) => x.id === q.messageId);
+    if (m) {
+      m.answered = now;
+      this.broadcast({ type: 'ceoChat', message: m });
+    }
+    this.save();
+    const repo = this.state.repos.find((r) => r.id === q.repoId);
+    if (manager && repo && (q.issue || q.pr)) {
+      const post = q.issue ? this.backend.commentIssue(repo.fullName, q.issue, answerComment(q, text)) : this.backend.commentPull(repo.fullName, q.pr!, answerComment(q, text));
+      void post.catch((err) => console.warn(`could not post the answer to ${q.agentName}'s question on GitHub`, err));
+    }
   }
 
   /** The manager answered a question (tapped an option, or replied to its message): to the agent, and the CEO hears. */
   protected async managerAnswer(q: AgentQuestion, text: string, replyTo: number, via?: 'telegram') {
     const m = this.postMessage('manager', text, undefined, { replyTo, delivery: 'read', ...(via && { telegram: 'in' as const }) });
     try {
-      await this.answerQuestion(q, text, this.state.settings.managerName || 'the manager');
+      await this.answerQuestion(q, text, this.state.settings.managerName || 'the manager', true);
       this.ceoTold.push(`The manager answered ${q.agentName}'s question "${clip(q.text, 120)}": ${clip(text, 200)}`);
       this.postMessage('office', `↪ Sent to ${q.agentName}: they carry on with your answer.`);
     } catch (err) {
@@ -619,12 +648,15 @@ export abstract class SwarmCeoTools extends SwarmTeam {
     return { id: m.id };
   }
 
-  protected async answerAgent(x: { agent_id: string; text: string }) {
+  /** answer_agent; with asked_in, the manager's answer in their words in chat, even to a question that is theirs (#508). */
+  protected async answerAgent(x: { agent_id: string; text: string; asked_in?: number }) {
     const a = this.agentByRef(x.agent_id);
     const q = questionOf(this.state.questions, a.id);
     if (!q) throw new Error(`${a.name} has no open question. Use message_agent to guide them.`);
-    if (q.to === 'manager') throw new Error(`${a.name}'s question is with the manager already; their answer goes straight to ${a.name}.`);
-    await this.answerQuestion(q, x.text, `${this.ceo().name} (CEO)`);
+    const asked = x.asked_in !== undefined;
+    if (asked) this.checkAsked(x);
+    else if (q.to === 'manager') throw new Error(`${a.name}'s question is with the manager. If they answered it in chat, pass asked_in (their message's number); else their answer goes straight to ${a.name}.`);
+    await this.answerQuestion(q, x.text, asked ? `${this.managerLabel()}, through ${this.ceo().name} (CEO)` : `${this.ceo().name} (CEO)`, asked);
     return `Sent: ${a.name} carries on with your answer.`;
   }
 

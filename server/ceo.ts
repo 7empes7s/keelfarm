@@ -19,6 +19,9 @@ import { DEFAULT_RESEARCH_MIN, RESEARCH_NO_FILING, researchPrompt, short } from 
 import { MAX_TRIAGES, type TriagePr } from './triage.ts';
 import { waitTools, type WaitHandlers } from './ceoWaitTools.ts';
 import { reactTools, type ReactHandlers } from './ceoReactTools.ts';
+import { setupTools, type SetupHandlers } from './ceoSetupTool.ts';
+import { ASKED_IN, askTools, type AskHandlers } from './ceoAskTools.ts';
+import { itTools, type ItHandlers } from './ceoItTools.ts';
 
 // The CEO: a Claude Code session in the lobby that runs the company instead of writing code.
 // It studies each floor's repo, sizes its team of interchangeable agents from its throughput (team changes the
@@ -39,14 +42,18 @@ export interface CeoJob {
   pick?: string; // plan: the option the manager picked from the CEO's research
   brief?: string; // plan: where that research brief was saved
   onCeoModel?: true; // its kind's model failed with a model error: the retry runs on the CEO's own (#331)
+  id?: number; // its number in the CEO jobs log, given when it first starts (#332)
+  by?: 'manager'; // a review the manager asked for (Review now), not the schedule's
+  redo?: { job: number; message: number | null }; // a redo on the CEO's model of this job, fresh, with its inputs (#332)
   at: number;
 }
 
-/** Queue a CEO job: one onboarding and one plan per floor, one review, one research per topic; chat messages and follow-up events merge. */
+/** Queue a CEO job: one onboarding and one plan per floor, one review, one research per topic; chat messages and follow-up events merge. A redo never merges. */
 export function queueCeoJob(q: CeoJob[], job: CeoJob): void {
   const same = q.findIndex(
     (j) =>
       j.kind === job.kind &&
+      !j.redo && !job.redo && // a redo runs on its own inputs
       (job.kind === 'review' || job.kind === 'chat' || job.kind === 'followup' || job.kind === 'changes' || (j.repoId === job.repoId && j.prNumber === job.prNumber && j.topic === job.topic)),
   );
   if (same < 0) q.push(job);
@@ -152,7 +159,7 @@ export function qaReportText(
   return JSON.stringify(report, null, 1);
 }
 
-export interface OfficeHandlers extends WaitHandlers, ReactHandlers {
+export interface OfficeHandlers extends WaitHandlers, ReactHandlers, SetupHandlers, AskHandlers, ItHandlers {
   companyStatus(a: { full?: boolean }): string;
   floorDetail(a: { floor: number }): string;
   agentDetail(a: { agent_id: string }): string;
@@ -163,10 +170,11 @@ export interface OfficeHandlers extends WaitHandlers, ReactHandlers {
   fileIssue(a: { floor: number; title: string; body: string }): Promise<string>;
   setDependencies(a: { floor: number; number: number; depends_on: number[] }): Promise<string>;
   closeIssue(a: { floor: number; number: number; reason: string }): Promise<string>;
-  retryQa(a: { floor: number; pr: number }): Promise<string>;
-  sendBack(a: { floor: number; pr: number; note: string }): Promise<string>;
-  rerunChecks(a: { floor: number; pr: number }): Promise<string>;
-  closePull(a: { floor: number; pr: number; comment: string }): Promise<string>;
+  // asked_in (#403): outside a triage job, the manager's message that asks for it
+  retryQa(a: { floor: number; pr: number; asked_in?: number }): Promise<string>;
+  sendBack(a: { floor: number; pr: number; note: string; asked_in?: number }): Promise<string>;
+  rerunChecks(a: { floor: number; pr: number; asked_in?: number }): Promise<string>;
+  closePull(a: { floor: number; pr: number; comment: string; asked_in?: number }): Promise<string>;
   escalate(a: { floor: number; pr: number; reason: string }): Promise<string>;
   attachFile(a: { path: string }): Promise<string>;
   keepFile(a: { id: string; keep: boolean; reason: string }): string;
@@ -180,12 +188,14 @@ export interface OfficeHandlers extends WaitHandlers, ReactHandlers {
   stopAgent(a: { agent_id: string; reason: string }): string;
   messageAgent(a: { floor: number; agent_id: string; text: string }): Promise<string>;
   assignIssue(a: { floor: number; number: number; agent?: string }): Promise<string>;
-  answerAgent(a: { agent_id: string; text: string }): Promise<string>;
+  answerAgent(a: { agent_id: string; text: string; asked_in?: number }): Promise<string>;
   askManagerChoice(a: { agent_id: string; question: string; options: string[]; recommendation: string }): string;
   qaReport(a: { floor: number; pr: number }): string;
   worktreeFile(a: { agent_id: string; mode: 'file' | 'diff_stat' | 'diff'; path?: string }): Promise<string>;
   prDiff(a: { floor: number; pr: number; patch?: boolean }): Promise<string>;
   sendTelegram(a: { text: string }): Promise<string>;
+  scanKeys(a: { rescan?: boolean }): Promise<string>;
+  makeDefaultAccount(a: { account: string; switch_now?: boolean }): string;
   editMessage(a: { id?: number; text: string; reason?: string }): Promise<string>;
   sessionHistory(a: z.infer<z.ZodObject<typeof SESSION_HISTORY_INPUT>>): string;
 }
@@ -227,8 +237,9 @@ export interface OfficeTools {
 }
 
 const EFFORT = z.enum(['low', 'medium', 'high', 'xhigh', 'max']);
-const CLI = z.enum(['claude', 'codex', 'opencode']);
+const CLI = z.enum(['claude', 'codex', 'opencode', 'gemini']);
 const TOOL_REFS = z.array(z.string().min(1).max(200)).max(30).optional();
+const TRIAGE_OR_ASKED = 'In a triage job (its stuck PR), or when the manager asks in a message to you now (pass asked_in): ';
 
 export function createOfficeTools(h: OfficeHandlers): OfficeTools {
   const run = async (fn: () => string | Promise<string>) => {
@@ -316,7 +327,7 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
       {
         agent_id: z.string(),
         account: z.string().max(40).optional().describe('An account id or tag (company_status lists them) to run on, or "rotation"'),
-        cli: z.union([CLI, z.literal('')]).optional().describe('"" for the office default'),
+        cli: z.union([CLI, z.literal('')]).optional().describe('"" for the office default. gemini: QA second opinions, docs, research, small fixes; not a builder'),
         model: z.string().optional().describe('A model id of their coding agent, "" for the default'),
         effort: z.union([EFFORT, z.literal('')]).optional().describe('"" for the office default'),
         // Tools & skills switches, only when the manager asks: names, or ids like 'mcp:notion'. Claude Code agents only.
@@ -358,26 +369,26 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
     ),
     tool(
       'retry_qa',
-      'Triage only: give a stuck pull request another QA round (a flaky session, or the problem has since been fixed).',
-      { floor: z.number().int(), pr: z.number().int().positive().describe('The pull request number') },
+      `${TRIAGE_OR_ASKED}give a pull request another QA round (a flaky session, or the problem has since been fixed); at the round cap, a full fresh test.`,
+      { floor: z.number().int(), pr: z.number().int().positive().describe('The pull request number'), asked_in: ASKED_IN.optional() },
       (a) => run(() => h.retryQa(a)),
     ),
     tool(
       'send_back',
-      "Triage only: send a stuck pull request back to a developer with QA's findings plus your note, without another QA round first.",
-      { floor: z.number().int(), pr: z.number().int().positive(), note: z.string().min(1).max(1000).describe('What the developer should do, e.g. "Merge main and keep both toolbar changes."') },
+      `${TRIAGE_OR_ASKED}send a pull request back to a developer with QA's findings plus your note, without another QA round first.`,
+      { floor: z.number().int(), pr: z.number().int().positive(), note: z.string().min(1).max(1000).describe('What the developer should do, e.g. "Merge main and keep both toolbar changes."'), asked_in: ASKED_IN.optional() },
       (a) => run(() => h.sendBack(a)),
     ),
     tool(
       'rerun_checks',
-      "Triage only: re-run the failed GitHub Actions runs on a stuck pull request's head commit (a flaky check or an outage), then hand it back to the office.",
-      { floor: z.number().int(), pr: z.number().int().positive() },
+      `${TRIAGE_OR_ASKED}re-run the failed GitHub Actions runs on a pull request's head commit (a flaky check or an outage), then hand it back to the office.`,
+      { floor: z.number().int(), pr: z.number().int().positive(), asked_in: ASKED_IN.optional() },
       (a) => run(() => h.rerunChecks(a)),
     ),
     tool(
       'close_pull',
-      'Triage only: close a stuck pull request that is the wrong approach, with your comment on it. Its issue stays open so it is built again. No branch is deleted.',
-      { floor: z.number().int(), pr: z.number().int().positive(), comment: z.string().min(1).max(1000).describe('Posted on the PR: why it is closed') },
+      `${TRIAGE_OR_ASKED}close a pull request that is the wrong approach, with your comment on it. Its issue stays open so it is built again. No branch is deleted.`,
+      { floor: z.number().int(), pr: z.number().int().positive(), comment: z.string().min(1).max(1000).describe('Posted on the PR: why it is closed'), asked_in: ASKED_IN.optional() },
       (a) => run(() => h.closePull(a)),
     ),
     tool(
@@ -413,7 +424,7 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
     tool('propose_design', PROPOSE_DESIGN_TEXT, PROPOSE_DESIGN, (a) => run(() => h.proposeDesign(a))),
     tool(
       'define_experiment',
-      "Define an A/B experiment on harness practices, as a draft: new issues on its floors get a variant at random and Mission control compares their PRs (QA rounds, cost, time to merge, survival). Only the manager starts, stops and promotes one. The first variant is the control: usually no settings.",
+      "Define an A/B experiment on harness practices, as a draft: new issues on its floors get a variant at random and Mission control compares their PRs (QA rounds, cost, time to merge, survival). Start it with run_experiment only when the manager asks. The first variant is the control: usually no settings.",
       {
         name: z.string().min(1).max(80),
         hypothesis: z.string().min(1).max(600).describe('What you expect a variant to change, and on which numbers'),
@@ -467,7 +478,7 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
       { floor: z.number().int(), number: z.number().int().positive().describe('The issue number'), agent: z.string().max(80).optional().describe('An id or name from company_status, or "next free"') },
       (a) => run(() => h.assignIssue(a)),
     ),
-    tool('answer_agent', "Answer an agent's open question (company_status questions, or a follow-up's event): typed into their session as their next message, and they carry on.", { agent_id: z.string().describe('An id (or name) from company_status'), text: z.string().min(1).max(2000).describe('Your answer, with the reason in a sentence') }, (a) => run(() => h.answerAgent(a))),
+    tool('answer_agent', "Answer an agent's open question (company_status questions, or a follow-up's event): typed into their session as their next message, and they carry on. One with the manager: only with asked_in, their message that answers it.", { agent_id: z.string().describe('An id (or name) from company_status'), text: z.string().min(1).max(2000).describe('Your answer, with the reason in a sentence'), asked_in: ASKED_IN.optional() }, (a) => run(() => h.answerAgent(a))),
     tool('ask_manager_choice', "Bring an agent's open question to the manager when only they can decide (a product call, credentials, something only they know). Their phone gets the question with one-tap options; their answer goes straight to the agent.", { agent_id: z.string(), question: z.string().min(1).max(600).describe('One plain sentence the manager can answer from their phone'), options: z.array(z.string().min(1).max(80)).min(2).max(4).describe('The choices, shortest wording'), recommendation: z.string().min(1).max(300).describe('Your pick and why, in a sentence') }, (a) => run(() => h.askManagerChoice(a))),
     tool(
       'qa_report',
@@ -498,9 +509,14 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
       { text: z.string().min(1).max(4000).describe('The message, plain text or light Markdown') },
       (a) => run(() => h.sendTelegram(a)),
     ),
+    tool('scan_keys', "Find the API keys the retired Mulinux projects left on this computer (their archive, OpenCode's config), test each with its provider, and list them for the manager to review and import in Settings → Providers. You see the provider, where it was, its last 4 characters and the test result, never a value. The last scan unless rescan.", { rescan: z.boolean().optional() }, (a) => run(() => h.scanKeys(a))),
+    tool('make_default_account', 'Make an account the default of its coding agent, when the manager asks: new tasks start on it, open tasks finish on theirs (switch_now: they move at their next session).', { account: z.string().max(40).describe('An account id (company_status lists them)'), switch_now: z.boolean().optional() }, (a) => run(() => h.makeDefaultAccount(a))),
     tool('edit_message', "Correct one of your earlier replies to the manager (#N from the chat; default your latest): its text is replaced, and the manager sees your old words struck through next to the new ones, marked edited. Their Telegram copy follows. For a real mistake only; new information goes in a new message.", { id: z.number().int().optional(), text: z.string().min(1).max(6000).describe('The whole corrected message'), reason: z.string().max(200).optional().describe('Why, in a few words') }, (a) => run(() => h.editMessage(a))),
     ...waitTools(h, run),
     ...reactTools(h, run),
+    ...setupTools(h, run),
+    ...askTools(h, run),
+    ...itTools(h, run),
   ];
   const server = createSdkMcpServer({ name: 'office', version: '1.0.0', tools: defs });
   return {
@@ -590,7 +606,7 @@ export function ceoSystemPrompt(o: {
     '',
     'How you work:',
     "- Call mcp__office__company_status first (floors, clone paths, teams, backlogs, PRs), and floor_detail before planning a floor's issues, QA brief or charter.",
-    '- Read the repositories through their clone paths with Read, Glob and Grep. They are read-only to you. You cannot run shell commands.',
+    '- Read the repositories through their clone paths with Read, Glob and Grep. They are read-only to you. You cannot run shell commands. On this machine, it_run reads (df, du, ps, systemctl status…) and it_propose puts a change on a card the manager runs.',
     `- Keep durable notes about the company in ${o.notesFile}: read it at the start, and update it at the end with decisions and anything worth remembering next time.`,
     '- Change things only through the mcp__office__ tools.',
     "- wait_for a PR, issue, agent or preview instead of ending the job; ask_manager for answers you need; consult a floor's agent about its code.",
@@ -604,6 +620,7 @@ export function ceoSystemPrompt(o: {
     '- Issues: the same agents build and test, so PRs queued for QA (capacity.prsAwaitingQa) mean fewer, bigger issues, not more. Most briefs need 1 to 4 issues. Write "Depends on #N" only when an issue truly cannot start until #N\'s code is merged, because it waits until #N is closed. Keep dependency chains to two steps at most. The office starts the issues that hold up others first. Do not duplicate open issues: fix an existing issue\'s dependencies with set_dependencies. File at most 12 issues per job, or per message from the manager.',
     '- Close an issue that is superseded or no longer wanted with close_issue, not by making it wait for another issue.',
     '- Charters: each issue names its objective ("Objective: O2"); ask the manager before filing a non-goal. Change charters only with propose_charter.',
+    '- When the manager asks you in chat to do something an office tool can do, do it (pass asked_in).',
     '- Follow-up jobs: the office woke you because something happened (a merge, a PR failing QA again, an agent stuck). Look with agent_log, qa_report, worktree_file and pr_diff, act only where it helps, and file issues only on floors a standing mandate covers. Record a mandate with set_mandate only when the manager asks you to keep working on something.',
     '- Triage jobs: a pull request got stuck (needs-human). Look before the manager does, and bring them only real decisions. Read the facts in the job and the code, then call exactly one of retry_qa (a flaky QA session, or it has been fixed since), send_back (a developer can fix it; your note says how), rerun_checks (a red check that looks flaky or like an outage), close_pull (the approach is wrong: its issue stays open to be built again) or escalate (only the manager can decide: a product call, credentials, a broken setup).',
     "- The manager's board actions never stop agents: you stop_agent, redirect or let finish the work they touched.",

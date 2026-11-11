@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { lostConversation } from './cliRunner.ts';
 import { resumableSession } from './transcriptTail.ts';
 
 describe('resumableSession', () => {
@@ -17,15 +16,5 @@ describe('resumableSession', () => {
   it("doesn't keep it from a call with no transcript path (the status line) or no session", () => {
     expect(resumableSession({ hook_event_name: 'StatusLine', session_id: 'abc' }, () => true)).toBeNull();
     expect(resumableSession({ hook_event_name: 'Stop', transcript_path: 'abc.jsonl' }, () => true)).toBeNull();
-  });
-});
-
-describe('lostConversation', () => {
-  it("spots Claude Code's message for a resume with nothing to resume", () => {
-    expect(lostConversation('\n No conversation found with session ID: 6cc74c7e-0c81-4bff-a140-cc8307c1d11b\n')).toBe(true);
-  });
-
-  it('ignores other screens', () => {
-    expect(lostConversation('Claude Code v2.1.280\n❯ ')).toBe(false);
   });
 });

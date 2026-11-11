@@ -1,7 +1,7 @@
 // How Claude's usage reads, on the server (phone messages, the CEO's company status) and in the office (the usage
 // meter, the HUD's pacing chip): clock times and the names of Claude's limits.
 
-import type { UsageCheckError, UsageReading, UsageWarningChoice } from './types.ts';
+import type { AccountsView, UsageCheckError, UsageReading, UsageWarningChoice } from './types.ts';
 
 /** "14:30", with the weekday when it isn't today. */
 export function clock(at: number, now: number): string {
@@ -53,15 +53,35 @@ export function readingOf(raw: { type: string; percent?: unknown; fraction?: unk
   return { type: raw.type, pct: Math.max(0, Math.min(100, Math.round(pct))), resetsAt, at };
 }
 
+/** A reading whose window has reset since: its number was the last window's, so it counts as 0% until a new reading comes. */
+export const isReset = (r: Pick<UsageReading, 'resetsAt'>, now: number) => r.resetsAt !== null && r.resetsAt <= now;
+
+/** How full a limit is now: its reading, or 0 once its window has reset. */
+export const livePct = (r: Pick<UsageReading, 'pct' | 'resetsAt'>, now: number) => (isReset(r, now) ? 0 : r.pct);
+
 const rank = (type: string) => (ORDER.includes(type) ? ORDER.indexOf(type) : ORDER.length);
 
-/** The latest reading per limit with `next` folded in: the newest reading of each type wins; in the meter's order, at most 8. */
+/**
+ * Whether `r` replaces `old` (same limit): the newer reading does (a reset Anthropic moved shows at once), unless it
+ * describes a window that was over before `old` was read; and a reading stamped after its own window ended loses to one
+ * of the window after (#383: a stale weekly reading never outlives the endpoint's).
+ */
+function replaces(r: UsageReading, old: UsageReading): boolean {
+  if (old.resetsAt !== null && old.resetsAt <= r.at && !(r.resetsAt !== null && r.resetsAt <= old.at)) return true;
+  if (r.resetsAt !== null && r.resetsAt <= old.at) return false;
+  return r.at >= old.at;
+}
+
+/**
+ * One account's latest reading per limit with `next` folded in (see replaces); in the
+ * meter's order, at most 8. Each account keeps its own list: never fold two accounts' readings together.
+ */
 export function mergeReadings(prev: readonly UsageReading[], next: readonly UsageReading[]): UsageReading[] {
   const byType = new Map(prev.map((r) => [r.type, r]));
   for (const r of next) {
     if (!LIMIT_TYPE.test(r.type)) continue;
     const old = byType.get(r.type);
-    if (!old || r.at >= old.at) byType.set(r.type, r);
+    if (!old || replaces(r, old)) byType.set(r.type, r);
   }
   return [...byType.values()].sort((a, b) => rank(a.type) - rank(b.type) || a.type.localeCompare(b.type)).slice(0, MAX_READINGS);
 }
@@ -102,7 +122,7 @@ export function readingsNote(readings: readonly UsageReading[], now: number, che
   return check ? `as of ${ago(newest, now)} · ${checkNote(check)}` : `as of ${ago(newest, now)}`;
 }
 
-/** One bar on the usage meter: "5-hour", 42%, its tone, and "resets 18:30" (or "reset 18:30" once it has). */
+/** One bar on the usage meter: "5-hour", 42%, its tone, and "resets 18:30" (or "reset" once it has: short enough for a phone). */
 export interface UsageBar {
   type: string;
   name: string;
@@ -114,24 +134,51 @@ export interface UsageBar {
 /** How full is too full on the meter: amber from 75%, red from 90%. */
 export const pctTone = (pct: number): UsageBar['tone'] => (pct >= 90 ? 'bad' : pct >= 75 ? 'warn' : 'good');
 
-/** The usage meter's bars, one per limit. */
+/** The usage meter's bars, one per limit; one whose window has reset reads 0% until a new reading comes. */
 export function usageBars(readings: readonly UsageReading[], now: number): UsageBar[] {
   return readings.map((r) => ({
     type: r.type,
     name: barName(r.type),
-    pct: r.pct,
-    tone: pctTone(r.pct),
-    resets: r.resetsAt === null ? null : `${r.resetsAt > now ? 'resets' : 'reset'} ${clock(r.resetsAt, now)}`,
+    pct: livePct(r, now),
+    tone: pctTone(livePct(r, now)),
+    resets: r.resetsAt === null ? null : isReset(r, now) ? 'reset' : `resets ${clock(r.resetsAt, now)}`,
   }));
 }
 
 /** The latest numbers for the CEO's company status: "5h 42% · week 61%", with "(as of 12 min ago)" when old; "no reading yet" without any. */
 export function readingsLabel(readings: readonly UsageReading[], now: number, check: UsageCheckError | null = null): string {
   if (!readings.length) return 'no reading yet';
-  const nums = readings.map((r) => `${SHORT_NAMES[r.type] ?? r.type.replace(/_/g, ' ')} ${r.pct}%`).join(' · ');
+  const nums = readings.map((r) => `${SHORT_NAMES[r.type] ?? r.type.replace(/_/g, ' ')} ${livePct(r, now)}%`).join(' · ');
   const note = readingsNote(readings, now, check);
   return note ? `${nums} (${note})` : nums;
 }
+
+/** One row of the Claude usage card (#383): a Claude login with its own readings, never a blend of accounts. */
+export interface UsageMeter {
+  id: string;
+  name: string;
+  plan: string | null;
+  readings: UsageReading[];
+  builtIn: boolean; // the built-in login: its readings are the office's own (claudeUsage), and the idle check's note is its
+  next: boolean; // the next agent's session starts on it
+  ceo: boolean; // the CEO's next session starts on it
+}
+
+/**
+ * The Claude usage card's rows: one per Claude login (not API keys), the next session's first. Without accounts (an
+ * old journal), the built-in login's readings alone.
+ */
+export function usageMeters(view: Pick<AccountsView, 'accounts' | 'next'>, builtIn: readonly UsageReading[]): UsageMeter[] {
+  const rows = view.accounts
+    .filter((a) => a.cli === 'claude' && a.kind !== 'api-key' && !a.removing && (a.enabled || a.usage.length))
+    .map((a): UsageMeter => ({ id: a.id, name: a.label, plan: a.loginPlan ?? a.plan ?? null, readings: a.builtIn ? [...builtIn] : a.usage, builtIn: !!a.builtIn, next: view.next?.claude === a.id, ceo: view.next?.ceo === a.id }));
+  if (!rows.length) return [{ id: '', name: 'Claude', plan: null, readings: [...builtIn], builtIn: true, next: true, ceo: true }];
+  const rank = (m: UsageMeter) => (m.next ? 0 : m.ceo ? 1 : 2);
+  return rows.map((m, i) => ({ m, i })).sort((x, y) => rank(x.m) - rank(y.m) || x.i - y.i).map((x) => x.m);
+}
+
+/** One account's numbers for the CEO's company status: "Ultra: 5h 67% · week 11%". */
+export const accountUsageLabel = (name: string, readings: readonly UsageReading[], now: number, check: UsageCheckError | null = null) => `${name}: ${readingsLabel(readings, now, check)}`;
 
 // ---------- when Claude warns that usage is high (#323) ----------
 
