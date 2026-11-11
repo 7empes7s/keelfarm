@@ -116,3 +116,11 @@ export function questionEvent(q: AgentQuestion, where: string): Omit<FollowupEve
 
 /** What the manager did since the CEO last looked (their answers to agents' questions), after the CEO job's prompt. */
 export const toldCeo = (lines: string[]) => (lines.length ? `\n\nSince you last looked:\n${lines.map((l) => `- ${l}`).join('\n')}` : '');
+
+/** A draft PR whose developer waits on an answer gets no QA or fix rounds until it comes (#508): each would be a wasted session. */
+export const waitsOnAnswer = (qs: readonly AgentQuestion[], repoId: string, pr: { number: number; isDraft: boolean } | undefined, devIds: readonly (string | null)[]) =>
+  !!pr?.isDraft && qs.some((q) => q.repoId === repoId && (q.pr === pr.number || devIds.includes(q.agentId)));
+
+/** The manager's answer as a comment where the agent asked (#508), so an agent that checks GitHub sees it there too. */
+export const answerComment = (q: Pick<AgentQuestion, 'agentName' | 'text'>, text: string) =>
+  `**Manager's answer via the office:** ${text.trim()}\n\n<sub>To ${q.agentName}'s question: "${q.text.replace(/"/g, "'")}"</sub>`;

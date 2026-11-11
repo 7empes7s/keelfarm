@@ -33,7 +33,7 @@ import { mergedPulls } from '../costLedger.ts';
 import { preferCli } from '../../shared/experiments.ts';
 import { blockers, holdUps } from '../../shared/issues.ts';
 import { planAssign } from '../../shared/assignIssue.ts';
-import { questionOf } from '../../shared/questions.ts';
+import { questionOf, waitsOnAnswer } from '../../shared/questions.ts';
 import { chooseIssue, predictFiles } from '../../shared/practices.ts';
 import { areaFiles, isPriorityLabel, pickNext, playbookAreas } from '../../shared/conflicts.ts';
 import type { OpsView, PullInfo, ServerEvent, SwarmSettings, UsageReading, UsageView, UsageWarningView, WorldSnapshot } from '../../shared/types.ts';
@@ -117,8 +117,10 @@ export abstract class SwarmScheduling extends SwarmQa {
     const free = this.available(repo);
     if (!free.length) return false;
     const now = Date.now();
-    const floor = this.floorState(this.repoRt.get(repo.id)!);
-    const queue = pipelineQueue(this.state.qa.filter((q) => q.repoId === repo.id && stillOpen({ kind: 'pr', number: q.prNumber }, floor) && !this.outsidePull(repo.id, q.prNumber))).filter(
+    const rt = this.repoRt.get(repo.id)!;
+    const floor = this.floorState(rt);
+    const asking = (q: QaRecord) => waitsOnAnswer(this.state.questions, repo.id, rt.pulls.find((p) => p.number === q.prNumber), [q.devAgentId, ...this.state.agents.filter((a) => a.repoId === repo.id && a.prNumber === q.prNumber).map((a) => a.id)]);
+    const queue = pipelineQueue(this.state.qa.filter((q) => q.repoId === repo.id && stillOpen({ kind: 'pr', number: q.prNumber }, floor) && !this.outsidePull(repo.id, q.prNumber) && !asking(q))).filter(
       ({ rec, task }) => !prepHeld(this.prepStrikes.get(prepKey(repo.id, rec.prNumber, task)), now),
     );
     const owed = new Set(queue.flatMap(({ rec, task }) => (task === 'fix' && rec.devAgentId ? [rec.devAgentId] : [])));
