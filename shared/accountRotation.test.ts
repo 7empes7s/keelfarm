@@ -67,6 +67,18 @@ const acc = (id: string, o: Partial<ProviderAccount> = {}): ProviderAccount => (
 const cand = (account: ProviderAccount, o: Partial<Candidate> = {}): Candidate => ({ account, signedIn: true, usage: [], todayUsd: 0, ...o });
 const pick = (binding: string | undefined, list: Candidate[], o: { apiLast?: boolean; skip?: string[]; now?: number } = {}) => pickAccount(binding, list, o.now ?? NOW, { cli: 'claude', apiLast: o.apiLast ?? true, skip: o.skip })?.id ?? null;
 
+describe('pickAccount with a task\'s account (#390)', () => {
+  const pro = acc('pro');
+  const ultra = acc('ultra', { priority: 1 });
+  const sticky = (list: Candidate[], id: string, now = NOW) => pickAccount(undefined, list, now, { cli: 'claude', apiLast: true, sticky: id })?.id ?? null;
+  it("keeps an open task on its account though another is first, and moves it when that one is out", () => {
+    expect(sticky([cand(pro), cand(ultra)], 'ultra')).toBe('ultra');
+    expect(sticky([cand(pro), cand({ ...ultra, limitedUntil: NOW + 60_000 })], 'ultra')).toBe('pro');
+    expect(sticky([cand(pro), cand({ ...ultra, enabled: false })], 'ultra')).toBe('pro');
+  });
+  it('a pinned account still comes first', () => expect(pickAccount('pro', [cand(pro), cand(ultra)], NOW, { cli: 'claude', apiLast: true, sticky: 'ultra' })?.id).toBe('pro'));
+});
+
 describe('pickAccount', () => {
   const main = acc('main', { priority: 0, tags: ['max'] });
   const backup = acc('backup', { priority: 1, tags: ['max', 'backup'] });

@@ -37,6 +37,7 @@ import {
   type AccountPatch,
   type AccountSetup,
 } from '../shared/accounts.ts';
+import { defaultAccount, makeDefault, tasksLeft } from '../shared/accountDefault.ts';
 import { addSpan, hasRoom, NEAR_OUT_PCT, pickAccount, rotationStats, type Candidate } from '../shared/accountRotation.ts';
 import { mergeReadings } from '../shared/usage.ts';
 import { codeProblem, inputShape, menuKeys, signInCode, signInEnd, signInScreen } from '../shared/signIn.ts';
@@ -60,11 +61,9 @@ export interface AccountsDeps {
   /** The cost ledger's sessions, for today's spend per account. */
   spend: () => { at: number; usd: number; account?: string }[];
   /** Agents (and the CEO) with what they're pinned to. */
-  agents: () => { id: string; account?: string }[];
+  agents: () => { id: string; account?: string; role?: string }[];
   /** The built-in Claude login's readings: the office already keeps them (claudeUsage). */
   builtInUsage: () => UsageReading[];
-  /** What the CEO is pinned to, for the account its next session starts on (#383). */
-  ceoBinding?: () => string | undefined;
   changed: (view: AccountsView) => void;
   /** The demo's made-up accounts, for a registry with only the built-in ones. */
   seed?: () => { accounts: ProviderAccount[]; keys: Record<string, string> };
@@ -74,6 +73,8 @@ export interface AccountsDeps {
   rotation?: () => RotationSettings;
   /** The folder every Claude login shares memory, conversations and settings with (#377); absent: the built-in login's. */
   shareFrom?: string;
+  /** The accounts the tasks running now started on (#390): Mission control's "tasks left" after Make default. */
+  tasks?: () => string[];
 }
 
 /** One session on an account: what it adds to the session's environment, and release() once it ends. */
@@ -237,8 +238,7 @@ export class Accounts {
 
   view(now = Date.now()): AccountsView {
     const agents = this.deps.agents();
-    return {
-      accounts: this.candidates(now)
+    const accounts = this.candidates(now)
         .sort((x, y) => x.account.cli.localeCompare(y.account.cli) || x.account.priority - y.account.priority)
         .map(({ account: a, signedIn, usage, todayUsd, sessions }): AccountView => {
           const secret = this.secretOf(a);
@@ -261,9 +261,14 @@ export class Accounts {
             ...(this.refresh.has(a.id) && signedIn ? { tokenRefresh: true } : {}),
             ...(this.ownsFolder(a) ? { shareMissing: shareStatus(this.dirOf(a), this.shareSource()) } : {}),
           };
-        }),
+        });
+    const running = this.deps.tasks?.() ?? [];
+    const switching = ACCOUNT_CLIS.map((cli) => ({ cli, to: defaultAccount(accounts, cli)?.label ?? '', left: tasksLeft(running, accounts, cli) })).filter((x) => x.left.length);
+    return {
+      accounts,
       rotation: rotationStats(this.switches, now),
-      next: { claude: this.pick(undefined, 'claude', now)?.id ?? null, ceo: this.pick(this.deps.ceoBinding?.(), 'claude', now)?.id ?? null },
+      next: { claude: this.pick(undefined, 'claude', now)?.id ?? null, ceo: this.pick(this.deps.agents().find((x) => x.role === 'ceo')?.account, 'claude', now)?.id ?? null },
+      ...(switching.length ? { switching } : {}),
     };
   }
 
@@ -282,18 +287,18 @@ export class Accounts {
   // ---------- sessions ----------
 
   /**
-   * The account a new session of an agent pinned to `binding` runs on, with what it adds to the session's
-   * environment; null: it runs as before accounts. Its running count goes up until release().
+   * The account a new session of an agent pinned to `binding` runs on (its task's account first, `sticky`, while
+   * it's usable), with what it adds to the session's environment; null: it runs as before accounts. Its running count goes up until release().
    */
-  use(binding: string | undefined, cli: AccountCli): AccountUse | null {
-    const a = this.pick(binding, cli, Date.now());
+  use(binding: string | undefined, cli: AccountCli, sticky?: string): AccountUse | null {
+    const a = this.pick(binding, cli, Date.now(), sticky);
     return a ? this.take(a) : null;
   }
 
   /** The account a new session pinned to `binding` would start on (rotation's pick, else the binding's), without starting one. */
-  private pick(binding: string | undefined, cli: AccountCli, now: number): ProviderAccount | null {
+  private pick(binding: string | undefined, cli: AccountCli, now: number, sticky?: string): ProviderAccount | null {
     const r = this.rotation();
-    return (r.on ? pickAccount(binding, this.candidates(now), now, { cli, apiLast: r.apiLast }) : null) ?? resolveAccount(this.list(), binding, cli);
+    return (r.on ? pickAccount(binding, this.candidates(now), now, { cli, apiLast: r.apiLast, sticky }) : null) ?? resolveAccount(this.list(), binding, cli);
   }
 
   /** The account the next unpinned session of `cli` would start on, with its readings: what pacing and company.usage name (#383). */
@@ -460,6 +465,15 @@ export class Accounts {
     this.find(id);
     this.save(moveAccount(this.list(), id, by < 0 ? -1 : 1));
     return this.view();
+  }
+
+  /** Make default (#390): first of its coding agent's, so new tasks start on it. Returns it. */
+  makeDefault(id: string): ProviderAccount {
+    const a = this.list().find((x) => x.id === id);
+    if (!a) throw new HttpError(404, `No account "${id}". Accounts: ${this.list().map((x) => `${x.id} (${x.label})`).join(', ')}.`);
+    if (!a.enabled || a.removing) throw new HttpError(400, `${a.label} is paused: resume it first.`);
+    this.save(makeDefault(this.list(), id));
+    return a;
   }
 
   /** PUT /api/accounts/:id/key: a new key for an API key account, tested first. */

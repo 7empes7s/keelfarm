@@ -25,7 +25,7 @@ describe('the spoken summary', () => {
     expect(swarm.snapshot().messages.find((x) => x.id === m.id)?.spoken).toBe('I filed two fixes for the terminal.');
   });
 
-  it("after answering with the reply tool, the turn's bookkeeping close is not read aloud", () => {
+  it("after answering with the reply tool, the turn's bookkeeping close is not a bubble read aloud", () => {
     const swarm = new Swarm(createDemoBackend());
     swarm.updateSettings({ voice: { ...DEFAULT_VOICE, provider: 'browser' } });
     const internals = swarm as unknown as Internals;
@@ -37,10 +37,10 @@ describe('the spoken summary', () => {
     internals.ceoReply({ message_id: asked.id, text: 'Paste works now.\n```spoken\nPaste works on your phone now.\n```' });
     const answer = internals.state.messages.at(-1)!;
     expect(answer).toMatchObject({ spoken: 'Paste works on your phone now.', voice: 'browser' });
-    internals.postCeoReply('Both messages are answered on your phone.');
-    const close = internals.state.messages.at(-1)!;
-    expect(close).toMatchObject({ from: 'ceo', text: 'Both messages are answered on your phone.', silent: true });
-    expect(close.voice).toBeUndefined();
+    const count = internals.state.messages.length;
+    internals.postCeoReply('Both messages are answered on your phone.'); // folds into the reply's steps row (#378): nothing new to read
+    expect(internals.state.messages.length).toBe(count);
+    expect(answer).toMatchObject({ text: 'Paste works now.', summary: 'Both messages are answered on your phone.', voice: 'browser' });
   });
 
   it("the demo CEO's replies carry one", () => {

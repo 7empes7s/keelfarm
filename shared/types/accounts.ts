@@ -71,6 +71,21 @@ export interface AccountsView {
   rotation?: RotationStats; // absent in old journals
   sources?: UsageSource[]; // usage for every account and provider (#361), worst first: in the snapshot, then usageSources events
   next?: { claude: string | null; ceo: string | null }; // the Claude account the next agent's and the CEO's session start on (#383)
+  switching?: Switching[]; // a new default while open tasks finish on the old one (#390); absent: none
+}
+
+/** One account's tasks still running on it after another became the default (#390). */
+export interface TasksLeft {
+  id: string;
+  label: string;
+  count: number;
+}
+
+/** A coding agent's new default and the tasks finishing elsewhere first. */
+interface Switching {
+  cli: AccountCli;
+  to: string; // the default's label
+  left: TasksLeft[];
 }
 
 /** Settings → Providers & accounts → Rotation (#248): automatic fallback when an account is limited or signed out. */

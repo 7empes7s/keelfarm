@@ -11,6 +11,7 @@ const home = fs.mkdtempSync(path.join(os.tmpdir(), 'cubefarm-rotation-'));
 process.env.SWARM_HOME = home;
 const { createDemoBackend } = await import('./demo.ts');
 const { Swarm } = await import('./swarm.ts');
+const { SWITCHED_NOTE } = await import('./swarm/rotation.ts');
 afterAll(() => fs.rmSync(home, { recursive: true, force: true, maxRetries: 5 }));
 
 // Account rotation (#248) in a demo office: a session that ends on a usage limit starts again on the next account
@@ -417,5 +418,92 @@ describe('the CEO on a second account', { timeout: 30_000 }, () => {
     cb!.text?.('Here.', true); // it answers: no longer shown as stuck
     expect(swarm.snapshot().agents.find((a) => a.id === 'ceo')?.blocked).toBeNull();
     expect(ceo().status).toBe('working');
+  });
+});
+
+// Make default and task stickiness (#390): an open task's sessions stay on the account it started on; new tasks go to
+// the default, which is first again at its reset; Switch now moves open tasks at their next session.
+describe('the default and task stickiness', { timeout: 30_000 }, () => {
+  type Sticky = Internals & { startOnAccount(a: object, o: SessionOptions, cb: SessionCallbacks): SessionHandle; watchDefaults(): void };
+  const HOUR = 60 * 60_000;
+
+  /** An office whose sessions only record where they ran; `run(agent, resume?)` starts one of that agent's task. */
+  async function sticky() {
+    const o = await office([]);
+    const i = o.i as Sticky;
+    const seen: { agent: string; account: string; resume?: string; prompt: string }[] = [];
+    i.backend.startSession = (opts) => {
+      seen.push({ agent: opts.agentId ?? '', account: accountOf(opts), resume: opts.resumeSessionId, prompt: opts.prompt });
+      return { send: () => undefined, stop: () => undefined };
+    };
+    /** A teammate on an issue (no session: run() starts them). */
+    const agent = (name: string, issueNumber: number) => {
+      const { id } = o.swarm.hireAgent(o.repo.id, { name, strict: true });
+      return Object.assign(i.state.agents.find((x) => x.id === id)!, { task: 'issue', issueNumber, prNumber: null }) as unknown as { id: string };
+    };
+    const cb = { log: () => undefined, tool: () => undefined, sessionId: () => undefined, finished: () => undefined } as unknown as SessionCallbacks;
+    const run = (a: ReturnType<typeof agent>, resume?: string) => {
+      i.startOnAccount(a, { cwd: home, prompt: 'Carry on.', systemAppend: '', model: 'm', effort: 'medium', browserTesting: false, additionalDirectories: [], role: 'agent', agentId: a.id, resumeSessionId: resume }, cb);
+      return seen.at(-1)!;
+    };
+    return { ...o, i, agent, run };
+  }
+
+  it('a resumed session of an open task stays on its account after Make default; a new task starts on the new default', async () => {
+    const { swarm, agent, run, i } = await sticky();
+    const ada = agent('Ada', 1);
+    expect(run(ada).account).toBe('claude-login');
+    const text = swarm.makeDefaultAccount('claude-keelop');
+    expect(text).toBe('Max · keelops is the default now: new tasks start on it; 1 agent finishes their current task on Claude login on this computer first.');
+    expect(i.state.messages.at(-1)?.text).toBe(text);
+    expect(run(ada, 'conversation-1')).toMatchObject({ account: 'claude-login', resume: 'conversation-1', prompt: 'Carry on.' });
+    expect(run(agent('Bob', 2)).account).toBe('claude-keelop');
+  });
+
+  it('a 5-hour limit on the default sends the next session on; at its reset new tasks go back to it, open ones stay put', async () => {
+    const { swarm, agent, run, i } = await sticky();
+    i.watchDefaults();
+    swarm.accounts.limited('claude-login', Date.now() + 5 * HOUR);
+    const ada = agent('Ada', 1);
+    expect(run(ada).account).toBe('claude-keelop');
+    i.watchDefaults(); // the default is out: noted
+    vi.setSystemTime(Date.now() + 5 * HOUR + 60_000);
+    i.watchDefaults();
+    expect(i.state.messages.at(-1)?.text).toBe('Claude login on this computer is back: new tasks start on it again.');
+    expect(run(agent('Bob', 2)).account).toBe('claude-login');
+    expect(run(ada, 'conversation-1')).toMatchObject({ account: 'claude-keelop', resume: 'conversation-1' });
+  });
+
+  it('the same with a weekly limit: Ultra-like default at 100% weekly, the other free (2026-11-08)', async () => {
+    const { swarm, agent, run } = await sticky();
+    swarm.makeDefaultAccount('claude-keelop');
+    const now = Date.now();
+    swarm.accounts.readings('claude-keelop', [{ type: 'seven_day', pct: 100, resetsAt: now + 3 * 24 * HOUR, at: now }]);
+    const ada = agent('Ada', 1);
+    expect(run(ada).account).toBe('claude-login');
+    vi.setSystemTime(now + 3 * 24 * HOUR + 60_000);
+    expect(run(agent('Bob', 2)).account).toBe('claude-keelop');
+    expect(run(ada, 'conversation-1')).toMatchObject({ account: 'claude-login', resume: 'conversation-1' });
+  });
+
+  it('Switch now moves an open task at its next session: a fresh one with the switched note, then it stays there', async () => {
+    const { swarm, agent, run } = await sticky();
+    const ada = agent('Ada', 1);
+    expect(run(ada).account).toBe('claude-login');
+    swarm.makeDefaultAccount('claude-keelop', true);
+    const moved = run(ada, 'conversation-1');
+    expect(moved).toMatchObject({ account: 'claude-keelop', resume: undefined });
+    expect(moved.prompt).toBe(`${SWITCHED_NOTE}\n\nCarry on.`);
+    expect(run(ada, 'conversation-2')).toMatchObject({ account: 'claude-keelop', resume: 'conversation-2', prompt: 'Carry on.' });
+  });
+
+  it('counts the tasks left on the old default until they finish', async () => {
+    const { swarm, agent, run } = await sticky();
+    const a = agent('Ada', 1);
+    expect(run(a).account).toBe('claude-login');
+    expect(swarm.makeDefaultAccount('claude-keelop')).toBe('Max · keelops is the default now: new tasks start on it; 1 agent finishes their current task on Claude login on this computer first.');
+    expect(swarm.accounts.view().switching).toEqual([{ cli: 'claude', to: 'Max · keelops', left: [{ id: 'claude-login', label: 'Claude login on this computer', count: 1 }] }]);
+    Object.assign(a, { task: null, issueNumber: null });
+    expect(swarm.accounts.view().switching).toBeUndefined();
   });
 });
