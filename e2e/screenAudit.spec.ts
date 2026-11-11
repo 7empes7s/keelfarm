@@ -4,6 +4,10 @@ import { expect, overflowProblems, test } from './helpers';
 // it shows (data-route-ready="1"), nothing scrolls sideways, and the fixture fails on any console error. Each screen
 // is also photographed top to bottom into the test's output folder, for QA's report (never committed).
 
+// No service worker: its precache of / would be cut off by the next cold load. Reduced motion: an indeterminate
+// progress bar's sweep, caught mid-slide, isn't a layout that scrolls sideways.
+test.use({ serviceWorkers: 'block', contextOptions: { reducedMotion: 'reduce' } });
+
 const SCOPE = /^#(tab\/(company|kanban|approvals)|company\/ops|previews|floor\/\d+\/(kanban|app)|pr\/|issue\/|usage|notices|sound)/;
 
 test('every pocket and 2D page in the audit fits a 390px phone', async ({ page }, info) => {
