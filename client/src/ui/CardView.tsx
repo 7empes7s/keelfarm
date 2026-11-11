@@ -73,7 +73,7 @@ export function CardView({ repoId, cardKey, number, pr }: { repoId: string; card
               title={gone.title ?? cardLabel({ number, pr })}
               chips={<Chip tone={gone.state === 'merged' ? 'good' : 'plain'}>{gone.state === 'merged' ? 'Merged' : gone.state === 'closed' ? 'Closed' : 'Off the board'}</Chip>}
             >
-              <div className="dp-meta">{gone.at ? `${gone.state === 'merged' ? 'Merged' : 'Closed'} ${ago(gone.at)}. ` : ''}It's off the board: closed, or not on this floor.</div>
+              <div className="dp-meta">{gone.at ? `${gone.state === 'merged' ? 'Merged' : 'Closed'} ${ago(gone.at)}. ` : 'Closed on GitHub, or on another floor. '}Its links are below.</div>
             </DetailsHeader>
             <Actions>
               <LinkButton href={gone.issueUrl}>Issue on GitHub <Icon name="external-link" /></LinkButton>
