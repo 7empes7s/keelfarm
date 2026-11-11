@@ -1,6 +1,7 @@
-// The IT desk (#506): the CEO's commands on this machine. it_run runs a read-only command at once; it_propose puts a
-// change on a card in the chat and Mission control, run only on the manager's Run (several at once with Run all) and
-// checked against the never-list again then. Every command is logged here and in the daily log. Rules in server/itDesk.ts.
+// The IT desk (#506): the IT department's commands on this machine (#524: the IT lead's, no longer the CEO's). it_run
+// runs a read-only command at once; it_propose puts a change on a card in the chats, Mission control and Telegram, run
+// only on the manager's Run (several at once with Run all) and checked against the never-list again then; IT then checks
+// the result (itRan). Every command is logged here and in the daily log. Rules in server/itDesk.ts.
 import os from 'node:os';
 import path from 'node:path';
 import { argvLine, IT_LOG_KEPT, IT_LOG_SHOWN, type ItDeskView, type ItLogEntry, type ItProposal, type ItRisk } from '../../shared/itDesk.ts';
@@ -27,6 +28,7 @@ export interface ItProposeArgs {
 }
 
 const OFF = 'The IT desk is off (Settings → CEO settings → IT desk): tell the manager what you would run instead.';
+const DEPT_OFF = 'The IT department is off (Settings → The IT department).';
 const WAITING_MAX = 12;
 
 export abstract class SwarmItDesk extends SwarmManagerAsks {
@@ -35,6 +37,11 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
 
   protected get itOn() {
     return this.state.settings.itDesk !== false;
+  }
+
+  /** The IT lead's name (Settings → The IT department). */
+  protected get itName() {
+    return this.state.settings.itDept.name;
   }
 
   /** The live office's own folders and state, which no proposal may touch. */
@@ -52,7 +59,7 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
     return d.waiting.length || d.log.length ? { ...super.snapshot(), itDesk: this.itDeskView() } : super.snapshot();
   }
 
-  private itChanged() {
+  private itDeskChanged() {
     this.save();
     this.broadcast({ type: 'itDesk', itDesk: this.itDeskView() });
   }
@@ -71,20 +78,22 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
   /** it_run: one read-only command now, its output sorted, limited, masked and capped. */
   protected async itRun(a: ItRunArgs): Promise<string> {
     if (!this.itOn) throw new HttpError(403, OFF);
+    if (!this.state.settings.itDept.on) throw new HttpError(403, DEPT_OFF);
     const parsed = parseCommand(String(a.command ?? ''));
     if ('refused' in parsed) throw new HttpError(400, parsed.refused);
     const plan = readOnlyPlan(parsed.argv, { linux: process.platform === 'linux' });
     if ('refused' in plan) throw new HttpError(400, plan.refused);
     const ran = await this.backend.itExec(plan.argv, plan.timeoutMs);
     const out = shapeOutput({ ...ran, sort: a.sort, lines: a.lines, mask: this.itMask });
-    this.itLog({ kind: 'read', by: this.ceo().name, argv: parsed.argv, code: ran.code, out });
-    this.itChanged();
+    this.itLog({ kind: 'read', by: this.itName, argv: parsed.argv, code: ran.code, out });
+    this.itDeskChanged();
     return `$ ${argvLine(parsed.argv)}\n${ran.code === null ? 'did not finish' : `exit ${ran.code}`}\n${out}`;
   }
 
   /** it_propose: a change on a card for the manager; nothing runs until their Run. */
   protected itPropose(a: ItProposeArgs): string {
     if (!this.itOn) throw new HttpError(403, OFF);
+    if (!this.state.settings.itDept.on) throw new HttpError(403, DEPT_OFF);
     const argv = (Array.isArray(a.argv) ? a.argv : []).map(String);
     const never = neverRefusal(argv, { protectedDirs: this.itProtected });
     if (never) throw new HttpError(403, never);
@@ -92,11 +101,12 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
     const line = argvLine(argv);
     if (this.state.itDesk.waiting.some((p) => argvLine(p.argv) === line)) throw new HttpError(409, `\`${line}\` already waits for the manager's Run.`);
     const at = Date.now();
-    const p: ItProposal = { id: `it-${at.toString(36)}-${++this.itSeq}`, argv, why: this.itMask(String(a.why ?? '').trim()), affects: this.itMask(String(a.affects ?? '').trim()), undo: this.itMask(String(a.undo ?? '').trim()), risk: a.risk ?? 'medium', at };
+    const p: ItProposal = { id: `it-${at.toString(36)}-${++this.itSeq}`, argv, why: this.itMask(String(a.why ?? '').trim()), affects: this.itMask(String(a.affects ?? '').trim()), undo: this.itMask(String(a.undo ?? '').trim()), risk: a.risk ?? 'medium', at, by: this.itName };
     this.state.itDesk.waiting.push(p);
-    this.itChanged();
-    this.notifier.notify('decisions', `${this.ceo().name} asks to run a command`, `${line}\n${p.why}`);
-    return `On the manager's card: \`${line}\`. Nothing has run: it runs only when they tap Run, and its output comes to the chat.`;
+    this.itDeskChanged();
+    this.itProposed(p); // its card in IT's chat and on Telegram, with Run / Not now
+    this.notifier.notify('decisions', `${this.itName} asks to run a command`, `${line}\n${p.why}`);
+    return `On the manager's card: \`${line}\`. Nothing has run: it runs only when they tap Run, and you get its output to check.`;
   }
 
   /** POST /api/it/run: the manager's Run on these cards, one after another; the never-list is checked again first. */
@@ -104,17 +114,16 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
     if (!this.itOn) throw new HttpError(403, 'The IT desk is off: turn it on in Settings → CEO settings.');
     const picked = ids.map((id) => this.state.itDesk.waiting.find((p) => p.id === id)).filter((p): p is ItProposal => !!p && !this.itRunning.has(p.id));
     if (!picked.length) throw new HttpError(404, 'Those commands have run or gone already.');
-    const ceo = this.ceo().name;
-    const by = `${this.managerLabel()}, proposed by ${ceo}`;
     const results: { id: string; code: number | null }[] = [];
     for (const p of picked) {
       this.itRunning.add(p.id);
       try {
         const line = argvLine(p.argv);
+        const by = `${this.managerLabel()}, proposed by ${p.by ?? this.ceo().name}`;
         const never = neverRefusal(p.argv, { protectedDirs: this.itProtected });
         if (never) {
           this.itLog({ kind: 'change', by, argv: p.argv, code: null, out: never, why: p.why });
-          this.postMessage('office', `🖥️ Refused \`${line}\`: ${never}`);
+          this.itRan(p, `🖥️ Refused \`${line}\`: ${never}`, never, null);
           results.push({ id: p.id, code: null });
           continue;
         }
@@ -122,12 +131,12 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
         const out = shapeOutput({ ...ran, mask: this.itMask, max: 8_000 });
         this.itLog({ kind: 'change', by, argv: p.argv, code: ran.code, out, why: p.why });
         const how = ran.code === 0 ? 'Ran' : ran.code === null ? "Couldn't finish" : `Exit ${ran.code} for`;
-        this.postMessage('office', `🖥️ ${how} \`${line}\` for ${ceo}`, undefined, { notice: { details: out.trim() || '(no output)' } });
+        this.itRan(p, `🖥️ ${how} \`${line}\` for ${p.by ?? this.ceo().name}`, out, { code: ran.code });
         results.push({ id: p.id, code: ran.code });
       } finally {
         this.itRunning.delete(p.id);
         this.state.itDesk.waiting = this.state.itDesk.waiting.filter((x) => x.id !== p.id);
-        this.itChanged();
+        this.itDeskChanged();
       }
     }
     return { results };
@@ -139,7 +148,7 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
     if (!gone.length) throw new HttpError(404, 'Those commands have run or gone already.');
     this.state.itDesk.waiting = this.state.itDesk.waiting.filter((p) => !gone.includes(p));
     for (const p of gone) this.itLog({ kind: 'change', by: `${this.managerLabel()} (Not now)`, argv: p.argv, code: null, out: 'Not run: the manager said Not now.', why: p.why });
-    this.itChanged();
+    this.itDeskChanged();
     return { ok: true };
   }
 }

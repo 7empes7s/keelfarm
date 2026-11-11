@@ -56,6 +56,7 @@ import { latestPage } from '../../shared/chatPage.ts';
 import { CeoFiles } from '../ceoFiles.ts';
 import { consultSessions, type Consult } from '../consult.ts';
 import { DEFAULT_CEO_AWAKE } from '../../shared/ceoAwake.ts';
+import { IT_DEPT_DEFAULTS, loadIt } from '../../shared/itDept.ts';
 import { FileStore } from '../files.ts';
 import type {
   AgentActivity,
@@ -112,6 +113,7 @@ export abstract class SwarmCore extends SwarmContract {
       ceoFollowups: followupSettings(DEFAULT_FOLLOWUPS, {}),
       ceoMandates: [],
       ceoAwake: { ...DEFAULT_CEO_AWAKE },
+      itDept: { ...IT_DEPT_DEFAULTS },
       managerName: '',
       companyName: '',
       dogName: DEFAULT_DOG_NAME,
@@ -152,7 +154,7 @@ export abstract class SwarmCore extends SwarmContract {
     pong: {},
     officeId: officeId(),
     claudeUsage: [],
-    questions: [], decisions: { list: [], digestAt: 0 }, taskAccounts: {}, itDesk: { waiting: [], log: [] },
+    questions: [], decisions: { list: [], digestAt: 0 }, taskAccounts: {}, itDesk: { waiting: [], log: [] }, it: loadIt(undefined),
     experiments: loadLab(undefined, Date.now()),
   };
   /** The chat's files store; every change goes out to the tabs as a `files` event. */
@@ -218,6 +220,8 @@ export abstract class SwarmCore extends SwarmContract {
   readonly notifier: Notifier;
   /** The manager's own Telegram bot: notifications, the CEO chat both ways, team-change buttons. The demo's is fake. */
   readonly telegram: TelegramBot;
+  /** The IT department's own bot (#524), under "telegramIt" in the secrets file. */
+  readonly itBot: TelegramBot;
   /** Settings → Cloud agents: the Upstash account and what cloud agents sign in with (docs/cloud.md). The demo's is fake. */
   readonly cloud: Cloud;
   /** Cloud agents' machines: an Upstash Box each. */
@@ -289,6 +293,17 @@ export abstract class SwarmCore extends SwarmContract {
       decide: (verdict, id) => this.decideFromTelegram(verdict, id),
       changed: () => this.notifier.refresh(),
       log: (line) => console.warn(line),
+    });
+    this.itBot = new TelegramBot({
+      api: backend.telegramIt,
+      secretsFile: path.join(HOME_DIR, backend.demo ? 'demo-telegram-secrets.json' : 'secrets.json'),
+      key: 'telegramIt',
+      who: () => this.state.settings.itDept.name,
+      on: () => this.state.settings.notify.channels.telegram,
+      message: async (text, id) => void (await this.messageIt(text, 'telegram', id)),
+      decide: (verdict, id) => this.itDecide(verdict, id),
+      changed: () => this.itChanged(),
+      log: (line) => console.warn(`IT ${line}`),
     });
     this.notifier = new Notifier({
       transport: backend.notify,
@@ -668,8 +683,8 @@ export abstract class SwarmCore extends SwarmContract {
   /** Values the journal must never write: the ElevenLabs key and secret-looking environment variables. */
   protected secrets(): string[] {
     const key = this.voice.secret();
-    const bot = this.telegram.secret();
-    return [...this.envSecrets, ...(key ? [key] : []), ...(bot ? [bot] : []), ...this.cloud.secretValues()];
+    const bots = [this.telegram.secret(), this.itBot.secret()].filter((b): b is string => !!b);
+    return [...this.envSecrets, ...(key ? [key] : []), ...bots, ...this.cloud.secretValues()];
   }
 
   /** POST /api/journal/sample (demo only): writes a made-up working day as yesterday's journal, to replay. */

@@ -162,6 +162,9 @@ export function parseDecision(data: string): { verdict: 'approve' | 'decline'; i
   return m ? { verdict: m[1] === 'a' ? 'approve' : 'decline', id: m[2] } : null;
 }
 
+/** An IT card's buttons (#524): Run or Not now, decided as the chat's card is. */
+export const runKeyboard = (id: string): TgButton[][] => [[{ text: 'Run', callback_data: decisionData('approve', id) }, { text: 'Not now', callback_data: decisionData('decline', id) }]];
+
 /** One row per team change: approve it (hire / let go) or decline it. */
 export function teamKeyboard(changes: readonly { id: string; name: string; kind: 'hire' | 'let-go' }[]): TgButton[][] {
   return changes.map((c) => [

@@ -18,4 +18,4 @@ const demoNotify: NotifyTransport = {
   },
 };
 
-registerDemo('notify', () => ({ notify: demoNotify, telegram: demoTelegram() }));
+registerDemo('notify', () => ({ notify: demoNotify, telegram: demoTelegram(), telegramIt: demoTelegram() }));
