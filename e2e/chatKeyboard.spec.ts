@@ -94,7 +94,9 @@ test("the 3D office's phone: the message box above the keyboard, full screen fil
   await keyboard(page, 0);
   await expect(phone.getByRole('tab', { name: 'Team' })).toBeVisible(); // the phone's tabs are back
 
-  await phone.getByRole('button', { name: 'Full screen chat', exact: true }).tap();
+  // through ⋯: the phone's narrow header may fold ⛶ into it (#514)
+  await phone.getByRole('button', { name: /^More for the chat/ }).tap();
+  await page.getByRole('menuitem', { name: /^Full screen chat/ }).tap();
   await expect(phone).toHaveClass(/phone-full/);
   await fillsScreen(page, phone);
   await phone.locator('.chat-input textarea').focus();
