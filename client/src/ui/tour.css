@@ -73,12 +73,12 @@
   }
 }
 /* the card clear of its control: above one low on the screen, centred when it isn't on screen */
-:is(body, .pocket.pk-railed) .tour.tour-at-top {
+body .tour.tour-at-top {
   top: 16px;
   bottom: auto;
 }
-.pocket:not(.pk-railed) .tour.tour-at-top {
-  top: calc(72px + var(--ds-safe-top));
+:is(.pocket, .pocket.pk-railed) .tour.tour-at-top {
+  top: calc(72px + var(--ds-safe-top)); /* under the header */
   bottom: auto;
 }
 :is(body, .pocket, .pocket.pk-railed) .tour.tour-at-center {
