@@ -180,6 +180,7 @@ export function ChatTools({ ceoName, who, files, onChats, onFiles, onCharts, int
       <Menu
         label="More for the chat"
         className="chat-more"
+        tour="chat-more"
         badge={foldedBadge(folded, { files })}
         items={[
           fold('charts', { label: 'Charts', hint: 'Ready prompts for a live chart', onSelect: onCharts }),

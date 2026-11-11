@@ -13,6 +13,7 @@ import { Panel } from './Panel';
 import { XLabel } from './HoverCard';
 import { useToastSpot } from './useToastSpot';
 import { useKeyReview } from './keyReview';
+import { useTour } from './tour';
 import './notices.css';
 import { CloseButton, Icon } from './Icon';
 import { iconFor } from './icons';
@@ -189,9 +190,11 @@ function ToastItem({ t, pocket }: { t: Toast; pocket: boolean }) {
 
 /** The toasts, newest at the end; `max` show and the rest collapse into "+N more", which opens the centre. */
 export function NoticeToasts({ max }: { max: number }) {
-  const toasts = useStore((s) => s.toasts);
+  const all = useStore((s) => s.toasts);
   const pocket = useMode((s) => s.mode) === 'pocket';
+  const tour = useTour((s) => s.on); // they wait behind the tour, their time starting once it's done (#408)
   useNoticeSync();
+  const toasts = tour ? [] : all;
   const { shown, more } = toastStack(toasts, max);
   const box = useRef<HTMLDivElement>(null);
   const spot = useToastSpot(box, shown.length + (more > 0 ? 1 : 0)); // never over a header or a tab row (#230)
