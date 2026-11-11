@@ -12,6 +12,7 @@ import { PrActions } from '../ui/PrActions';
 import { qaShotUrl } from '../ui/channels';
 import { sendToCeo } from '../ui/chatSend';
 import { Icon } from '../ui/Icon';
+import { TryThisList, useTryThis } from '../ui/TryThis';
 import { iconFor, type IconName } from '../ui/icons';
 
 const CHECK_ICON: Record<'pass' | 'fail' | 'skip', IconName> = { pass: 'circle-check', fail: 'circle-x', skip: 'skip-forward' };
@@ -64,6 +65,7 @@ export function PrDetail({ repo, qa, pr, why, now }: { repo: RepoView; qa: QaVie
     if (ok) sendToCeo(`What do you recommend for PR #${pr.number} on floor ${repo.floor} (“${pr.title}”)? It's in my Approvals as ${WHY_LABELS[why].label.toLowerCase()}.`);
   };
   const shots = qa.shots ?? [];
+  const steps = useTryThis(repo.id, pr, qa);
   return (
     <div className="apr-detail">
       <section className="pk-card apr-section apr-header" aria-label={`PR #${pr.number}`} style={{ ['--accent' as string]: repo.color }}>
@@ -210,6 +212,7 @@ export function PrDetail({ repo, qa, pr, why, now }: { repo: RepoView; qa: QaVie
 
       <Section title="Preview">
         <p className="small">Runs this PR beside {repo.defaultBranch}, opening at the pages it changes, with Compare.</p>
+        {steps && <TryThisList repoId={repo.id} pull={pr} steps={steps} onOpen={(path) => openOverlay({ kind: 'app', repoId: repo.id, pr: pr.number, path })} />}
         <div className="pk-actions">
           <button className="btn btn-small" onClick={() => openOverlay({ kind: 'app', repoId: repo.id, pr: pr.number })}>
             Open preview

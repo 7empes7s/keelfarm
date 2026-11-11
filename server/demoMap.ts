@@ -1,7 +1,8 @@
 // The demo's past for the memory map (#136): each floor's merged PRs of the last weeks, with the files they changed, so
 // a fresh demo office has history to look at (hot files, the time slider), and the files its fake PRs change.
-import type { IssueInfo, PullInfo } from '../shared/types.ts';
+import type { IssueInfo, PullInfo, TryStep } from '../shared/types.ts';
 import { prSummary } from '../shared/prSummary.ts';
+import { tryItSteps } from '../shared/tryIt.ts';
 
 /** A merged PR of a demo floor's past: its title, files, and how many days ago it merged. */
 interface PastWork {
@@ -87,3 +88,7 @@ export const demoPrSummary = (issue: Pick<IssueInfo, 'number' | 'body'> | undefi
 
 /** The page a demo QA session checks on a PR, after the home page (#203: the viewer's pages and live agent). */
 export const demoQaPage = (pr: number) => ['/settings', '/todos/new', '/lists/groceries', '/about#team'][pr % 4];
+
+/** A fake PR's "Try it" (#381): three steps on the page its QA checks, written as a PR body would and parsed like one. */
+export const demoTryIt = (title: string, pr: number): TryStep[] =>
+  tryItSteps(`## Try it\n1. Open \`${demoQaPage(pr)}\` in the preview.\n2. Use what "${title}" adds, once.\n3. You should see it work at 390 px, nothing cut off.`);

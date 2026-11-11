@@ -2,7 +2,8 @@
 // (structured output, or the last ```json block of a terminal agent's message).
 
 import { isRoundCause, ROUND_CAUSES, type RoundCause } from '../shared/rounds.ts';
-import type { QaCheck } from '../shared/types.ts';
+import { qaTrySteps } from '../shared/tryIt.ts';
+import type { QaCheck, TryStep } from '../shared/types.ts';
 import type { SessionResult } from './agentRunner.ts';
 import { LAB_PROBLEM_TEXT } from './testLab.ts';
 
@@ -18,6 +19,8 @@ export interface QaReport {
   charterCheck?: string;
   /** Why it failed (#188): QA's pick, absent on a pass or when QA gave none. */
   cause?: RoundCause;
+  /** The "Try this" steps as QA followed them (#381), corrected, with results. */
+  tryIt?: TryStep[];
 }
 
 export const QA_SCHEMA: Record<string, unknown> = {
@@ -61,6 +64,16 @@ export const QA_SCHEMA: Record<string, unknown> = {
       type: 'string',
       enum: ROUND_CAUSES,
       description: 'When the verdict is fail, the main reason: bug (doesn\'t work), nit (small polish only), spec-missing (lacks a test or part the issue asks for), lab-error (the browser or test lab broke, not the PR), outage (CI never started), conflict, checks (CI red).',
+    },
+    tryIt: {
+      type: 'array',
+      description: "The PR's \"## Try it\" steps (or 2-5 of your own from the issue's acceptance if it has none) as you followed them in the app: corrected so the manager can repeat them, a page path in backticks, a note on a fail.",
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['step', 'result'],
+        properties: { step: { type: 'string' }, result: { type: 'string', enum: ['pass', 'fail', 'skip'] }, note: { type: 'string' } },
+      },
     },
     charterCheck: { type: 'string', description: 'When the project has a charter: one line, "ok" or "violation: <the standard broken>", on its standards and the issue\'s objective.' },
   },
@@ -111,6 +124,7 @@ export function parseReport(result: SessionResult): QaReport | null {
     screenshots: Array.isArray(r.screenshots) ? r.screenshots.map(String) : [],
     fixInstructions,
     charterCheck,
+    tryIt: qaTrySteps((r as { tryIt?: unknown }).tryIt),
     ...((r.verdict === 'fail' || broken) && isRoundCause(r.cause) ? { cause: r.cause } : {}),
   };
 }
