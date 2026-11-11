@@ -127,3 +127,9 @@ html[data-ui-scale] .pocket .tour {
     bottom: calc(96px + var(--ds-safe-bottom));
   }
 }
+/* above the keys line while it shows, not over its start */
+@media (min-width: 761px) {
+  :root:has(.hud-help) .tour-invite-float {
+    bottom: 64px;
+  }
+}

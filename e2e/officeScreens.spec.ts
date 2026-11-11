@@ -23,7 +23,7 @@ const overlap = (a: DOMRect, b: DOMRect) => a.left < b.right && b.left < a.right
 async function closeBy(root: Locator) {
   const x = root.getByRole('button', { name: /^(Close|Back)/ }).first();
   await expect(x).toBeVisible();
-  await x.click();
+  await x.tap();
   await expect(root).toBeHidden();
 }
 
@@ -34,13 +34,13 @@ test.describe('on a phone', () => {
     await office(page);
     const phone = dialog(page, /Your phone/);
     const openPhone = async () => {
-      await page.getByTitle(/^Your phone/).click();
+      await page.getByTitle(/^Your phone/).tap();
       await expect(phone).toBeVisible();
     };
     // the phone, tab by tab
     await openPhone();
     for (const tab of ['Team', 'Company', 'Games']) {
-      await phone.getByRole('tab', { name: tab }).click();
+      await phone.getByRole('tab', { name: tab }).tap();
       await expect(phone.getByRole('tab', { name: tab })).toHaveAttribute('aria-selected', 'true');
     }
     await closeBy(phone);
@@ -52,22 +52,22 @@ test.describe('on a phone', () => {
       [/Help/, /How the office works/],
     ] as const) {
       await openPhone();
-      await phone.getByRole('tab', { name: 'Company' }).click();
-      await phone.getByRole('button', { name: button }).click();
+      await phone.getByRole('tab', { name: 'Company' }).tap();
+      await phone.getByRole('button', { name: button }).tap();
       await closeBy(dialog(page, name));
     }
     // the top bar: the floor card, the bell and Options
-    await page.locator('.hud-floor-chip').click();
+    await page.locator('.hud-floor-chip').tap();
     await closeBy(dialog(page, /Lobby/));
-    await page.locator('.hud .notice-bell').click();
+    await page.locator('.hud .notice-bell').tap();
     await closeBy(dialog(page, /Notifications/));
-    await page.getByRole('button', { name: 'Options' }).click();
+    await page.getByRole('button', { name: 'Options' }).tap();
     await closeBy(dialog(page, /^Options/));
   });
 
   test("the phone's ✕ stands out on its dark frame (#516)", async ({ page }) => {
     await office(page);
-    await page.getByTitle(/^Your phone/).click();
+    await page.getByTitle(/^Your phone/).tap();
     const x = dialog(page, /Your phone/).locator('.phone-x');
     await expect(x).toBeVisible();
     // the x's colour against its fill laid over the frame: WCAG's 3:1 for an icon
@@ -85,10 +85,12 @@ test.describe('on a phone', () => {
 
   test("the phone's chat shows its thread, nothing hanging under its screen to scroll it away (#516)", async ({ page }) => {
     await office(page);
-    await page.getByTitle(/^Your phone/).click();
+    await page.getByTitle(/^Your phone/).tap();
     const phone = dialog(page, /Your phone/);
-    if (!(await phone.locator('.chat-input').isVisible())) await phone.locator('.phone-tab').first().click(); // it opens on Team when a team change waits there
+    if (!(await phone.locator('.chat-input').isVisible())) await phone.locator('.phone-tab').first().tap(); // it opens on Team when a team change waits there
     await expect(phone.locator('.chat-log .bubble').first()).toBeVisible();
+    await expect(phone.locator('.chat-input textarea'), 'the keyboard waits for a tap').not.toBeFocused();
+    await expect(phone.getByRole('tab', { name: 'Team' }), "the phone's tabs show").toBeVisible();
     await page.waitForTimeout(1000); // the log settles at its end
     const screen = await phone.locator('.phone-screen').evaluate((el) => ({ top: el.scrollTop, over: el.scrollHeight - el.clientHeight }));
     expect(screen.over, 'nothing overflows the screen').toBeLessThanOrEqual(1);
@@ -106,12 +108,9 @@ test.describe('on a phone', () => {
     await page.waitForTimeout(800); // useToastSpot's next tick
     const vw = await page.evaluate(() => document.documentElement.clientWidth);
     const c = await rect(card);
-    for (const t of await page.locator('.toasts > *').all()) {
-      const r = await rect(t);
-      expect(r.left, 'a toast starts on screen').toBeGreaterThanOrEqual(0);
-      expect(r.right, 'a toast ends on screen').toBeLessThanOrEqual(vw);
-      expect(overlap(r, c), "a toast is over the What's new card").toBe(false);
-    }
+    const toasts = await Promise.all((await page.locator('.toasts > *').all()).map(rect));
+    for (const r of toasts) expect([r.left >= 0, r.right <= vw], 'a toast on screen, start and end').toEqual([true, true]);
+    for (const r of toasts) expect(overlap(r, c), "a toast is over the What's new card").toBe(false);
   });
 });
 
