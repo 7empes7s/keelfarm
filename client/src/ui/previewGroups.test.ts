@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PreviewView, PrPreviewView, PullInfo, QaView, RepoView } from '../../../shared/types';
 import type { Agent } from '../store';
-import { ago, parsePreviewsHash, plainTitle, previewLists, previewsHash, previewsStats, rowMatches, statusWord, type ListInputs } from './previewGroups';
+import { ago, parsePreviewsHash, plainTitle, previewLists, previewsHash, previewsStats, rowMatches, stageName, statusWord, type ListInputs } from './previewGroups';
 
 const NOW = Date.parse('2026-11-07T12:00:00Z');
 const hoursAgo = (h: number) => new Date(NOW - h * 3_600_000).toISOString();
@@ -145,5 +145,17 @@ describe('the deep link', () => {
     expect(previewsHash(3, null)).toBe('#previews/3/main');
     expect(previewsHash(null, null)).toBe('#previews');
     expect(parsePreviewsHash(previewsHash(4, 9))).toEqual({ floor: 4, pr: 9 });
+  });
+});
+
+describe('the phone switcher (#382)', () => {
+  const r = repo('todo', 1, [pull(23, 'Dark mode'), pull(20, 'Old one', { state: 'MERGED' })], { preview: preview('running') });
+  it('names the PR on stage, with its light', () => {
+    expect(stageName(r, 23, { 'todo#23': prPreview('todo', 23, 'starting') })).toEqual({ name: 'todo · PR #23', led: 'busy' });
+  });
+  it('names main when the PR asked for is merged or missing', () => {
+    expect(stageName(r, 20, {})).toEqual({ name: 'todo · live app', led: 'live' });
+    expect(stageName(r, 99, {})).toEqual({ name: 'todo · live app', led: 'live' });
+    expect(stageName(r, null, {})).toEqual({ name: 'todo · live app', led: 'live' });
   });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PrPreviewView, PullInfo } from '../../../shared/types';
-import { atPath, busyPrs, channelLabel, channelLed, channelOrder, channelPulls, keepOrder, liveChannels, pinLabel, previewingPrs, standLabel, stopsLabel, watchSays, chipRects, comparePath, currentChannel, newPathSync, onOfficeComputer, prAsPreview, qaBadge, qaShotUrl, reachable, relayPath, stripPulls } from './channels';
+import { atPath, busyPrs, channelLabel, channelLed, channelOrder, channelPulls, keepOrder, liveChannels, pinLabel, previewingPrs, standLabel, stopsLabel, chipTime, watchSays, chipRects, comparePath, currentChannel, newPathSync, onOfficeComputer, prAsPreview, qaBadge, qaShotUrl, reachable, relayPath, stripPulls } from './channels';
 
 const pull = (number: number, state: PullInfo['state'] = 'OPEN', title = `Change ${number}`) => ({ number, state, title }) as PullInfo;
 
@@ -192,5 +192,13 @@ describe('live channels (#204)', () => {
     expect(standLabel({ ...p, pinned: 'forever' }, 1, now)).toBe('Kept until you stop it');
     expect(pinLabel(new Date(2026, 10, 7, 15, 0).getTime())).toBe('Kept until 15:00');
     expect(standLabel({ ...p, status: 'stopped' }, 1, now)).toBe('');
+  });
+});
+
+describe('chipTime (#382)', () => {
+  it('keeps the time of a stand label for the phone bar’s timer chip', () => {
+    expect(chipTime('Stops 1:00 after you leave')).toBe('1:00');
+    expect(chipTime('Stops in 12 min')).toBe('12 min');
+    expect(chipTime('In use (own tab)')).toBe('');
   });
 });

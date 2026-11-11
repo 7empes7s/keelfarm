@@ -243,3 +243,45 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ---------- a phone (#382): one slim bar, the app edge to edge ---------- */
+
+.panel-previews-phone > .panel-head {
+  display: none;
+}
+.panel-previews.panel-previews-phone > .panel-body {
+  padding: 0;
+}
+.panel-previews-phone .pv {
+  gap: 0;
+}
+.app-slim {
+  max-height: 52px;
+  margin: 0;
+  padding: var(--ds-space-1) max(var(--ds-space-1), env(safe-area-inset-right)) var(--ds-space-1) max(var(--ds-space-1), env(safe-area-inset-left));
+  gap: var(--ds-space-1);
+}
+.app-toolbar.app-slim > .pv-open-list {
+  flex: 1;
+  justify-content: flex-start;
+  gap: var(--ds-space-2);
+}
+.app-slim > .btn,
+.app-slim .ds-menu-wrap > .ds-btn {
+  min-width: var(--ds-target);
+  min-height: var(--ds-target);
+}
+.use-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+}
+.app-bare:has(> .panel-body > div > .app-slim) .app-stage {
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+}
+.app-bare:has(> .panel-body > div > .app-slim) .app-body {
+  padding-bottom: env(safe-area-inset-bottom);
+}

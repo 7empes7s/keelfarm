@@ -4,12 +4,13 @@
 // what's picked (#previews/<floor>/<main|pr-N>). The lists are pure, in previewGroups.ts.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useStore } from '../store';
-import { AppViewer } from './AppViewer';
+import { AppViewer, NARROW } from './AppViewer';
+import { useMedia } from './DesktopView';
 import { Icon } from './Icon';
 import { stopsLabel } from './channels';
 import { Panel } from './Panel';
 import { Sheet } from './Sheet';
-import { ago, FILTERS, parsePreviewsHash, previewLists, previewsHash, previewsStats, rowMatches, type PreviewFilter, type PreviewRow } from './previewGroups';
+import { ago, FILTERS, parsePreviewsHash, previewLists, previewsHash, previewsStats, rowMatches, stageName, type PreviewFilter, type PreviewRow } from './previewGroups';
 import './previews.css';
 
 /** Narrower than this, the list is a sheet and the stage has the page. */
@@ -165,6 +166,7 @@ export function PreviewsPage({ repoId, pr, qa, merged, path }: { repoId?: string
   const [sheet, setSheet] = useState(false);
   const now = useNow();
   const { ref, narrow } = useNarrower(LIST_BESIDE_PX);
+  const phone = useMedia(NARROW) && narrow; // one slim bar over the app, edge to edge (#382)
   const fallback = firstRunning ?? (repos[0] ? { repoId: repos[0].id, pr: null } : null);
   const shown = pick && repos.some((r) => r.id === pick.repoId) ? pick : fallback;
   // what it opened on stays on stage while other previews start and stop
@@ -197,7 +199,14 @@ export function PreviewsPage({ repoId, pr, qa, merged, path }: { repoId?: string
     setSheet(false);
   };
   const list = <PreviewList selected={selected} first={first} pick={choose} now={now} />;
-  const name = repo && (shown?.pr == null ? `${repo.fullName.split('/')[1]} · live app` : `${repo.fullName.split('/')[1]} · PR #${shown.pr}`);
+  const stage = repo && shown ? stageName(repo, shown.pr, prPreviews) : null;
+  const name = stage?.name;
+  const switcher = narrow && (
+    <button className="btn btn-small pv-open-list" aria-haspopup="dialog" aria-label={name ? `All previews (showing ${name})` : 'All previews'} onClick={() => setSheet(true)}>
+      {stage && <span className={`led led-${stage.led}`} aria-hidden />}
+      <span className="pv-open-name">{name ?? 'All previews'}</span> <Icon name="chevron-down" />
+    </button>
+  );
   return (
     <Panel
       wide
@@ -206,17 +215,15 @@ export function PreviewsPage({ repoId, pr, qa, merged, path }: { repoId?: string
           <Icon name="monitor" /> Previews
         </>
       }
-      className="panel-previews"
+      className={`panel-previews ${phone && repo ? 'panel-previews-phone' : ''}`}
     >
       <div className="pv" ref={ref}>
-        <div className="pv-top">
-          {narrow && (
-            <button className="btn btn-small pv-open-list" aria-haspopup="dialog" aria-label={name ? `All previews (showing ${name})` : 'All previews'} onClick={() => setSheet(true)}>
-              <span className="pv-open-name">{name ?? 'All previews'}</span> <Icon name="chevron-down" />
-            </button>
-          )}
-          {!narrow && <StatsBar now={now} />}
-        </div>
+        {!(phone && repo) && (
+          <div className="pv-top">
+            {switcher}
+            {!narrow && <StatsBar now={now} />}
+          </div>
+        )}
         <div className={`pv-split ${narrow ? 'pv-split-narrow' : ''}`}>
           {!narrow && (
             <aside className="pv-side" aria-label="Previews list">
@@ -225,7 +232,7 @@ export function PreviewsPage({ repoId, pr, qa, merged, path }: { repoId?: string
           )}
           <div className="pv-stage">
             {repo && shown ? (
-              <AppViewer key={repo.id} repoId={repo.id} pr={shown.pr} qa={qa && shown.repoId === repoId && shown.pr === (pr ?? null)} merged={shown.repoId === repoId && shown.pr == null ? merged : undefined} path={shown.repoId === repoId && shown.pr === (pr ?? null) ? path : undefined} bare />
+              <AppViewer key={repo.id} repoId={repo.id} pr={shown.pr} qa={qa && shown.repoId === repoId && shown.pr === (pr ?? null)} merged={shown.repoId === repoId && shown.pr == null ? merged : undefined} path={shown.repoId === repoId && shown.pr === (pr ?? null) ? path : undefined} bare lead={phone ? switcher : undefined} />
             ) : (
               <p className="muted pv-empty">No projects yet: move one in from Floors &amp; repos and its live app shows here.</p>
             )}

@@ -5,7 +5,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { qaKey, useStore } from '../store';
 import { CEO_ID, type PreviewView, type PullInfo, type RepoView } from '../../../shared/types';
 import { api } from '../api';
-import { busyPrs, channelLabel, channelLed, channelOrder, clockLeft, keepOrder, pinLabel, previewingPrs, PR_PREVIEW_SLOTS, qaBadge, stopsLabel, standLabel, type Channel, type Chip } from './channels';
+import { busyPrs, channelLabel, channelLed, channelOrder, chipTime, clockLeft, keepOrder, pinLabel, previewingPrs, PR_PREVIEW_SLOTS, qaBadge, stopsLabel, standLabel, type Channel, type Chip } from './channels';
 import { sendToCeo } from './chatSend';
 import { ProgressBar } from './ProgressBar';
 import { Sheet } from './Sheet';
@@ -139,7 +139,8 @@ export function ChannelBar({ repo, channel, onPick }: { repo: RepoView; channel:
  * How a running preview stands (#252): "In use (own tab)", "Stops 1:00 after you leave", "📌 until 15:00" (with Unpin),
  * and in its max lifetime's last minute "Still using it?" with Keep it running. An agent's hold is HeldNote's.
  */
-export function UseNote({ preview, repo }: { preview: PreviewView; repo: RepoView }) {
+/** `chip`: its time is the slim bar's chip (`UseChip`); only the last-minute alert shows here. */
+export function UseNote({ preview, repo, chip }: { preview: PreviewView; repo: RepoView; chip?: boolean }) {
   const settings = useStore((s) => s.settings);
   const now = useNow();
   if (preview.status !== 'running' || preview.heldBy) return null;
@@ -156,7 +157,7 @@ export function UseNote({ preview, repo }: { preview: PreviewView; repo: RepoVie
           </button>
         </div>
       )}
-      {text && (
+      {text && !chip && (
         <div className="held-note small use-note" role="status">
           <span>
             {preview.pinned != null && <Icon name="pin" />} {text}
@@ -173,6 +174,22 @@ export function UseNote({ preview, repo }: { preview: PreviewView; repo: RepoVie
 }
 
 /** The ⋯ menu's 📌 items for a running preview the manager may stop: keep it an hour, until stopped, or let it go again. */
+/** A phone's slim bar (#382): when it stops on its own, as a small timer chip; the full words on hover and for screen readers. */
+export function UseChip({ preview }: { preview: PreviewView }) {
+  const settings = useStore((s) => s.settings);
+  const now = useNow();
+  if (preview.heldBy) return null;
+  const text = standLabel(preview, preview.pr == null ? settings.mainPreviewIdleMin : settings.prPreviewIdleMin, now);
+  if (!text) return null;
+  const time = chipTime(text);
+  return (
+    <span className="chip use-chip small" role="status" title={text} aria-label={text}>
+      <Icon name={preview.pinned != null ? 'pin' : 'timer'} />
+      {time && ` ${time}`}
+    </span>
+  );
+}
+
 export function keepItems(repo: RepoView, preview: PreviewView) {
   if (preview.status !== 'running' || preview.heldBy) return [];
   const pin = (how: 'hour' | 'forever' | 'off') => void api.keepPreview(repo.id, preview.pr, how).catch(() => undefined);

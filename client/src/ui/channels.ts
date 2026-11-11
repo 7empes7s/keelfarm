@@ -141,6 +141,11 @@ export function standLabel(p: Pick<PreviewView, 'status' | 'heldBy' | 'pinned' |
   return stops ? stops[0].toUpperCase() + stops.slice(1) : '';
 }
 
+/** The time in a stand label, for a phone's timer chip (#382): "1:00", "12 min"; '' when it has none (pinned, in use). */
+export function chipTime(label: string): string {
+  return /\d+:\d\d|\d+ min/.exec(label)?.[0] ?? '';
+}
+
 /** The channel on screen: the picked PR while it's still open, otherwise main. */
 export function currentChannel(picked: Channel | undefined, pulls: Pick<PullInfo, 'number' | 'state'>[]): Channel {
   return picked != null && pulls.some((p) => p.number === picked && p.state === 'OPEN') ? picked : null;
