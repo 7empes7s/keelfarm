@@ -56,6 +56,7 @@ export interface PhoneMessage {
   hidden?: true; // the CEO's, hidden by the manager (#145): kept for the CEO, never sent to a phone (shared/chatPage.ts)
   signIn?: ChatSignIn; // the office's: cloud agents to sign in after the API key stopped working (#258), as a card
   switch?: ChatSwitch; // the office's: the CEO moved to another account (#248), shown as a pill
+  ceoStuck?: ChatCeoStuck; // the office's: the CEO's session is stuck (#375), as a card with Open terminal, Sign in and Switch back
   pacing?: true; // the office's: pacing started on a usage warning, as a card with Resume full speed and Always keep full speed (#323)
   ceoJob?: CeoJobTag; // the CEO's reply to a job the office started (#332): its model, and Redo on Opus
 }
@@ -81,6 +82,14 @@ interface ChatSwitch {
   to: string | null;
   until: number | null; // when the first account is back
   useKey?: string; // every account is out but this paused API key: "Use API key" resumes it
+}
+
+/** The CEO's session stuck on a sign-in, a setup screen or silence (#375): what the card offers. */
+export interface ChatCeoStuck {
+  kind: 'sign-in' | 'setup' | 'silent' | 'other';
+  account: string | null; // the account it's stuck on (its id; null: the built-in login)
+  back: string | null; // the account binding Switch back sets ('' the office default), null when there's nowhere to go back to
+  backLabel?: string;
 }
 
 /** Cloud agents whose API key ran out of credit or was turned away, and now wait for their own sign-in: one card per burst. */
