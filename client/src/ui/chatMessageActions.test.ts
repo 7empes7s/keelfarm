@@ -23,4 +23,14 @@ describe("a chat message's actions", () => {
     expect(labels(messageActions({ from: 'ceo' }, { ...opts({ label: 'Hide', run: noop }), readWhole: noop }))).toEqual(['Read the whole message', 'Remember this', 'Hide']);
     expect(labels(messageActions({ from: 'manager' }, { ...opts({ label: 'Delete', run: noop }), readWhole: noop }))).toEqual(['Edit', 'Remember this', 'Delete']);
   });
+
+  it('offers Copy all commands on a message with two or more, copying them in order (#438)', () => {
+    const copied: string[] = [];
+    const copy = (t: string) => copied.push(t);
+    const acts = messageActions({ from: 'ceo' }, { ...opts({ label: 'Hide', run: noop }), commands: ['free -h', 'df -h /', 'vmstat 5'], copy });
+    expect(labels(acts)).toEqual(['Copy all commands', 'Remember this', 'Hide']);
+    acts[0].run();
+    expect(copied).toEqual(['free -h\ndf -h /\nvmstat 5']);
+    expect(labels(messageActions({ from: 'ceo' }, { ...opts({ label: 'Hide', run: noop }), commands: ['free -h'], copy }))).toEqual(['Remember this', 'Hide']);
+  });
 });
