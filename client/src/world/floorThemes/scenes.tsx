@@ -1,6 +1,7 @@
-// A themed floor's dressing (#370; #371's themes in studioScenes.tsx), the lazy chunk FloorThemeLayer.tsx loads only while a themed floor is on screen:
-// the pack's props in the free decoration slots, the extra monitors on working desks, and its own wall pieces (the
-// game studio's Playtest screen and neon, the trading floor's market board, world clocks and hanging ticker).
+// A themed floor's dressing (#370), the lazy chunk FloorThemeLayer.tsx loads only while a themed floor is on screen
+// (#371's themes are drawn by studioScenes.tsx, in the same chunk): the pack's props in the free decoration slots,
+// the extra monitors on working desks, and its own wall pieces (the game studio's Playtest screen and neon, the
+// trading floor's market board, world clocks and hanging ticker).
 // Repeated props are one InstancedMesh each; pictures are canvases drawn once (or when their numbers change).
 
 import { useEffect, useMemo, useRef, useState } from 'react';
