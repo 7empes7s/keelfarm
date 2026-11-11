@@ -482,6 +482,8 @@ export interface KanbanCard {
   note?: string;
   tone?: CardTone;
   prNumber?: number;
+  /** A PR card's issues it closes: a ref to one of them opens this card (#505). */
+  closes?: number[];
   qa?: QaView;
   /** The 3D board draws it as an outline: its sticky is off the board, with the agent testing it (StickyNotes.tsx). */
   ghost?: boolean;
@@ -533,7 +535,7 @@ export function kanbanFor(repo: RepoView, agents: Agent[], qaRecords: Record<str
     const rec = qaRecords[qaKey(repo.id, p.number)];
     const dev = (rec?.devAgentId ? byId.get(rec.devAgentId) : undefined) ?? authorOf(p.number, p.headRefName);
     const tester = rec?.qaAgentId ? byId.get(rec.qaAgentId) : undefined;
-    const base = { key: `pr-${p.number}`, number: p.number, prNumber: p.number, title: p.title, url: p.url, qa: rec, untrusted: p.untrusted };
+    const base = { key: `pr-${p.number}`, number: p.number, prNumber: p.number, closes: p.closesIssues, title: p.title, url: p.url, qa: rec, untrusted: p.untrusted };
     const card = { ...base, ...(p.untrusted ? { note: OUTSIDE_PR, tone: 'warn' as const } : qaCardNote(rec, p, repo.autoMerge)) };
     if (rec?.status === 'passed') ready.push({ ...card, agent: dev });
     else qa.push({ ...card, agent: rec?.status === 'testing' ? tester : dev });
@@ -558,7 +560,7 @@ export function kanbanFor(repo: RepoView, agents: Agent[], qaRecords: Record<str
   const merged: KanbanCard[] = repo.pulls
     .filter((p) => p.state === 'MERGED')
     .sort((a, b) => (b.mergedAt ?? '').localeCompare(a.mergedAt ?? ''))
-    .map((p) => ({ key: `m-${p.number}`, number: p.number, prNumber: p.number, title: p.title, url: p.url, agent: authorOf(p.number, p.headRefName) }));
+    .map((p) => ({ key: `m-${p.number}`, number: p.number, prNumber: p.number, closes: p.closesIssues, title: p.title, url: p.url, agent: authorOf(p.number, p.headRefName) }));
 
   return { backlog, progress, qa, ready, merged };
 }

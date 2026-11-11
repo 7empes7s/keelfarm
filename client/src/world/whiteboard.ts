@@ -143,16 +143,21 @@ export function dependencyPairs(issues: readonly Pick<IssueInfo, 'number' | 'bod
 
 // ---------- reading a card ----------
 
-/** The card a card view is about, wherever it is now: by key, else the same issue or PR by number. */
+/**
+ * The card a card view is about, wherever it is now: by key, else the same issue or PR by number, else the card that
+ * holds it under its other number (an issue's PR card, a PR's issue card; #505).
+ */
 export function locateCard(cols: KanbanColumns, key: string, number: number, pr: boolean): (Slot & { card: KanbanCard }) | null {
   let byNumber: (Slot & { card: KanbanCard }) | null = null;
+  let byOther: (Slot & { card: KanbanCard }) | null = null;
   for (const col of KANBAN_KEYS) {
     const cards = cols[col];
     for (let index = 0; index < cards.length; index++) {
       const card = cards[index];
       if (card.key === key) return { col, index, card };
       if (!byNumber && card.number === number && !!card.prNumber === pr) byNumber = { col, index, card };
+      if (!byOther && (card.number === number || card.prNumber === number || card.closes?.includes(number))) byOther = { col, index, card };
     }
   }
-  return byNumber;
+  return byNumber ?? byOther;
 }
