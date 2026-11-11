@@ -4,6 +4,8 @@
 import { create } from 'zustand';
 import { useStore, type Overlay } from '../store';
 import type { SectionId } from './consoleNavRules';
+import { gateAllows } from './tourGate';
+import type { HudOptionId } from './hudOptions';
 
 export type Target =
   | { kind: 'overlay'; overlay: Overlay }
@@ -12,7 +14,9 @@ export type Target =
   | { kind: 'ceo'; text?: string; jump?: number }
   | { kind: 'link'; url: string }
   /** The guide checklist (GuideCard.tsx). */
-  | { kind: 'guide' };
+  | { kind: 'guide' }
+  /** One of the phone HUD's Options (hudOptions.ts), in the 3D office. */
+  | { kind: 'option'; id: HudOptionId };
 
 /** A message for the CEO chat's box, and a message to scroll to, taken by the chat when it shows (Chat.tsx). */
 export const useCeoDraft = create<{ text: string | null; jump?: number | null }>(() => ({ text: null }));
@@ -21,9 +25,15 @@ export const useCeoDraft = create<{ text: string | null; jump?: number | null }>
 export const useFinder = create<{ search: boolean; guide: boolean }>(() => ({ search: false, guide: false }));
 
 export function openSearch() {
+  if (!gateAllows({ kind: 'search' })) return;
   if (document.pointerLockElement) document.exitPointerLock();
   useFinder.setState({ search: true });
 }
+
+let runOption: ((id: HudOptionId) => void) | null = null;
+
+/** The 3D office's HUD says how to run an Option (PhoneHud.tsx). */
+export const setOptionRunner = (run: (id: HudOptionId) => void) => void (runOption = run);
 
 export function go(t: Target) {
   const s = useStore.getState();
@@ -39,7 +49,10 @@ export function go(t: Target) {
     case 'link':
       return void window.open(t.url, '_blank', 'noopener');
     case 'guide':
+      if (!gateAllows({ kind: 'guide' })) return;
       if (document.pointerLockElement) document.exitPointerLock();
       return useFinder.setState({ guide: true });
+    case 'option':
+      return runOption?.(t.id);
   }
 }
