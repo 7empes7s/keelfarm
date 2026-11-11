@@ -1,7 +1,7 @@
 // A task's progress (#140): build → PR → QA → fix → merge as steps, the one it's in pulsing, when it was asked for and
 // how long its agent has worked on it against the floor's median issue → merge (Mission control's lead time; #349).
 // Kanban cards and the agent card show the bar; the agent window and pocket's team cards show the ring.
-import { STAGE_LABELS, TASK_STAGES, taskStage, taskTimes, type TaskInput } from '../../../shared/progressBars';
+import { onCard, STAGE_LABELS, TASK_STAGES, taskStage, taskTimes, type TaskInput } from '../../../shared/progressBars';
 import type { QaView, RepoView } from '../../../shared/types';
 import { qaKey, useStore, type Agent } from '../store';
 import { ProgressBar, ProgressRing } from './ProgressBar';
@@ -17,9 +17,10 @@ export function taskSince(repo: RepoView | undefined, issue: number | null, pr: 
   return Number.isFinite(t) ? t : null;
 }
 
-/** Since when an agent has been on their current step, and what the card calls it (none while they're not working). */
-export function agentWorking(a: Agent | undefined): { workingSince: number | null; step: string } {
-  const busy = a && (a.status === 'working' || a.status === 'preparing') && a.startedAt != null;
+/** Since when an agent has been on their current step, and what the card calls it (none while they're not working,
+ *  or, given a card, while their step is on another one). */
+export function agentWorking(a: Agent | undefined, card?: { issue: number | null; pr: number | null }): { workingSince: number | null; step: string } {
+  const busy = a && (!card || onCard(a, card)) && (a.status === 'working' || a.status === 'preparing') && a.startedAt != null;
   return { workingSince: busy ? a.startedAt : null, step: a?.task === 'qa' ? 'testing' : a?.task === 'fix' ? 'fixing' : 'working' };
 }
 

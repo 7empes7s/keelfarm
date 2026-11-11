@@ -142,6 +142,10 @@ const SKIP = /^(swarm:skip|wontfix|question)$/i;
 export const buildingOf = (agents: { role: string; task: AgentTask | null; status: AgentStatus; issueNumber: number | null; prNumber: number | null }[]) =>
   agents.filter((a) => a.role !== 'ceo' && a.task === 'issue' && a.status !== 'idle' && a.issueNumber != null && a.prNumber == null).map((a) => a.issueNumber!);
 
+/** Whether an agent's current step is a card's: its PR (fixers and testers carry it), or its issue before a PR. */
+export const onCard = (a: { issueNumber: number | null; prNumber: number | null }, card: { issue: number | null; pr: number | null }) =>
+  card.pr != null ? a.prNumber === card.pr : a.issueNumber === card.issue && a.prNumber == null;
+
 /** A floor's work as done / in progress / ready / waiting, with merges per day for the week. */
 export function backlogSplit(b: BacklogInput): BacklogSplit {
   const open = new Set(b.issues.map((i) => i.number));

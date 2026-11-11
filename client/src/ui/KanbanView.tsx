@@ -384,7 +384,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
                         input={c.prNumber != null ? { task: null, prNumber: c.prNumber, qa: c.qa } : { task: 'issue', status: c.agent?.status, prNumber: null }}
                         repoId={repo.id}
                         since={taskSince(repo, c.number, c.prNumber ?? null)}
-                        working={agentWorking(c.untrusted ? undefined : c.agent)}
+                        working={agentWorking(c.untrusted ? undefined : c.agent, { issue: c.prNumber != null ? null : c.number, pr: c.prNumber ?? null })}
                         name={`${kind} #${c.number}`}
                         compact
                         {...(c.url ? { href: c.url, tap: `Open ${c.prNumber ? 'the PR' : 'the issue'} on GitHub` } : c.agent ? { onClick: () => openOverlay({ kind: 'terminal', agentId: c.agent!.id }), tap: `Open ${c.agent.name}'s terminal` } : {})}

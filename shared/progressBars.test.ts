@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ObjectiveInsight } from './charterStats.ts';
-import { backlogParts, backlogSplit, buildingOf, focusProgress, leadPace, memoryLimit, objectiveProgress, planBatches, previewSteps, spendLimit, taskStage, taskTimes, updateSteps } from './progressBars.ts';
+import { backlogParts, backlogSplit, buildingOf, focusProgress, leadPace, memoryLimit, objectiveProgress, onCard, planBatches, previewSteps, spendLimit, taskStage, taskTimes, updateSteps } from './progressBars.ts';
 
 const H = 3600_000;
 
@@ -156,5 +156,19 @@ describe('steps', () => {
     expect(updateSteps('updating')?.at).toBe(3);
     expect(updateSteps('failed')?.tone).toBe('bad');
     expect(updateSteps('none')).toBeNull();
+  });
+});
+
+describe('onCard', () => {
+  it("leaves a PR card alone while its author fixes another PR (#410)", () => {
+    const ada = { issueNumber: 20, prNumber: 27 };
+    expect(onCard(ada, { issue: null, pr: 25 })).toBe(false);
+    expect(onCard(ada, { issue: null, pr: 27 })).toBe(true);
+  });
+
+  it('counts an issue card only while its agent builds it, before a PR', () => {
+    expect(onCard({ issueNumber: 20, prNumber: null }, { issue: 20, pr: null })).toBe(true);
+    expect(onCard({ issueNumber: 21, prNumber: null }, { issue: 20, pr: null })).toBe(false);
+    expect(onCard({ issueNumber: 20, prNumber: 27 }, { issue: 20, pr: null })).toBe(false);
   });
 });
