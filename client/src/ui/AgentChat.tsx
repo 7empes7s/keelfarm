@@ -11,6 +11,7 @@ import { api } from '../api';
 import { isBusy, qaKey, useStore } from '../store';
 import { toolVerb } from '../world/draw';
 import { prChip } from './chatMode';
+import { prPage } from './prNav';
 import { Markdown } from './Markdown';
 import { Reactable, ReactionChips } from './Reactions';
 import './agentChat.css';
@@ -159,6 +160,7 @@ export function AgentChat({ agent, repo, jump, onTerminal, onSend, onStop }: { a
   };
 
   const prUrl = prNumber ? pull(prNumber)?.url : undefined;
+  const prOverlay = prNumber ? prPage(repo, prNumber) : null;
   return (
     <div className="ac">
       <div
@@ -202,10 +204,16 @@ export function AgentChat({ agent, repo, jump, onTerminal, onSend, onStop }: { a
             </button>
           </>
         )}
-        {prUrl && (
-          <a className="btn btn-small" href={prUrl} target="_blank" rel="noopener noreferrer">
+        {prOverlay ? (
+          <button type="button" className="btn btn-small" onClick={() => useStore.getState().openOverlay(prOverlay)}>
             Open PR #{prNumber}
-          </a>
+          </button>
+        ) : (
+          prUrl && (
+            <a className="btn btn-small" href={prUrl} target="_blank" rel="noopener noreferrer">
+              Open PR #{prNumber}
+            </a>
+          )
         )}
         <button type="button" className="btn btn-small btn-ghost" onClick={onTerminal}>
           Open terminal
