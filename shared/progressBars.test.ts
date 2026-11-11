@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ObjectiveInsight } from './charterStats.ts';
-import { backlogParts, backlogSplit, buildingOf, focusProgress, leadPace, memoryLimit, objectiveProgress, planBatches, previewSteps, spendLimit, taskStage, updateSteps } from './progressBars.ts';
+import { backlogParts, backlogSplit, buildingOf, focusProgress, leadPace, memoryLimit, objectiveProgress, onCard, planBatches, previewSteps, spendLimit, taskStage, taskTimes, updateSteps } from './progressBars.ts';
 
 const H = 3600_000;
 
@@ -28,6 +28,27 @@ describe('leadPace', () => {
     expect(leadPace(0, 5 * H, 2 * H)?.tone).toBe('bad');
     expect(leadPace(0, H, null)).toBeNull();
     expect(leadPace(null, H, H)).toBeNull();
+  });
+});
+
+describe('taskTimes', () => {
+  const now = 10 * H;
+  const M = 60_000;
+  it('says when it was asked and how long the agent has worked, never red for the wait', () => {
+    const t = taskTimes({ askedAt: now - 9 * H, workingSince: now - 12 * M, now, medianMs: 2 * H });
+    expect(t.text).toBe('Asked 9h ago · working 12m');
+    expect(t.aria).toBe('Asked 9h ago, working for 12m');
+    expect(t.pace?.tone).toBe('neutral'); // the filed time (9 h, 4.5× the median) would have made it bad
+  });
+  it('adds the × median hint only once the working time is past the median', () => {
+    const t = taskTimes({ askedAt: now - 9 * H, workingSince: now - 3 * H, now, medianMs: 2 * H, pr: true, step: 'fixing' });
+    expect(t.text).toBe('PR opened 9h ago · fixing 3h 0m · 1.5× median 2h 0m');
+    expect(t.pace?.tone).toBe('warn');
+    expect(t.aria).toContain("1.5 times the floor's median");
+  });
+  it('leaves out what it does not know', () => {
+    expect(taskTimes({ askedAt: now - 30 * M, workingSince: null, now, medianMs: 2 * H })).toEqual({ text: 'Asked 30m ago', aria: 'Asked 30m ago', pace: null });
+    expect(taskTimes({ askedAt: null, workingSince: null, now, medianMs: null }).text).toBeNull();
   });
 });
 
@@ -135,5 +156,19 @@ describe('steps', () => {
     expect(updateSteps('updating')?.at).toBe(3);
     expect(updateSteps('failed')?.tone).toBe('bad');
     expect(updateSteps('none')).toBeNull();
+  });
+});
+
+describe('onCard', () => {
+  it("leaves a PR card alone while its author fixes another PR (#410)", () => {
+    const ada = { issueNumber: 20, prNumber: 27 };
+    expect(onCard(ada, { issue: null, pr: 25 })).toBe(false);
+    expect(onCard(ada, { issue: null, pr: 27 })).toBe(true);
+  });
+
+  it('counts an issue card only while its agent builds it, before a PR', () => {
+    expect(onCard({ issueNumber: 20, prNumber: null }, { issue: 20, pr: null })).toBe(true);
+    expect(onCard({ issueNumber: 21, prNumber: null }, { issue: 20, pr: null })).toBe(false);
+    expect(onCard({ issueNumber: 20, prNumber: 27 }, { issue: 20, pr: null })).toBe(false);
   });
 });

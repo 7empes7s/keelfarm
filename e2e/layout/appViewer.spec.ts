@@ -18,9 +18,10 @@ const SCREENS: Screen[] = [
     name: "app viewer, a PR's changes sheet (#203)",
     widths: PHONES,
     open: async (page) => {
-      const run = (await pocket(page, 'kanban')).getByTitle(/^Run PR #\d+ beside/).first();
-      test.skip(!(await run.count()), 'no open PR on this floor yet');
-      await run.click();
+      const more = (await pocket(page, 'kanban')).locator('.kcol-qa').getByRole('button', { name: /^More for PR #/ }).first();
+      test.skip(!(await more.count()), 'no open PR on this floor yet');
+      await more.click(); // Preview is on a card's bar only while its preview runs (#410), else in its ⋯
+      await page.getByRole('menuitem', { name: /^Preview/ }).click();
       return page.getByRole('dialog');
     },
     tabs: [],
