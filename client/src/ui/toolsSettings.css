@@ -19,7 +19,7 @@
   gap: 2px 8px;
   align-items: center;
   padding: 6px 0;
-  border-top: 1px solid #0001;
+  border-top: 1px solid var(--ds-line);
 }
 .tool-chips {
   display: flex;
@@ -45,7 +45,7 @@
   margin: 0;
 }
 .tool-error {
-  color: #b00020;
+  color: var(--ds-danger-text);
 }
 .agent-tools summary {
   cursor: pointer;
@@ -68,7 +68,7 @@
 .look-editor {
   margin: 8px 0;
   padding: 6px 12px 10px;
-  border: 2px solid rgba(31, 29, 43, 0.15);
+  border: 2px solid var(--ds-line);
   border-radius: 12px;
 }
 .look-editor legend {
@@ -85,7 +85,7 @@
   flex: none;
   border-radius: 12px;
   border: 2px solid var(--ds-outline);
-  background: radial-gradient(circle at 50% 40%, #fff7e6, #f4d9b8);
+  background: radial-gradient(circle at 50% 40%, var(--ds-surface-hover), var(--ds-surface-sunken));
   overflow: hidden;
 }
 .look-fields {
@@ -120,7 +120,7 @@
   overflow: auto;
   margin: 6px 0;
   padding: 8px 10px;
-  border: 1px solid rgba(31, 29, 43, 0.15);
+  border: 1px solid var(--ds-line);
   border-radius: 8px;
   background: var(--ds-surface-sunken);
   font-family: var(--mono);

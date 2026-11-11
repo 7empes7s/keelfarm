@@ -24,7 +24,7 @@
 .mouse-sens input[type='range'] {
   flex: 1;
   max-width: 260px;
-  accent-color: var(--accent, #ff8a5b);
+  accent-color: var(--ds-accent);
 }
 .mouse-sens b {
   min-width: 3.4em;
@@ -47,5 +47,5 @@
   font-size: 0.92rem;
 }
 .day-settings input[type='radio'] {
-  accent-color: var(--accent, #ff8a5b);
+  accent-color: var(--ds-accent);
 }
