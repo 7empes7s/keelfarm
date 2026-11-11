@@ -35,10 +35,19 @@ test("a usage card's plan warning opens the card like the rest of it", async ({ 
   await page.goto('/?pocket=1#company/ops');
   await expect(page.locator('html[data-route-ready="1"]')).toBeAttached();
   const warning = page.locator('.us-row .plan-flag-warn').first();
-  await warning.scrollIntoViewIfNeeded();
-  // The warning lets taps fall through to the card's button: tap the spot, as a finger would.
-  const b = (await warning.boundingBox())!;
-  await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
+  // The warning lets taps fall through to its card's button: in the middle of the screen (the list re-sorts as
+  // readings arrive, and bars sit at its edges), its centre hits that button, and a tap there opens the card.
+  const spot = () =>
+    warning.evaluate((w) => {
+      w.scrollIntoView({ block: 'center' });
+      const r = w.getBoundingClientRect();
+      const [x, y] = [r.x + r.width / 2, r.y + r.height / 2];
+      const hit = document.elementFromPoint(x, y);
+      return hit?.matches('.us-open') && hit.closest('.us-row') === w.closest('.us-row') ? { x, y } : null;
+    });
+  await expect.poll(spot, { message: "the warning's centre hits its card's button" }).not.toBeNull();
+  const at = (await spot())!;
+  await page.mouse.click(at.x, at.y);
   await expect(page.locator('.us-sheet')).toBeVisible();
 });
 
