@@ -40,7 +40,7 @@ Workflow:
 4. If the project has a web UI, start its dev server in the background on port 5839 (reserved for you, so you don't collide with teammates), then check your change with the Playwright browser tools (mcp__playwright__browser_navigate, browser_snapshot, browser_click, browser_take_screenshot). Stop the dev server when you're done.
 5. Self-review before pushing: read your diff (git diff origin/main...HEAD) against the issue and the QA brief. Remove dead code, duplicates and debug output, keep the diff minimal and on-topic, and re-run the checks after any change. If review skills are installed (e.g. simplify, code-review, verification-before-completion), use them at low or medium effort on the diff, else review by hand. No multi-agent or cloud reviews.
 6. Push: git push -u origin swarm/issue-7-margaret
-7. Open a pull request with the GitHub CLI: gh pr create --base main --head swarm/issue-7-margaret --title "<concise title>" --body "<what changed, how you verified it, assumptions, and a Self-review line: what it found and you fixed>". The body must contain "Closes #<issue number>".
+7. Open a pull request with the GitHub CLI: gh pr create --base main --head swarm/issue-7-margaret --title "<concise title>" --body "<what changed, how you verified it, assumptions, a Self-review line: what it found and you fixed, and a '## Try it' section: 2-5 numbered steps (where to go, what to tap, what you should see; paths in backticks)>". The body must contain "Closes #<issue number>".
 8. End your final message with the pull request URL on its own line.
 Rules: never push to the default branch, never force-push, never merge pull requests yourself (the office merges them once QA and the checks pass), and never edit files outside your worktree. If you cannot finish, open a draft PR (gh pr create --draft) explaining what is left and why.`,
   devPlain: `Repository: acme/shop (default branch: main)
@@ -55,7 +55,7 @@ Workflow:
 4. Verify the behaviour you changed as directly as you can.
 5. Self-review before pushing: read your diff (git diff origin/main...HEAD) against the issue. Remove dead code, duplicates and debug output, keep the diff minimal and on-topic, and re-run the checks after any change. If review skills are installed (e.g. simplify, code-review, verification-before-completion), use them at low or medium effort on the diff, else review by hand. No multi-agent or cloud reviews.
 6. Push: git push -u origin swarm/issue-7-margaret
-7. Open a pull request with the GitHub CLI: gh pr create --base main --head swarm/issue-7-margaret --title "<concise title>" --body "<what changed, how you verified it, assumptions, and a Self-review line: what it found and you fixed>". The body must contain "Closes #<issue number>".
+7. Open a pull request with the GitHub CLI: gh pr create --base main --head swarm/issue-7-margaret --title "<concise title>" --body "<what changed, how you verified it, assumptions, a Self-review line: what it found and you fixed, and a '## Try it' section: 2-5 numbered steps (where to go, what to tap, what you should see; paths in backticks)>". The body must contain "Closes #<issue number>".
 8. End your final message with the pull request URL on its own line.
 Rules: never push to the default branch, never force-push, never merge pull requests yourself (the office merges them once QA and the checks pass), and never edit files outside your worktree. If you cannot finish, open a draft PR (gh pr create --draft) explaining what is left and why.`,
   devFixing: `Repository: acme/shop (default branch: main)
@@ -217,7 +217,7 @@ describe('self-review and the playbook', () => {
 
   it('stay within their length budget without a playbook', () => {
     const { build, fix, test } = prompts();
-    expect(build.length).toBeLessThanOrEqual(3210); // +110: the reactions line (#120)
+    expect(build.length).toBeLessThanOrEqual(3320); // +110: the reactions line (#120); +110: the PR's Try it (#381)
     expect(fix.length).toBeLessThanOrEqual(3210);
     expect(test.length).toBeLessThanOrEqual(3300);
   });

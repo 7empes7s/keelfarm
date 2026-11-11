@@ -62,6 +62,7 @@ export interface AccountView extends ProviderAccount {
   signIn: SignInRun | null; // its last sign-in in its terminal since the office started (#302)
   loginPlan?: string; // the plan a Claude login really has, from its .credentials.json ("Max 20x"), never a token (#442)
   planWarning?: string; // that plan isn't the one its name, plan field or tags say
+  sameAs?: string; // the label of another login on the same subscription (same plan and owner), whose limits it shares (#460)
   tokenRefresh?: boolean; // its access token expired: still signed in, its next session refreshes it
   shareMissing?: string[]; // a Claude login with its own folder (#377): what it doesn't share yet with this computer's login ([] all)
 }

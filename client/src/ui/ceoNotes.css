@@ -1,0 +1,192 @@
+/* the CEO's NOTES.md in sections (#417): CeoNotes.tsx */
+
+/* search and jump stay at the top of the sheet while its notes scroll under them */
+.notes-bar {
+  position: sticky;
+  top: calc(-1 * var(--ds-space-3)); /* flush with the sheet's top, over its padding */
+  z-index: 2;
+  display: flex;
+  gap: var(--ds-space-2);
+  margin: 0 calc(-1 * var(--ds-space-4));
+  padding: var(--ds-space-2) var(--ds-space-4);
+  background: var(--ds-surface);
+  border-bottom: var(--ds-border) solid var(--ds-line);
+}
+.notes-search {
+  flex: 1;
+  min-width: 0;
+}
+.notes-jump {
+  flex: 0 1 9rem;
+  min-width: 0;
+  min-height: var(--ds-target);
+  padding: 0 var(--ds-space-2);
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-raised);
+  color: var(--ds-text);
+  font: inherit;
+  font-size: 16px;
+}
+
+.notes-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-3);
+}
+.notes-group {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-1);
+  margin: var(--ds-space-2) 0 0;
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-sm);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  scroll-margin-top: calc(var(--ds-target) + var(--ds-space-4));
+}
+
+/* a section: a card with its title row as the fold button */
+.notes-card {
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-raised);
+  box-shadow: var(--ds-shadow-1);
+  overflow: hidden;
+  scroll-margin-top: calc(var(--ds-target) + var(--ds-space-4));
+}
+.notes-card-sub {
+  margin-left: var(--ds-space-3);
+}
+.notes-card-archived {
+  background: var(--ds-surface-sunken);
+  box-shadow: none;
+}
+.notes-head {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  width: 100%;
+  min-height: var(--ds-target);
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border: 0;
+  background: none;
+  color: var(--ds-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.notes-head:focus-visible {
+  outline: 2px solid var(--ds-focus);
+  outline-offset: -4px;
+}
+.notes-head > .ds-icon {
+  flex: none;
+  color: var(--ds-text-muted);
+}
+.notes-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-wrap: anywhere;
+}
+.notes-eyebrow {
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.notes-name {
+  font-size: var(--ds-text-md);
+  font-weight: var(--ds-weight-strong);
+  line-height: var(--ds-leading-tight);
+}
+.notes-meta {
+  flex: none;
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-sm);
+  white-space: nowrap;
+}
+
+/* inside: each bullet a row */
+.notes-md {
+  padding: var(--ds-space-1) var(--ds-space-3) var(--ds-space-3);
+  border-top: var(--ds-border) solid var(--ds-line);
+  line-height: var(--ds-leading);
+}
+.notes-md > ul {
+  list-style: none;
+  margin: 0 calc(-1 * var(--ds-space-3));
+  padding: 0;
+}
+.notes-md > ul > li {
+  margin: 0;
+  padding: var(--ds-space-2) var(--ds-space-3);
+}
+.notes-md > ul > li + li,
+.notes-md > ol > li + li {
+  border-top: 1px solid var(--ds-line);
+}
+.notes-md > ol > li {
+  margin: 0;
+  padding: var(--ds-space-2) 0;
+}
+.notes-md > p {
+  margin-top: var(--ds-space-2);
+}
+.notes-md code {
+  background: var(--ds-surface-sunken);
+  border: 1px solid var(--ds-line);
+}
+
+/* chips: a message/date lead-in, #N, a file ref, and "Why" / "How to apply" labels */
+.note-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-1);
+  max-width: 100%;
+  padding: 0 var(--ds-space-2);
+  border-radius: var(--ds-radius-pill);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-strong);
+  line-height: 1.6;
+  vertical-align: 0.1em;
+  overflow-wrap: anywhere;
+}
+.note-chip-lead {
+  background: var(--ds-warn-fill);
+  color: var(--ds-on-color);
+}
+.note-chip-lead > * + *::before {
+  content: '·';
+  margin-right: var(--ds-space-1);
+}
+.md a.note-chip-issue,
+.note-chip-issue {
+  border: 1px solid var(--ds-link);
+  color: var(--ds-link);
+  text-decoration: none;
+}
+.md code.note-chip-file {
+  padding: 0 var(--ds-space-2);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface-sunken);
+  color: var(--ds-text);
+  font-family: var(--mono);
+  font-weight: var(--ds-weight);
+}
+.note-chip-file > .ds-icon {
+  flex: none;
+  width: 1.1em;
+  height: 1.1em;
+}
+.note-label {
+  display: inline-block;
+  margin-right: var(--ds-space-1);
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-strong);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}

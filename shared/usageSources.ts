@@ -1,5 +1,6 @@
 // Usage for every account and provider (#361), pure: each provider's answer as windows, an account as a source, the
 // worst row first, the CEO's one line, the 90% notifications (once per window) and "resets in 3h".
+import { cardPlan } from './accounts.ts';
 import { barName, isReset, livePct, readingOf } from './usage.ts';
 import type { AccountView, UsageReading, UsageSource, UsageSourceStatus, UsageSplit, UsageWindow } from './types.ts';
 
@@ -157,7 +158,7 @@ export function accountSource(a: AccountView, spendUsd7d: number, now: number, s
     provider: a.cli,
     category: 'coding',
     label: a.label,
-    plan: a.plan ?? (api ? 'API' : ''),
+    plan: cardPlan(a) ?? (api ? 'API' : ''),
     windows,
     ...(api ? { spendUsd7d } : {}),
     status,

@@ -95,6 +95,11 @@ describe('adapters', () => {
     expect(s.note).toBe('Reset, waiting for a new reading');
   });
 
+  it("shows the plan read from a Claude login over the typed one (#460)", () => {
+    expect(accountSource(account({ label: 'Claude Ultra', plan: 'Ultra', loginPlan: 'Pro' }), 0, NOW).plan).toBe('Pro');
+    expect(accountSource(account({ label: 'Claude Ultra', plan: 'Ultra' }), 0, NOW).plan).toBe('Ultra');
+  });
+
   it('counts Boxes against the plan limit', () => {
     expect(boxSource({ total: 9, running: 2 }, 10, NOW)).toMatchObject({ status: 'near', windows: [{ used: 9, limit: 10, usedPct: 90 }] });
   });

@@ -183,7 +183,7 @@ export function PhoneHud({ num, title, sub, accent, phone, chips }: { num: strin
           </span>
           {alert && <span className="hud-floor-dot" aria-hidden />}
         </button>
-        <NoticeBell className="pill" />
+        <NoticeBell className="pill" compact />
         {phone}
         <button type="button" data-tour="options" className="pill hud-options" onClick={() => open('options')} aria-label="Options" title="Options">
           <Icon name="sliders-horizontal" />

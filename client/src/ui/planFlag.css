@@ -1,0 +1,31 @@
+/* A Claude login's plan flags (#460, PlanFlag.tsx). Tokens only. Above a usage row's whole-card button. */
+.plan-flag {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  min-width: 0;
+}
+.plan-flag-line {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ds-space-2);
+  min-width: 0;
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-sm);
+  overflow-wrap: anywhere;
+}
+.plan-flag-line svg {
+  flex: none;
+  width: 1em;
+  height: 1em;
+  margin-top: 0.15em;
+}
+.plan-flag-warn {
+  color: var(--ds-warn-text);
+}
+.plan-flag-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-2);
+}

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { LogLine, RepoView, ServerEvent } from '../shared/types.ts';
+import type { CeoInfo, LogLine, RepoView, ServerEvent } from '../shared/types.ts';
+import type { TestLabView } from '../shared/testLab.ts';
 import { agentPatch, FLUSH_MS, Outbox, snapshotAgent, type Agent, type Tab } from './outbox.ts';
 
 const agent = (id: string, patch: Partial<Agent> = {}): Agent =>
@@ -88,6 +89,30 @@ describe('floor patches', () => {
     o.broadcast({ type: 'repoRemoved', repoId: 'acme/app' });
     o.flush();
     expect(t.got.at(-1)).toEqual({ type: 'repoRemoved', repoId: 'acme/app' });
+  });
+});
+
+describe('whole views (#491)', () => {
+  const ceo = (patch: Partial<CeoInfo> = {}): CeoInfo => ({ queue: [], job: null, lastReviewAt: null, nextReviewAt: null, questions: [{ agentId: 'ken' }] as CeoInfo['questions'], ...patch });
+
+  it('go out on the tick as the fields that changed: the CEO\'s questions are not resent with every job', () => {
+    vi.useFakeTimers();
+    const o = outbox();
+    const t = tab();
+    o.add(t);
+    o.broadcast({ type: 'ceo', ceo: ceo() });
+    vi.advanceTimersByTime(FLUSH_MS);
+    expect(t.got).toEqual([{ type: 'views', ceo: { set: ceo() } }]);
+    o.broadcast({ type: 'ceo', ceo: ceo({ job: { kind: 'review', label: 'a' } }) });
+    o.broadcast({ type: 'ceo', ceo: ceo({ job: { kind: 'review', label: 'b' }, held: null }) });
+    o.broadcast({ type: 'testLab', testLab: { enabled: true } as TestLabView });
+    expect(t.got).toHaveLength(1);
+    vi.advanceTimersByTime(FLUSH_MS);
+    expect(t.got[1]).toEqual({ type: 'views', ceo: { set: { job: { kind: 'review', label: 'b' }, held: null } }, testLab: { set: { enabled: true } } });
+    o.broadcast({ type: 'ceo', ceo: ceo({ job: { kind: 'review', label: 'b' }, held: null }) });
+    o.broadcast({ type: 'accounts', accounts: { accounts: [] } });
+    vi.advanceTimersByTime(FLUSH_MS);
+    expect(t.got[2]).toEqual({ type: 'views', accounts: { set: { accounts: [] } } });
   });
 });
 

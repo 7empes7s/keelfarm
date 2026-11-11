@@ -17,7 +17,7 @@ import { checkUsage, type UsageCheck } from './usagePoll.ts';
 import { realUsageApi } from './usageApi.ts';
 import type { UsageApi } from './usageSources.ts';
 import { readCatalog } from './modelCatalog.ts';
-import { checkAccount } from './accountCheck.ts';
+import { checkAccount, readClaudeLogin } from './accountCheck.ts';
 import { startLocalSignIn } from './localSignIn.ts';
 import type { AccountsDeps } from './accounts.ts';
 import { installDesk, type DepsCallbacks, type DepsOutcome } from './deps.ts';
@@ -258,6 +258,8 @@ export interface CloudBackend {
 export interface AccountsBackend {
   /** Test an account: a login in its folder (and its usage), or one free request with its key. Never throws. */
   check: AccountsDeps['check'];
+  /** The built-in Claude login's plan and owner from its files (#460), no request. Never throws. */
+  login: NonNullable<AccountsDeps['login']>;
   /** A login's CLI signing in, in the account's terminal, with the account's folder in `env`. */
   signIn: AccountsDeps['signIn'];
   /** The demo only: its made-up accounts and keys, added to a registry that has only the built-in ones. */
@@ -364,7 +366,7 @@ export const realBackend: Backend = {
   toolInventory: (projects) => scanTooling(projects),
   modelCatalog: () => readCatalog(),
   usageCheck: () => checkUsage(),
-  accounts: { check: checkAccount, signIn: startLocalSignIn },
+  accounts: { check: checkAccount, login: (_a, dir) => readClaudeLogin(dir), signIn: startLocalSignIn },
   usage: realUsageApi,
   providerProbe: realProbe,
   scanForKeys: realKeyScan,

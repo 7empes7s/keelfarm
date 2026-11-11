@@ -84,6 +84,17 @@ export const loginPlan = (raw: string): string | null => {
   return oauth ? loginPlanName(oauth.subscriptionType, oauth.rateLimitTier) : null;
 };
 
+/** Who a login belongs to, from its .claude.json's oauthAccount (account id, else email), lowercased; kept on the server (#460). */
+export const loginOwner = (raw: string): string | null => {
+  try {
+    const o = (JSON.parse(raw) as { oauthAccount?: { accountUuid?: unknown; emailAddress?: unknown } }).oauthAccount;
+    const who = typeof o?.accountUuid === 'string' && o.accountUuid ? o.accountUuid : o?.emailAddress;
+    return typeof who === 'string' && who.trim() ? who.trim().toLowerCase() : null;
+  } catch {
+    return null;
+  }
+};
+
 // ---------- the real check ----------
 
 const USAGE_URL = 'https://api.anthropic.com/api/oauth/usage';

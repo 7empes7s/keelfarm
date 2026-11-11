@@ -16,7 +16,7 @@ const { Swarm } = await import('./swarm.ts');
 // the company (terminal lines in the snapshot, every agent change sent in full) fails here, not in someone's office.
 
 const SNAPSHOT_BUDGET = 620_000; // bytes; it was 2 MB and growing with every log line before #228; +15 KB for what each busy agent's session runs on (#376); +5 KB for who spent each account's window (#409)
-const TRAFFIC_BUDGET = 85_000; // bytes per second to a tab on one floor with the workers list out; 124 KB/s before; 80 KB/s until runs reached 82 KB/s, +1 KB/s for each floor's 7-day QA curve (#371)
+const TRAFFIC_BUDGET = 70_000; // bytes per second to a tab on one floor with the workers list out; 124 KB/s before #228, 78-85 before #491
 
 afterAll(() => {
   vi.useRealTimers();
@@ -54,6 +54,8 @@ describe('a big company', () => {
     const lineFloors = new Set(types.flatMap((e) => (e.type === 'logs' ? Object.keys(e.tails).map((id) => floorOf.get(id)) : [])));
     expect([...lineFloors]).toEqual([1]);
     expect(types.filter((e) => e.type === 'agent').length).toBe(0);
+    // the CEO's, the test lab's and the accounts' views came as patches (#491)
+    expect(types.filter((e) => e.type === 'ceo' || e.type === 'testLab' || e.type === 'accounts').length).toBe(0);
     expect(types.filter((e) => e.type === 'agents').length).toBeLessThanOrEqual(4 * 60 + 1);
   });
 });

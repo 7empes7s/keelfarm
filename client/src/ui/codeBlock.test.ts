@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { codeLanguage, copiedText, languageLabel, shellLines } from './codeBlock';
+import { codeLanguage, copiedText, languageLabel, looksLikeCommand, messageCommands, shellLines } from './codeBlock';
 
 describe('code blocks (#200)', () => {
   it('labels the fence language', () => {
@@ -23,5 +23,31 @@ describe('code blocks (#200)', () => {
 
   it('puts the prompt on commands, not on comments, blanks or continuations', () => {
     expect(shellLines('# set up\nnpm ci \\\n  --no-audit\n\nnpm test').map((l) => l.prompt)).toEqual([false, true, false, false, true]);
+  });
+});
+
+describe('commands in chat messages (#438)', () => {
+  it('offers Copy on long spans, !, $, paths and known CLIs, not on short names', () => {
+    for (const c of ['! npx cubefarm login --account work', '!claude', '$ df -h', '/root/bin/run', '~/notes.md', './x', 'git status', 'npm test', 'systemctl status cubefarm'])
+      expect(looksLikeCommand(c), c).toBe(true);
+    for (const c of ['merge.ts', 'qaPassed', 'git', 'true', '', '  ', 'a\nb', 'https://x.io', '5 GB'])
+      expect(looksLikeCommand(c), c).toBe(false);
+  });
+
+  it("lists a message's commands in order: inline ones and shell blocks, not other code", () => {
+    const md = [
+      '1. Sign in: `! claude /login`',
+      '2. Check: `gh auth status --hostname github.com`',
+      '```bash',
+      '$ free -h',
+      'Mem: 7.6G',
+      '```',
+      '```ts',
+      'const x = 1;',
+      '```',
+      'Then `npm run build` in `server/`.',
+    ].join('\n');
+    expect(messageCommands(md)).toEqual(['! claude /login', 'gh auth status --hostname github.com', 'free -h', 'npm run build']);
+    expect(messageCommands('Nothing `here`.')).toEqual([]);
   });
 });

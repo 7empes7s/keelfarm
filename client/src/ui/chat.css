@@ -348,8 +348,7 @@
   box-sizing: border-box;
 }
 .conv-list,
-.memory-notes,
-.memory-found {
+.memory-notes {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -446,17 +445,6 @@
   font-size: 16px;
   box-sizing: border-box;
   resize: vertical;
-}
-.memory-found li {
-  padding: var(--ds-space-2);
-  border-radius: var(--ds-radius-sm);
-  background: var(--ds-surface-sunken);
-  overflow-wrap: anywhere;
-}
-.memory-file {
-  padding: var(--ds-space-3);
-  border-radius: var(--ds-radius-md);
-  background: var(--ds-surface-sunken);
 }
 
 /* the chat's header holds one line: the CEO's name and what they're doing truncate, never wrap into the buttons */
