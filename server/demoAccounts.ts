@@ -39,7 +39,7 @@ export function demoAccounts(signIn: AccountsDeps['signIn']): AccountsBackend {
       if (!signedIn.has(a.id)) return { signedIn: false, readings: [], note: 'Not signed in yet: tap Sign in.' };
       // #442: Ultra's token expired after its week reset (last week's 100% reads 0%); keelops is signed in with a Pro account.
       if (a.id === 'claude-ultra') return { signedIn: true, refresh: true, plan: 'Max 20x', readings: [{ type: 'seven_day', pct: 100, resetsAt: now - 2 * HOUR, at: now - 30 * HOUR }], note: '✓ Signed in; its token refreshes on its next session.' };
-      if (a.id === 'claude-keelop') return { signedIn: true, plan: 'Pro', readings: [reading('five_hour', 42, 3 * HOUR, now), reading('seven_day', 63, 50 * HOUR, now)], note: '✓ Signed in; usage read (demo).' };
+      if (a.id === 'claude-keelop') return { signedIn: true, plan: 'Pro', readings: [reading('five_hour', 18, 3 * HOUR, now), reading('seven_day', 63, 50 * HOUR, now)], note: '✓ Signed in; usage read (demo).' };
       return { signedIn: true, readings: a.cli === 'claude' ? [reading('five_hour', 42, 3 * HOUR, now), reading('seven_day', 63, 50 * HOUR, now)] : [], note: '✓ Signed in; usage read (demo).' };
     },
     signIn: (o, exited) => {

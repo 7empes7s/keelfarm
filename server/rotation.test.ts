@@ -253,8 +253,8 @@ describe('account rotation', { timeout: 30_000 }, () => {
     const login = swarm.accounts.view().accounts.find((a) => a.id === 'claude-login')!;
     expect(login.status).toBe('limited');
     expect(limitedBy(login.usage, login.until, Date.now())).toBe('weekly');
-    expect(swarm.accounts.view().accounts.find((a) => a.id === 'claude-keelop')!.usage.map((r) => r.pct)).toEqual([42, 63]); // its own numbers, untouched
-    expect((i as unknown as { nextUsage(): string }).nextUsage()).toBe('next on Max · keelops: 5h 42% · week 63%');
+    expect(swarm.accounts.view().accounts.find((a) => a.id === 'claude-keelop')!.usage.map((r) => r.pct)).toEqual([18, 63]); // its own numbers, untouched
+    expect((i as unknown as { nextUsage(): string }).nextUsage()).toBe('next on Max · keelops: 5h 18% · week 63%');
     expect(swarm.accounts.view().next).toEqual({ claude: 'claude-keelop', ceo: 'claude-keelop' });
   });
 
