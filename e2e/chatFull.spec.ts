@@ -12,7 +12,7 @@ for (const width of [390, 1280]) {
     await chat.evaluate((el) => (el.scrollTop = el.scrollHeight / 2));
     const top = await chat.evaluate((el) => el.scrollTop);
     for (const leave of [() => page.keyboard.press('Escape'), () => page.goBack()]) {
-      await root.getByRole('button', { name: 'Full screen', exact: true }).click();
+      await root.getByRole('button', { name: 'Full screen chat', exact: true }).click();
       if (width > 1000) {
         await expect(root.locator('.pk-tabs')).toBeVisible();
         expect((await root.locator('.pk-dock').boundingBox())!.width).toBeGreaterThan(width * 0.85);

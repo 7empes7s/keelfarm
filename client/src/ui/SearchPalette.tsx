@@ -2,6 +2,7 @@
 // has (searchIndex.ts), results grouped with icons, ↑ ↓ Enter or a tap to go.
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useStore } from '../store';
+import { canGoFullscreen } from './browserFull';
 import type { Where } from './consoleNavRules';
 import { go, openSearch, useFinder } from './goTo';
 import { buildIndex, loadRecent, saveRecent, searchAll, withRecent, type Item } from './searchIndex';
@@ -31,7 +32,7 @@ function Palette({ where }: { where: Where }) {
   const agents = useStore((s) => s.agents);
   const qa = useStore((s) => s.qa);
   const messages = useStore((s) => s.messages);
-  const items = useMemo(() => buildIndex({ repos, agents, qa, messages, where }), [repos, agents, qa, messages, where]);
+  const items = useMemo(() => buildIndex({ repos, agents, qa, messages, where, fullscreen: canGoFullscreen() }), [repos, agents, qa, messages, where]);
   const [query, setQuery] = useState('');
   const [recent, setRecent] = useState(loadRecent);
   const groups = useMemo(() => searchAll(query, items, recent), [query, items, recent]);

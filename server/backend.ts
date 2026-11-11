@@ -199,7 +199,7 @@ export interface Backend {
   /** The demo only: a made-up past week for mission control, so a fresh demo office has numbers from the start. */
   seedOps?(repos: string[], now: number): OpsHistory;
   /** The demo only: a made-up week of sessions and merges for the cost ledger (#18), when it's empty. */
-  seedCosts?(repos: { id: string; fullName: string }[], agents: { id: string; name: string; role: string; repoId: string }[], now: number): CostRecord[];
+  seedCosts?(repos: { id: string; fullName: string }[], agents: { id: string; name: string; role: string; repoId: string; cli?: string; account?: string }[], now: number): CostRecord[];
   /** The demo only: made-up careers for a fresh demo office's agents (#117), so their profiles have numbers. */
   seedCareers?(agentIds: string[], now: number): Record<string, CareerView>;
   /** The demo only: someone let go, under the Team tab's Past agents (#205). */
