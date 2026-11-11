@@ -46,8 +46,10 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
     return { on: this.itOn, waiting: this.state.itDesk.waiting, log: this.state.itDesk.log.slice(0, IT_LOG_SHOWN) };
   }
 
+  /** Left out while empty: every tab's snapshot pays for it (scale.test.ts), and the switch is in the settings. */
   override snapshot(): WorldSnapshot {
-    return { ...super.snapshot(), itDesk: this.itDeskView() };
+    const d = this.state.itDesk;
+    return d.waiting.length || d.log.length ? { ...super.snapshot(), itDesk: this.itDeskView() } : super.snapshot();
   }
 
   private itChanged() {
