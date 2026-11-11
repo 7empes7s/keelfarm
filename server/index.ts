@@ -479,6 +479,7 @@ app.post('/api/ceo/messages/:id/edit', route((req) => swarm.editMessage(Number(r
 app.post('/api/ceo/messages/:id/react', route((req) => swarm.reactToMessage(Number(req.params.id), str(req.body?.emoji), str(req.body?.note))));
 app.get('/api/ceo/messages', route((req) => swarm.chatMessages(Number(req.query.before), Number(req.query.limit))));
 app.delete('/api/ceo/messages/:id', route((req) => swarm.removeChatMessage(Number(req.params.id))));
+app.post('/api/ceo/messages/:id/actions/:index/undo', route((req) => swarm.undoCeoAction(Number(req.params.id), Number(req.params.index))));
 app.post('/api/ceo/conversations', route((req) => swarm.newConversation(req.body?.repoId ?? null)));
 app.get('/api/ceo/conversations/search', route((req) => swarm.searchConversations(typeof req.query.q === 'string' ? req.query.q : '')));
 app.post('/api/ceo/conversations/:id/open', route((req) => swarm.openConversation(String(req.params.id))));

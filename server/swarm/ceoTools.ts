@@ -36,7 +36,7 @@ import { blockers } from '../../shared/issues.ts';
 import { redact as scrub } from '../../shared/journal.ts';
 import { historyText } from '../../shared/history.ts';
 import { mandateFor, MAX_MANDATES } from '../../shared/followups.ts';
-import { charterOf, charterText, cleanCharter, CHARTER_PROMPT_MAX, objectiveRefusal, renderCharter } from '../../shared/charter.ts';
+import { charterOf, charterText, CHARTER_PROMPT_MAX, objectiveRefusal, renderCharter } from '../../shared/charter.ts';
 import { OFFICE_PLAYBOOK_MAX, PLAYBOOK_MAX } from '../../shared/types.ts';
 import { modelAfterCliChange, modelProblem } from '../../shared/models.ts';
 import { cliLabel, isCli } from '../clis.ts';
@@ -45,7 +45,7 @@ import type { AgentView, CeoVerdict, HireRequestView, PhoneMessage } from '../..
 import { changesBlock, changesDue, markVerdict, reviewing, settle, stillOn, takeUntold } from '../../shared/managerChanges.ts';
 import { type PersistedAgent, type PersistedRepo, CEO_MODEL, CEO_EFFORT, BUSY, QA_SHOTS_DIR } from './model.ts';
 import { clip } from '../notify.ts';
-import { SwarmTeam } from './team.ts';
+import { SwarmManagerAsks } from './managerAsks.ts';
 import { decisionsForCeo, type DecisionAbout } from '../../shared/decisions.ts';
 import { applyEdit } from '../../shared/messageEdits.ts';
 import { excerpt } from '../../shared/chat.ts';
@@ -57,7 +57,7 @@ import { compactStatus, floorDetail, type FullStatus } from '../statusViews.ts';
 /** An agent's status in company_status (#307): "needs you" is the manager (waitsForManager says what for); finished agents are free, not "done". */
 const SHOWN_WORD: Record<ShownState, string> = { 'needs-you': 'needs you', 'waiting-ceo': 'waiting for your answer', free: 'free', preparing: 'preparing', working: 'working', error: 'error', stopped: 'stopped' };
 
-export abstract class SwarmCeoTools extends SwarmTeam {
+export abstract class SwarmCeoTools extends SwarmManagerAsks {
   /**
    * The CEO's office tools. Every session gets its own server: one can only be connected to one session at a time, so
    * a shared one left the next session connected but without any tools while an earlier session still held it.
@@ -109,6 +109,12 @@ export abstract class SwarmCeoTools extends SwarmTeam {
       sessionHistory: (a) => this.sessionHistory(a),
       react: (a) => this.ceoReact(a),
       reply: (a) => this.ceoReply(a),
+      runExperiment: acts((a) => this.askRunExperiment(a)),
+      setFloorSwitches: acts((a) => this.askFloorSwitches(a)),
+      setIssuePriority: acts((a) => this.askIssuePriority(a)),
+      setCeoSetup: acts((a) => this.askCeoSetup(a)),
+      applyCharter: acts((a) => this.askApplyCharter(a)),
+      mergePull: acts((a) => this.askMergePull(a)),
     }, () => this.state.ceo.job?.kind === 'research')));
   }
 
@@ -275,7 +281,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
           sessionLimit: s.sessionLimit || 'none',
           sessionsRunning: this.running(),
           usage: [usageLabel(this.usageNow(), Date.now()), this.nextUsage(), usageLine(this.usageSources())].filter(Boolean).join(' · '), // every account and provider (#361); the next session's account named (#383)
-          experiments: this.lab.summary(), // only the manager starts, stops and promotes them
+          experiments: this.lab.summary(), // run_experiment starts, stops and promotes one when the manager asks
           providers: this.providersLine(), // every connection on Settings → Providers (#362)
           accounts: this.accounts.view().accounts.map((x) => `${x.id} (${x.cli}, ${x.kind}${x.tags.length ? `, tags ${x.tags.join('/')}` : ''}): ${x.status}`),
           officePlaybook: s.officePlaybook || null,
@@ -439,14 +445,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
   /** propose_charter: a charter for the manager to approve or edit, never applied here (decideCharter applies it). */
   protected proposeCharter(x: CharterProposalArgs) {
     const repo = this.floorRepo(x.floor);
-    const now = charterOf(repo.mission, repo.charter);
-    const charter = cleanCharter({
-      mission: x.mission ?? now.mission,
-      focus: x.focus ?? now.focus,
-      objectives: x.objectives ?? now.objectives,
-      standards: x.standards ?? now.standards,
-      nonGoals: x.non_goals ?? now.nonGoals,
-    });
+    const { now, charter } = this.charterFrom(repo, x);
     if (JSON.stringify(charter) === JSON.stringify(now)) throw new Error(`That is floor ${repo.floor}'s charter already: nothing to propose.`);
     const replaced = repo.charter.proposal ? ' It replaces your earlier proposal.' : '';
     const ceo = this.ceo().name;

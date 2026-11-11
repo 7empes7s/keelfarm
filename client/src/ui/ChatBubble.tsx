@@ -262,7 +262,7 @@ export const Bubble = memo(function Bubble({ item, ceoName, quoted, highlight, l
           </Suspense>
         )}
         {m?.artifacts?.map((a) => <ArtifactCard key={a.id} artifact={a} onOpen={() => onArtifact(m.id, a.id)} />)}
-        {!!m?.actions?.length && <ActionCards actions={m.actions} />}
+        {!!m?.actions?.length && <ActionCards actions={m.actions} messageId={m.id} />}
         {m && (log || m.summary) && <StepsRow log={rowLog(m)} actions={m.actions?.length ?? 0} used={m.used} summary={m.summary} linked={linked} onFloor={onFloor} />}
         {m?.ceoJob && <CeoJobLine tag={m.ceoJob} onJump={onQuote} />}
         {req && req.status === 'pending' && m?.from === 'ceo' && <Resume req={req} />}

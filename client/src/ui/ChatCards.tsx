@@ -15,38 +15,50 @@ import './chatCards.css';
 // The CEO chat's cards (#108): what a reply did as action cards with a live status, its idea card (Accept / Edit /
 // Not now), the "working on it" strip with Stop and the round's live log (#150), and the starter chips of an empty message box. Rules in chatCardRules.ts.
 
-/** One office tool call that changed something; its status follows the issue, PR, floor or agent it names. */
-function ActionCard({ action }: { action: ChatAction }) {
+/** One office tool call that changed something; its status follows the issue, PR, floor or agent it names. Undo (#403) puts back what it changed. */
+function ActionCard({ action, onUndo }: { action: ChatAction; onUndo?: () => void }) {
   const world = { repos: useStore((s) => s.repos), agents: useStore((s) => s.agents), qa: useStore((s) => s.qa) };
   const openAction = useActionOpen();
   const open = action.ref ? openAction(action.ref) : null;
-  const status: ActionStatus | null = action.refused ? { label: 'refused', tone: 'bad' } : action.ref ? actionStatus(action.ref, world) : null;
+  const status: ActionStatus | null = action.refused ? { label: 'refused', tone: 'bad' } : action.undone ? { label: 'undone' } : action.ref ? actionStatus(action.ref, world) : null;
   const body = (
     <>
       <span className="action-card-icon" aria-hidden>
         <Icon name={iconFor(action.icon, 'zap')} />
       </span>
-      <span className="grow action-card-text">{action.text}</span>
+      <span className="grow action-card-text">
+        {action.text}
+        {action.askedIn !== undefined && <span className="action-card-asked"> · you asked in #{action.askedIn}</span>}
+      </span>
       {status && <span className={`action-chip ${status.tone ? `action-chip-${status.tone}` : ''}`}>{status.label}</span>}
       {status?.merged && <span className="action-confetti" aria-hidden />}
     </>
   );
   const cls = `action-card ${action.refused ? 'action-card-refused' : ''}`;
-  return open ? (
+  const card = open ? (
     <button type="button" className={cls} onClick={open} aria-label={`${action.text}${status ? `, ${status.label}` : ''}. Open it.`}>
       {body}
     </button>
   ) : (
     <div className={cls}>{body}</div>
   );
+  if (!action.undo || action.undone || !onUndo) return card;
+  return (
+    <div className="action-row">
+      {card}
+      <button type="button" className="btn action-undo" onClick={onUndo} aria-label={`Undo: ${action.text}`}>
+        Undo
+      </button>
+    </div>
+  );
 }
 
 /** What a CEO reply changed in the office. */
-export function ActionCards({ actions }: { actions: readonly ChatAction[] }) {
+export function ActionCards({ actions, messageId }: { actions: readonly ChatAction[]; messageId?: number }) {
   return (
     <div className="action-cards" role="group" aria-label="What this reply changed">
       {actions.map((a, i) => (
-        <ActionCard key={i} action={a} />
+        <ActionCard key={i} action={a} onUndo={messageId === undefined ? undefined : () => void api.undoCeoAction(messageId, i).catch(() => undefined)} />
       ))}
     </div>
   );

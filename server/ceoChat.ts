@@ -7,7 +7,7 @@ import path from 'node:path';
 import { Readable } from 'node:stream';
 import { finishedLog, foldStream, type CeoLive, type OfficeCall } from '../shared/ceoStream.ts';
 import type { NameOf } from '../shared/ceoSteps.ts';
-import { actionCards } from '../shared/ceoActions.ts';
+import { actionCards, type ActionUndo } from '../shared/ceoActions.ts';
 import { NOTES_VIEW_MAX } from '../shared/ceoMemory.ts';
 import { inScope, startConversation, threadStats, touchConversation, type ChatsState, type ThreadScope } from '../shared/conversations.ts';
 import { filterLibrary, libraryCounts, libraryItems, pageLibrary, type LibraryFilter, type LibraryPage } from '../shared/library.ts';
@@ -146,6 +146,12 @@ export class CeoChat {
   noteMessage(id: number) {
     const call = current.getStore();
     if (call) call.messageId = id;
+  }
+
+  /** Inside an office call: how its card's Undo puts back what it changed (#403). Elsewhere nothing. */
+  noteUndo(undo: ActionUndo) {
+    const call = current.getStore();
+    if (call) call.undo = undo;
   }
 
   /** The current job's calls once those still running have finished (or `ms` passed). */

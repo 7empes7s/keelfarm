@@ -172,6 +172,7 @@ describe('office tools', () => {
       sessionHistory: (a) => (calls.push(['session_history', a]), 'history'),
       react: (a) => (calls.push(['react', a]), 'reacted'),
       reply: (a) => (calls.push(['reply', a]), 'answered'),
+      runExperiment: () => '', setFloorSwitches: () => '', setIssuePriority: async () => '', setCeoSetup: () => '', applyCharter: () => '', mergePull: async () => '',
     });
     const [serverSide, clientSide] = InMemoryTransport.createLinkedPair();
     await office.server.instance.connect(serverSide);
@@ -187,6 +188,7 @@ describe('office tools', () => {
       'agent_detail',
       'agent_log',
       'answer_agent',
+      'apply_charter',
       'apply_setup',
       'ask_manager',
       'ask_manager_choice',
@@ -204,6 +206,7 @@ describe('office tools', () => {
       'floor_detail',
       'keep_file',
       'make_default_account',
+      'merge_pull',
       'message_agent',
       'pr_diff',
       'propose_charter',
@@ -215,13 +218,17 @@ describe('office tools', () => {
       'resolve_decision',
       'restart_agent',
       'retry_qa',
+      'run_experiment',
       'scale_team',
       'scan_keys',
       'send_back',
       'send_telegram',
       'session_history',
+      'set_ceo_setup',
       'set_dependencies',
       'set_floor_profile',
+      'set_floor_switches',
+      'set_issue_priority',
       'set_mandate',
       'set_office_playbook',
       'stop_agent',
@@ -276,6 +283,12 @@ describe('office tools', () => {
       scan_keys: {},
       make_default_account: { account: 'claude-ultra' },
       wait_for: { conditions: [{ kind: 'pr_merged', floor: 1, pr: 7 }] },
+      run_experiment: { experiment: 'x1', action: 'start', asked_in: 4 },
+      set_floor_switches: { ...f, auto_merge: true, asked_in: 4 },
+      set_issue_priority: { ...f, number: 7, priority: true, asked_in: 4 },
+      set_ceo_setup: { model: 'claude-sonnet-5', asked_in: 4 },
+      apply_charter: { ...f, reason: 'r', asked_in: 4 },
+      merge_pull: { ...f, pr: 7, asked_in: 4 },
     };
     const acting = tools.map((t) => t.name).filter((name) => !NOT_CARDS.has(name));
     for (const name of acting) {
@@ -701,6 +714,7 @@ describe('follow-ups (#27)', () => {
           closePull: async () => 'ok', escalate: async () => 'ok', attachFile: async () => 'ok', worktreeFile: async () => 'ok', prDiff: async () => 'ok', sendTelegram: async () => 'ok', scanKeys: async () => 'ok', makeDefaultAccount: () => 'ok', editMessage: async () => 'ok',
           restartAgent: ok, stopAgent: ok, messageAgent: async () => 'ok', assignIssue: async () => 'ok', answerAgent: async () => 'ok', askManagerChoice: ok, defineExperiment: ok, sessionHistory: ok, proposeCharter: ok, resolveDecision: ok, proposeDesign: async () => 'ok',
           waitFor: async () => 'ok', askManager: async () => 'ok', consult: async () => 'ok', react: ok, reply: ok,
+          runExperiment: ok, setFloorSwitches: ok, setIssuePriority: async () => 'ok', setCeoSetup: ok, applyCharter: ok, mergePull: async () => 'ok',
         },
         () => researching,
       ),
