@@ -310,3 +310,75 @@ describe('sessions on a fresh login', { timeout: 30_000 }, () => {
     expect(o.swarm.accounts.view().accounts.find((a) => a.id === 'claude-keelop')?.status).toBe('signed-out');
   });
 });
+
+// #375: the CEO on a second account starts ready too, and a stuck CEO shows in the chat instead of going silent.
+describe('the CEO on a second account', { timeout: 30_000 }, () => {
+  /** The office with the CEO pinned to the second Max (rotation off, so a stuck session stays there), and the notices sent. */
+  async function ceoOn(account = 'claude-keelop') {
+    const o = await office([]);
+    o.swarm.updateSettings({ rotation: { on: false, apiLast: true, ceoClis: [], agentsSwitchCli: false } });
+    o.swarm.updateAgent('ceo', { account });
+    const notify = vi.spyOn(o.i.notifier, 'notify');
+    const cards = () => o.i.state.messages.filter((m) => m.ceoStuck);
+    return { ...o, notify, cards };
+  }
+
+  it("sets up the account's login folder for the CEO's folder before its first session there", async () => {
+    const dir = path.join(home, 'accounts', 'claude-keelop', 'claude');
+    fs.rmSync(dir, { recursive: true, force: true });
+    const { swarm, runs } = await ceoOn();
+    await swarm.messageCeo('Hello?');
+    await wait(3_000);
+    expect(runs.filter((r) => r.role === 'ceo').at(-1)?.account).toBe('claude-keelop');
+    const config = JSON.parse(fs.readFileSync(path.join(dir, '.claude.json'), 'utf8'));
+    expect(config.hasCompletedOnboarding).toBe(true);
+    expect(config.theme).toBeTruthy();
+    expect(config.projects[path.join(home, 'ceo')]).toMatchObject({ hasTrustDialogAccepted: true, hasCompletedProjectOnboarding: true });
+  });
+
+  it('a session on a login nobody signed in shows the stuck card with Switch back, no generic error, and Switch back answers', async () => {
+    const { demoSignedIn } = await import('./demoAccounts.ts');
+    const { swarm, i, runs, cards, ceo } = await ceoOn();
+    swarm.updateSettings({ statusReactions: true });
+    await swarm.messageCeo('Before the switch'); // answered on the built-in login: where Switch back goes
+    await wait(20_000);
+    demoSignedIn.delete('claude-keelop');
+    await swarm.messageCeo('Are you there?');
+    await wait(10_000);
+    expect(cards()).toHaveLength(1);
+    expect(cards()[0].ceoStuck).toMatchObject({ kind: 'sign-in', account: 'claude-keelop', back: '' });
+    expect(cards()[0].text).toMatch(/is stuck on Max · keelops: sign-in needed/);
+    expect(i.state.messages.filter((m) => /hit a problem/.test(m.text))).toHaveLength(0);
+    await swarm.messageCeo('Still there?');
+    await wait(10_000);
+    expect(cards()).toHaveLength(1); // one card however many jobs hit the sign-in
+    swarm.ceoSwitchBack('');
+    await wait(20_000);
+    expect(runs.filter((r) => r.role === 'ceo').at(-1)?.account).toBe('claude-login');
+    expect(ceo().status).not.toBe('error');
+    const asked = i.state.messages.filter((m) => m.from === 'manager' && m.text.endsWith('there?'));
+    expect(asked.map((m) => m.status)).toEqual(['done', 'done']); // both stuck messages answered after Switch back
+  });
+
+  it("a session that sits on a setup screen, or says nothing for a minute, shows a card and one notification each", async () => {
+    const { swarm, i, cards, notify, ceo } = await ceoOn();
+    let cb: SessionCallbacks | null = null;
+    i.backend.startSession = (_opts, c) => {
+      cb = c;
+      return { send: () => undefined, stop: () => c.finished({ ok: false, text: '', costUsd: 0, turns: 0, errors: ['Stopped'], interrupted: true }) };
+    };
+    await swarm.messageCeo('Anyone?');
+    await wait(59_000);
+    expect(cards()).toHaveLength(0);
+    await wait(2_000);
+    expect(cards().map((m) => m.ceoStuck?.kind)).toEqual(['silent']);
+    expect(swarm.snapshot().agents.find((a) => a.id === 'ceo')?.blocked).toMatch(/hasn't answered/);
+    cb!.blocked?.('needs setup (the theme screen)', 'setup');
+    cb!.blocked?.('needs setup (the theme screen)', 'setup'); // read again: still one card
+    expect(cards().map((m) => m.ceoStuck?.kind)).toEqual(['silent', 'setup']);
+    expect(notify.mock.calls.filter(([, title]) => /is stuck on Max · keelops/.test(title))).toHaveLength(2);
+    cb!.text?.('Here.', true); // it answers: no longer shown as stuck
+    expect(swarm.snapshot().agents.find((a) => a.id === 'ceo')?.blocked).toBeNull();
+    expect(ceo().status).toBe('working');
+  });
+});

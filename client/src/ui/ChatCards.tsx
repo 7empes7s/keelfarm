@@ -3,11 +3,12 @@ import { api } from '../api';
 import { useStore } from '../store';
 import type { ChatAction } from '../../../shared/ceoActions';
 import { currentStep } from '../../../shared/ceoStream';
-import { CEO_ID, type ChatIdea, type ChatNotice } from '../../../shared/types';
+import { CEO_ID, type ChatCeoStuck, type ChatIdea, type ChatNotice } from '../../../shared/types';
 import { actionStatus, daySeparator, elapsed, starterChips, workingLine, type ActionStatus } from './chatCardRules';
 import { Icon } from './Icon';
 import { iconFor, type IconName } from './icons';
-import { useActionOpen } from './RefChips';
+import { useActionOpen, useRefOpen } from './RefChips';
+import { SignInSheet } from './SignInSheet';
 import { StepLogList } from './ChatLive';
 import './chatCards.css';
 
@@ -152,6 +153,47 @@ export function PacingCard({ text }: { text: string }) {
           {always ? 'Full speed kept' : 'Always keep full speed'}
         </button>
       </div>
+    </div>
+  );
+}
+
+/** The CEO's session is stuck (#375): the office's line, its terminal, the account's guided sign-in, and Switch back. */
+export function CeoStuckCard({ text, stuck }: { text: string; stuck: ChatCeoStuck }) {
+  const [busy, setBusy] = useState(false);
+  const [signing, setSigning] = useState(false);
+  const account = useStore((s) => s.accounts.accounts.find((a) => a.id === stuck.account));
+  const binding = useStore((s) => s.agents[CEO_ID]?.account ?? '');
+  const terminal = useRefOpen()({ kind: 'agent', agentId: CEO_ID, terminal: true, start: 0, end: 0 });
+  const back = stuck.back;
+  const backDone = back !== null && binding === back;
+  const signIn = stuck.kind === 'sign-in' && account?.kind === 'subscription-login' && !account.builtIn;
+  return (
+    <div className="notice-card" role="note">
+      <p className="notice-card-title">{text}</p>
+      <div className="notice-card-links">
+        {terminal && (
+          <button type="button" className="btn" onClick={terminal}>
+            <Icon name="terminal" /> Open terminal
+          </button>
+        )}
+        {signIn && (
+          <button type="button" className="btn" disabled={busy || account.status !== 'signed-out'} onClick={() => {
+              setBusy(true);
+              void api.signInAccount(account.id).then(() => setSigning(true), () => undefined).finally(() => setBusy(false));
+            }}>
+            <Icon name="key-round" /> {account.status === 'signed-out' ? 'Sign in' : 'Signed in'}
+          </button>
+        )}
+        {back !== null && (
+          <button type="button" className="btn" disabled={busy || backDone} onClick={() => {
+              setBusy(true);
+              void api.ceoSwitchBack(back).catch(() => undefined).finally(() => setBusy(false)); // api() already toasted the error
+            }}>
+            <Icon name="undo-2" /> {backDone ? `Back on ${stuck.backLabel ?? 'it'}` : `Switch back to ${stuck.backLabel ?? 'the last account'}`}
+          </button>
+        )}
+      </div>
+      {signing && account && <SignInSheet a={account} close={() => setSigning(false)} />}
     </div>
   );
 }

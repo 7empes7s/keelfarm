@@ -51,12 +51,12 @@ import type { DoctorFinding, DoctorFix, MachineHost, PullInfo, SwarmSettings } f
 import { type PersistedRepo, type PersistedAgent, BUSY, FULL_HOUSE, oneLine, QA_SHOTS_DIR } from './model.ts';
 import { LAB_SLUG } from '../testLabRunner.ts';
 import { slugify } from './flavour.ts';
-import { SwarmCeo } from './ceoJobs.ts';
+import { SwarmCeoStuck } from './ceoStuck.ts';
 
 /** An agent's current task, for telling each blocked state once per task. */
 const blockedTask = (a: PersistedAgent) => `${a.id}@${a.startedAt ?? 0}`;
 
-export abstract class SwarmUpkeep extends SwarmCeo {
+export abstract class SwarmUpkeep extends SwarmCeoStuck {
   // ---------- idle desks ----------
 
   protected bootAt = Date.now();
