@@ -8,13 +8,13 @@ for (const [mode, width] of [
   ['pocket', 390],
   ['office', 1280],
 ] as const) {
-  test(`every deep link opens its view cold in the ${mode} office`, async ({ page }) => {
+  test(`every deep link opens its view cold in the ${mode} office`, async ({ page, baseURL }) => {
     test.setTimeout(360_000);
     await page.setViewportSize({ width, height: 800 });
-    // A new page load cuts off the last one's requests (the app viewer's previews watch, a lazy chunk): each link's
-    // requests finish before the next link loads, so the fixture's failed-request check stays strict.
+    // A new page load cuts off the last one's requests (a lazy chunk, a panel's fetch): each link's requests to the
+    // office finish before the next link loads, so the fixture's failed-request check stays strict.
     const pending = new Set<Request>();
-    page.on('request', (r) => void pending.add(r));
+    page.on('request', (r) => void (r.url().startsWith(baseURL!) && pending.add(r)));
     const settle = (r: Request) => void pending.delete(r);
     page.on('requestfinished', settle);
     page.on('requestfailed', settle);

@@ -20,7 +20,7 @@ import type { CleanPlan, CleanResult, DiskSettings } from '../../shared/disk';
 import type { HealthView } from '../../shared/health';
 import type { ChatPage } from '../../shared/chatPage';
 
-async function call<T = unknown>(method: string, url: string, body?: unknown, toast = true, keepalive = false): Promise<T> {
+async function call<T = unknown>(method: string, url: string, body?: unknown, toast = true): Promise<T> {
   // The time-lapse shows a recorded day: nothing in it can be acted on.
   if (method !== 'GET' && useStore.getState().replaying) {
     useStore.getState().pushToast('info', 'Replaying: live actions are off. Press Esc to go back to the live office.');
@@ -30,7 +30,6 @@ async function call<T = unknown>(method: string, url: string, body?: unknown, to
     method,
     headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
     body: body !== undefined ? JSON.stringify(body) : undefined,
-    keepalive,
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -107,8 +106,7 @@ export const api = {
   /** 📌 keep a preview running ('hour' | 'forever'), let it stop by itself again ('off'), or (no pin) start its max lifetime again. */
   keepPreview: (repoId: string, pr: number | null, pin?: 'hour' | 'forever' | 'off') => call('POST', `${r(repoId)}/preview/keep`, { pr, pin }),
   /** The app viewer's heartbeat: which PR preview it has on screen (repoId null: none). Quiet on errors. */
-  // keepalive: the hidden page's word (theatre.ts) is sent as it unloads, and a new page load mustn't cut it off
-  watchPreview: (viewer: string, repoId: string | null, pr: number | null) => call('POST', '/api/previews/watch', { viewer, repoId, pr }, false, true),
+  watchPreview: (viewer: string, repoId: string | null, pr: number | null) => call('POST', '/api/previews/watch', { viewer, repoId, pr }, false),
   previewSync: (repoId: string, pr: number | null) => call<{ url: string }>('POST', `${r(repoId)}/preview/sync`, { pr }),
   disconnectRepo: (repoId: string) => call('DELETE', r(repoId)),
   syncRepo: (repoId: string) => call('POST', `${r(repoId)}/sync`),
