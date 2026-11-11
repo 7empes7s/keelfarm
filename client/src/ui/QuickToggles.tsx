@@ -1,7 +1,7 @@
 // The top bar's Sound and CC buttons (#267), in pocket mode's header and the 3D office's HUD: a tap mutes or unmutes and
 // turns captions on or off; hover, keyboard focus or a long-press opens a small card with the volume, soundtrack,
-// chatter and the voice (VoiceQuick.tsx, #500), or the caption size, and a link to the rest. On a phone one "Sound & captions" button opens a sheet with
-// both. They read the same stores as Settings (sfx.ts, a11y.ts), so a change anywhere shows here at once.
+// chatter and the voice (VoiceQuick.tsx, #500), or the caption size, and a link to the rest. On a phone one
+// "Sound & captions" button opens a sheet with both. They read the same stores as Settings (sfx.ts, a11y.ts), so a change anywhere shows here at once.
 import { useId, useSyncExternalStore } from 'react';
 import { useStore } from '../store';
 import { typingIn } from '../pocket/switchOffice';

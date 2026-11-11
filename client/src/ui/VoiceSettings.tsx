@@ -1,7 +1,7 @@
 // The Settings tab's Voice section: who reads messages aloud, the ElevenLabs key (write-only), the voice, and a Test;
 // then talking instead of typing: who turns speech into text, auto-send and hands-free. The key lives on the server;
 // the browser only ever sees its last 4 characters.
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
 import { SAMPLE_LINE } from '../../../shared/speech';
@@ -285,7 +285,10 @@ function SavedClips({ voice, save }: { voice: Voice; save: Save }) {
 /** The Test line in the voice in use, and which preview is playing; closing the screen stops it. */
 export function useVoiceTest(voice: Voice, keySet: boolean) {
   const [playing, setPlaying] = useState<Playing>(null);
-  useEffect(() => stopVoice, []); // closing the console stops a preview
+  const mine = useRef(playing);
+  mine.current = playing;
+  // Closing the screen stops its own preview or test, never another voice (an agent's line under the Sound card).
+  useEffect(() => () => void (mine.current && stopVoice()), []);
   const eleven = voice.provider === 'elevenlabs';
   const canTest = voice.provider === 'browser' || (eleven && keySet && !!voice.voiceId);
   const test = async () => {
