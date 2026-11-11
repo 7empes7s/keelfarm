@@ -1,8 +1,8 @@
 // Usage for every account and provider (#361): one row per source (Claude and Codex accounts, ElevenLabs, Upstash
 // Boxes, API spend), worst first, with a bar per window, "resets in 3h" and a status chip. A tap opens the source's
-// detail: every window, the last day's history, the agents on it, and (for API spend) the Admin key that reads the
-// organisation's cost report. On the Company page (pocket mode) and in Mission control. Each row and sheet has the
-// actions that fit its state (#404, UsageActions.tsx): the chip signs a signed-out account in.
+// detail: every window, the last day's history, who is on it and who spent it (UsageWho.tsx, #409), and (for API spend)
+// the Admin key that reads the organisation's cost report. On the Company page (pocket mode) and in Mission control.
+// Each row and sheet has the actions that fit its state (#404, UsageActions.tsx): the chip signs a signed-out account in.
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { fmtUsd } from '../ops';
@@ -21,6 +21,7 @@ import { sharesNote, shareStats } from './peekFacts';
 import { SignInSheet } from './SignInSheet';
 import { AgentsSheet, OnIt, UsageActionButton, runUsageAction, useUsageContext, type UsageHost } from './UsageActions';
 import { backAt, chipAction, rowAction, usageActions } from './usageActionRules';
+import { OnItNow, WindowSplit } from './UsageWho';
 import './usageSources.css';
 
 const ICON: Record<UsageProvider, IconName> = { claude: 'asterisk', codex: 'terminal', elevenlabs: 'mic', upstash: 'cloud', anthropic: 'wallet', openai: 'wallet', gemini: 'sparkles', openrouter: 'shuffle', hetzner: 'server', runway: 'clapperboard', luma: 'film', kling: 'video' };
@@ -164,16 +165,23 @@ function UsageDetail({ s, now, host, onClose }: { s: UsageSource; now: number; h
         )}
         {s.note && <p className="muted small">{s.note}</p>}
         <History points={s.history ?? []} />
-        {shares.length > 0 && (
+        {shares.length > 0 && !s.split && (
           <div>
             <b className="small">Floor shares this week</b> <span className="muted small">{sharesNote(week!, now, fmtUsd)}</span>
             <p className="small">{shares.map(([name, v]) => `${name} ${v}`).join(' · ')}</p>
           </div>
         )}
-        <div>
-          <b className="small">On it</b>
-          <OnIt ids={s.agents ?? []} onOpen={onClose} />
-        </div>
+        {s.accountId ? (
+          <>
+            <OnItNow accountId={s.accountId} pinned={s.agents ?? []} now={now} close={onClose} />
+            <WindowSplit split={s.split} close={onClose} />
+          </>
+        ) : (
+          <div>
+            <b className="small">On it</b>
+            <OnIt ids={s.agents ?? []} onOpen={onClose} />
+          </div>
+        )}
         {admin && <AdminKey provider={admin} />}
         <div className="us-actions" role="group" aria-label="Actions">
           {usageActions(s, ctx).map((a) => (
