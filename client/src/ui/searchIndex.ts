@@ -5,6 +5,7 @@ import { CEO_ID, type AgentView, type PhoneMessage, type QaView, type RepoView }
 import { SECTIONS, type Where } from './consoleNavRules';
 import type { Target } from './goTo';
 import type { IconName } from './icons';
+import { HUD_OPTIONS } from './hudOptions';
 
 export type Kind = 'action' | 'floor' | 'agent' | 'issue' | 'pr' | 'qa' | 'setting' | 'objective' | 'message' | 'artifact';
 
@@ -59,6 +60,8 @@ export function buildIndex(s: IndexInput): Item[] {
     { id: 'act:guide', kind: 'action', icon: 'circle-check', label: 'Get the most out of the office', sub: 'The setup checklist', target: { kind: 'guide' } },
     { id: 'act:previews', kind: 'action', icon: 'monitor', label: 'Previews', sub: 'Every live app and PR preview', target: { kind: 'overlay', overlay: { kind: 'previews' } } },
   );
+  // the 3D office's Options: what a phone's top bar leaves out (#406)
+  if (s.where === 'office') for (const o of HUD_OPTIONS) items.push({ id: `opt:${o.id}`, kind: 'action', icon: o.icon, label: o.label, sub: 'Options', target: { kind: 'option', id: o.id } });
   for (const r of floors) {
     const n = `floor ${r.floor}`;
     items.push(

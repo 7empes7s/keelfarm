@@ -21,6 +21,7 @@ import { IssueActions } from './IssueActions';
 import { Markdown } from './Markdown';
 import { Panel } from './Panel';
 import { ProgressBar } from './ProgressBar';
+import { prPreview } from './prNav';
 import './cardView.css';
 
 // One issue or PR card up close (#206), the same from a chat ref, the Kanban and a 3D sticky (E): a header card with the
@@ -167,7 +168,7 @@ function Card({ repo, card, col, allAgents, ceo }: { repo: RepoView; card: Kanba
           </Stat>
         )}
         {pull?.state === 'OPEN' && !pull.untrusted && (
-          <Stat icon={<Icon name="play" />} title="Preview" onTap={() => go({ kind: 'overlay', overlay: { kind: 'app', repoId: repo.id, pr: pull.number } })}>
+          <Stat icon={<Icon name="play" />} title="Preview" onTap={() => go({ kind: 'overlay', overlay: prPreview(repo, pull.number) })}>
             Run PR #{pull.number} beside {repo.defaultBranch}
           </Stat>
         )}

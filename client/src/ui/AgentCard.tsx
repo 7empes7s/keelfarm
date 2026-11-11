@@ -1,21 +1,33 @@
 import { useEffect, useState } from 'react';
+import { create } from 'zustand';
+import { taskStage } from '../../../shared/progressBars';
 import { ACTIVITY_ICONS, ACTIVITY_LABELS, clipText, recentActions, redact } from '../../../shared/activity';
 import { isBusy, qaKey, useStore, type Agent } from '../store';
 import { reportCard } from '../world/activityProbe';
 import { useKeyName } from './controls';
 import { agentLabel, signInFor } from './floorRows';
 import { HostBadge } from './HostBadge';
-import { Icon } from './Icon';
-import { iconFor } from './icons';
+import { CloseButton, Icon } from './Icon';
+import { iconFor, type IconName } from './icons';
 import { isTouch, openHoldMenu } from '../world/touch/touchState';
 import { agentTask, TaskBar, taskSince } from './TaskProgress';
+import { Avatar } from './phoneParts';
+import { aimProgress, aimStatus, prLabel, type PrMark } from './aimCardRules';
+import { tourAllows, useTourGate } from './tourGate';
 
 // The card at the left edge (clear of their monitor) when you keep someone in your sights for a moment: who they are,
 // what they're on and for how long, what they're doing now and their last few steps, turns and cost on this task, and
 // the QA round while they're testing or fixing a PR. It only reads the store: E still opens their terminal.
+// On a touch screen it starts compact (#406): name, one status line, a thin bar and their PR; a tap shows the rest.
 
 const AIM_MS = 400;
 const STATUS: Record<Agent['status'], string> = { idle: 'free', preparing: 'setting up', working: 'working', done: 'done', error: 'stuck', stopped: 'stopped' };
+
+const MARK_ICON: Record<PrMark, IconName> = { passed: 'circle-check', failed: 'circle-x', waiting: 'hourglass', you: 'hand' };
+const MARK_WORD: Record<PrMark, string> = { passed: 'passed', failed: 'failed', waiting: 'waiting', you: 'needs you' };
+
+/** A touch screen's card is expanded: its details and the career peek show (HUD.tsx). */
+export const useAimCard = create<{ open: boolean }>(() => ({ open: false }));
 
 function elapsed(ms: number) {
   const m = Math.floor(ms / 60_000);
@@ -32,7 +44,8 @@ function onWhat(a: Agent): string | null {
 }
 
 export function AgentCard() {
-  const aimed = useStore((s) => (s.started && !s.overlay && !s.travel && s.focus?.action.kind === 'terminal' ? s.focus.action.agentId : null));
+  const allowed = useTourGate((s) => tourAllows(s.step, { kind: 'card' }));
+  const aimed = useStore((s) => (allowed && s.started && !s.overlay && !s.travel && s.focus?.action.kind === 'terminal' ? s.focus.action.agentId : null));
   const [held, setHeld] = useState<string | null>(null);
   useEffect(() => {
     setHeld(null);
@@ -42,6 +55,8 @@ export function AgentCard() {
   }, [aimed]);
   // Looking away (or at someone else) hides it at once; the new person's card waits for its own moment.
   const id = held !== null && held === aimed ? held : null;
+  const open = useAimCard((s) => s.open);
+  useEffect(() => useAimCard.setState({ open: false }), [id]);
   const agent = useStore((s) => (id ? s.agents[id] : undefined));
   const log = useStore((s) => (id ? s.logs[id] : undefined));
   const qa = useStore((s) => (agent?.prNumber ? s.qa[qaKey(agent.repoId, agent.prNumber)] : undefined));
@@ -70,8 +85,39 @@ export function AgentCard() {
   const on = onWhat(agent);
   const round = (agent.task === 'fix' || agent.task === 'qa') && qa ? qa.round : null;
   const signIn = signInFor(agent, settings);
+  const more = () => openHoldMenu({ id: `agent-${agent.id}`, label: `Watch ${agent.name}`, action: { kind: 'terminal', agentId: agent.id } });
+  if (isTouch && !open) {
+    const stage = taskStage(agentTask(agent, qa));
+    const status = aimStatus(agent, stage, round);
+    const pr = prLabel(agent, qa?.status);
+    const n = agent.prNumber;
+    return (
+      <div className="agent-card ac-compact" style={{ ['--who' as string]: agent.color }}>
+        <div className="ac-head">
+          <button type="button" className="ac-open" onClick={() => useAimCard.setState({ open: true })} aria-label={`${agent.name}: ${status}. Show their card`}>
+            <Avatar name={agent.name} color={agent.color} size={36} />
+            <span className="ac-who">
+              <span className="ac-name">{agent.name}</span>
+              <span className="ac-line">{signIn ? `Sign ${signIn} in` : status}</span>
+            </span>
+          </button>
+          {pr && n != null && (
+            <button type="button" className="btn btn-small ac-pr" onClick={() => useStore.getState().openOverlay({ kind: 'card', repoId: agent.repoId, key: `pr-${n}`, number: n, pr: true })} aria-label={`Open ${pr.text}${pr.mark ? `, QA: ${MARK_WORD[pr.mark]}` : ''}`}>
+              {pr.text} {pr.mark && <Icon name={MARK_ICON[pr.mark]} />}
+            </button>
+          )}
+          <button className="ac-more" onClick={more} aria-label={`More for ${agent.name}`} title="More options">
+            <Icon name="ellipsis" />
+          </button>
+        </div>
+        <div className="ac-bar" aria-hidden>
+          <span style={{ width: `${aimProgress(stage) * 100}%` }} />
+        </div>
+      </div>
+    );
+  }
   return (
-    <div className="agent-card" style={{ ['--who' as string]: agent.color }}>
+    <div className={`agent-card ${isTouch ? 'ac-full' : ''}`} style={{ ['--who' as string]: agent.color }}>
       <div className="ac-head">
         <span className="ac-dot" />
         <span className="ac-who">
@@ -93,9 +139,12 @@ export function AgentCard() {
           )}
         </span>
         {isTouch && (
-          <button className="ac-more" onClick={() => openHoldMenu({ id: `agent-${agent.id}`, label: `Watch ${agent.name}`, action: { kind: 'terminal', agentId: agent.id } })} aria-label={`More for ${agent.name}`} title="More options">
-            <Icon name="ellipsis" />
-          </button>
+          <>
+            <button className="ac-more" onClick={more} aria-label={`More for ${agent.name}`} title="More options">
+              <Icon name="ellipsis" />
+            </button>
+            <CloseButton className="ac-more" onClick={() => useAimCard.setState({ open: false })} label="Show less" />
+          </>
         )}
       </div>
       {signIn && (
