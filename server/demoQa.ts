@@ -1,12 +1,13 @@
 // The demo's stuck PR (#155): a fresh demo office opens with a PR QA failed and left with the manager, so the details
 // page shows a full report: nine checks of every result, a charter violation and a merge conflict.
-import type { PullInfo, QaCheck } from '../shared/types.ts';
+import type { PullInfo, QaCheck, TryStep } from '../shared/types.ts';
 
 export interface DemoQaReport {
   pull: PullInfo;
   summary: string;
   checks: QaCheck[];
   fixInstructions: string;
+  tryIt: TryStep[]; // QA's version of the PR's "Try it" (#381): the last step fails
 }
 
 /** The issue the stuck PR closes: a title long enough to wrap on a phone, as the details header's must (#155). */
@@ -37,6 +38,11 @@ export function demoQaReport(fullName: string, number: number, issue: { number: 
       mergeState: 'DIRTY',
       failedChecks: [],
       pendingChecks: [],
+      tryIt: [
+        { text: 'Open the checkout at /checkout.', path: '/checkout' },
+        { text: 'Add two items, then tap Next.' },
+        { text: 'You should see the steps wrap and Pay stay on screen.' },
+      ],
     },
     summary: 'The page reads well on a desktop, but at 390px the stepper is cut off and the page scrolls sideways. The branch also conflicts with main.',
     checks: [
@@ -49,6 +55,11 @@ export function demoQaReport(fullName: string, number: number, issue: { number: 
       { name: 'Screen reader labels', result: 'pass', details: 'The stepper buttons say "More" and "Fewer"' },
       { name: 'Offline mode', result: 'skip', details: 'The service worker is not built in preview mode, so it could not be checked.' },
       { name: 'Charter check', result: 'fail', details: "violation: 'Screens work at 390px': the page scrolls sideways and the stepper is cut off" },
+    ],
+    tryIt: [
+      { text: 'Open the checkout at /checkout.', path: '/checkout', result: 'pass' },
+      { text: 'Add two items with +, then tap Next.', result: 'pass' },
+      { text: 'You should see the steps wrap and Pay stay on screen.', result: 'fail', note: 'At 390 px the stepper overflows and the page scrolls sideways' },
     ],
     fixInstructions: 'Let the stepper wrap under the title below 480px, and give the page bottom padding the height of the sticky action bar. Then merge main and keep both changes working.',
   };

@@ -73,3 +73,16 @@ describe('lab errors (#189)', () => {
     expect(parseReport(result({ structured: report({ verdict: 'fail', checks: lab, charterCheck: 'violation: no test' }) }))!.verdict).toBe('fail');
   });
 });
+
+describe("QA's Try it steps (#381)", () => {
+  it('are in the schema, optional, and read back corrected with results and notes', () => {
+    expect((QA_SCHEMA.properties as Record<string, unknown>).tryIt).toBeDefined();
+    expect(QA_SCHEMA.required).not.toContain('tryIt');
+    const tryIt = [{ step: 'Open `/chat`', result: 'pass' }, { step: 'Send a message', result: 'fail', note: 'Two bubbles' }];
+    expect(parseReport(result({ structured: report({ tryIt }) }))?.tryIt).toEqual([
+      { text: 'Open /chat', path: '/chat', result: 'pass' },
+      { text: 'Send a message', result: 'fail', note: 'Two bubbles' },
+    ]);
+    expect(parseReport(result({ structured: report() }))?.tryIt).toBeUndefined();
+  });
+});
