@@ -259,6 +259,7 @@ export const api = {
   // Settings → Providers & accounts (#247, docs/accounts.md). Keys go in; only their last 4 come back.
   addAccount: (a: { cli: AccountCli; kind: AccountKind; label?: string; tags?: string; key?: string; tokenEnv?: string }) => call<{ id: string; note: string }>('POST', '/api/accounts', a, false),
   updateAccount: (id: string, patch: { label?: string; tags?: string; enabled?: boolean; plan?: string; dailyCostCap?: number | null }) => call('PATCH', `/api/accounts/${encodeURIComponent(id)}`, patch),
+  makeDefaultAccount: (id: string, now: boolean) => call<{ note: string }>('POST', `/api/accounts/${encodeURIComponent(id)}/default`, { now }),
   moveAccount: (id: string, by: -1 | 1) => call('POST', `/api/accounts/${encodeURIComponent(id)}/move`, { by }),
   setAccountKey: (id: string, key: string) => call<{ note: string }>('PUT', `/api/accounts/${encodeURIComponent(id)}/key`, { key }, false),
   repairShare: (id: string) => call<{ note: string }>('POST', `/api/accounts/${encodeURIComponent(id)}/share`),

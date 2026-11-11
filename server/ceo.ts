@@ -191,6 +191,7 @@ export interface OfficeHandlers extends WaitHandlers, ReactHandlers {
   prDiff(a: { floor: number; pr: number; patch?: boolean }): Promise<string>;
   sendTelegram(a: { text: string }): Promise<string>;
   scanKeys(a: { rescan?: boolean }): Promise<string>;
+  makeDefaultAccount(a: { account: string; switch_now?: boolean }): string;
   editMessage(a: { id?: number; text: string; reason?: string }): Promise<string>;
   sessionHistory(a: z.infer<z.ZodObject<typeof SESSION_HISTORY_INPUT>>): string;
 }
@@ -504,6 +505,7 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
       (a) => run(() => h.sendTelegram(a)),
     ),
     tool('scan_keys', "Find the API keys the retired Mulinux projects left on this computer (their archive, OpenCode's config), test each with its provider, and list them for the manager to review and import in Settings → Providers. You see the provider, where it was, its last 4 characters and the test result, never a value. The last scan unless rescan.", { rescan: z.boolean().optional() }, (a) => run(() => h.scanKeys(a))),
+    tool('make_default_account', 'Make an account the default of its coding agent, when the manager asks: new tasks start on it, open tasks finish on theirs (switch_now: they move at their next session).', { account: z.string().max(40).describe('An account id (company_status lists them)'), switch_now: z.boolean().optional() }, (a) => run(() => h.makeDefaultAccount(a))),
     tool('edit_message', "Correct one of your earlier replies to the manager (#N from the chat; default your latest): its text is replaced, and the manager sees your old words struck through next to the new ones, marked edited. Their Telegram copy follows. For a real mistake only; new information goes in a new message.", { id: z.number().int().optional(), text: z.string().min(1).max(6000).describe('The whole corrected message'), reason: z.string().max(200).optional().describe('Why, in a few words') }, (a) => run(() => h.editMessage(a))),
     ...waitTools(h, run),
     ...reactTools(h, run),

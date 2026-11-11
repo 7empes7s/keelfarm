@@ -29,6 +29,7 @@ import { CHAT_KEEP } from '../../shared/chatPage.ts';
 import type { AgentStyle } from '../../shared/looks.ts';
 import type { CharterRecord } from '../../shared/charter.ts';
 import type { CharterInsights } from '../../shared/charterStats.ts';
+import type { TaskAccounts } from '../../shared/accountDefault.ts';
 import type { DecisionsState } from '../../shared/decisions.ts';
 import type { RoundCause } from '../../shared/rounds.ts';
 import type { BlockedState } from '../liveState.ts';
@@ -226,6 +227,7 @@ export interface Persisted {
   experiments: LabState; // the lab's experiments and the issues in them (experiments.ts)
   questions: AgentQuestion[]; // agents waiting on an answer (shared/questions.ts)
   decisions: DecisionsState; // questions waiting on the manager (#114, shared/decisions.ts)
+  taskAccounts: TaskAccounts; // the account each open build or fix task runs on (#390, shared/accountDefault.ts)
 }
 
 export interface Shot {

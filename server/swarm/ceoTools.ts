@@ -100,6 +100,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
       prDiff: (a) => this.prDiff(a),
       sendTelegram: (a) => this.sendTelegram(a),
       scanKeys: (a) => this.keyScanForCeo(!!a.rescan),
+      makeDefaultAccount: acts((a) => this.makeDefaultAccount(a.account, !!a.switch_now)),
       editMessage: async (a) => this.editCeoMessage(a),
       waitFor: (a) => this.waitFor(a),
       askManager: (a) => this.askManager(a),

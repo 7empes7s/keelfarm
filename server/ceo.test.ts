@@ -162,6 +162,7 @@ describe('office tools', () => {
       prDiff: async (a) => (calls.push(['pr_diff', a]), 'diff'),
       sendTelegram: async () => '',
       scanKeys: async () => '',
+      makeDefaultAccount: () => '',
       editMessage: async () => '',
       waitFor: async (a) => (calls.push(['wait_for', a]), 'PR #7 on floor 1 merged.'),
       askManager: async (a) => (calls.push(['ask_manager', a]), 'The manager answered: yes'),
@@ -200,6 +201,7 @@ describe('office tools', () => {
       'file_issue',
       'floor_detail',
       'keep_file',
+      'make_default_account',
       'message_agent',
       'pr_diff',
       'propose_charter',
@@ -269,6 +271,7 @@ describe('office tools', () => {
       ask_manager_choice: { ...agent, question: 'q' },
       send_telegram: { text: 't' },
       scan_keys: {},
+      make_default_account: { account: 'claude-ultra' },
       wait_for: { conditions: [{ kind: 'pr_merged', floor: 1, pr: 7 }] },
     };
     const acting = tools.map((t) => t.name).filter((name) => !NOT_CARDS.has(name));
@@ -692,7 +695,7 @@ describe('follow-ups (#27)', () => {
         {
           companyStatus: ok, floorDetail: ok, agentDetail: ok, setFloorProfile: ok, setOfficePlaybook: ok, scaleTeam: ok, configureAgent: ok, keepFile: ok, setMandate: ok, agentLog: ok, qaReport: ok,
           fileIssue: async () => 'filed', setDependencies: async () => 'ok', closeIssue: async () => 'ok', retryQa: async () => 'ok', sendBack: async () => 'ok', rerunChecks: async () => 'ok',
-          closePull: async () => 'ok', escalate: async () => 'ok', attachFile: async () => 'ok', worktreeFile: async () => 'ok', prDiff: async () => 'ok', sendTelegram: async () => 'ok', scanKeys: async () => 'ok', editMessage: async () => 'ok',
+          closePull: async () => 'ok', escalate: async () => 'ok', attachFile: async () => 'ok', worktreeFile: async () => 'ok', prDiff: async () => 'ok', sendTelegram: async () => 'ok', scanKeys: async () => 'ok', makeDefaultAccount: () => 'ok', editMessage: async () => 'ok',
           restartAgent: ok, stopAgent: ok, messageAgent: async () => 'ok', assignIssue: async () => 'ok', answerAgent: async () => 'ok', askManagerChoice: ok, defineExperiment: ok, sessionHistory: ok, proposeCharter: ok, resolveDecision: ok, proposeDesign: async () => 'ok',
           waitFor: async () => 'ok', askManager: async () => 'ok', consult: async () => 'ok', react: ok, reply: ok,
         },

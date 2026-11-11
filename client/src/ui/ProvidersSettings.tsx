@@ -5,6 +5,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
 import { BILLING_LINKS, kindSentence } from '../../../shared/accounts';
+import { switchingText } from '../../../shared/accountDefault';
 import { clock, isReset, usageBars } from '../../../shared/usage';
 import type { AccountCli, AccountKind, AccountView } from '../../../shared/types';
 import { Menu } from './Menu';
@@ -82,7 +83,7 @@ function Stats({ list }: { list: AccountView[] }) {
   );
 }
 
-function AccountCard({ a, first, last, edit, signIn }: { a: AccountView; first: boolean; last: boolean; edit: () => void; signIn: () => void }) {
+function AccountCard({ a, first, last, isDefault, left, edit, signIn }: { a: AccountView; first: boolean; last: boolean; isDefault: boolean; left: number; edit: () => void; signIn: () => void }) {
   const agents = useStore((s) => s.agents);
   const demo = useStore((s) => s.demo);
   const now = useNow(30_000);
@@ -123,6 +124,17 @@ function AccountCard({ a, first, last, edit, signIn }: { a: AccountView; first: 
     });
     if (ok) await api.removeAccount(a.id).catch(() => undefined);
   };
+  // Switch now (#390): open tasks on the other accounts move to this one at their next session, in a fresh session.
+  const switchNow = async () => {
+    const ok = await confirmDialog({
+      title: `Switch everyone to ${a.label} now?`,
+      body: "Open tasks on the other accounts move to it at their next session: a fresh session in the same worktree, without its conversation. Make default lets them finish where they are instead.",
+      icon: 'shuffle',
+      confirm: 'Switch now',
+      tone: 'warn',
+    });
+    if (ok) await api.makeDefaultAccount(a.id, true).catch(() => undefined);
+  };
   return (
     <div className={`acc-card ${a.enabled ? '' : 'acc-paused'}`}>
       <div className="ds-card-head">
@@ -134,6 +146,7 @@ function AccountCard({ a, first, last, edit, signIn }: { a: AccountView; first: 
             {a.loginPlan ? ` · login is ${a.loginPlan}` : ''}
             {a.keyHint ? ` · ••••${a.keyHint}` : ''}
             {a.builtIn ? ' · already here' : ''}
+            {isDefault ? ' · default' : ''}
           </div>
         </div>
         <span className={`chip acc-chip acc-${chip.tone}`}>{chip.text}</span>
@@ -143,6 +156,8 @@ function AccountCard({ a, first, last, edit, signIn }: { a: AccountView; first: 
             a.kind === 'subscription-login' && { label: 'Sign in again', onSelect: signIn },
             { label: 'Test', onSelect: () => void test() },
             !a.removing && { label: a.enabled ? 'Pause in the rotation' : 'Resume in the rotation', onSelect: () => void api.updateAccount(a.id, { enabled: !a.enabled }).catch(() => undefined) },
+            a.enabled && !a.removing && !isDefault && { label: 'Make default', hint: 'New tasks start on it; open ones finish first', onSelect: () => void api.makeDefaultAccount(a.id, false).catch(() => undefined) },
+            a.enabled && !a.removing && (!isDefault || left > 0) && { label: 'Switch now', hint: 'Open tasks move to it at their next session', onSelect: () => void switchNow() },
             !first && { label: 'Move up', onSelect: () => void api.moveAccount(a.id, -1).catch(() => undefined) },
             !last && { label: 'Move down', onSelect: () => void api.moveAccount(a.id, 1).catch(() => undefined) },
             { label: a.kind === 'api-key' ? 'Rename, tags, daily cap' : 'Rename and tags', onSelect: edit },
@@ -353,6 +368,7 @@ function AddSheet({ cli, close, signIn }: { cli: AccountCli; close: () => void; 
 
 export function ProvidersSettings() {
   const list = useStore((s) => s.accounts.accounts);
+  const switchingNow = useStore((s) => s.accounts.switching);
   const agents = Object.values(useStore((s) => s.agents));
   const settings = useStore((s) => s.settings);
   const [adding, setAdding] = useState<AccountCli | null>(null);
@@ -363,6 +379,8 @@ export function ProvidersSettings() {
   };
   const onRotation = agents.filter((x) => x.host !== 'box' && !x.account).length;
   const find = (id: string | null) => list.find((a) => a.id === id);
+  const switching = (cli: string) => switchingNow?.find((x) => x.cli === cli);
+  const def = (cli: string) => list.find((a) => a.cli === cli && a.enabled && !a.removing)?.id;
   return (
     <div className="card acc-page">
       <h3>
@@ -390,8 +408,13 @@ export function ProvidersSettings() {
             <p className="muted small">
               Signs in with {c.signs}.{users ? ` ${users} of the team run${users === 1 ? 's' : ''} it.` : ''}
             </p>
+            {switching(c.id) && (
+              <p className="acc-flag" role="status">
+                <Icon name="shuffle" /> {switchingText(switching(c.id)!.left)}
+              </p>
+            )}
             {mine.map((a, i) => (
-              <AccountCard key={a.id} a={a} first={i === 0} last={i === mine.length - 1} edit={() => setEditing(a.id)} signIn={() => signIn(a.id)} />
+              <AccountCard key={a.id} a={a} first={i === 0} last={i === mine.length - 1} isDefault={a.id === def(c.id)} left={switching(c.id)?.left.reduce((n, l) => n + l.count, 0) ?? 0} edit={() => setEditing(a.id)} signIn={() => signIn(a.id)} />
             ))}
           </section>
         );

@@ -120,6 +120,7 @@ const OFFICE: Record<string, [string, Words]> = {
   session_history: ['🕘', () => 'Reading past sessions'],
   send_telegram: ['✈️', () => 'Sending to Telegram'],
   scan_keys: ['🔑', () => 'Looking for keys left on this computer'],
+  make_default_account: ['🔀', () => 'Changing the default account'],
   edit_message: ['✏️', () => 'Correcting an earlier reply'],
   react: ['👍', () => 'Reacting to your message'],
   reply: ['↩️', () => 'Answering a message'],
