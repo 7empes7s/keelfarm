@@ -44,6 +44,7 @@ import { XLabel } from '../ui/HoverCard';
 import { TourInvite, Tutorial } from '../ui/Tutorial';
 import { trackFor, type Track } from '../ui/tourSteps';
 import { useTour } from '../ui/tour';
+import { showTab, useRouteLink } from '../routeLink';
 import { heldNote } from '../../../shared/health';
 import { PreviewsHost, PreviewsRailButton, usePreviewsLink } from './PocketPreviews';
 import { pushLayer } from '../ui/backStack';
@@ -598,6 +599,8 @@ export default function Pocket() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+  useEffect(() => showTab(tab), [tab]);
+  useRouteLink('pocket'); // deep links (#413), after the listeners above
   // pocket.css's icons and look apply to the whole page while pocket mode is on (dialogs and toasts included).
   useEffect(() => {
     document.documentElement.classList.add('pocket-mode');
@@ -703,7 +706,7 @@ export default function Pocket() {
           )}
         </nav>
         <div className={`pk-work ${settings ? 'pk-work-console' : ''}`}>
-          <main className={`pk-main ${tab === 'chat' ? 'pk-main-chat' : ''}`}>
+          <main className={`pk-main ${tab === 'chat' ? 'pk-main-chat' : ''}`} data-tab={tab}>
             {loaded && !setupDone ? (
               <div className="pk-page">
                 <p>The office isn't set up yet. Finish the setup in the 3D office (on a computer is easiest), then come back.</p>
