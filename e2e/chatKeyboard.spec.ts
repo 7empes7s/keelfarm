@@ -32,10 +32,11 @@ const visible = (page: Page) => page.evaluate(() => ({ top: visualViewport!.offs
 
 /** The message box is fully on screen, above the keyboard, the newest message in view, and nothing scrolls sideways. */
 async function aboveKeyboard(page: Page, chat: Locator) {
-  const box = (await chat.locator('.chat-input textarea').boundingBox())!;
+  // polled: software WebGL can hold the phone's next render past the keyboard helper's wait
   const v = await visible(page);
-  expect(box.y, 'the message box starts on screen').toBeGreaterThanOrEqual(v.top - 0.5);
-  expect(box.y + box.height, 'the message box ends above the keyboard').toBeLessThanOrEqual(v.bottom + 0.5);
+  const box = () => chat.locator('.chat-input textarea').boundingBox().then((b) => b!);
+  await expect.poll(() => box().then((b) => b.y), { message: 'the message box starts on screen' }).toBeGreaterThanOrEqual(v.top - 0.5);
+  await expect.poll(() => box().then((b) => b.y + b.height), { message: 'the message box ends above the keyboard' }).toBeLessThanOrEqual(v.bottom + 0.5);
   // the newest message in view (the demo's CEO may post one meanwhile: the log follows it)
   const below = () => chat.locator('.chat-log').evaluate((log) => log.lastElementChild!.getBoundingClientRect().bottom - log.getBoundingClientRect().bottom);
   await expect.poll(below, { message: 'the newest message in view' }).toBeLessThanOrEqual(1);
@@ -135,12 +136,16 @@ test("the 3D office's phone: the message box on a late, tall keyboard", async ({
       },
       [px, resize] as const,
     );
+  // the conversation at its end (the demo CEO's unread messages may have opened it at the divider)
+  await phone.locator('.chat-log').evaluate((el) => el.scrollTo(0, el.scrollHeight));
+  await frames(page);
   await field.focus();
   await kb(200, true); // mid-slide
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(350);
   await kb(474, false); // where it settles, never reported
-  // a frame measuring the settled size before the next check (it must still tell the phone)
-  await page.evaluate(() => document.dispatchEvent(new FocusEvent('focusin')));
+  // a frame measuring the settled size before the 600ms check (focus moving between fields: it must still tell the phone)
+  await field.evaluate((el) => document.dispatchEvent(new FocusEvent('focusout', { relatedTarget: el })));
+  await frames(page);
   await page.waitForTimeout(1500);
 
   const [input, v] = await Promise.all([phone.locator('.chat-input').boundingBox(), visible(page)]);
