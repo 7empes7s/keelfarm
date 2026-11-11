@@ -147,3 +147,18 @@
   white-space: nowrap;
   pointer-events: none;
 }
+/* one line, centred on each other (#507): the key chip, the words (cut short with … on a narrow screen) and the ⋯ */
+.hud-hint {
+  display: flex;
+  align-items: center;
+  gap: 0.3em;
+  max-width: calc(100vw / var(--ui-scale, 1) - 32px);
+}
+.hud-hint > :not(.hint-label) {
+  flex: none;
+}
+.hint-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
