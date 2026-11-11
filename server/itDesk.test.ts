@@ -42,9 +42,11 @@ describe('readOnlyPlan (it_run)', () => {
   it('gives a unit lines when none were asked for', () => {
     expect(plan('journalctl -u caddy')).toMatchObject({ argv: ['journalctl', '--no-pager', '-u', 'caddy', '-n', '200'] });
     expect(plan('journalctl --disk-usage')).toMatchObject({ argv: ['journalctl', '--no-pager', '--disk-usage'] });
+    expect(plan('journalctl -u keel-portal -n 50 --since=-1h -p err -o short-iso')).toMatchObject({ argv: ['journalctl', '--no-pager', '-u', 'keel-portal', '-n', '50', '--since=-1h', '-p', 'err', '-o', 'short-iso'] });
+    expect(plan('journalctl -n50 -b -k _SYSTEMD_UNIT=caddy.service')).toMatchObject({ argv: ['journalctl', '--no-pager', '-n50', '-b', '-k', '_SYSTEMD_UNIT=caddy.service'] });
   });
 
-  it.each(['rm -rf /tmp/x', 'systemctl restart caddy', 'docker image prune', 'journalctl --vacuum-size=500M', 'find /tmp -delete', 'find / -exec rm {} +', 'snap remove x', 'git push', 'git branch new', 'git remote add x y', 'mount /dev/sdb1 /mnt', 'systemctl -p status restart cubefarm.service', 'systemctl --property status stop x', 'docker --config ps run alpine true', 'docker --context images rm keel-postgres', 'docker system --log-level df prune', 'snap --color list remove x', 'journalctl --cursor-file=/root/newfile -n 1'])(
+  it.each(['rm -rf /tmp/x', 'systemctl restart caddy', 'docker image prune', 'journalctl --vacuum-size=500M', 'find /tmp -delete', 'find / -exec rm {} +', 'snap remove x', 'git push', 'git branch new', 'git remote add x y', 'mount /dev/sdb1 /mnt', 'systemctl -p status restart cubefarm.service', 'systemctl --property status stop x', 'docker --config ps run alpine true', 'docker --context images rm keel-postgres', 'docker system --log-level df prune', 'snap --color list remove x', 'journalctl --cursor-file=/root/newfile -n 1', 'journalctl --cursor-fil=/root/x -n 1', 'journalctl --rot', 'journalctl --flu', 'journalctl --syn', 'journalctl --relinq', 'journalctl --update', 'journalctl --vacuum-s=500M', 'journalctl -u caddy --rot'])(
     'refuses a change and points to it_propose: %s',
     (line) => expect(refusedWhy(line)).toMatch(/it_propose/),
   );

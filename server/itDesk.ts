@@ -72,7 +72,34 @@ const nice = (argv: string[], linux: boolean, seconds: number) => (linux ? ['tim
 /** The verb (or subcommand) is the word right after the program: an option before it could take a word as its value
  * (`systemctl -p status restart x`, `docker --config ps run …`) and leave the real verb further on. */
 const verbOf = (args: readonly string[], n = 1) => (args.slice(0, n).every((a) => !a.startsWith('-')) ? args.slice(0, n).join(' ') : null);
-const OPTION_FIRST = (program: string) => ({ refused: `Put ${program}'s verb first, before any option (e.g. "${program} status x -n 50"). ${PROPOSE}` });
+const OPTION_FIRST = (program: string, example: string) => ({ refused: `Put ${program}'s verb first, before any option (e.g. "${example}"). ${PROPOSE}` });
+
+// journalctl's read-only options, only in full: getopt takes any unambiguous prefix of a long option, so "--rot" is
+// --rotate and "--cursor-fil" writes a file. Options taking a value consume the next word (or "=value", or "-n50").
+const JOURNAL_VALUE = new Set(['-u', '--unit', '--user-unit', '-n', '--lines', '-S', '--since', '-U', '--until', '-p', '--priority', '-o', '--output', '-g', '--grep', '-t', '--identifier']);
+const JOURNAL_FLAG = new Set(['-b', '--boot', '--disk-usage', '--no-hostname', '-r', '--reverse', '-k', '--dmesg', '--list-boots', '--no-pager', '--utc', '-x', '--catalog', '-q', '--quiet', '-l', '--full', '--no-full', '-a', '--all', '--system', '--user', '-e', '--pager-end', '--case-sensitive']);
+
+/** The first journalctl option that isn't a known read-only one, given in full; null when they all are. */
+function journalOddOption(args: readonly string[]): string | null {
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (!a.startsWith('-') || a === '-') continue; // a match like _SYSTEMD_UNIT=x, or a value consumed below
+    const eq = a.indexOf('=');
+    const name = a.startsWith('--') && eq > 0 ? a.slice(0, eq) : a;
+    if (name !== a) {
+      if (JOURNAL_VALUE.has(name) || name === '--boot') continue;
+      return name;
+    }
+    if (JOURNAL_VALUE.has(a)) {
+      i++;
+      continue;
+    }
+    if (JOURNAL_FLAG.has(a)) continue;
+    if (/^-[unpogtbSU]./.test(a) && (JOURNAL_VALUE.has(a.slice(0, 2)) || a.startsWith('-b'))) continue; // -n50, -uX, -b-1
+    return a;
+  }
+  return null;
+}
 
 /** it_run's command: the argv to run, or why not (pointing to it_propose for changes). */
 export function readOnlyPlan(argv: readonly string[], o: { linux: boolean }): ReadPlan | Refusal {
@@ -102,20 +129,20 @@ export function readOnlyPlan(argv: readonly string[], o: { linux: boolean }): Re
       return { argv: nice([...argv], o.linux, READ_TIMEOUT_MS / 1000), timeoutMs: READ_TIMEOUT_MS + 10_000 };
     }
     case 'systemctl': {
-      if (args[0]?.startsWith('-')) return OPTION_FIRST('systemctl');
+      if (args[0]?.startsWith('-')) return OPTION_FIRST('systemctl', 'systemctl status caddy -n 50');
       const verb = verbOf(args);
       if (!verb || !['status', 'is-active', 'is-enabled', 'list-units', 'list-timers', 'cat'].includes(verb)) return changes(`systemctl ${verb ?? ''}`.trim());
       return { argv: ['systemctl', '--no-pager', ...args], timeoutMs: READ_TIMEOUT_MS };
     }
     case 'journalctl': {
-      const act = args.find((a) => /^--(vacuum|rotate|flush|sync|relinquish|setup-keys|update-catalog|cursor-file)/.test(a));
-      if (act) return changes(`journalctl ${act.split('=')[0]}`);
       if (args.some((a) => a === '-f' || a === '--follow')) return { refused: "journalctl --follow never ends: ask for the last lines with -n." };
+      const odd = journalOddOption(args);
+      if (odd) return { refused: `journalctl ${odd} isn't one of the read-only options it_run takes, written in full (-u, -n, --since, --until, -p, -b, -o, -g, -k, -r, --disk-usage, --list-boots, --no-hostname). ${PROPOSE}` };
       const lines = args.includes('--disk-usage') || args.some((a) => a === '-n' || a.startsWith('--lines') || /^-n\d+$/.test(a)) ? [] : ['-n', '200'];
       return { argv: ['journalctl', '--no-pager', ...args, ...lines], timeoutMs: READ_TIMEOUT_MS };
     }
     case 'docker': {
-      if (args[0]?.startsWith('-')) return OPTION_FIRST('docker');
+      if (args[0]?.startsWith('-')) return OPTION_FIRST('docker', 'docker ps -a');
       const one = verbOf(args);
       const two = verbOf(args, 2);
       if ((one && ['ps', 'images'].includes(one)) || (two && ['system df', 'volume ls', 'image ls', 'container ls'].includes(two))) return plain;
