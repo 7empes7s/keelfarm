@@ -121,7 +121,7 @@ function SoundButton({ className }: { className: string }) {
       >
         <Icon name={muted ? 'volume-x' : 'volume-2'} />
       </button>
-      <Peek peek={peek} label="Sound">
+      <Peek peek={peek} label="Sound" anchored="center">
         <SoundSettings toggle={peek.mode === 'sheet'} />
       </Peek>
     </>
@@ -147,7 +147,7 @@ function CaptionsButton({ className }: { className: string }) {
       >
         <Icon name={on ? 'captions' : 'captions-off'} />
       </button>
-      <Peek peek={peek} label="Captions">
+      <Peek peek={peek} label="Captions" anchored="center">
         <CaptionSettings toggle={peek.mode === 'sheet'} />
       </Peek>
     </>
