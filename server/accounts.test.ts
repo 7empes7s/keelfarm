@@ -95,6 +95,27 @@ describe('Accounts', () => {
     expect(accounts.use(undefined, 'claude')?.id).toBe('claude-login'); // as before: the binding's account
   });
 
+  it("a new Claude login shares this computer's login's set (#377): on the card, Repair heals it, removing it leaves the set", async () => {
+    const shared = await fs.mkdtemp(path.join(os.tmpdir(), 'cf-shared-'));
+    dirs.push(shared);
+    await fs.mkdir(path.join(shared, 'projects', '-root', 'memory'), { recursive: true });
+    await fs.writeFile(path.join(shared, 'projects', '-root', 'memory', 'MEMORY.md'), 'remember\n');
+    await fs.writeFile(path.join(shared, 'settings.json'), '{}');
+    const { accounts } = await office({ shareFrom: shared });
+    const { id } = await accounts.add({ cli: 'claude', kind: 'subscription-login', label: 'Pro' });
+    const dir = accounts.dirOf(accounts.list().find((a) => a.id === id)!);
+    const card = () => accounts.view().accounts.find((a) => a.id === id)!;
+    expect(card().shareMissing).toEqual([]);
+    expect(await fs.readFile(path.join(dir, 'projects', '-root', 'memory', 'MEMORY.md'), 'utf8')).toBe('remember\n');
+    expect(accounts.sharesConversations(id)).toBe(true);
+    expect(accounts.sharesConversations('claude-login')).toBe(true); // the built-in login is the set
+    expect(accounts.view().accounts.find((a) => a.id === 'claude-login')?.shareMissing).toBeUndefined();
+    await fs.unlink(path.join(dir, 'settings.json'));
+    expect(accounts.repairShare(id)).toMatch(/^✓ Repaired/);
+    await accounts.remove(id);
+    expect(await fs.readFile(path.join(shared, 'projects', '-root', 'memory', 'MEMORY.md'), 'utf8')).toBe('remember\n');
+  });
+
   it('runs every session on the login on this computer until another account is added', async () => {
     const { accounts } = await office();
     const use = accounts.use(undefined, 'claude')!;

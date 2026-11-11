@@ -7,6 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { HttpError } from './httpError.ts';
 import { builtInPrefs, prepareLogin } from './cliSetup.ts';
+import { shareLogin, shareStatus, unshareLogin } from './sharedLogin.ts';
 import { mergeSecrets, readSecrets } from './secrets.ts';
 import { AgentTerminal } from './terminal.ts';
 import { POLL_MS } from './usagePoll.ts';
@@ -69,6 +70,8 @@ export interface AccountsDeps {
   poll?: boolean;
   /** Rotation's settings (#248); absent: off, sessions run on their binding's account as before. */
   rotation?: () => RotationSettings;
+  /** The folder every Claude login shares memory, conversations and settings with (#377); absent: the built-in login's. */
+  shareFrom?: string;
 }
 
 /** One session on an account: what it adds to the session's environment, and release() once it ends. */
@@ -120,6 +123,7 @@ export class Accounts {
       if (typeof v === 'string' && v) this.secrets.set(a.id, v);
     }
     if (seed || saved === null) void this.write(); // the built-ins are there from the first start
+    for (const a of this.list()) this.share(a.id);
     if (!this.deps.poll) return;
     // Every login but the built-in one (the office reads that one already) is checked now, then every POLL_MS.
     void this.pollAll();
@@ -171,6 +175,47 @@ export class Accounts {
     return a.builtIn ? builtInDir(path.join, a.cli, this.deps.env, this.deps.homedir ?? os.homedir()) : accountDir(path.join, this.deps.home, a);
   }
 
+  // ---------- the shared set (#377) ----------
+
+  private shareSource(): string {
+    return this.deps.shareFrom ?? builtInDir(path.join, 'claude', this.deps.env, this.deps.homedir ?? os.homedir());
+  }
+
+  /** A Claude login with a folder of its own, which shares the built-in login's set. */
+  private ownsFolder(a: ProviderAccount | undefined): a is ProviderAccount {
+    return !!a && a.cli === 'claude' && a.kind === 'subscription-login' && !a.builtIn;
+  }
+
+  /**
+   * Links a Claude login's folder to the shared set (memory, conversations, skills, settings), merging what it had into
+   * it first; logs what moved. Returns the items it couldn't share; [] for every other account (it shares already).
+   */
+  share(id: string): string[] {
+    const a = this.list().find((x) => x.id === id);
+    if (!this.ownsFolder(a)) return [];
+    try {
+      const r = shareLogin(this.dirOf(a), this.shareSource(), a.id);
+      for (const m of r.moved) console.log(`account ${a.id}: merged into the shared set: ${m}`);
+      return r.missing;
+    } catch (err) {
+      console.warn(`account ${a.id}: couldn't link its folder to the shared set: ${(err as Error).message}`);
+      return shareStatus(this.dirOf(a), this.shareSource());
+    }
+  }
+
+  /** Whether a session on this account sees the built-in login's conversations, so --resume works across accounts. */
+  sharesConversations(id: string): boolean {
+    return !this.share(id).includes('projects');
+  }
+
+  /** POST /api/accounts/:id/share: Repair, the links made again. */
+  repairShare(id: string): string {
+    this.find(id);
+    const missing = this.share(id);
+    this.emit();
+    return missing.length ? `Still not shared: ${missing.join(', ')} (see the office's log).` : '✓ Repaired: it shares everything again.';
+  }
+
   private secretOf(a: ProviderAccount): string {
     if (a.kind === 'setup-token') return (a.tokenEnv ? this.deps.env[a.tokenEnv] : '')?.trim() ?? '';
     return this.secrets.get(a.id) ?? '';
@@ -212,6 +257,7 @@ export class Accounts {
             ...(plan ? { loginPlan: plan } : {}),
             ...(warning ? { planWarning: warning } : {}),
             ...(this.refresh.has(a.id) && signedIn ? { tokenRefresh: true } : {}),
+            ...(this.ownsFolder(a) ? { shareMissing: shareStatus(this.dirOf(a), this.shareSource()) } : {}),
           };
         }),
       rotation: rotationStats(this.switches, now),
@@ -374,6 +420,7 @@ export class Accounts {
       a.tokenEnv = name;
     } else await fs.mkdir(this.dirOf(a), { recursive: true });
     this.save([...list, a]);
+    this.share(a.id);
     return { id: a.id, note: kind === 'subscription-login' ? 'Added: sign it in next.' : kind === 'setup-token' && !this.secretOf(a) ? `Added: set ${a.tokenEnv} in the office's environment and restart it.` : '✓ Added.' };
   }
 
@@ -488,6 +535,7 @@ export class Accounts {
     if (!a.builtIn && a.cli !== 'codex') {
       try {
         prepareLogin(a.cli, dir, [], { prefs: builtInPrefs() });
+        this.share(id);
       } catch (err) {
         console.warn(`account ${id}: couldn't set up its login folder: ${(err as Error).message}`);
       }
@@ -603,7 +651,15 @@ export class Accounts {
     this.running.delete(a.id);
     this.save(this.list().filter((x) => x.id !== a.id));
     await mergeSecrets(this.deps.secretsFile, { [secretKey(a.id)]: undefined });
-    // The login's folder (its credentials) goes with it.
+    // The login's folder (its credentials) goes with it; the shared set it links to stays.
+    if (this.ownsFolder(a)) {
+      try {
+        unshareLogin(this.dirOf(a));
+      } catch (err) {
+        console.warn(`account ${a.id}: couldn't unlink its folder from the shared set, so it's kept: ${(err as Error).message}`);
+        return;
+      }
+    }
     if (a.kind === 'subscription-login') await fs.rm(path.join(this.deps.home, 'accounts', a.id), { recursive: true, force: true, maxRetries: 5 }).catch(() => undefined);
   }
 }
