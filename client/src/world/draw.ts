@@ -6,6 +6,7 @@ import { officeNow } from '../officeTime';
 import { chipRects } from '../ui/channels';
 import { inkOn } from '../ui/colorMath';
 import { addressBar } from '../ui/browserRules';
+import { TAG_PR_SPLIT, type PrMark } from '../ui/aimCardRules';
 import { KIND_ICON, kindStrong, STANDARD_LOOK, STATUS_KIND, TONE_KIND, toneFill, type StatusKind, type StatusLook } from '../ui/statusLook';
 import { statsChips, type BoardStats } from './boardStats';
 import type { Pair } from './whiteboard';
@@ -542,7 +543,10 @@ function drawNote(ctx: CanvasRenderingContext2D, x: number, y: number, w: number
 
 // ---------- signs and tags ----------
 
-export function drawTag(ctx: CanvasRenderingContext2D, w: number, h: number, agent: Agent, look: StatusLook = STANDARD_LOOK) {
+const PR_MARK: Record<PrMark, string> = { passed: ' ✓', failed: ' ✗', waiting: ' …', you: ' ✋' };
+
+/** An agent's floating tag; `pr` ("PR #405 ✓", aimCardRules.ts) is a chip at its right end, its own tap target (#406). */
+export function drawTag(ctx: CanvasRenderingContext2D, w: number, h: number, agent: Agent, look: StatusLook = STANDARD_LOOK, pr: { text: string; mark: PrMark | null } | null = null) {
   ctx.clearRect(0, 0, w, h);
   const needs = agent.role !== 'ceo' && needsYou(agent) != null; // #307: stands out; a finished agent reads as free
   const icon = needs
@@ -576,23 +580,34 @@ export function drawTag(ctx: CanvasRenderingContext2D, w: number, h: number, age
   ctx.fillStyle = '#23263a';
   ctx.font = `700 40px ${SANS}`;
   const busy = agent.status !== 'idle' && agent.status !== 'done';
+  const prText = (n: number) => (pr ? '' : ` PR #${n}`); // with the chip the number is there
   let label =
     agent.role === 'ceo'
       ? `${agent.name} · CEO`
       : needs
         ? `${agent.name} · needs you`
         : busy && agent.task === 'fix' && agent.prNumber
-        ? `${agent.name} · 🔧 PR #${agent.prNumber}`
+        ? `${agent.name} · 🔧${prText(agent.prNumber)}`
         : busy && agent.task === 'qa' && agent.prNumber
-          ? `${agent.name} · 🧪 PR #${agent.prNumber}`
-          : busy && agent.issueNumber
+          ? `${agent.name} · 🧪${prText(agent.prNumber)}`
+          : busy && agent.issueNumber && !pr
             ? `${agent.name} · #${agent.issueNumber}`
             : agent.name;
   // With status shapes on, a badge at the right end says the status in shape and colour (the icon on the left is the detail).
   const badge = look.shapes ? h * 0.32 : 0;
-  while (label.length > 4 && ctx.measureText(label).width > w - 96 - badge * 2) label = `${label.slice(0, -2)}…`;
+  const chipX = pr ? w * TAG_PR_SPLIT : w;
+  while (label.length > 4 && ctx.measureText(label).width > chipX - 96 - badge * 2) label = `${label.slice(0, -2)}…`;
   ctx.fillText(label, 78, h / 2 + 2);
-  if (badge) drawStatusBadge(ctx, w - 14 - badge, h / 2, badge, needs ? 'attention' : agent.status === 'done' ? 'idle' : STATUS_KIND[agent.status], look);
+  if (badge) drawStatusBadge(ctx, chipX - 14 - badge, h / 2, badge, needs ? 'attention' : agent.status === 'done' ? 'idle' : STATUS_KIND[agent.status], look);
+  if (!pr) return;
+  roundRect(ctx, chipX, 14, w - chipX - 14, h - 28, (h - 28) / 2);
+  ctx.fillStyle = agent.color;
+  ctx.fill();
+  ctx.fillStyle = inkOn(agent.color);
+  ctx.font = `700 34px ${SANS}`;
+  ctx.textAlign = 'center';
+  ctx.fillText(`${pr.text}${pr.mark ? PR_MARK[pr.mark] : ''}`, (chipX + w - 14) / 2, h / 2 + 2);
+  ctx.textAlign = 'left';
 }
 
 /** Name tag for a candidate in the waiting room: who they are, a detail (their coding agent, say) and their floor. */

@@ -109,7 +109,7 @@ export function AppMonitor({ repo, agents }: { repo: RepoView; agents: Agent[] }
     (ctx) => drawAppScreen(ctx, PX[0], PX[1], { floor: repo.floor, name, color: repo.color, preview: p, shot: shot?.img ?? null, shotCaption: shot?.caption ?? null, channels: chips, use }),
     [repo.floor, name, repo.color, p.status, p.url, p.ref, p.commit, p.startedAt, p.error, shot, chipKey, use],
   );
-  const ref = useInteractable<THREE.Group>({ id: `app-${repo.id}`, label: channel == null ? 'Open the app' : `Open PR #${channel}`, action: { kind: 'app', repoId: repo.id, pr: channel } }, 6);
+  const ref = useInteractable<THREE.Group>({ id: `app-${repo.id}`, label: channel == null ? 'Open the app' : `Preview PR #${channel}`, action: { kind: 'app', repoId: repo.id, pr: channel } }, 6);
 
   const s = APP_SCREEN;
   const outerW = s.w + s.bezel * 2;
