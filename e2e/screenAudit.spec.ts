@@ -1,10 +1,12 @@
+import type { Request } from '@playwright/test';
 import { expect, overflowProblems, test } from './helpers';
 
 // Screen audit 1/4 (#513): every pocket and 2D page in its scope, opened cold through its deep link on a 390px phone:
 // it shows (data-route-ready="1"), nothing scrolls sideways, and the fixture fails on any console error. Each screen
 // is also photographed top to bottom into the test's output folder, for QA's report (never committed).
 
-// No service worker: its precache of / would be cut off by the next cold load. Reduced motion: an indeterminate
+// No service worker: its precache of / would be cut off by the next cold load (so would a preview frame's page: each
+// screen's requests finish before the next one loads, as in deepLinks.spec.ts). Reduced motion: an indeterminate
 // progress bar's sweep, caught mid-slide, isn't a layout that scrolls sideways.
 test.use({ serviceWorkers: 'block', contextOptions: { reducedMotion: 'reduce' } });
 
@@ -18,6 +20,10 @@ test('every pocket and 2D page in the audit fits a 390px phone', async ({ page }
   const links = (await page.evaluate(() => (window as unknown as { __swarmRoutes: { links(): string[] } }).__swarmRoutes.links())).filter((l) => SCOPE.test(l));
   expect(links.length).toBeGreaterThan(8);
   const problems: string[] = [];
+  const pending = new Set<Request>();
+  page.on('request', (r) => void pending.add(r));
+  page.on('requestfinished', (r) => void pending.delete(r));
+  page.on('requestfailed', (r) => void pending.delete(r));
   for (const [i, link] of links.entries()) {
     await page.goto(`/?pocket=1&audit=${i}${link}`); // a new query: a cold load
     await expect(page.locator('html'), link).toHaveAttribute('data-route-ready', '1', { timeout: 30_000 });
@@ -37,6 +43,7 @@ test('every pocket and 2D page in the audit fits a 390px phone', async ({ page }
       if (!moved) break;
       await page.waitForTimeout(150);
     }
+    await expect.poll(() => pending.size, { message: `${link}'s requests`, timeout: 30_000 }).toBe(0);
   }
   expect(problems).toEqual([]);
 });

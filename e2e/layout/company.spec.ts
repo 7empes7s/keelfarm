@@ -37,10 +37,11 @@ async function companyProblems(root: Locator): Promise<string[]> {
       if (Math.abs(right - side.right) > 1) out.push(`the summary row ends ${Math.round(side.right - right)}px short of its column`);
       if (Math.max(...boxes.map((b) => b.height)) - Math.min(...boxes.map((b) => b.height)) > 1) out.push('summary cards in a row differ in height');
     }
-    // a card stretched to the usage card's height had its content centred far below its top: a blank box (#513)
+    // a card stretched to the usage card's height had its content centred hundreds of px below its top: a blank box
+    // (#513). Its content starts at its highest child: an avatar centred beside wrapped text is fine.
     for (const card of el.querySelectorAll('.pk-company-side > .pk-summary')) {
-      const gap = card.firstElementChild!.getBoundingClientRect().top - card.getBoundingClientRect().top;
-      if (gap > 40) out.push(`the ${card.className} card's content starts ${Math.round(gap)}px below its top`);
+      const gap = Math.min(...[...card.children].map((c) => c.getBoundingClientRect().top)) - card.getBoundingClientRect().top;
+      if (gap > 80) out.push(`the ${card.className} card's content starts ${Math.round(gap)}px below its top`);
     }
     const floorsBox = el.querySelector('.pk-company-floors')!.getBoundingClientRect();
     if (side.width && side.top < floorsBox.top && Math.abs(side.right - floorsBox.right) > 1) out.push('the summary row and the floors end at different right edges');
