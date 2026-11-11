@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { addFreed, clampMainIdleMin, clampMaxLifeHours, clampRecentHours, closedPrs, freeSlot, leftoverPrDesks, lifeEndsAt, lifeWarning, onScreen, pickEviction, prBranch, previewSettings, prKey, prPortCandidates, prSlug, stopsAt, stopWhy, upgradePreviewIdle, type PreviewUse, type PrRunInfo } from './prTheatre.ts';
+import { OPEN_PULLS_LISTED } from '../shared/types.ts';
 
 const run = (pr: number, over: Partial<PrRunInfo> = {}): PrRunInfo => ({ key: prKey('o/r', pr), repoId: 'o/r', pr, slot: 1, active: true, viewedAt: 0, ...over });
 
@@ -112,7 +113,7 @@ describe('stopping on its own', () => {
   });
 
   it("keeps a missing PR when the open list was cut off at its limit", () => {
-    const pulls = Array.from({ length: 50 }, (_, i) => ({ number: 100 + i, state: 'OPEN' }));
+    const pulls = Array.from({ length: OPEN_PULLS_LISTED }, (_, i) => ({ number: 100 + i, state: 'OPEN' }));
     expect(closedPrs([run(4)], 'o/r', pulls)).toEqual([]);
   });
 });
