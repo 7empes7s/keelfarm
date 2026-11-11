@@ -8,7 +8,8 @@ import { go as goTo, openSearch, useFinder } from './goTo';
 import type { ActionId } from './keymap';
 import { matchCommands } from './chatCardRules';
 import { reduceMotion } from './a11y';
-import { newSince, stepsFor, textParts, TOUR, isStep, type TourStep, type Track, type TryIt } from './tourSteps';
+import { newSince, stepsFor, textParts, TOUR, isStep, type TourPage, type TourStep, type Track, type TryIt } from './tourSteps';
+import { cardPlace, pickSpot, PROBE_PX, stageChange, toVisual, type Box } from './tourSpot';
 import { openWhatsNew, saveSeen, seenNow, useTour } from './tour';
 import { Icon } from './Icon';
 import './tour.css';
@@ -38,7 +39,7 @@ const DONE: Record<string, { done: (s: S) => boolean; minMs?: number }> = {
   'agent-chat': { done: () => useChatMode.getState().on, minMs: 3000 },
 };
 
-const TRY_LABEL: Record<TryIt, string> = { search: 'Open search', guide: 'Open the guide', bell: 'Open the bell', plan: 'Start a /plan', console: 'Open the console', charter: 'Open a charter', costs: 'Show the costs' };
+const TRY_LABEL: Record<TryIt, string> = { search: 'Open search', guide: 'Open the guide', bell: 'Open the bell', plan: 'Start a /plan', console: 'Open the console' };
 
 /** Brings what a Try it opened into view, once it's drawn. */
 function reveal(target: string) {
@@ -59,6 +60,15 @@ function tryIt(t: TryIt) {
       return goTo({ kind: 'ceo', text: matchCommands('plan')[0].template(s.repos[0]?.floor ?? 1) });
     case 'console':
       return goTo({ kind: 'section', section: 'floors' });
+  }
+}
+
+/** Takes the manager to the page a step's control lives on (#408). */
+function openPage(p: TourPage) {
+  if (document.pointerLockElement) document.exitPointerLock();
+  switch (p) {
+    case 'chat':
+      return goTo({ kind: 'ceo' });
     case 'charter':
       goTo({ kind: 'section', section: 'charter' });
       return reveal('charter');
@@ -66,6 +76,14 @@ function tryIt(t: TryIt) {
       goTo({ kind: 'section', section: 'ops' });
       return reveal('costs');
   }
+}
+
+/** What's on screen before the tour opens a page, and its way back: pocket mode's own, else the 3D office's panel. */
+function keepPage(): () => void {
+  const own = useTour.getState().keepPage;
+  if (own) return own();
+  const was = useStore.getState().overlay;
+  return () => useStore.getState().openOverlay(was);
 }
 
 function StepText({ text }: { text: string }) {
@@ -90,37 +108,83 @@ function StepText({ text }: { text: string }) {
   );
 }
 
-/** The first of `targets` on screen. */
-function findTarget(targets: readonly string[]): DOMRect | null {
-  for (const t of targets)
-    for (const el of document.querySelectorAll(`[data-tour="${t}"]`)) {
-      const r = el.getBoundingClientRect();
-      if (r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < innerHeight) return r;
-    }
-  return null;
+/** The CSS zoom `el` is drawn at (the UI scale). */
+function zoomOf(el: Element): number {
+  let z = 1;
+  for (let e: Element | null = el; e; e = e.parentElement) z *= parseFloat(getComputedStyle(e).zoom) || 1;
+  return z;
 }
 
-/** A ring around the control a step is about, following it as the page moves; nothing when it isn't on screen. */
-function Spotlight({ targets }: { targets: readonly string[] }) {
-  const [rect, setRect] = useState<DOMRect | null>(null);
+/** The reported width of a PROBE_PX wide box beside `el`: whether this browser reports zoomed rects (tourSpot.ts). */
+function probeBeside(el: Element): number {
+  const probe = document.createElement('div');
+  probe.style.cssText = `position:absolute;visibility:hidden;pointer-events:none;width:${PROBE_PX}px;height:1px`;
+  (el.parentElement ?? document.body).appendChild(probe);
+  const w = probe.getBoundingClientRect().width;
+  probe.remove();
+  return w;
+}
+
+/** Whether something else is drawn over `el` at `x`, `y` (the tour's own card doesn't count: it moves out of the way). */
+function coveredAt(el: Element, x: number, y: number): boolean {
+  const hit = document.elementFromPoint(x, y);
+  return !!hit && !el.contains(hit) && !hit.closest('.tour');
+}
+
+/** The first of `targets` on screen, where it's drawn: never inside the tour's card, never under a sheet. */
+function findTarget(targets: readonly string[]): Box | null {
+  const candidates = targets.flatMap((t) =>
+    [...document.querySelectorAll(`[data-tour="${t}"]`)].map((el) => {
+      const r = el.getBoundingClientRect();
+      const raw = { left: r.left, top: r.top, width: r.width, height: r.height };
+      const zoom = zoomOf(el);
+      const box = zoom === 1 ? raw : toVisual(raw, probeBeside(el), zoom);
+      const on = box.width > 0 && box.height > 0 && box.top + box.height > 0 && box.top < innerHeight && box.left + box.width > 0 && box.left < innerWidth;
+      const at = (b: Box) => [Math.min(innerWidth - 1, Math.max(0, b.left + b.width / 2)), Math.min(innerHeight - 1, Math.max(0, b.top + b.height / 2))] as const;
+      // either centre: an engine may hit-test in the zoomed box's px like it reports them
+      const covered = !on || (coveredAt(el, ...at(box)) && coveredAt(el, ...at(raw)));
+      return { box, inCard: !!el.closest('.tour'), covered };
+    }),
+  );
+  return pickSpot(candidates);
+}
+
+const same = (a: Box | null, b: Box | null) => a === b || (!!a && !!b && a.left === b.left && a.top === b.top && a.width === b.width && a.height === b.height);
+
+/** Where the step's control is drawn, following it on resize, scroll and layout changes; null when it isn't on screen. */
+function useSpot(targets: string): Box | null {
+  const [rect, setRect] = useState<Box | null>(null);
   useEffect(() => {
-    const look = () =>
-      setRect((was) => {
-        const r = findTarget(targets);
-        return r && was && r.x === was.x && r.y === was.y && r.width === was.width && r.height === was.height ? was : r;
-      });
+    if (!targets) return setRect(null);
+    let frame = 0;
+    const look = () => {
+      frame = 0;
+      const r = findTarget(targets.split(' '));
+      setRect((was) => (same(was, r) ? was : r));
+    };
+    const soon = () => void (frame ||= requestAnimationFrame(look));
     look();
     const t = setInterval(look, 300);
-    window.addEventListener('resize', look);
+    window.addEventListener('resize', soon);
+    window.addEventListener('scroll', soon, true);
     return () => {
       clearInterval(t);
-      window.removeEventListener('resize', look);
+      cancelAnimationFrame(frame);
+      window.removeEventListener('resize', soon);
+      window.removeEventListener('scroll', soon, true);
     };
   }, [targets]);
-  if (!rect) return null;
+  return rect;
+}
+
+/** A ring around the control a step is about, and the page dimmed around it; the dim alone when it isn't on screen. */
+function Spotlight({ rect }: { rect: Box | null }) {
   const pad = 4;
   // on the body: inside a zoomed box (the UI scale) its place would be scaled again
-  return createPortal(<div className={`tour-ring ${reduceMotion() ? '' : 'tour-ring-pulse'}`} aria-hidden style={{ left: rect.left - pad, top: rect.top - pad, width: rect.width + pad * 2, height: rect.height + pad * 2 }} />, document.body);
+  return createPortal(
+    rect ? <div className={`tour-ring ${reduceMotion() ? '' : 'tour-ring-pulse'}`} aria-hidden style={{ left: rect.left - pad, top: rect.top - pad, width: rect.width + pad * 2, height: rect.height + pad * 2 }} /> : <div className="tour-dim" aria-hidden />,
+    document.body,
+  );
 }
 
 /** The tour on this screen: the full one while settings.tutorialStep says so, else a What's new replay. */
@@ -166,6 +230,32 @@ export function Tutorial({ track }: { track: Track }) {
 
   // Move on by itself once the thing the step asks for has happened.
   const id = active ? steps[at]?.id : undefined;
+
+  // Owns the screen while it shows: toasts wait behind it.
+  useEffect(() => {
+    useTour.setState({ on: active });
+    return () => useTour.setState({ on: false });
+  }, [active]);
+
+  // The page the step is about (#408): opened first, kept across steps on it, and what was there put back after.
+  const page = active ? steps[at]?.page : undefined;
+  const stage = useRef<{ page: TourPage; restore: () => void } | null>(null);
+  useEffect(() => {
+    const plan = stageChange(stage.current?.page, page);
+    if (plan.restore) {
+      stage.current?.restore();
+      stage.current = null;
+    }
+    if (plan.open) {
+      stage.current = { page: plan.open, restore: stage.current?.restore ?? keepPage() };
+      openPage(plan.open);
+    }
+  }, [page]);
+  useEffect(() => () => stage.current?.restore(), []);
+
+  const targets = active ? (steps[at]?.targets ?? []).join(' ') : '';
+  const spot = useSpot(targets);
+
   useEffect(() => {
     const rule = id ? DONE[id] : undefined;
     if (!rule) return;
@@ -203,8 +293,8 @@ export function Tutorial({ track }: { track: Track }) {
   const auto = tour && !!DONE[s.id];
   return (
     <>
-      {s.targets && <Spotlight targets={s.targets} />}
-      <section className={`tour tour-${track} ${cheer ? 'tour-cheer' : ''} ${reduceMotion() ? 'tour-still' : ''}`} aria-label={tour ? 'Tour' : "What's new"} aria-live="polite">
+      {!!s.targets?.length && <Spotlight rect={spot} />}
+      <section className={`tour tour-${track} tour-at-${cardPlace(spot, !!s.targets?.length, innerHeight)} ${cheer ? 'tour-cheer' : ''} ${reduceMotion() ? 'tour-still' : ''}`} aria-label={tour ? 'Tour' : "What's new"} aria-live="polite">
         <div className="tour-head">
           <span className="tour-count">
             {tour ? (
