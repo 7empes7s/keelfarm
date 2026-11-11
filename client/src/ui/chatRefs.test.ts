@@ -35,6 +35,20 @@ describe('jumpFor', () => {
     expect(jumpFor(ref({ kind: 'preview', repoId: 'o/web' }), 'office', world)).toEqual({ kind: 'overlay', overlay: { kind: 'app', repoId: 'o/web', pr: null }, floor: 2 });
   });
 
+  it('asks which floor for a bare #N on several boards (#505)', () => {
+    const api = { ...world.repos[0], id: 'o/api', floor: 3, fullName: 'o/api', pulls: [], issues: [{ ...world.repos[0].issues[0], title: 'Rate limits' }] };
+    const two = { ...world, repos: [...world.repos, api] };
+    expect(jumpFor(ref({ kind: 'issue', repoId: 'o/web', number: 3, alts: ['o/api'] }), 'pocket', two)).toEqual({
+      kind: 'pick',
+      options: [
+        { label: 'Floor 2 · #3 Dark mode', jump: { kind: 'overlay', overlay: { kind: 'card', repoId: 'o/web', key: 'i-3', number: 3, pr: false } } },
+        { label: 'Floor 3 · #3 Rate limits', jump: { kind: 'overlay', overlay: { kind: 'card', repoId: 'o/api', key: 'i-3', number: 3, pr: false } } },
+      ],
+    });
+    // the other floor is gone: straight to the one left
+    expect(jumpFor(ref({ kind: 'issue', repoId: 'o/web', number: 3, alts: ['o/api'] }), 'pocket', world)).toMatchObject({ kind: 'overlay', overlay: { repoId: 'o/web' } });
+  });
+
   it('goes to floors and the file viewer', () => {
     expect(jumpFor(ref({ kind: 'floor', repoId: 'o/web' }), 'office', world)).toEqual({ kind: 'floor', floor: 2, repoId: 'o/web' });
     expect(jumpFor(ref({ kind: 'file', repoId: 'o/web', path: 'a.ts' }), 'pocket', world)).toEqual({ kind: 'file' });

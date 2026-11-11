@@ -20,7 +20,8 @@ export type Jump =
   | { kind: 'floor'; floor: number; repoId: string }
   | { kind: 'file' }
   | { kind: 'url'; url: string }
-  | { kind: 'decisions' }; // the decision log under the approvals (#208)
+  | { kind: 'decisions' } // the decision log under the approvals (#208)
+  | { kind: 'pick'; options: { label: string; jump: Jump }[] }; // a bare #N on several floors' boards: which one (#505)
 
 const ghUrl = (fullName: string, n: number, pull: boolean) => `https://github.com/${fullName}/${pull ? 'pull' : 'issues'}/${n}`;
 
@@ -44,6 +45,15 @@ export function jumpFor(ref: ChatRef, mode: 'office' | 'pocket', w: RefWorld): J
   const open = pull?.state === 'OPEN';
   if (ref.kind === 'issue') {
     const n = ref.number;
+    if (ref.alts?.length) {
+      const options = [repo.id, ...ref.alts].flatMap((repoId) => {
+        const r = w.repos.find((x) => x.id === repoId);
+        const jump = r && jumpFor({ ...ref, repoId, alts: undefined }, mode, w);
+        const title = r && (r.issues.find((i) => i.number === n) ?? r.pulls.find((p) => p.number === n))?.title;
+        return jump ? [{ label: `Floor ${r.floor} · #${n}${title ? ` ${title}` : ''}`, jump }] : [];
+      });
+      if (options.length > 1) return { kind: 'pick', options };
+    }
     const issue = repo.issues.some((i) => i.number === n);
     // The whiteboard has open issues and open or merged PRs; anything else is on GitHub.
     const overlay: Overlay | null = pull ? prPage(repo, n) : issue ? { kind: 'card', repoId: repo.id, key: `i-${n}`, number: n, pr: false } : null;

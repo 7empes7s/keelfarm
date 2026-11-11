@@ -15,7 +15,7 @@ import { copyText } from './clipboard';
 import { Actions, AgentChip, ChecksList, ChecksStat, Chip, DetailsHeader, LinkButton, Section, Stat as Tile, StatStrip, StatusRows, Verdict } from './DetailsPage';
 import { mergeRows, stateChip, type ChipTone } from './detailsRules';
 import { go } from './goTo';
-import { acceptanceProgress, issueCost, issueTimeline, splitSections, stageAt, STAGES, STATUS } from './issueCard';
+import { acceptanceProgress, goneCard, issueCost, issueTimeline, splitSections, stageAt, STAGES, STATUS } from './issueCard';
 import { Key } from './Key';
 import { IssueActions } from './IssueActions';
 import { Markdown } from './Markdown';
@@ -56,6 +56,7 @@ export function CardView({ repoId, cardKey, number, pr }: { repoId: string; card
   const at = cols ? locateCard(cols, cardKey, number, pr) : null;
 
   if (!repo || !at) {
+    const gone = repo && goneCard(repo.fullName, repo.pulls, number, pr);
     return (
       <Panel
         title={
@@ -65,7 +66,26 @@ export function CardView({ repoId, cardKey, number, pr }: { repoId: string; card
         }
         className="cardview"
       >
-        <p className="muted">That card isn't on the board any more.</p>
+        {gone ? (
+          <>
+            <DetailsHeader
+              eyebrow={`${cardLabel({ number, pr })} · floor ${repo.floor} · ${repo.fullName.split('/')[1]}`}
+              title={gone.title ?? cardLabel({ number, pr })}
+              chips={<Chip tone={gone.state === 'merged' ? 'good' : 'plain'}>{gone.state === 'merged' ? 'Merged' : gone.state === 'closed' ? 'Closed' : 'Off the board'}</Chip>}
+            >
+              <div className="dp-meta">{gone.at ? `${gone.state === 'merged' ? 'Merged' : 'Closed'} ${ago(gone.at)}. ` : ''}It's off the board: closed, or not on this floor.</div>
+            </DetailsHeader>
+            <Actions>
+              <LinkButton href={gone.issueUrl}>Issue on GitHub <Icon name="external-link" /></LinkButton>
+              {gone.prUrl && <LinkButton href={gone.prUrl}>PR on GitHub <Icon name="external-link" /></LinkButton>}
+              <button type="button" className="ds-btn" onClick={() => useStore.getState().openOverlay({ kind: 'kanban', repoId: repo.id })}>
+                Floor {repo.floor}'s board
+              </button>
+            </Actions>
+          </>
+        ) : (
+          <p className="muted">That floor isn't in the office any more.</p>
+        )}
       </Panel>
     );
   }
