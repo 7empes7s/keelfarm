@@ -260,7 +260,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
     );
     if (a === 'github')
       return (
-        <a key={a} className="ds-btn" href={c.url} target="_blank" rel="noreferrer" title={x.title} aria-label={`${x.label}: ${x.title}`} aria-disabled={x.disabled || undefined}>
+        <a key={a} className="ds-btn" href={c.url} target="_blank" rel="noreferrer" title={x.title} aria-label={x.label} aria-disabled={x.disabled || undefined}>
           {face}
         </a>
       );
@@ -280,7 +280,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
       <div className="kcard-foot">
         {primary}
         {main && (
-          <button type="button" className={`btn kcard-primary ${main.good ? 'btn-good' : ''}`} title={main.title ?? main.label} disabled={main.disabled} onClick={main.run}>
+          <button type="button" className={`btn ${main.good ? 'btn-good' : ''}`} title={main.title ?? main.label} disabled={main.disabled} onClick={main.run}>
             <Icon name={main.icon} /> {main.label}
           </button>
         )}
@@ -489,7 +489,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
                 c,
                 'issue',
                 c.untrusted ? (
-                  <button type="button" className="btn kcard-primary" disabled={pending === c.key} onClick={() => void trust(c)}>
+                  <button type="button" className="btn" disabled={pending === c.key} onClick={() => void trust(c)}>
                     <Icon name="shield" /> Trust issue
                   </button>
                 ) : (
