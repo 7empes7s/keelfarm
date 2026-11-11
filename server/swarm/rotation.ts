@@ -9,7 +9,7 @@ import { HttpError } from '../httpError.ts';
 import { builtInPrefs, prepareLogin } from '../cliSetup.ts';
 import { cliLabel } from '../clis.ts';
 import { backText, defaultAccount, defaultsBack, defaultText, pruneTaskAccounts, switchNow, taskKey, tasksLeft } from '../../shared/accountDefault.ts';
-import { allOutText, detectLimit, switchesForCeo, switchHandover, switchText, type LimitHit } from '../../shared/accountRotation.ts';
+import { allOutText, detectLimit, endedText, LIMIT_TAIL_LINES, switchesForCeo, switchHandover, switchText, type LimitHit } from '../../shared/accountRotation.ts';
 import { ACCOUNT_CLIS, LOGIN_ENV } from '../../shared/accounts.ts';
 import { readingOf, usedPercent } from '../../shared/usage.ts';
 import type { AccountCli, AccountSwitch, AccountsView, AgentCli } from '../../shared/types.ts';
@@ -20,6 +20,12 @@ import { SwarmUsage } from './usage.ts';
 const clock = (t: number) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 /** The demo's "Simulate a limit": that long. */
 const DEMO_LIMIT_MS = 3 * 60_000;
+/** Codex's usage limit as a narrow terminal shows it (#400), resetting at `at`: the demo's simulated one. */
+function codexLimitLines(at: number): string[] {
+  const d = new Date(at);
+  const time = `${d.getHours() % 12 || 12}:${String(d.getMinutes()).padStart(2, '0')} ${d.getHours() < 12 ? 'AM' : 'PM'}`;
+  return ['■ You’ve hit your usage limit.', 'Upgrade to Pro (https://chatgpt.com/explore/pro),', 'visit https://chatgpt.com/settings/usage to', 'purchase more credits or try again at', `${time}.`];
+}
 /** One sign-in notice per account this often (#360). */
 const SIGN_IN_NOTICE_MS = 60 * 60_000;
 /** What an agent's fresh session on another account (a limit, or Switch now) hears first: its worktree is as the last one left it. */
@@ -31,7 +37,7 @@ const RESUMED_NOTE = 'Your session stopped at an account limit and now continues
 
 export abstract class SwarmRotation extends SwarmUsage {
   /** Sessions running on each account: what the demo's "Simulate a limit" ends. */
-  private onAccount = new Map<string, Set<(hit: LimitHit) => void>>();
+  private onAccount = new Map<string, Set<(hit: LimitHit, lines?: string[]) => void>>();
   /** The account each agent's latest session started on (null: the built-in login): where a stuck CEO is (#375). */
   protected sessionAccount = new Map<string, string | null>();
   /** Which account's folder holds each agent's latest session (its id, the built-in login's too), for resuming it there (#401). */
@@ -111,7 +117,7 @@ export abstract class SwarmRotation extends SwarmUsage {
         },
       };
       current = this.onUse(a, o, tracked, use, (result, hit) => {
-        const why = result.ok || stopped || result.interrupted ? null : (hit ?? detectLimit([...result.errors, ...(o.terminal?.tail(8) ?? [])].join('\n'), Date.now()));
+        const why = result.ok || stopped || result.interrupted ? null : (hit ?? detectLimit(endedText(result.errors, o.terminal?.tail(LIMIT_TAIL_LINES, true) ?? []), Date.now()));
         if (sw?.api) sw.usd += result.costUsd;
         if (!use || !why) return cb.finished(result);
         // The built-in login isn't polled, so a sign-out read from its output only rests it a while.
@@ -129,17 +135,30 @@ export abstract class SwarmRotation extends SwarmUsage {
         this.tellSwitch(a, s);
         const retry: SessionOptions = { ...o, resumeSessionId: resumeId, typed: false, reattach: false, prompt: resumeId ? (a.role === 'ceo' || opts.readOnly ? opts.prompt : RESUMED_NOTE) : this.freshPrompt(a, opts) };
         if (!crossed) return attempt(retry, oc, c, next.use, s);
-        const onCli: SessionCallbacks = {
-          ...c,
-          sessionId: (id) => {
-            c.sessionId(id);
-            if (id) a.sessionCli = next.cli; // resumed with that one next time
-          },
-        };
-        attempt({ ...retry, cli: next.cli, model: this.modelFor(a, next.cli), tools: this.sessionToolsFor(a, next.cli) }, next.cli, onCli, next.use, s);
+        cross(retry, c, next, s);
       });
     };
-    attempt(opts, cli, cb, first, null);
+    /** On another coding agent, with its model and tools. */
+    const cross = (o: SessionOptions, c: SessionCallbacks, next: { use: AccountUse; cli: AccountCli }, sw: AccountSwitch | null) => {
+      const onCli: SessionCallbacks = {
+        ...c,
+        sessionId: (id) => {
+          c.sessionId(id);
+          if (id) a.sessionCli = next.cli; // resumed with that one next time
+        },
+      };
+      attempt({ ...o, cli: next.cli, model: this.modelFor(a, next.cli), tools: this.sessionToolsFor(a, next.cli) }, next.cli, onCli, next.use, sw);
+    };
+    // Every account of its coding agent is limited or signed out (#400): straight to the next one's, not a session that can only fail.
+    const instead = first && !a.account && !this.accounts.hasFree(cli) ? this.nextUse(a, cli, others, [first.id]) : null;
+    if (first && instead && instead.cli !== cli) {
+      first.release();
+      this.appendLog(a, [{ kind: 'system', text: `🔀 ${this.accounts.label(first.id)} is out: starting on ${this.accounts.label(instead.use.id)}.` }]);
+      cross(opts.resumeSessionId ? this.fresh(a, opts, SWITCHED_NOTE) : opts, cb, instead, null);
+    } else {
+      instead?.use.release();
+      attempt(opts, cli, cb, first, null);
+    }
     return {
       send: (text) => current.send(text),
       stop: () => {
@@ -240,7 +259,8 @@ export abstract class SwarmRotation extends SwarmUsage {
     let handle: SessionHandle | null = null;
     const live = this.onAccount.get(use.id) ?? new Set();
     this.onAccount.set(use.id, live);
-    const simulate = (h: LimitHit) => {
+    const simulate = (h: LimitHit, lines?: string[]) => {
+      if (lines) this.appendLog(a, lines.map((text) => ({ kind: 'error' as const, text })));
       hit = h;
       handle?.stop();
     };
@@ -360,11 +380,14 @@ export abstract class SwarmRotation extends SwarmUsage {
   simulateAccountLimit(id: string): AccountsView {
     if (!this.backend.demo) throw new HttpError(404, 'A limit can only be simulated in the demo office.');
     if (!this.accounts.list().some((x) => x.id === id)) throw new HttpError(404, 'No such account.');
-    const until = Date.now() + DEMO_LIMIT_MS;
+    // A Codex account's limit is Codex's own message as its terminal shows it (#400), read like a real one.
+    const lines = this.accounts.list().find((x) => x.id === id)?.cli === 'codex' ? codexLimitLines(Date.now() + DEMO_LIMIT_MS) : undefined;
+    const hit = lines ? detectLimit(lines.join('\n'), Date.now()) : null;
+    const until = hit?.kind === 'limited' ? hit.until : Date.now() + DEMO_LIMIT_MS;
     this.accounts.limited(id, until);
     const live = [...(this.onAccount.get(id) ?? [])];
-    for (const end of live) end({ kind: 'limited', until });
-    if (!live.length) this.toast('info', `${this.accounts.label(id)} is limited for 3 minutes: new sessions start on the next account.`);
+    for (const end of live) end({ kind: 'limited', until }, lines);
+    if (!live.length) this.toast('info', `${this.accounts.label(id)} is limited until ${clock(until)}: new sessions start on the next account.`);
     return this.accounts.view();
   }
 }
