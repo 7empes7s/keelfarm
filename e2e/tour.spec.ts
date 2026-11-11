@@ -32,8 +32,10 @@ async function ringOn(page: Page, targets: readonly string[]) {
         const t = el.getBoundingClientRect();
         const off = Math.max(Math.abs(r.left + 4 - t.left), Math.abs(r.top + 4 - t.top), Math.abs(r.width - 8 - t.width), Math.abs(r.height - 8 - t.height));
         if (off > 2) continue;
-        const hit = document.elementFromPoint(t.left + t.width / 2, t.top + t.height / 2);
-        return { id, inCard: !!el.closest('.tour'), covered: !hit || !el.contains(hit), onScreen: t.top >= 0 && t.bottom <= innerHeight && t.left >= 0 && t.right <= innerWidth };
+        // its visible part's middle: only the tour's own card, which moves out of a small control's way, may be over it
+        const [top, bottom] = [Math.max(0, t.top), Math.min(innerHeight, t.bottom)];
+        const hit = document.elementFromPoint(t.left + t.width / 2, (top + bottom) / 2);
+        return { id, inCard: !!el.closest('.tour'), covered: !hit || (!el.contains(hit) && !hit.closest('.tour')), onScreen: bottom - top > 0 && t.left >= 0 && t.right <= innerWidth };
       }
     return { id: null };
   }, targets);
@@ -122,8 +124,10 @@ test('the 3D office tour has Try it, and its What\'s new card waits for the pane
   await expect(card.locator('.tour-title')).toHaveText('Notifications');
   await expect(page.locator('.tour-ring')).toBeVisible(); // around the HUD's bell
   await card.getByRole('button', { name: 'Open the bell' }).click();
-  await expect(card.locator('.tour-title')).toHaveText('Ask the CEO'); // done: it moved on by itself
+  await expect(card.locator('.tour-title')).toHaveText('Sound and captions'); // done: it moved on by itself
   await page.keyboard.press('Escape');
+  await card.getByRole('button', { name: /^(Next|Skip step)/ }).click();
+  await expect(card.locator('.tour-title')).toHaveText('Ask the CEO');
   await card.getByRole('button', { name: 'Start a /plan' }).click();
   await expect(page.getByRole('dialog', { name: /Your phone/ }).locator('textarea')).toHaveValue(/^Plan the next milestone for floor \d+: $/); // filled, not sent
   await page.keyboard.press('Escape');

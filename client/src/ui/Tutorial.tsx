@@ -139,7 +139,9 @@ function findTarget(targets: readonly string[]): Box | null {
       const zoom = zoomOf(el);
       const box = zoom === 1 ? raw : toVisual(raw, probeBeside(el), zoom);
       const on = box.width > 0 && box.height > 0 && box.top + box.height > 0 && box.top < innerHeight && box.left + box.width > 0 && box.left < innerWidth;
-      const at = (b: Box) => [Math.min(innerWidth - 1, Math.max(0, b.left + b.width / 2)), Math.min(innerHeight - 1, Math.max(0, b.top + b.height / 2))] as const;
+      // the middle of its part on screen: a page taller than the screen is hit-tested where it shows
+      const mid = (from: number, size: number, max: number) => (Math.max(0, from) + Math.min(max - 1, from + size)) / 2;
+      const at = (b: Box) => [mid(b.left, b.width, innerWidth), mid(b.top, b.height, innerHeight)] as const;
       // either centre: an engine may hit-test in the zoomed box's px like it reports them
       const covered = !on || (coveredAt(el, ...at(box)) && coveredAt(el, ...at(raw)));
       return { box, inCard: !!el.closest('.tour'), covered };
