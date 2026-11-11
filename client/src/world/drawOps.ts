@@ -269,7 +269,8 @@ export function drawTeam(ctx: CanvasRenderingContext2D, w: number, h: number, d:
 export interface UsageScreen {
   state: string; // Normal / Pacing / Paused
   tone: 'good' | 'warn' | 'bad';
-  bars: UsageBar[]; // Claude's latest reading per limit
+  who: string | null; // the login the bars are for, when there are several (#383)
+  bars: UsageBar[]; // that login's latest reading per limit
   note: string | null; // no reading yet, or "as of 12 min ago"
   hint: string;
 }
@@ -279,7 +280,8 @@ const STATE_ICON: Record<string, string> = { Normal: '✓', Pacing: '🐢', Paus
 
 /** The usage meter: normal, pacing or paused, then a bar per limit with how full it is and when it resets. */
 export function drawUsage(ctx: CanvasRenderingContext2D, w: number, h: number, d: UsageScreen) {
-  frame(ctx, w, h, 'CLAUDE USAGE', d.tone === 'good' ? 'full speed' : 'new work held back');
+  const speed = d.tone === 'good' ? 'full speed' : 'new work held back';
+  frame(ctx, w, h, 'CLAUDE USAGE', d.who ? `${d.who} · ${speed}` : speed);
   text(ctx, `${STATE_ICON[d.state] ?? ''} ${d.state}`, w / 2, 130, 64, TONE[d.tone], 'center');
   const gx = 60;
   const gw = w - 120;

@@ -18,7 +18,7 @@ import type { UsageWarning } from '../pacing.ts';
 import { charTokens } from '../../shared/startup.ts';
 import { keyName } from '../../shared/termKeys.ts';
 import { toolArgsLine } from '../../shared/tooling.ts';
-import type { UsageReading } from '../../shared/types.ts';
+import type { AgentCli, UsageReading } from '../../shared/types.ts';
 import { ceoSession } from './ceo.ts';
 import { boxDeskRepo } from './cloud.ts';
 import { registerDemo } from './registry.ts';
@@ -48,6 +48,36 @@ function signInSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandl
     send: () => undefined,
     stop() {
       clearTimeout(timer);
+      cb.finished({ ok: false, text: '', costUsd: 0, turns: 0, errors: ['Stopped by manager'] });
+    },
+  };
+}
+
+/** The demo's sessions and the CLI that made each: one it never made (before a restart) or another CLI's isn't there to resume (#401). */
+const made = new Map<string, AgentCli>();
+
+/** An agent's session: as cliRunner.ts ends one whose CLI can't find the session it was to resume, or the fake session. */
+function agentSession(opts: SessionOptions, cb: SessionCallbacks, fullName: string): SessionHandle {
+  const cli = opts.cli ?? 'claude';
+  const id = opts.resumeSessionId;
+  const minting: SessionCallbacks = {
+    ...cb,
+    sessionId: (sid) => {
+      if (sid) made.set(sid, cli);
+      cb.sessionId(sid);
+    },
+  };
+  if (!id?.startsWith('demo-') || made.get(id) === cli) return fakeSession(opts, minting, fullName);
+  cb.log([{ kind: 'error', text: cli === 'codex' ? `ERROR: No saved session found with ID ${id}. Run codex resume without an ID to choose from existing sessions.` : `No conversation found with session ID: ${id}` }]);
+  const label = CLIS.find((c) => c.id === cli)?.label ?? 'Claude Code';
+  const t = setTimeout(() => {
+    cb.sessionId(null);
+    cb.finished({ ok: false, text: '', costUsd: 0, turns: 0, errors: [`${label} couldn't find the session it was resuming.`], lostSession: true });
+  }, 1000);
+  return {
+    send: () => undefined,
+    stop() {
+      clearTimeout(t);
       cb.finished({ ok: false, text: '', costUsd: 0, turns: 0, errors: ['Stopped by manager'] });
     },
   };
@@ -457,7 +487,7 @@ registerDemo('sessions', ({ scale, deskRepo }) => ({
     if (!opts.resumeSessionId) cb.startup?.({ tokens: 23_500 + charTokens(opts.systemAppend.length + opts.prompt.length) + (opts.tools?.noConnectors ? 0 : 27_800), memoryChars: 24_000 });
     const fake = !opts.readOnly && opts.role !== 'ceo';
     const stuck = fake && !scale && !opts.box && !opts.resumeSessionId && opts.terminal ? demoStuck(opts.task) : null; // a cloud agent's sign-in is the office's own (docs/cloud.md)
-    return inTerminal(opts, cb, (c) => (opts.readOnly ? demoConsultSession(opts, c) : opts.role === 'ceo' ? (signInSession(opts, c) ?? ceoSession(opts, c)) : fakeSession(opts, withDemoChat(opts, withLab(opts, c)), deskRepo.get(opts.cwd) ?? boxDeskRepo(opts.cwd) ?? [...repos.keys()][0])), fake, stuck);
+    return inTerminal(opts, cb, (c) => (opts.readOnly ? demoConsultSession(opts, c) : opts.role === 'ceo' ? (signInSession(opts, c) ?? ceoSession(opts, c)) : agentSession(opts, withDemoChat(opts, withLab(opts, c)), deskRepo.get(opts.cwd) ?? boxDeskRepo(opts.cwd) ?? [...repos.keys()][0])), fake, stuck);
   },
   sessionTranscript: (_cwd, sessionId, about) => demoTranscript(path.join(HOME_DIR, 'demo-transcripts'), sessionId, about),
   terminals: true,

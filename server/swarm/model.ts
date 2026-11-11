@@ -149,6 +149,7 @@ export interface PersistedAgent {
   turns: number;
   sessionId: string | null;
   sessionCli: AgentCli | null; // the CLI whose session sessionId is: only it can resume it
+  sessionAccount?: string; // the account whose folder holds it (#401); unset: not known
   lastError: string | null;
   logTail: LogLine[];
 }
