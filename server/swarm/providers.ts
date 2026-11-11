@@ -6,6 +6,8 @@
 import path from 'node:path';
 import { HOME_DIR } from '../config.ts';
 import { Providers } from '../providers.ts';
+import { CliSetup, cliBinDir, cliPrefix } from '../cliInstall.ts';
+import { useOfficeCliBin } from '../clis.ts';
 import { providerCards, providerDef, providersLine, type McpInput } from '../../shared/providers.ts';
 import { checkRequest, checkResult, foundView, importLabel, keyScanText, mergeFound, scanSummary, type FoundKey } from '../../shared/keyScan.ts';
 import { redact } from '../../shared/journal.ts';
@@ -19,6 +21,22 @@ export abstract class SwarmProviders extends SwarmCloudCredit {
     probe: (req) => this.backend.providerProbe(req),
     changed: (view) => this.providersChanged(view),
   });
+
+  /** Coding-agent CLIs installed from Settings (#493): looked for at startup and again after an install or "Check again". */
+  readonly cliSetup = new CliSetup({
+    detect: () => (useOfficeCliBin(cliBinDir(cliPrefix(HOME_DIR))), this.backend.detectClis()),
+    install: (id) => this.backend.installCli(id, cliPrefix(HOME_DIR)),
+    signIn: (term, exited) => this.backend.opencodeSignIn(term, exited),
+    changed: (clis) => {
+      this.clis = clis;
+      this.broadcast({ type: 'clis', clis });
+    },
+  });
+
+  /** A sign-in that couldn't start: its CLI may have gone, or come. */
+  protected recheckClis() {
+    void this.cliSetup.check().catch((err) => console.warn('could not look for agent CLIs', err));
+  }
 
   private found: FoundKey[] = [];
   private keyScan: KeyScanView = { state: 'idle', at: null, keys: [] };

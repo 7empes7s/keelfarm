@@ -1,0 +1,18 @@
+/* Settings → Providers & accounts: a coding agent's CLI missing or OpenCode's own card (#493, CliSetupCard.tsx). Tokens only. */
+
+.cli-missing {
+  border-style: dashed;
+}
+.cli-log {
+  margin: var(--ds-space-2) 0 0;
+  padding: var(--ds-space-2) var(--ds-space-3);
+  max-height: 10em;
+  overflow: auto;
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface-sunken);
+  color: var(--ds-text);
+  font-family: var(--mono);
+  font-size: var(--ds-text-xs);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

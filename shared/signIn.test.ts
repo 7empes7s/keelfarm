@@ -38,6 +38,10 @@ describe('signInEnd', () => {
     expect(signInEnd('login', 2, ['bye']).note).toBe('Sign-in failed (exit 2). Try again.');
     expect(signInEnd('login', -1, []).note).toMatch(/could not start/);
   });
+
+  it('a CLI that isn’t installed says to install it, not to try again (#493)', () => {
+    expect(signInEnd('login', -1, ['── Signing Gemini CLI in ──', "Couldn't start signing in: Gemini CLI isn't installed"])).toEqual({ ok: false, note: "Gemini CLI isn't installed. Tap Install." });
+  });
 });
 
 // Real output, from `claude auth login` (Claude Code 2.x) and `codex login --device-auth` (codex-cli 0.166.0) in

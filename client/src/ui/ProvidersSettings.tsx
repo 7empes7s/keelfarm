@@ -19,6 +19,7 @@ import { Icon } from './Icon';
 import { SecretInput } from './SecretInput';
 import { PlanFlag } from './PlanFlag';
 import { LimitTimeline, RotationCard } from './RotationSettings';
+import { CliMissingCard, OpencodeCard } from './CliSetupCard';
 
 const DOCS = 'https://github.com/7empes7s/keelfarm/blob/main/docs/accounts.md';
 
@@ -26,7 +27,7 @@ const CLI_INFO: { id: AccountCli | 'opencode'; name: string; signs: string }[] =
   { id: 'claude', name: 'Claude Code', signs: 'a Claude subscription login (Pro or Max), an Anthropic API key, or a setup token' },
   { id: 'codex', name: 'Codex', signs: 'a ChatGPT plan login or an OpenAI API key' },
   { id: 'gemini', name: 'Gemini CLI', signs: 'a Google AI plan login (Plus or Pro), for QA second opinions, docs, research and small fixes' },
-  { id: 'opencode', name: 'OpenCode', signs: 'its own setup (opencode auth login): the office runs it as it is' },
+  { id: 'opencode', name: 'OpenCode', signs: 'its own setup (opencode auth login), for any provider it supports' },
 ];
 const CLI_NAME: Record<AccountCli, string> = { claude: 'Claude Code', codex: 'Codex', gemini: 'Gemini CLI' };
 
@@ -86,7 +87,7 @@ function Stats({ list }: { list: AccountView[] }) {
   );
 }
 
-function AccountCard({ a, first, last, isDefault, left, edit, signIn }: { a: AccountView; first: boolean; last: boolean; isDefault: boolean; left: number; edit: () => void; signIn: () => void }) {
+function AccountCard({ a, first, last, isDefault, left, edit, signIn, missing }: { a: AccountView; first: boolean; last: boolean; isDefault: boolean; left: number; edit: () => void; signIn: () => void; missing: boolean }) {
   const agents = useStore((s) => s.agents);
   const demo = useStore((s) => s.demo);
   const now = useNow(30_000);
@@ -156,7 +157,7 @@ function AccountCard({ a, first, last, isDefault, left, edit, signIn }: { a: Acc
         <Menu
           label={`More for ${a.label}`}
           items={[
-            a.kind === 'subscription-login' && { label: 'Sign in again', onSelect: signIn },
+            a.kind === 'subscription-login' && { label: 'Sign in again', onSelect: signIn, disabled: missing, ...(missing && { hint: 'Install it first' }) },
             { label: 'Test', onSelect: () => void test() },
             !a.removing && { label: a.enabled ? 'Pause in the rotation' : 'Resume in the rotation', onSelect: () => void api.updateAccount(a.id, { enabled: !a.enabled }).catch(() => undefined) },
             a.enabled && !a.removing && !isDefault && { label: 'Make default', hint: 'New tasks start on it; open ones finish first', onSelect: () => void api.makeDefaultAccount(a.id, false).catch(() => undefined) },
@@ -211,7 +212,7 @@ function AccountCard({ a, first, last, isDefault, left, edit, signIn }: { a: Acc
         {names.length ? `Pinned: ${names.join(', ')}` : 'Nobody pinned'}
       </div>
       {a.status === 'signed-out' && a.kind === 'subscription-login' && (
-        <button className="btn btn-primary acc-action" onClick={signIn}>
+        <button className="btn btn-primary acc-action" disabled={missing} onClick={signIn}>
           <Icon name="key-round" /> Sign in
         </button>
       )}
@@ -382,6 +383,8 @@ export function ProvidersSettings() {
   const nextOn = find(nextId);
   const switching = (cli: string) => switchingNow?.find((x) => x.cli === cli);
   const def = (cli: string) => list.find((a) => a.cli === cli && a.enabled && !a.removing)?.id;
+  const clis = useStore((s) => s.clis);
+  const anyInstalling = clis.some((c) => c.install?.running);
   return (
     <div className="card acc-page">
       <h3>
@@ -396,12 +399,14 @@ export function ProvidersSettings() {
       {CLI_INFO.map((c) => {
         const mine = list.filter((a) => a.cli === c.id);
         const users = agents.filter((x) => x.host !== 'box' && workerCli(x, settings) === c.id).length;
+        const cli = clis.find((x) => x.id === c.id);
+        const missing = !!cli && !cli.installed; // unknown until the office has looked
         return (
           <section key={c.id} className="acc-cli" aria-label={c.name}>
             <div className="row wrap">
               <h4 className="grow">{c.name}</h4>
               {c.id !== 'opencode' && (
-                <button className="btn btn-small" onClick={() => setAdding(c.id as AccountCli)}>
+                <button className="btn btn-small" disabled={missing} onClick={() => setAdding(c.id as AccountCli)}>
                   ＋ Add account
                 </button>
               )}
@@ -409,13 +414,16 @@ export function ProvidersSettings() {
             <p className="muted small">
               Signs in with {c.signs}.{users ? ` ${users} of the team run${users === 1 ? 's' : ''} it.` : ''}
             </p>
+            {missing && c.id !== 'opencode' && <p className="muted small">Sign in and Add account need {c.name} on this computer: install it first.</p>}
+            <CliMissingCard cli={cli} anyInstalling={anyInstalling} />
+            {c.id === 'opencode' && <OpencodeCard cli={cli} />}
             {switching(c.id) && (
               <p className="acc-flag" role="status">
                 <Icon name="shuffle" /> {switchingText(switching(c.id)!.left)}
               </p>
             )}
             {mine.map((a, i) => (
-              <AccountCard key={a.id} a={a} first={i === 0} last={i === mine.length - 1} isDefault={a.id === def(c.id)} left={switching(c.id)?.left.reduce((n, l) => n + l.count, 0) ?? 0} edit={() => setEditing(a.id)} signIn={() => signIn(a.id)} />
+              <AccountCard key={a.id} a={a} first={i === 0} last={i === mine.length - 1} isDefault={a.id === def(c.id)} left={switching(c.id)?.left.reduce((n, l) => n + l.count, 0) ?? 0} edit={() => setEditing(a.id)} signIn={() => signIn(a.id)} missing={missing} />
             ))}
           </section>
         );

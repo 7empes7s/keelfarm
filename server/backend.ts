@@ -9,6 +9,7 @@ import { upstashBoxes, type BoxApi } from './box.ts';
 import { run } from './exec.ts';
 import { localMachines, type MachineProvider } from './machines.ts';
 import { detectClis } from './clis.ts';
+import { npmInstall } from './cliInstall.ts';
 import { readPicks } from './picks.ts';
 import type { QuickPicks } from '../shared/used.ts';
 import { scanTooling } from './tooling.ts';
@@ -48,7 +49,7 @@ import type { LabRunner } from './testLab.ts';
 import { createLabRunner } from './testLabRunner.ts';
 import { claudeProjectsDir, findTranscript } from './history.ts';
 import type { HistoryEntry } from '../shared/history.ts';
-import type { CliView, ModelCatalogView, GhRepoSummary, IssueInfo, MergedPage, NoticeView, PhoneMessage, ProviderAccount, PullInfo, UseCase } from '../shared/types.ts';
+import type { AgentCli, CliView, ModelCatalogView, GhRepoSummary, IssueInfo, MergedPage, NoticeView, PhoneMessage, ProviderAccount, PullInfo, UseCase } from '../shared/types.ts';
 import type { SampleFloor } from './chatSample.ts';
 import { realProbe } from './providers.ts';
 import { realKeyScan } from './keyScan.ts';
@@ -154,6 +155,10 @@ export interface Backend {
   releaseClis(restart: boolean): Promise<void>;
   /** The coding-agent CLIs installed on this machine. */
   detectClis(): Promise<CliView[]>;
+  /** Install a missing CLI's pinned npm package into `prefix` (#493). Never throws: how it went and its log's tail. */
+  installCli(id: AgentCli, prefix: string): Promise<{ ok: boolean; tail: string[] }>;
+  /** OpenCode's own sign-in, `opencode auth login`, in `term` (#493). */
+  opencodeSignIn(term: AgentTerminal, exited: (code: number) => void): BoxSignIn;
   /** The chat's "/" picks: the manager's installed skills and connected apps (server/picks.ts). */
   quickPicks(): Promise<QuickPicks>;
   /** What a Claude Code session here loads (Tools & skills), read only, secrets masked; `projects`: the floors' checkouts. */
@@ -362,6 +367,8 @@ export const realBackend: Backend = {
   hooksReady,
   releaseClis,
   detectClis,
+  installCli: (id, prefix) => npmInstall(id, { prefix }),
+  opencodeSignIn: (term, exited) => startLocalSignIn({ cli: 'opencode', env: {}, term }, exited),
   quickPicks: () => readPicks(),
   toolInventory: (projects) => scanTooling(projects),
   modelCatalog: () => readCatalog(),

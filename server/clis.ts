@@ -6,6 +6,7 @@ import { localModel, type LocalProvider } from '../shared/models.ts';
 import type { AgentCli, CliView, EffortLevel, KeyTrouble } from '../shared/types.ts';
 import { keyTrouble } from '../shared/keyTrouble.ts';
 import { resetTime } from '../shared/accountRotation.ts';
+import { opencodeProviders } from '../shared/cliInstall.ts';
 import type { BoxVersions } from './boxScripts.ts';
 import { CEO_DISALLOWED, CROSS_TURN_TOOLS, OFFICE_DISALLOWED, toolsEnv, type SessionTools } from '../shared/tooling.ts';
 
@@ -36,10 +37,13 @@ export const cliLabel = (id: AgentCli) => CLIS.find((c) => c.id === id)?.label ?
 
 const WIN = process.platform === 'win32';
 
-/** The executable for a command name on PATH: on Windows only .exe/.cmd/.bat/.com, never an extensionless sh shim. */
-export function resolveCommand(name: string, env: NodeJS.ProcessEnv = process.env): string | null {
+/**
+ * The executable for a command name in `first` (the office's own CLI folder) or on PATH: on Windows only
+ * .exe/.cmd/.bat/.com, never an extensionless sh shim.
+ */
+export function resolveCommand(name: string, env: NodeJS.ProcessEnv = process.env, first: string[] = []): string | null {
   const key = Object.keys(env).find((k) => k.toUpperCase() === 'PATH') ?? 'PATH';
-  const dirs = (env[key] ?? '').split(path.delimiter).filter(Boolean);
+  const dirs = [...first, ...(env[key] ?? '').split(path.delimiter).filter(Boolean)];
   const exts = WIN ? (env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(';').filter((e) => /^\.(exe|cmd|bat|com)$/i.test(e)) : [''];
   for (const dir of dirs) {
     for (const ext of exts) {
@@ -107,12 +111,16 @@ function bundledClaude(): string | null {
   return null;
 }
 
+/** The office's own CLI folder (<SWARM_HOME>/cli, #493): CLIs installed from Settings, looked in before PATH. */
+let officeBin: string[] = [];
+export const useOfficeCliBin = (dir: string) => void (officeBin = [dir]);
+
 /** How to start a CLI: the program and the arguments that come before the office's own. */
 export function commandFor(id: AgentCli): { file: string; args: string[] } | null {
   const bundled = id === 'claude' ? bundledClaude() : null;
   if (bundled) return { file: bundled, args: [] };
   const def = CLIS.find((c) => c.id === id);
-  const found = def && resolveCommand(def.command);
+  const found = def && resolveCommand(def.command, process.env, officeBin);
   if (!found) return null;
   if (WIN && /\.(cmd|bat)$/i.test(found)) {
     try {
@@ -124,13 +132,14 @@ export function commandFor(id: AgentCli): { file: string; args: string[] } | nul
   return { file: found, args: [] };
 }
 
-/** Which CLIs this machine has, with their versions. */
+/** Which CLIs this machine has, with their versions; OpenCode's signed-in providers from `opencode auth list` (#493). */
 export async function detectClis(): Promise<CliView[]> {
   return Promise.all(
     CLIS.map(async (c) => {
       const cmd = commandFor(c.id);
       const version = cmd ? await run(cmd.file, [...cmd.args, '--version'], { timeoutMs: 20_000 }).catch(() => null) : null;
-      return { id: c.id, label: c.label, installed: !!cmd, version: version?.split(/\r?\n/)[0].trim().slice(0, 60) || null, integrated: c.integrated };
+      const auth = cmd && c.id === 'opencode' ? await run(cmd.file, [...cmd.args, 'auth', 'list'], { timeoutMs: 20_000 }).catch(() => null) : null;
+      return { id: c.id, label: c.label, installed: !!cmd, version: version?.split(/\r?\n/)[0].trim().slice(0, 60) || null, integrated: c.integrated, ...(auth !== null && { providers: opencodeProviders(auth) }) };
     }),
   );
 }

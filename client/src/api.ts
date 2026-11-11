@@ -267,6 +267,10 @@ export const api = {
   expireSignIns: () => call('POST', '/api/cloud/demo-expire'),
   useKeyAgain: (kind: 'anthropic' | 'openai') => call<CloudView>('POST', '/api/cloud/key-again', { kind }),
   simulateOutOfCredit: () => call<CloudView>('POST', '/api/cloud/demo-credit'),
+  // Coding-agent CLIs (#493): look again, install a missing one, OpenCode's own sign-in. The result comes as a `clis` event.
+  checkClis: () => call('POST', '/api/clis/check'),
+  installCli: (id: AgentCli) => call('POST', `/api/clis/${id}/install`),
+  opencodeSignIn: () => call('POST', '/api/clis/opencode/signin'),
   // Settings → Providers & accounts (#247, docs/accounts.md). Keys go in; only their last 4 come back.
   addAccount: (a: { cli: AccountCli; kind: AccountKind; label?: string; tags?: string; key?: string; tokenEnv?: string }) => call<{ id: string; note: string }>('POST', '/api/accounts', a, false),
   updateAccount: (id: string, patch: { label?: string; tags?: string; enabled?: boolean; plan?: string; dailyCostCap?: number | null }) => call('PATCH', `/api/accounts/${encodeURIComponent(id)}`, patch),

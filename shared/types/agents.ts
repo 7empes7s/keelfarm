@@ -132,6 +132,19 @@ export interface CliView {
   version: string | null;
   /** Hooks report every tool call and enforce the guard rails; the others report only when a turn ends. */
   integrated: boolean;
+  /** Its install from Settings → Providers (#493): running, or how the last one ended. */
+  install?: CliInstallRun;
+  /** OpenCode: the providers it's signed in to (`opencode auth list`), names only. */
+  providers?: string[];
+  /** OpenCode: its own sign-in (`opencode auth login`, the `cli:opencode` terminal). */
+  signIn?: { running: boolean; ok: boolean; note: string };
+}
+
+export interface CliInstallRun {
+  running: boolean;
+  ok: boolean;
+  note: string; // "Installing opencode-ai@1.19.5…", "OpenCode installed.", "Installing OpenCode failed."
+  tail: string[]; // the log's last lines when it failed
 }
 
 /** One model a coding agent can run (#198), from its live list or the office's built-in one (shared/models.ts). */
