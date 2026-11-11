@@ -70,6 +70,24 @@
   html[data-touch][data-typing] .phone :is(.phone-tabs, .phone-hint, .decision-tray) {
     display: none;
   }
+  /* ...and the rows above the thread make room too (#507: under a tall keyboard the message box was pushed out of the
+     phone's screen): the lobby nudge and the thread bar step aside, the ✕ joins the chat's header row as in full screen */
+  html[data-touch][data-typing] .phone:has(.phone-chat) {
+    position: relative;
+  }
+  html[data-touch][data-typing] .phone:has(.phone-chat) :is(.phone-nudge, .thread-bar) {
+    display: none;
+  }
+  html[data-touch][data-typing] .phone:not(.phone-full):has(.phone-chat) .phone-x {
+    position: absolute;
+    top: calc(max(10px, var(--ds-safe-top)) + 2px);
+    right: max(10px, var(--ds-safe-right));
+    z-index: 2;
+    margin: 0;
+  }
+  html[data-touch][data-typing] .phone:has(.phone-chat) .chat-head {
+    padding-right: calc(12px + var(--ds-target) + 8px);
+  }
   .phone-status {
     display: none;
   }

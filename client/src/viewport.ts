@@ -24,7 +24,9 @@ export function appViewport(innerHeight: number, vv: Viewport | null): { height:
  */
 export function chatDock(innerHeight: number, vv: Viewport | null, uiScale: number, full: boolean): { top: number; height: number; band: boolean } {
   const { height, top } = appViewport(innerHeight, vv);
-  const keyboard = !!vv && Math.abs(vv.scale - 1) <= 0.01 && keyboardInset(innerHeight, vv) > 0;
+  // the visible part 80px or more short of the page, wherever iOS scrolled it to (#507: scrolled right down to the
+  // message box, nothing seemed to be under it)
+  const keyboard = !!vv && Math.abs(vv.scale - 1) <= 0.01 && keyboardInset(innerHeight, { height: vv.height, offsetTop: 0 }) > 0;
   return { top: top / uiScale, height: height / uiScale, band: !full && !keyboard };
 }
 
@@ -130,11 +132,11 @@ export function watchViewport() {
   let frame = 0;
   let keyboard = false;
   const touch = matchMedia('(pointer: coarse)').matches;
-  let measured = -1;
+  let measured = ''; // the visible part's height and top, last measured
   const update = () => {
     frame = 0;
     const { height, top } = appViewport(window.innerHeight, vv);
-    measured = height;
+    measured = `${height} ${top}`;
     root.style.setProperty('--app-height', `${height}px`);
     root.style.setProperty('--app-top', `${top}px`);
     const open = height < window.innerHeight - 80; // smaller differences are browser bars, not a keyboard
