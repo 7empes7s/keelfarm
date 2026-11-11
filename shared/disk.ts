@@ -93,7 +93,7 @@ export const DISK_REMIND_MS = 24 * 3_600_000;
 const REARM_PCT = 2;
 
 /** Every disk is back above the warning by the margin: the next low stretch rings again. */
-export function diskRecovered(disks: readonly DiskReading[], s: DiskSettings): boolean {
+function diskRecovered(disks: readonly DiskReading[], s: DiskSettings): boolean {
   return disks.every((d) => d.freeMb >= (s.warnGb + s.rearmGb) * 1024 && (d.totalMb <= 0 || (d.freeMb / d.totalMb) * 100 >= s.warnPct + REARM_PCT));
 }
 
