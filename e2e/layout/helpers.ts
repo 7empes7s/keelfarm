@@ -127,6 +127,8 @@ async function layoutProblems(root: Locator): Promise<string[]> {
     if (document.documentElement.scrollWidth > vw + 1) out.push(`the page scrolls sideways (${document.documentElement.scrollWidth} > ${vw})`);
     const title = document.querySelector('.pk-head .pk-title');
     if (title && title.scrollWidth > title.clientWidth + 1) out.push(`the header's name "${title.textContent}" is cut off`);
+    // What a session runs on (#376) shows whole: its account and model wrap, never cut.
+    for (const c of el.querySelectorAll<HTMLElement>('.run-chip')) if (c.scrollWidth > c.clientWidth + 1 || c.getBoundingClientRect().right > (c.parentElement?.getBoundingClientRect().right ?? vw) + 1) out.push(`the run chip "${c.innerText}" is cut off`);
     const name = (b: Element) => (b.getAttribute('aria-label') || (b as HTMLElement).innerText || b.getAttribute('title') || b.tagName).trim().slice(0, 40);
     // Wider than the viewport, unless it's inside a box that scrolls sideways on purpose (the tab strip, a data table).
     const scroller = (x: Element) => {
