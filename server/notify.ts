@@ -43,8 +43,9 @@ const PLURAL: Record<NotifyEvent, string> = {
   disk: 'disk warnings',
   merge: 'merges',
   decisions: 'decision digests',
+  setup: 'setup gaps',
 };
-const ICON: Record<NotifyEvent | 'test', string> = { needsHuman: '⚠️', question: '❓', ceoMessage: '💬', hire: '📄', agentError: '🛑', usage: '⏸', memory: '🩺', disk: '💽', merge: '🔀', decisions: '🧭', test: '🔔' };
+const ICON: Record<NotifyEvent | 'test', string> = { needsHuman: '⚠️', question: '❓', ceoMessage: '💬', hire: '📄', agentError: '🛑', usage: '⏸', memory: '🩺', disk: '💽', merge: '🔀', decisions: '🧭', setup: '🧭', test: '🔔' };
 
 export const clip = (s: string, max = BODY_MAX) => {
   const t = cleanTerminalText(s, Infinity).replace(/\s+/g, ' ');

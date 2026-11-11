@@ -3,6 +3,7 @@
 // numbers Providers & accounts shows.
 import { accountStatus, type StatusInput } from './accounts.ts';
 import { keyTrouble } from './keyTrouble.ts';
+import type { TaskAccounts } from './accountDefault.ts';
 import type { AccountCli, AccountSwitch, PhoneMessage, ProviderAccount, RotationSettings, RotationStats, UsageReading } from './types.ts';
 
 const MIN = 60_000;
@@ -26,6 +27,17 @@ export function rotationSettings(base: RotationSettings | undefined, patch: unkn
   const bool = (v: unknown, d: boolean) => (typeof v === 'boolean' ? v : d);
   const clis = Array.isArray(p.ceoClis) ? p.ceoClis.filter((c): c is AccountCli => c === 'claude' || c === 'codex') : b.ceoClis;
   return { on: bool(p.on, b.on), apiLast: bool(p.apiLast, b.apiLast), ceoClis: [...new Set(clis)], agentsSwitchCli: bool(p.agentsSwitchCli, b.agentsSwitchCli) };
+}
+
+/** Saved task accounts (#390, shared/accountDefault.ts), checked. */
+export function loadTaskAccounts(raw: unknown): TaskAccounts {
+  if (!raw || typeof raw !== 'object') return {};
+  const out: TaskAccounts = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    const r = v as Partial<TaskAccounts[string]> | null;
+    if (r && typeof r.account === 'string') out[k] = { account: r.account, ...(r.move ? { move: true } : {}) };
+  }
+  return out;
 }
 
 // ---------- a dead account ----------
@@ -138,13 +150,14 @@ export interface PickOptions {
   cli: AccountCli;
   apiLast: boolean;
   skip?: readonly string[]; // tried already this session
+  sticky?: string; // the account the session's task started on (#390): next after the pinned one, while it's usable
 }
 
 const isApi = (a: ProviderAccount) => a.kind === 'api-key';
 
 /**
- * The account a session starts on: the binding first (the pinned account, which runs even while paused, then the
- * pinned tag's), then the rest by priority, API keys after subscriptions when `apiLast`. Accounts that are paused,
+ * The account a session starts on: the binding first (the pinned account, which runs even while paused), then its
+ * task's account (`sticky`), then the pinned tag's, then the rest by priority, API keys after subscriptions when `apiLast`. Accounts that are paused,
  * limited, signed out, over their daily cap or at NEAR_OUT_PCT of a limit are skipped; near-out ones are taken only
  * when nothing else is left. null: none is usable (the caller runs as before rotation).
  */
@@ -154,12 +167,23 @@ export function pickAccount(binding: string | undefined, candidates: readonly Ca
   const sorted = [...mine].sort((x, y) => rank(x) - rank(y) || x.account.priority - y.account.priority);
   const b = (binding ?? '').trim().toLowerCase();
   const pinned = b ? sorted.find((c) => c.account.id === b) : undefined;
-  const order = [...new Set([...(pinned ? [pinned] : []), ...(b ? sorted.filter((c) => c.account.tags.includes(b)) : []), ...sorted])];
+  const sticky = o.sticky ? sorted.find((c) => c.account.id === o.sticky) : undefined;
+  const order = [...new Set([...(pinned ? [pinned] : []), ...(sticky ? [sticky] : []), ...(b ? sorted.filter((c) => c.account.tags.includes(b)) : []), ...sorted])];
   const free = (c: Candidate) => {
     const { status } = accountStatus({ ...c, account: c === pinned ? { ...c.account, enabled: true } : c.account, now });
     return status === 'ready' || status === 'near';
   };
   return (order.find((c) => free(c) && !nearOut(c.usage, now)) ?? order.find(free))?.account ?? null;
+}
+
+/**
+ * Whether rotation has an account of `o.cli` with room to start a session now (ready or near its limit, not near out),
+ * skipping `o.skip`: a usage warning on one account then paces only that one, not the office (#383).
+ */
+export function hasRoom(candidates: readonly Candidate[], now: number, o: PickOptions): boolean {
+  const a = pickAccount(undefined, candidates, now, o);
+  const c = a && candidates.find((x) => x.account.id === a.id);
+  return !!c && !nearOut(c.usage, now);
 }
 
 // ---------- words ----------

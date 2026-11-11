@@ -176,6 +176,12 @@ app.put('/api/repos/:repo/charter', route((req) => swarm.setCharter(repoId(req),
 app.post('/api/repos/:repo/charter/proposal', route((req) => swarm.decideCharter(repoId(req), req.body?.approve === true, req.body?.charter ?? undefined)));
 app.put('/api/repos/:repo/charter/status', route((req) => swarm.setObjectiveStatus(repoId(req), req.body?.objective, req.body?.status ?? null)));
 app.post('/api/repos/:repo/charter/export', route((req) => swarm.exportCharter(repoId(req))));
+// The setup advisor (#366): the floor's use case, a gap's fix by its action's index, Not now, the new floor's checklist closed.
+app.put('/api/repos/:repo/setup/use-case', route((req) => swarm.setFloorUseCase(repoId(req), req.body?.useCase)));
+app.post('/api/repos/:repo/setup/apply', route((req) => swarm.applyFloorSetup(repoId(req), req.body?.gap, req.body?.action ?? 0)));
+app.post('/api/repos/:repo/setup/snooze', route((req) => swarm.snoozeFloorSetup(repoId(req), req.body?.gap)));
+app.post('/api/repos/:repo/setup/review', route((req) => swarm.closeFloorReview(repoId(req))));
+app.put('/api/company/use-cases', route((req) => swarm.setCompanyUseCases(req.body?.useCases)));
 // The floor's app, for the preview monitor
 app.post(
   '/api/repos/:repo/preview',
@@ -344,6 +350,7 @@ app.delete('/api/providers/mcp/:id', route(async (req) => ({ removed: await swar
 // Providers & accounts (#247, docs/accounts.md): keys come in here and never go back out.
 app.post('/api/accounts', route((req) => swarm.accounts.add(req.body ?? {})));
 app.patch('/api/accounts/:id', route((req) => swarm.accounts.update(String(req.params.id), req.body ?? {})));
+app.post('/api/accounts/:id/default', route((req) => ({ note: swarm.makeDefaultAccount(String(req.params.id), (req.body ?? {}).now === true) })));
 app.post('/api/accounts/:id/move', route((req) => swarm.accounts.move(String(req.params.id), Number((req.body ?? {}).by))));
 app.put('/api/accounts/:id/key', route(async (req) => ({ note: await swarm.accounts.setKey(String(req.params.id), (req.body ?? {}).key) })));
 app.post('/api/accounts/:id/share', route((req) => ({ note: swarm.accounts.repairShare(String(req.params.id)) })));
@@ -464,6 +471,7 @@ app.post('/api/ceo/review', route(() => swarm.requestReview()));
 // The chat closer to Claude's (#51): stop, edit and retry, conversations, and what the CEO remembers
 app.post('/api/ceo/stop', route(() => swarm.stopCeo()));
 app.post('/api/ceo/retry', route(() => swarm.retryCeo()));
+app.post('/api/ceo/switch-back', route((req) => swarm.ceoSwitchBack(req.body?.account)));
 app.post('/api/ceo/jobs/:id/redo', route((req) => swarm.redoCeoJob(Number(req.params.id))));
 app.post('/api/ceo/messages/:id/edit', route((req) => swarm.editMessage(Number(req.params.id), str(req.body?.text))));
 app.post('/api/ceo/messages/:id/react', route((req) => swarm.reactToMessage(Number(req.params.id), str(req.body?.emoji), str(req.body?.note))));

@@ -47,7 +47,28 @@
 .usage-bars {
   display: flex;
   flex-direction: column;
+  gap: var(--ds-space-3);
+}
+/* One Claude login's bars (#383); several logins are separated by a line. */
+.usage-meter {
+  display: flex;
+  flex-direction: column;
   gap: 6px;
+  min-width: 0;
+}
+.usage-meter + .usage-meter {
+  border-top: 1px solid var(--ds-line);
+  padding-top: var(--ds-space-3);
+}
+.usage-meter-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-width: 0;
+}
+.usage-meter-name {
+  overflow-wrap: anywhere;
 }
 /* The card the console was opened at (an alarm, or the usage meter). */
 .ops-card-hot {

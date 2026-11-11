@@ -62,7 +62,7 @@ export function CeoMemory({ ceoName, onClose }: { ceoName: string; onClose: () =
   const add = () => void api.addMemory(draft).then(() => setDraft('')).catch(() => undefined);
   const found = file && q.trim() ? searchNotes(file.text, q) : null;
   return (
-    <Sheet label={`What ${ceoName} remembers`} onClose={onClose} className="memory-sheet">
+    <Sheet label={`What ${ceoName} remembers`} onClose={onClose} className="memory-sheet" surface="memory">
       <div className="artifact-body memory-body">
         <h3 className="memory-h">Your notes for {ceoName}</h3>
         <p className="muted small">

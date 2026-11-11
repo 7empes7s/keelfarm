@@ -30,7 +30,7 @@ import { dueGreeting } from '../../shared/themes.ts';
 import { charterOf, MISSION_MAX, renderCharter } from '../../shared/charter.ts';
 import { CEO_ID } from '../../shared/types.ts';
 import { forwardText, isHarnessText, stripHarness } from '../../shared/chat.ts';
-import { feedbackPrompt, replyTarget, turnEnding } from '../../shared/reactions.ts';
+import { feedbackPrompt, replyTarget } from '../../shared/reactions.ts';
 import { researchJob, researchRef } from '../research.ts';
 import { makeArtifacts, parseMessage } from '../../shared/chatParts.ts';
 import { withVisualsText } from '../../shared/chatVisuals.ts';
@@ -270,7 +270,7 @@ export abstract class SwarmCeo extends SwarmCeoLog {
     const prompt = open.start + ceoJobPrompt(job, floor, triage, liveMandates(this.state.settings.ceoMandates, Date.now()), this.state.settings.researchMin) + (job.kind === 'chat' ? this.openDecisionsLine() : '') + open.since + toldCeo(this.ceoTold.splice(0)) + feedbackPrompt(this.ceoFeedback.splice(0)) + (open.start ? '' : memoryPrompt(this.state.ceo.remember)) + this.takeChanges(job);
     const system = ceoSystemPrompt(this.ceoPromptInput(a));
     const run = this.spend.start(a.id, { kind, effort: resolveEffort(a.effort, kind, this.state.settings.taskEffort, CEO_EFFORT), model, startedAt: Date.now(), round: null, known: officeParts({ system, prompt }), cwd: CEO_DIR, sessionId: how.resumeSessionId ?? null, title: label, resumed: !!open.resumeId });
-    rt.session = this.startOnAccount(a,
+    rt.session = this.startCeoSession(a,
       {
         cwd: CEO_DIR,
         prompt,
@@ -301,14 +301,17 @@ export abstract class SwarmCeo extends SwarmCeoLog {
           this.emitAgent(a);
         },
         sessionId: (id) => {
-          if (!plan.fresh) Object.assign(a, { sessionId: id, sessionCli: id ? 'claude' : null }); // a fresh job's session isn't the chat's
+          if (!plan.fresh) Object.assign(a, { sessionId: id, sessionCli: id ? 'claude' : null, sessionAccount: id ? this.sessionOn.get(a.id) : undefined }); // a fresh job's session isn't the chat's
           if (id) run.sessionId = id;
         },
         browserUrl: () => undefined,
         screenshot: () => undefined,
         // A follow-up that found nothing to do stays off the manager's phone.
         turn: (text) => {
-          if (job.kind === 'followup' && quietReply(text)) return void this.ceoChat.finishTurn(text);
+          if (job.kind === 'followup' && quietReply(text)) {
+            this.turnAnswer = null;
+            return void this.ceoChat.finishTurn(text);
+          }
           this.postCeoReply(text);
           this.markDelivery('all', 'replied');
           if (this.ceoAsked || job.messageIds?.length) this.markStatus('open', 'replied'); // only a job with the manager's messages answers them
@@ -363,7 +366,7 @@ export abstract class SwarmCeo extends SwarmCeoLog {
       a.lastError = result.errors.join('; ') || 'Session failed';
       this.appendLog(a, [{ kind: 'error', text: `✗ ${a.lastError}` }]);
       const what = job ? jobLabel(job, this.ceoFloor(job.repoId)).toLowerCase() : 'working';
-      this.postMessage('office', `⚠️ ${a.name} hit a problem while ${what}: ${a.lastError.slice(0, 240)}`);
+      if (!result.signedOut) this.postMessage('office', `⚠️ ${a.name} hit a problem while ${what}: ${a.lastError.slice(0, 240)}`); // a sign-in has its card (ceoStuck.ts)
     } else {
       a.status = 'done';
       const filed = this.ceoIssues.total ? ` · ${this.ceoIssues.total} issue${this.ceoIssues.total === 1 ? '' : 's'} filed` : '';
@@ -643,7 +646,7 @@ export abstract class SwarmCeo extends SwarmCeoLog {
   // ---------- the phone ----------
 
   /** `changes`: the team changes a CEO message proposes (Telegram gets their buttons); `telegram: 'in'`: sent from there; `closing`: a CEO turn's closing text (ceoSpoken). */
-  protected postMessage(from: PhoneMessage['from'], text: string, requestId?: string, opts: Pick<PhoneMessage, 'replyTo' | 'clientId' | 'delivery' | 'telegram' | 'tg' | 'attachments' | 'used' | 'research' | 'log' | 'actions' | 'question' | 'notice' | 'signIn' | 'switch' | 'pacing' | 'ceoJob'> & { changes?: TeamChange[]; closing?: boolean } = {}) {
+  protected postMessage(from: PhoneMessage['from'], text: string, requestId?: string, opts: Pick<PhoneMessage, 'replyTo' | 'clientId' | 'delivery' | 'telegram' | 'tg' | 'attachments' | 'used' | 'research' | 'log' | 'actions' | 'question' | 'notice' | 'signIn' | 'switch' | 'ceoStuck' | 'pacing' | 'ceoJob'> & { changes?: TeamChange[]; closing?: boolean } = {}) {
     const { changes, closing = false, ...extra } = opts;
     // The CEO's suggestion boxes and artifacts come out of the text; the office's notes are cleaned (shared/chatParts.ts).
     const parts = parseMessage(from, text);
@@ -703,7 +706,8 @@ export abstract class SwarmCeo extends SwarmCeoLog {
     const extra = { ...this.ceoFiles.takeReply(), ...researchRef(job), ...this.ceoChat.finishTurn(text) };
     if (job && BACKGROUND_KINDS.includes(job.kind) && text.trim()) this.state.ceo.lastJob = jobNote(job.kind, jobLabel(job, this.ceoFloor(job.repoId)), text, extra, Date.now()); // for the chat's digest (#330)
     const replyTo = replyTarget(this.state.messages); // the message it answers, when others came after it
-    if (turnEnding(text, extra) === 'reply') this.ceoJobReplied(this.postMessage('ceo', text, undefined, { ...extra, ...this.ceoJobTag(), ...(replyTo !== undefined && { replyTo }), closing: true })); // else a reaction said it, or nothing needed saying: no blank bubble, no push
+    if (this.foldTurn(text, extra)) return; // folded into this turn's reply, a quiet note, or nothing to say (#378)
+    this.ceoJobReplied(this.postMessage('ceo', text, undefined, { ...extra, ...this.ceoJobTag(), ...(replyTo !== undefined && { replyTo }), closing: true }));
   }
 
   /** GET /api/ceo/picks: the "/" list, the manager's installed skills and apps plus the connectors the CEO has used lately. */

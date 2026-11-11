@@ -12,7 +12,7 @@ import { fixGoesTo, pickTester, pipelineQueue, prepHeld, runnerFor, runsHere, WO
 import { localFirst } from '../hybrid.ts';
 import { HttpError } from '../httpError.ts';
 import type { SessionKind } from '../health.ts';
-import { mergeReadings, readingsChanged, usageChoice } from '../../shared/usage.ts';
+import { accountUsageLabel, mergeReadings, readingsChanged, usageChoice } from '../../shared/usage.ts';
 import { sharesSignature, usageShares } from '../../shared/usageShares.ts';
 import { afterPoll, pollDue, type PollState, type UsageCheck } from '../usagePoll.ts';
 import {
@@ -62,6 +62,7 @@ export abstract class SwarmScheduling extends SwarmQa {
   protected isFree(a: PersistedAgent) {
     if (a.needsSignIn) return false; // a cloud agent waiting to be signed in takes no work (docs/cloud.md)
     if (this.pinnedSignedOut(a)) return false;
+    if (this.setupBlocks(a.id)) return false; // signed out, as the setup advisor found (#366)
     if (questionOf(this.state.questions, a.id)) return false; // waiting on an answer: it resumes their task
     if (this.consulting(a)) return false;
     return FREE.includes(a.status) || (a.status === 'error' && Date.now() - (a.endedAt ?? 0) >= ERROR_COOLDOWN_MS);
@@ -292,8 +293,19 @@ export abstract class SwarmScheduling extends SwarmQa {
     if (until <= this.pausedUntil) return;
     const fresh = Date.now() >= this.pausedUntil;
     this.pausedUntil = until;
-    if (fresh && !told) this.postMessage('office', `⏸ Claude's usage limit was reached. The office starts no new work until ${new Date(until).toLocaleTimeString()}; sessions already running carry on.`);
+    if (fresh && !told) this.postMessage('office', `⏸ ${this.limitWho()} reached its usage limit. The office starts no new work until ${new Date(until).toLocaleTimeString()}; sessions already running carry on.`);
     this.emitUsage();
+  }
+
+  /** company.usage's account (#383): the one the next session starts on, named, with its own numbers ("next on Ultra: 5h 67% · week 11%"). */
+  protected nextUsage(): string {
+    const n = this.accounts.upNext('claude');
+    return n ? `next on ${accountUsageLabel(n.label, n.usage, Date.now(), this.accounts.list().find((a) => a.id === n.id)?.builtIn ? this.usageCheck : null)}` : '';
+  }
+
+  /** Who a pause at the limit is for (#383): only the built-in login (or the only account) pauses the office, so it's named. */
+  private limitWho(): string {
+    return this.accounts.list().find((a) => a.builtIn && a.cli === 'claude')?.label ?? 'Claude';
   }
 
   /** Claude warned that usage is getting high: pace new issues until the window resets, rather than run into the limit. */
@@ -395,7 +407,7 @@ export abstract class SwarmScheduling extends SwarmQa {
     }
     if (usage.state !== was && usage.state !== 'normal') {
       const until = usage.until ? new Date(usage.until).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'it resets';
-      if (usage.state === 'paused') this.notice({ kind: 'usage', title: "Claude's usage limit was reached", text: `The office starts no new work until ${until}; running sessions carry on.` }, { event: 'usage' });
+      if (usage.state === 'paused') this.notice({ kind: 'usage', title: `${this.limitWho()} reached its usage limit`, text: `The office starts no new work until ${until}; running sessions carry on.` }, { event: 'usage' });
       else this.notice({ kind: 'usage', title: 'Pacing new work', text: `Claude warned that usage is high, so new issues start slowly until ${until}.` }, { event: 'usage' });
     }
   }
@@ -435,6 +447,7 @@ export abstract class SwarmScheduling extends SwarmQa {
       this.readingsTimer = null;
       this.shownReadings = this.state.claudeUsage;
       this.broadcast(this.claudeUsageEvent());
+      this.accounts.emit(); // the built-in login's card and meter row
       this.save();
     }, READINGS_MS);
     this.readingsTimer.unref?.();

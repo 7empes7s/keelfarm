@@ -15,7 +15,7 @@ export async function demoReactions(text: string, use: Use): Promise<string | nu
   const msgs = taggedMessages(text);
   if (msgs.length > 1) {
     for (const m of msgs) await use('reply', { message_id: m.id, text: THANKS.test(m.text) ? 'Any time.' : `On it: "${m.text.slice(0, 60)}". I'll report back here.` });
-    return '';
+    return msgs.length === 2 ? 'Both messages are answered on your phone.' : `All ${msgs.length} messages are answered on your phone.`; // the recap real CEOs end with: it folds into the last reply (#378)
   }
   const said = msgs[0]?.text ?? text.trim();
   if (THANKS.test(said)) return (await use('react', { emoji: '👍' })).startsWith('Refused') ? 'Any time.' : '';

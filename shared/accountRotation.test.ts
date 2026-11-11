@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addSpan, allOutText, detectLimit, pickAccount, resetTime, rotationSettings, rotationStats, spanBars, switchHandover, switchText, type Candidate } from './accountRotation';
+import { addSpan, allOutText, detectLimit, hasRoom, pickAccount, resetTime, rotationSettings, rotationStats, spanBars, switchHandover, switchText, type Candidate } from './accountRotation';
 import type { AccountSwitch, ProviderAccount } from './types';
 
 const NOW = new Date(2026, 10, 7, 13, 0, 0).getTime(); // 13:00 local
@@ -67,6 +67,18 @@ const acc = (id: string, o: Partial<ProviderAccount> = {}): ProviderAccount => (
 const cand = (account: ProviderAccount, o: Partial<Candidate> = {}): Candidate => ({ account, signedIn: true, usage: [], todayUsd: 0, ...o });
 const pick = (binding: string | undefined, list: Candidate[], o: { apiLast?: boolean; skip?: string[]; now?: number } = {}) => pickAccount(binding, list, o.now ?? NOW, { cli: 'claude', apiLast: o.apiLast ?? true, skip: o.skip })?.id ?? null;
 
+describe('pickAccount with a task\'s account (#390)', () => {
+  const pro = acc('pro');
+  const ultra = acc('ultra', { priority: 1 });
+  const sticky = (list: Candidate[], id: string, now = NOW) => pickAccount(undefined, list, now, { cli: 'claude', apiLast: true, sticky: id })?.id ?? null;
+  it("keeps an open task on its account though another is first, and moves it when that one is out", () => {
+    expect(sticky([cand(pro), cand(ultra)], 'ultra')).toBe('ultra');
+    expect(sticky([cand(pro), cand({ ...ultra, limitedUntil: NOW + 60_000 })], 'ultra')).toBe('pro');
+    expect(sticky([cand(pro), cand({ ...ultra, enabled: false })], 'ultra')).toBe('pro');
+  });
+  it('a pinned account still comes first', () => expect(pickAccount('pro', [cand(pro), cand(ultra)], NOW, { cli: 'claude', apiLast: true, sticky: 'ultra' })?.id).toBe('pro'));
+});
+
 describe('pickAccount', () => {
   const main = acc('main', { priority: 0, tags: ['max'] });
   const backup = acc('backup', { priority: 1, tags: ['max', 'backup'] });
@@ -104,6 +116,21 @@ describe('pickAccount', () => {
     const limited = { ...main, limitedUntil: at(14) };
     expect(pick(undefined, [cand(limited), cand(backup)], { now: at(13, 59) })).toBe('backup');
     expect(pick(undefined, [cand(limited), cand(backup)], { now: at(14, 1) })).toBe('main');
+  });
+});
+
+describe('hasRoom (#383)', () => {
+  const ultra = acc('ultra', { priority: 0 });
+  const pro = acc('pro', { priority: 1 });
+  const near = [{ type: 'five_hour', pct: 96, resetsAt: NOW + 3600_000, at: NOW }];
+  const room = (list: Candidate[], skip: string[]) => hasRoom(list, NOW, { cli: 'claude', apiLast: true, skip });
+  it('finds another account with room besides the warned one', () => {
+    expect(room([cand(ultra, { usage: near }), cand(pro)], ['ultra'])).toBe(true);
+  });
+  it('has none when the rest are near out, limited or another coding agent’s', () => {
+    expect(room([cand(ultra), cand(pro, { usage: near })], ['ultra'])).toBe(false);
+    expect(room([cand(ultra), cand(pro, { account: { ...pro, limitedUntil: NOW + 60_000 } })], ['ultra'])).toBe(false);
+    expect(room([cand(ultra), cand(acc('cx', { cli: 'codex' }))], ['ultra'])).toBe(false);
   });
 });
 

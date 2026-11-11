@@ -92,12 +92,14 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
   | `ceoFresh.ts` | background jobs in fresh sessions with the office's digest, a full chat session's handover (#330; rules in `server/ceoDigest.ts`) |
   | `ceoLog.ts` | the CEO jobs log and Redo on Opus (#332): each job's number, log row and kept inputs, the redo on the CEO's model (rules in `server/ceoRedo.ts`, `shared/ceoJobLog.ts`; the demo's in `server/ceoJobSample.ts`) |
   | `ceoJobs.ts` | the CEO's job queue, follow-ups, triage, the phone, notifications |
+  | `ceoStuck.ts` | a stuck CEO (#375): its sessions' blocked screens and a minute's silence as a chat card (Open terminal, Sign in, Switch back) and one notification (words in `server/ceoStuck.ts`) |
   | `upkeep.ts` | idle desks, the watchdog and doctor, progress, ping-pong |
   | `team.ts` | hire and let-go requests, approvals, `scale_team` |
   | `ceoTools.ts` | the CEO's office tools (`officeTools`, `company_status`, mandates, read-only tools) |
   | `voices.ts` | a voice for every agent (#320): picked on hire, or when a key is saved or ElevenLabs turned on |
   | `serverLoad.ts` | the server's load by program (#271): who's who for the grouping, the reading every 15 s, the 24 h trend, "Stop it" for leftovers |
   | `disk.ts` | the disk (#340): free space on the health strip and its hold, the hourly cleanup and "Free up space", the working copies' disk |
+  | `setup.ts` | the setup advisor (#366): each floor's use case (guessed from its repo's top files), its gaps against `shared/useCases.ts`' recommendations (rules pure in `shared/setup.ts`), one notification per gap, Not now, the fixes, the CEO's `apply_setup` |
   | `../swarm.ts` | `Swarm` itself: startup (`init`), restart recovery, chat to agents, settings and setup |
 - `outbox.ts`: what goes out on `/ws`: agents' and floors' changes batched on a 250 ms tick as patches of what
   changed, terminal lines only to the tabs that show them (`shared/watch.ts`), catch-ups when a tab's watch changes.

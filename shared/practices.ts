@@ -11,6 +11,7 @@ export interface Practices {
   leases: boolean; // agents declare the files they expect to touch; the scheduler holds back issues that overlap
   autoRebase: boolean; // an open PR that conflicts after the base moves goes to a developer to update before QA
   busyFiles: boolean; // conflict-aware scheduling (#256): issues overlapping busy files wait, the hottest PR merges first
+  liveLeases: boolean; // live leases (#398): leases from each agent's real diff, and "merge main now" nudges
   generated: string[]; // files agents regenerate instead of hand-merging (e.g. docs/coverage.md)
   appendOnly: string[]; // append-only logs: on a conflict keep both sides' entries (e.g. STATE.md)
   diffBudget: number; // lines added + deleted a PR should stay under; over it the builder says why or splits it; 0: none
@@ -25,7 +26,7 @@ export interface EveryProject {
   conflictFix?: ConflictFixSettings; // the cheaper model for conflict-only fix rounds (#256), set in Settings → Agents
 }
 
-export const PRACTICES_OFF: Practices = { upToDate: false, leases: false, autoRebase: false, busyFiles: false, generated: [], appendOnly: [], diffBudget: 0 };
+export const PRACTICES_OFF: Practices = { upToDate: false, leases: false, autoRebase: false, busyFiles: false, liveLeases: false, generated: [], appendOnly: [], diffBudget: 0 };
 
 export const emptyEveryProject = (): EveryProject => ({ practices: { ...PRACTICES_OFF }, conflictFix: conflictFixSettings(undefined, {}) });
 const MAX_FILES = 30;
@@ -56,7 +57,7 @@ export function cleanOverrides(raw: unknown): PracticeOverrides {
   if (typeof raw !== 'object' || Array.isArray(raw)) throw new Error('practices must be an object of switches');
   const r = raw as Record<string, unknown>;
   const out: PracticeOverrides = {};
-  for (const k of ['upToDate', 'leases', 'autoRebase', 'busyFiles'] as const) {
+  for (const k of ['upToDate', 'leases', 'autoRebase', 'busyFiles', 'liveLeases'] as const) {
     if (r[k] === undefined || r[k] === null) continue;
     if (typeof r[k] !== 'boolean') throw new Error(`${k} must be true or false`);
     out[k] = r[k];
@@ -101,6 +102,7 @@ export function describePractices(p: PracticeOverrides): string {
   if (p.leases !== undefined) parts.push(`file leases ${p.leases ? 'on' : 'off'}`);
   if (p.autoRebase !== undefined) parts.push(`auto-rebase ${p.autoRebase ? 'on' : 'off'}`);
   if (p.busyFiles !== undefined) parts.push(`conflict-aware scheduling ${p.busyFiles ? 'on' : 'off'}`);
+  if (p.liveLeases !== undefined) parts.push(`live leases ${p.liveLeases ? 'on' : 'off'}`);
   if (p.generated?.length) parts.push(`regenerate ${p.generated.join(', ')}`);
   if (p.appendOnly?.length) parts.push(`append-only ${p.appendOnly.join(', ')}`);
   if (p.diffBudget !== undefined) parts.push(p.diffBudget ? `${p.diffBudget}-line PR budget` : 'no PR budget');
@@ -129,7 +131,7 @@ export interface Lease {
   pr: number | null;
   agentId: string | null;
   files: string[];
-  source: 'declared' | 'predicted' | 'pr';
+  source: 'declared' | 'predicted' | 'pr' | 'diff'; // diff: what the agent's worktree really changed (#398)
 }
 
 /** A lease-blocked issue starts after this long anyway, so no issue waits forever. */
@@ -178,11 +180,11 @@ export function leaseOverlap(files: string[], lease: string[]): string[] {
 }
 
 /**
- * The floor's leases now: each agent building or fixing an issue (the files they declared, else those predicted from
- * the issue) and each open PR (the files it changes). One lease per issue, its files merged. A lease ends on its own
+ * The floor's leases now: each agent building or fixing an issue (the files they declared, with those their worktree
+ * really changed (`real`, live leases) or else those predicted from the issue) and each open PR (the files it changes). One lease per issue, its files merged. A lease ends on its own
  * when the agent stops and the PR merges or closes: what isn't listed here any more holds nothing.
  */
-export function floorLeases(work: { agentId: string; issue: number; pr: number | null; declared: string[] | null; predicted: string[] }[], pulls: { number: number; issues: number[]; files: string[] }[]): Lease[] {
+export function floorLeases(work: { agentId: string; issue: number; pr: number | null; declared: string[] | null; predicted: string[]; real?: string[] | null }[], pulls: { number: number; issues: number[]; files: string[] }[]): Lease[] {
   const byIssue = new Map<number, Lease>();
   const add = (l: Lease) => {
     const had = byIssue.get(l.issue);
@@ -190,9 +192,12 @@ export function floorLeases(work: { agentId: string; issue: number; pr: number |
     had.files = [...new Set([...had.files, ...l.files])];
     had.pr ??= l.pr;
     had.agentId ??= l.agentId;
-    if (l.source === 'declared' || (l.source === 'pr' && had.source === 'predicted')) had.source = l.source;
+    if (l.source === 'declared' || l.source === 'diff' || (l.source === 'pr' && had.source === 'predicted')) had.source = l.source;
   };
-  for (const w of work) add({ issue: w.issue, pr: w.pr, agentId: w.agentId, files: w.declared ?? w.predicted, source: w.declared ? 'declared' : 'predicted' });
+  for (const w of work) {
+    if (w.real?.length) add({ issue: w.issue, pr: w.pr, agentId: w.agentId, files: [...(w.declared ?? []), ...w.real], source: 'diff' });
+    else add({ issue: w.issue, pr: w.pr, agentId: w.agentId, files: w.declared ?? w.predicted, source: w.declared ? 'declared' : 'predicted' });
+  }
   for (const p of pulls) for (const issue of p.issues.length ? p.issues : [-p.number]) add({ issue, pr: p.number, agentId: null, files: p.files, source: 'pr' });
   return [...byIssue.values()].filter((l) => l.files.length);
 }

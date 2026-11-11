@@ -28,7 +28,9 @@ import type { MemoryNote } from '../../shared/ceoMemory.ts';
 import { CHAT_KEEP } from '../../shared/chatPage.ts';
 import type { AgentStyle } from '../../shared/looks.ts';
 import type { CharterRecord } from '../../shared/charter.ts';
+import type { UseCase } from '../../shared/types/setup.ts';
 import type { CharterInsights } from '../../shared/charterStats.ts';
+import type { TaskAccounts } from '../../shared/accountDefault.ts';
 import type { DecisionsState } from '../../shared/decisions.ts';
 import type { RoundCause } from '../../shared/rounds.ts';
 import type { BlockedState } from '../liveState.ts';
@@ -86,6 +88,17 @@ export interface PersistedRepo {
   /** The charter besides its mission (#48), the CEO's pending proposal, who changed what, and the drift view's log. */
   charter: CharterRecord;
   ciOutage?: CiOutageState | null; // GitHub won't run its checks (#191)
+  setup?: FloorSetupRecord; // the setup advisor (#366); missing: not guessed yet
+}
+
+/** A floor's use case and what the manager said about its gaps (#366, shared/setup.ts). */
+export interface FloorSetupRecord {
+  useCase: UseCase | null;
+  guessed: boolean;
+  why: string;
+  snoozed: Record<string, number>; // gap id → Not now until
+  told: string[]; // gap ids notified about, while they stay open
+  review: boolean; // the new floor's checklist waits for the manager
 }
 
 /** A floor's CI outage (#191): why, since when, the last probe re-run, and when a run was last seen really starting. */
@@ -135,6 +148,7 @@ export interface PersistedAgent {
   turns: number;
   sessionId: string | null;
   sessionCli: AgentCli | null; // the CLI whose session sessionId is: only it can resume it
+  sessionAccount?: string; // the account whose folder holds it (#401); unset: not known
   lastError: string | null;
   logTail: LogLine[];
 }
@@ -226,6 +240,7 @@ export interface Persisted {
   experiments: LabState; // the lab's experiments and the issues in them (experiments.ts)
   questions: AgentQuestion[]; // agents waiting on an answer (shared/questions.ts)
   decisions: DecisionsState; // questions waiting on the manager (#114, shared/decisions.ts)
+  taskAccounts: TaskAccounts; // the account each open build or fix task runs on (#390, shared/accountDefault.ts)
 }
 
 export interface Shot {

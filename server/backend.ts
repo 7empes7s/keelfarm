@@ -31,6 +31,7 @@ import type { VoiceApi } from './voice.ts';
 import { openMeteo, type WeatherApi } from './weather.ts';
 import type { AgentTerminal } from './terminal.ts';
 import { readWorktree, type WorktreeRead } from './worktreeRead.ts';
+import * as liveDiff from './liveDiff.ts';
 import { checkoutFile, readRepoFile } from './repoFile.ts';
 import type { OpsHistory } from './metrics.ts';
 import type { CostRecord } from '../shared/costs.ts';
@@ -47,7 +48,7 @@ import type { LabRunner } from './testLab.ts';
 import { createLabRunner } from './testLabRunner.ts';
 import { claudeProjectsDir, findTranscript } from './history.ts';
 import type { HistoryEntry } from '../shared/history.ts';
-import type { CliView, ModelCatalogView, GhRepoSummary, IssueInfo, NoticeView, PhoneMessage, ProviderAccount, PullInfo } from '../shared/types.ts';
+import type { CliView, ModelCatalogView, GhRepoSummary, IssueInfo, NoticeView, PhoneMessage, ProviderAccount, PullInfo, UseCase } from '../shared/types.ts';
 import type { SampleFloor } from './chatSample.ts';
 import { realProbe } from './providers.ts';
 import { realKeyScan } from './keyScan.ts';
@@ -89,6 +90,12 @@ export interface Backend {
   prDiff(fullName: string, number: number, patch: boolean): Promise<github.PrDiff>;
   /** The CEO's worktree_file: a file or diff from an agent's worktree or branch (worktreeRead.ts). */
   readWorktree(r: WorktreeRead): Promise<string>;
+  /** Live leases (#398, liveDiff.ts): the files an agent's worktree changed since its merge-base with origin/<base>, and that merge-base. Read-only. */
+  worktreeChanges(dir: string, base: string): Promise<{ files: string[]; base: string }>;
+  /** The default branch's head in the floor's clone, as its last sync fetched it. */
+  mainHead(fullName: string, base: string): Promise<string>;
+  /** The files the default branch changed between two of its commits; null when unknown. */
+  mainFilesSince(fullName: string, from: string, to: string): Promise<string[] | null>;
   /** Chat file refs (repoFile.ts): the floor's main checkout has this plain file. */
   hasRepoFile(fullName: string, rel: string): boolean;
   /** A chat file ref's text on the floor's default branch; throws with what the viewer says. */
@@ -185,6 +192,8 @@ export interface Backend {
   scanForKeys(): Promise<RawKey[]>;
   /** The demo only: made-up keys and MCP servers for Settings → Providers, so a fresh demo office shows every category. */
   demoProviders?(): { keys: { provider: string; key: string; label: string }[]; mcp: (McpInput & { secrets?: Record<string, string> })[] };
+  /** The demo only (#366): the company's main use cases, repos listed but not moved in (a three.js game), and a floor's agent left signed out. */
+  demoSetup?(): { company: UseCase[]; spare: string[]; signedOut: { floor: number; model: string } };
   /** The demo only: a made-up past week for mission control, so a fresh demo office has numbers from the start. */
   seedOps?(repos: string[], now: number): OpsHistory;
   /** The demo only: a made-up week of sessions and merges for the cost ledger (#18), when it's empty. */
@@ -310,6 +319,9 @@ export const realBackend: Backend = {
   prDetails: github.prDetails,
   prDiff: github.prDiff,
   readWorktree,
+  worktreeChanges: liveDiff.worktreeChanges,
+  mainHead: (fullName, base) => liveDiff.mainHead(workspace.mainDir(fullName), base),
+  mainFilesSince: (fullName, from, to) => liveDiff.mainFilesSince(workspace.mainDir(fullName), from, to),
   hasRepoFile: (fullName, rel) => checkoutFile(workspace.mainDir(fullName), rel) !== null,
   readRepoFile: (fullName, branch, rel) => readRepoFile(workspace.mainDir(fullName), `origin/${branch}`, rel),
   issueDetails: github.issueDetails,

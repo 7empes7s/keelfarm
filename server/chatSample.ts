@@ -44,7 +44,7 @@ export function sampleChat(now: number, first = 1, cards?: SampleFloor): PhoneMe
     msg('manager', 'Plan the checkout fix for floor 1', 15, done),
     msg('manager', 'And can QA check the phone layout first?', 14.8, done),
     msg('ceo', 'Filed the checkout fix; the next free agent picks it up.', 14, { replyTo: first + 3 }),
-    msg('ceo', "Yes: floor 1's QA brief now checks 390 px before anything else.", 13.5, { replyTo: first + 4, reactions: [{ by: 'manager', emoji: '❤️' }, { by: 'manager', emoji: '👍' }] }),
+    msg('ceo', "Yes: floor 1's QA brief now checks 390 px before anything else.", 13.5, { replyTo: first + 4, reactions: [{ by: 'manager', emoji: '❤️' }, { by: 'manager', emoji: '👍' }], summary: 'Both messages are answered on your phone.', log: { steps: [{ label: 'Answered message 4', icon: '💬', state: 'done', ms: 400 }, { label: 'Answered message 5', icon: '💬', state: 'done', ms: 300 }], count: 2, ms: 24_000 } }), // the turn's recap folded into its last reply (#378)
     msg('manager', 'Go ahead and merge it once the checks are green', 10, { ...done, reactions: [{ by: 'ceo', emoji: '✅' }] }),
     ...(cards ? [msg('ceo', `Done: floor ${cards.floor}'s team, charter and QA brief are sorted. Tap a card to see each.`, 9.5, { actions: sampleCards(cards) })] : []),
     msg('manager', 'How do I see what landed on main and where the merge happens?', 9, done),

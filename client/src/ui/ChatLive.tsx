@@ -76,8 +76,8 @@ export function LiveBubble({ live, ceoName, linked, onFloor, onOpenLog }: { live
   );
 }
 
-/** A finished reply's steps as one row ("⚙ 6 steps · 1 action · 42 s ▸") that opens the round's log; its action cards stay above it. */
-export function StepsRow({ log, actions, used, linked, onFloor }: { log: StepLog | null; actions: number; used: UsedView | undefined } & Linked) {
+/** A finished reply's steps as one row ("⚙ 6 steps · 1 action · 42 s ▸") that opens the round's log, with `summary`, its turn's folded closing text (#378), first; its action cards stay above it. */
+export function StepsRow({ log, actions, used, summary, linked, onFloor }: { log: StepLog | null; actions: number; used: UsedView | undefined; summary?: string } & Linked) {
   const [open, setOpen] = useState(false);
   return (
     <div className="steps-row-wrap">
@@ -90,6 +90,11 @@ export function StepsRow({ log, actions, used, linked, onFloor }: { log: StepLog
       </button>
       {open && (
         <div className="steps-row-log">
+          {summary && (
+            <p className="steps-row-summary">
+              <strong>Summary</strong> {summary}
+            </p>
+          )}
           {log && <StepLogList steps={log.steps} now={0} linked={linked} onFloor={onFloor} />}
           {log && log.count > log.steps.length && <p className="steps-row-foot muted">{log.steps.length ? `and ${log.count - log.steps.length} earlier steps` : 'Only the newest replies keep each step after a reload'}</p>}
           {used && <p className="steps-row-foot muted">{usedLine(used)}</p>}

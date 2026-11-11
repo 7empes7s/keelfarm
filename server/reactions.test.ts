@@ -88,8 +88,9 @@ describe('reactions in the CEO chat', () => {
     const { swarm, ceo, byId, replies } = await office();
     const [a, b] = await Promise.all([swarm.messageCeo('Plan the checkout fix'), swarm.messageCeo('And check the phone layout first')]);
     await until(() => ceo().status === 'done');
-    expect(replies().map((m) => m.replyTo)).toEqual([a.id, b.id]);
+    expect(replies().map((m) => m.replyTo)).toEqual([a.id, b.id]); // its closing recap is no third bubble (#378)
     expect(replies().every((m) => m.text.trim())).toBe(true);
+    expect(replies()[1]).toMatchObject({ summary: 'Both messages are answered on your phone.', log: { count: expect.any(Number) } });
     expect([byId(a.id).status, byId(b.id).status]).toEqual(['done', 'done']);
   });
 

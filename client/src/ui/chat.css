@@ -166,6 +166,12 @@
   margin: var(--ds-space-1) 0 0;
   font-size: var(--ds-text-xs);
 }
+.steps-row-summary {
+  margin: 0 0 var(--ds-space-1);
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-xs);
+  overflow-wrap: anywhere;
+}
 
 /* a floor named in the chat: one line high, the text's own size (#150) */
 .floor-chip {

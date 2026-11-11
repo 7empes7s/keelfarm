@@ -8,6 +8,7 @@ import { browserProblem, playwrightMcp } from './browser.ts';
 import { HOME_DIR } from './config.ts';
 import { BOX_CDP, BoxPty, boxHooksReady, finishedTurn, lookAtBoxCli, readFrom, type BoxCliRecord } from './boxCli.ts';
 import { BOX_BIN, BOX_CLI_BIN, BOX_HOME, boxSessionDir, signInCommand, tmuxKill } from './boxScripts.ts';
+import { adoptsCli } from './cliAdopt.ts';
 import { cliLabel, CLIS, codexThread, commandFor, geminiLimit, interruptions, isCli, launchArgs, lostLogin, prepareLaunch, writeHelperFiles } from './clis.ts';
 import { answerNote, countAnswer, keyBytes, screenStep, signInError } from './cliScreens.ts';
 import { adoptPty, discardPty, hooksReady as keeperHooksReady, keeperHookUrl, keeperPid, leaveKeeper, spawnPty, startKeeper, terminalsAvailable, type Pty } from './ptyClient.ts';
@@ -40,6 +41,7 @@ import { resumableSession, TranscriptTail } from './transcriptTail.ts';
 import { programStatusStep, ProgramStatusReporter, type ProgramStatus } from './programStatus.ts';
 import { envSecrets } from './journal.ts';
 import { mcpGone, wireCli } from './cliWire.ts';
+import { lostSession } from './sessionResume.ts';
 
 // One agent session as the real CLI in a pseudo-terminal: the same contract as the Agent SDK runner (log lines, the
 // current tool, the final text, finished), so the rest of the office doesn't care which runtime an agent uses.
@@ -172,6 +174,7 @@ interface LiveCli {
   token: string;
   dir: string;
   resumeId: string | null; // the session a follow-up resumes
+  account?: string; // the account it runs on (#390): a follow-up on another account starts its own CLI
   statusLine: string;
   /** Browser screenshots already passed on (Codex and OpenCode: collected from the browser's output folder). */
   shots: Set<string>;
@@ -456,18 +459,13 @@ function idleHook(live: LiveCli, b: Record<string, unknown>): Record<string, unk
 
 // ---------- the session ----------
 
-/** Claude Code was told to resume a conversation that isn't on disk (it says so and exits 1). */
-export const lostConversation = (screen: string) => /No conversation found with session ID/i.test(screen);
-
 export function startCliSession(opts: SessionOptions, callbacks: SessionCallbacks): SessionHandle {
   const term = opts.terminal!;
   // A follow-up to the session a CLI is still waiting in picks that CLI up again, and so does an office that restarted
   // while it worked (reattach); anything else replaces it.
   const prev = lives.get(term);
   const waiting = !!prev?.proc && !prev.session;
-  // A CLI is only picked up where the session is to run: on this computer, or in that same Box.
-  const sameHost = (prev?.box?.boxId ?? null) === (opts.box?.boxId ?? null);
-  const adopt = waiting && (!!opts.reattach || (sameHost && prev!.cli === (opts.cli ?? 'claude') && !!opts.resumeSessionId && prev!.resumeId === opts.resumeSessionId));
+  const adopt = waiting && adoptsCli({ ...prev!, boxId: prev!.box?.boxId ?? null }, { ...opts, boxId: opts.box?.boxId ?? null });
   if (prev && !adopt) endLive(prev);
   let live: LiveCli | null = adopt ? prev! : null;
   const cli = live?.cli ?? opts.cli ?? 'claude';
@@ -821,9 +819,9 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
 
   /** The CLI quit on its own: /exit typed in the terminal, a crash, or it couldn't start (not signed in, bad flag…). */
   const exited = (exitCode: number) => {
-    if (cli === 'claude' && opts.resumeSessionId && !begun && lostConversation(term.screen())) {
+    if (opts.resumeSessionId && !begun && lostSession(cli, term.screen())) {
       cb.sessionId(null);
-      finish({ ok: false, text: '', errors: [`${label} couldn't find the conversation it was resuming, so the next session starts a new one.`] });
+      finish({ ok: false, text: '', errors: [`${label} couldn't find the session it was resuming.`], lostSession: true });
       return;
     }
     const ok = exitCode === 0 && (lastText !== '' || (cli !== 'claude' && Date.now() - started > 20_000));
@@ -961,7 +959,7 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
   if (cli === 'claude' && opts.resumeSessionId) cb.sessionId(sessionId);
   term.note(`── ${label}${opts.label ? ` · ${opts.label}` : ''}${box ? ' · ☁ cloud machine' : ''} ──`);
   const resumeId = cli === 'claude' ? sessionId : (opts.resumeSessionId ?? null);
-  const l: LiveCli = { agentId: opts.agentId ?? '', cli, term, proc: null, token, dir, resumeId, statusLine, shots: new Set(), session: { hook, exited }, ...(box ? { box: { api: box.api, boxId: box.boxId } } : {}) };
+  const l: LiveCli = { agentId: opts.agentId ?? '', cli, term, proc: null, token, dir, resumeId, ...(opts.account ? { account: opts.account } : {}), statusLine, shots: new Set(), session: { hook, exited }, ...(box ? { box: { api: box.api, boxId: box.boxId } } : {}) };
 
   // Starting up: answer the first-run and warning screens the office knows (cliScreens.ts), and end a session that
   // shows a sign-in only the manager can do, so it never sits at 0 turns (#360).

@@ -70,6 +70,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
       floorDetail: (a) => JSON.stringify(floorDetail(this.fullStatus(), a.floor), null, 1),
       agentDetail: (a) => this.agentDetail(a),
       setFloorProfile: acts((a) => this.setFloorProfile(a)),
+      applySetup: acts((a) => this.ceoApplySetup(a)),
       setOfficePlaybook: acts((a) => `Saved the office playbook (${this.setOfficePlaybook(a.playbook).length} of ${OFFICE_PLAYBOOK_MAX} characters).`),
       scaleTeam: acts((a) => this.didFor(this.scaleTeam(a), a.floor, [], a.reason, `floor ${a.floor}'s team set to ${a.size}`)),
       configureAgent: acts((a) => this.didForAgent(this.configureAgent(a), a.agent_id)),
@@ -100,6 +101,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
       prDiff: (a) => this.prDiff(a),
       sendTelegram: (a) => this.sendTelegram(a),
       scanKeys: (a) => this.keyScanForCeo(!!a.rescan),
+      makeDefaultAccount: acts((a) => this.makeDefaultAccount(a.account, !!a.switch_now)),
       editMessage: async (a) => this.editCeoMessage(a),
       waitFor: (a) => this.waitFor(a),
       askManager: (a) => this.askManager(a),
@@ -203,6 +205,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
           charter: renderCharter(charterOf(r.mission, r.charter)) || null,
           charterProposalWaiting: !!r.charter.proposal,
           profile: r.summary || null,
+          setup: this.floorSetupLine(r), // its use case and setup gaps (#366)
           qaBrief: r.qaBrief || null,
           playbook: r.playbook || null,
           preview: { command: r.preview.command, env: r.preview.env, status: this.previews.view(r).status },
@@ -271,7 +274,7 @@ export abstract class SwarmCeoTools extends SwarmTeam {
           maxAgentsPerFloor: s.maxAgents,
           sessionLimit: s.sessionLimit || 'none',
           sessionsRunning: this.running(),
-          usage: `${usageLabel(this.usageNow(), Date.now())} · ${usageLine(this.usageSources())}`, // every account and provider (#361); pacing follows the agents' Claude login
+          usage: [usageLabel(this.usageNow(), Date.now()), this.nextUsage(), usageLine(this.usageSources())].filter(Boolean).join(' · '), // every account and provider (#361); the next session's account named (#383)
           experiments: this.lab.summary(), // only the manager starts, stops and promotes them
           providers: this.providersLine(), // every connection on Settings → Providers (#362)
           accounts: this.accounts.view().accounts.map((x) => `${x.id} (${x.cli}, ${x.kind}${x.tags.length ? `, tags ${x.tags.join('/')}` : ''}): ${x.status}`),
