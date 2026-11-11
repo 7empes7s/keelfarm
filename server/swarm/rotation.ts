@@ -13,7 +13,8 @@ import { allOutText, detectLimit, switchesForCeo, switchHandover, switchText, ty
 import { ACCOUNT_CLIS, LOGIN_ENV } from '../../shared/accounts.ts';
 import { readingOf, usedPercent } from '../../shared/usage.ts';
 import type { AccountCli, AccountSwitch, AccountsView, AgentCli } from '../../shared/types.ts';
-import { CEO_DIR, LIMIT_PAUSE_MS, type PersistedAgent } from './model.ts';
+import { canResume, heldElsewhere } from '../sessionResume.ts';
+import { BUSY, CEO_DIR, LIMIT_PAUSE_MS, type PersistedAgent } from './model.ts';
 import { SwarmUsage } from './usage.ts';
 
 const clock = (t: number) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -23,6 +24,8 @@ const DEMO_LIMIT_MS = 3 * 60_000;
 const SIGN_IN_NOTICE_MS = 60 * 60_000;
 /** What an agent's fresh session on another account (a limit, or Switch now) hears first: its worktree is as the last one left it. */
 export const SWITCHED_NOTE = 'Your previous session on this task ran on another account; this is a fresh session on a new one. Your worktree and branch are as it left them: check git status and carry on.';
+/** What a fresh session hears when the one it was to resume isn't there (#401). */
+const LOST_NOTE = "Your previous session on this task couldn't be resumed; this is a fresh session. Your worktree and branch are as it left them: check git status and carry on.";
 /** What an agent's session resumed on the next account hears: the task is already above. */
 const RESUMED_NOTE = 'Your session stopped at an account limit and now continues on another account. Carry on with the task from where you stopped.';
 
@@ -31,6 +34,8 @@ export abstract class SwarmRotation extends SwarmUsage {
   private onAccount = new Map<string, Set<(hit: LimitHit) => void>>();
   /** The account each agent's latest session started on (null: the built-in login): where a stuck CEO is (#375). */
   protected sessionAccount = new Map<string, string | null>();
+  /** Which account's folder holds each agent's latest session (its id, the built-in login's too), for resuming it there (#401). */
+  protected sessionOn = new Map<string, string>();
   /** Coding agents' defaults that were out at the last look: one "is back" line when they're free again (#390). */
   private defaultsOut = new Set<string>();
 
@@ -41,14 +46,56 @@ export abstract class SwarmRotation extends SwarmUsage {
    * A cloud agent's runs on the cloud's credentials (docs/cloud.md), OpenCode on its own setup.
    */
   protected startOnAccount(a: PersistedAgent, opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
+    // A session its CLI can't find starts again fresh on the same task, once, with nothing counted (#401); if someone
+    // else has the task meanwhile, it's let go instead.
+    let current: SessionHandle;
+    let stopped = false;
+    let again = false;
+    const go = (o: SessionOptions) => {
+      current = this.rotating(a, o, {
+        ...cb,
+        finished: (result) => {
+          if (!result.lostSession || again || stopped) return cb.finished(result);
+          again = true;
+          const holder = heldElsewhere(a, this.state.agents.map((x) => ({ ...x, busy: BUSY.includes(x.status) })));
+          if (holder) return cb.finished({ ...result, errors: [`${holder.name} already has it, so ${a.name} let it go`] });
+          this.appendLog(a, [{ kind: 'system', text: `↻ ${result.errors[0] ?? "The session to resume isn't there."} Starting a fresh one on the same task.` }]);
+          go(this.fresh(a, o, LOST_NOTE));
+        },
+      });
+    };
+    go(opts);
+    return {
+      send: (text) => current.send(text),
+      stop: () => {
+        stopped = true;
+        current.stop();
+      },
+      get kept() {
+        return current.kept;
+      },
+    };
+  }
+
+  /** The session itself: on its account, moving to the next one on a limit. */
+  private rotating(a: PersistedAgent, opts: SessionOptions, cb: SessionCallbacks): SessionHandle {
     const cli = opts.terminal ? (opts.cli ?? 'claude') : 'claude';
-    if (a.host === 'box' || cli === 'opencode') return this.backend.startSession(opts, cb);
+    if (a.host === 'box' || cli === 'opencode') {
+      this.sessionOn.delete(a.id);
+      return this.backend.startSession(this.resumable(a, opts, cli, undefined), cb);
+    }
     const others = this.fallbackClis(a, opts);
-    if (!this.accounts.canRotate(cli, others)) return this.onUse(a, opts, cb, this.accounts.use(a.account, cli), null); // one account: as before rotation
+    if (!this.accounts.canRotate(cli, others)) {
+      const use = this.accounts.use(a.account, cli);
+      return this.onUse(a, this.resumable(a, opts, cli, use?.id), cb, use, null); // one account: as before rotation
+    }
     // A build or fix task stays on the account it started on (#390); Switch now moves it here, to a fresh session.
     const key = taskKey(a);
     const rec = key ? this.state.taskAccounts[key] : undefined;
     if (rec?.move) opts = { ...opts, resumeSessionId: undefined, prompt: this.freshPrompt(a, { ...opts, resumeSessionId: undefined }) };
+    // Else a session to resume goes back to the account holding it while it's usable (#401).
+    const first = this.accounts.use(a.account, cli, rec && !rec.move ? rec.account : opts.resumeSessionId ? a.sessionAccount : undefined);
+    opts = this.resumable(a, opts, cli, first?.id);
     const tried: string[] = [];
     let current: SessionHandle;
     let stopped = false;
@@ -92,7 +139,7 @@ export abstract class SwarmRotation extends SwarmUsage {
         attempt({ ...retry, cli: next.cli, model: this.modelFor(a, next.cli), tools: this.sessionToolsFor(a, next.cli) }, next.cli, onCli, next.use, s);
       });
     };
-    attempt(opts, cli, cb, this.accounts.use(a.account, cli, rec && !rec.move ? rec.account : undefined), null);
+    attempt(opts, cli, cb, first, null);
     return {
       send: (text) => current.send(text),
       stop: () => {
@@ -103,6 +150,23 @@ export abstract class SwarmRotation extends SwarmUsage {
         return current.kept;
       },
     };
+  }
+
+  /**
+   * The agent's saved session is resumed only by the CLI that made it, on the account holding it (#401): else a fresh
+   * session. (A session id that isn't the agent's own, a fix resuming the PR's author's, can't be checked here.)
+   */
+  private resumable(a: PersistedAgent, opts: SessionOptions, cli: AgentCli, account: string | undefined): SessionOptions {
+    if (!opts.resumeSessionId || opts.reattach || opts.resumeSessionId !== a.sessionId) return opts;
+    if (canResume({ cli: a.sessionCli, account: a.sessionAccount }, { cli, account }, (id) => this.accounts.sharesConversations(id))) return opts;
+    this.appendLog(a, [{ kind: 'system', text: `↻ The last session was ${cliLabel(a.sessionCli ?? 'claude')}'s${a.sessionAccount && a.sessionAccount !== account ? ` on ${this.accounts.label(a.sessionAccount)}` : ''}: starting a fresh one.` }]);
+    Object.assign(a, { sessionId: null, sessionCli: null, sessionAccount: undefined });
+    return this.fresh(a, opts, LOST_NOTE);
+  }
+
+  /** The session started fresh instead of resuming: what it hears first. */
+  private fresh(a: PersistedAgent, opts: SessionOptions, note: string): SessionOptions {
+    return { ...opts, resumeSessionId: undefined, typed: false, reattach: false, prompt: this.freshPrompt(a, opts, note) };
   }
 
   // ---------- the default and task stickiness (#390) ----------
@@ -151,9 +215,9 @@ export abstract class SwarmRotation extends SwarmUsage {
   }
 
   /** A fresh session's prompt after a switch: an agent hears its worktree is as it was, a CEO that was mid-conversation gets a handover. */
-  private freshPrompt(a: PersistedAgent, opts: SessionOptions): string {
+  private freshPrompt(a: PersistedAgent, opts: SessionOptions, note = SWITCHED_NOTE): string {
     if (opts.readOnly) return opts.prompt;
-    if (a.role !== 'ceo') return `${SWITCHED_NOTE}\n\n${opts.prompt}`;
+    if (a.role !== 'ceo') return `${note}\n\n${opts.prompt}`;
     return opts.resumeSessionId ? `${switchHandover(this.state.messages, path.join(CEO_DIR, 'NOTES.md'))}\n\n${opts.prompt}` : opts.prompt;
   }
 
@@ -162,9 +226,13 @@ export abstract class SwarmRotation extends SwarmUsage {
     const cli = opts.terminal ? (opts.cli ?? 'claude') : 'claude';
     // Gemini CLI on the manager's own login: its limit is its own, not a pause for the office (paced on Claude's).
     const own = cli === 'gemini' ? { ...cb, limited: undefined } : cb;
-    if (!use) return this.backend.startSession(opts, ended ? { ...own, finished: (r) => ended(r, null) } : own);
+    if (!use) {
+      this.sessionOn.delete(a.id);
+      return this.backend.startSession(opts, ended ? { ...own, finished: (r) => ended(r, null) } : own);
+    }
     this.readyLogin(a, use, cli, opts.cwd);
     this.sessionAccount.set(a.id, use.builtIn ? null : use.id);
+    this.sessionOn.set(a.id, use.id);
     this.spend.account(a.id, use.id);
     this.accounts.emit();
     const env = { ...opts.env, ...use.env };
