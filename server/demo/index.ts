@@ -5,6 +5,7 @@ import './desks.ts';
 import './sessions.ts';
 import './tools.ts';
 import './ceoReplies.ts';
+import './managerAsks.ts';
 import './charts.ts';
 import './previews.ts';
 import './office.ts';
