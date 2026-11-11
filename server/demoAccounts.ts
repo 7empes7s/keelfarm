@@ -8,6 +8,8 @@ import { HOME_DIR } from './config.ts';
 import type { AccountsDeps } from './accounts.ts';
 import type { UsageApi } from './usageSources.ts';
 import { codexReadings } from '../shared/usageSources.ts';
+import type { CostRecord } from '../shared/costs.ts';
+import { startOfDay } from './metrics.ts';
 import type { ProviderAccount, UsageReading } from '../shared/types.ts';
 
 const HOUR = 60 * 60_000;
@@ -23,6 +25,27 @@ const SEED: ProviderAccount[] = [
   { id: 'codex-pro', cli: 'codex', kind: 'subscription-login', label: 'ChatGPT Pro', tags: ['pro'], priority: 2, enabled: true, plan: 'Pro' }, // never signed in: the usage card's Sign in (#404)
   { id: 'gemini-plus', cli: 'gemini', kind: 'subscription-login', label: 'Google AI Plus', tags: ['gemini'], priority: 0, enabled: true, plan: 'Plus' }, // the demo's Gemini CLI agent runs on it (#365)
 ];
+
+/**
+ * The demo ledger's sessions on the seeded accounts (#409): a pinned agent's on their account, a Codex or Gemini CLI
+ * agent's on that login, and a share of the rest on the other Claude accounts (the API key's never today, under its
+ * daily cap), so every account's usage sheet has a window to split. Pure: no draws.
+ */
+export function demoAccountSpend(records: CostRecord[], agents: readonly { id: string; cli?: string; account?: string }[], now: number): CostRecord[] {
+  const today = startOfDay(now);
+  const of = new Map(agents.map((a) => [a.id, a]));
+  let n = 0;
+  return records.map((r) => {
+    if (r.type !== 'session') return r;
+    const a = of.get(r.agentId);
+    if (a?.account) return { ...r, account: a.account };
+    if (a?.cli === 'codex') return { ...r, account: 'codex-login', model: 'gpt-6.1-sol' };
+    if (a?.cli === 'gemini') return { ...r, account: 'gemini-plus', model: 'gemini-3-pro' };
+    const slot = n++ % 6;
+    const account = slot === 1 ? 'claude-keelop' : slot === 3 ? 'claude-ultra' : slot === 5 && r.at < today ? 'claude-apikey' : undefined;
+    return account ? { ...r, account } : r;
+  });
+}
 
 /** Login folders the demo has "signed in": a session on any other login account opens on its sign-in (demo/sessions.ts). */
 export const demoSignedIn = new Set<string>();

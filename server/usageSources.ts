@@ -5,6 +5,8 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { accountSource, anthropicCosts, boxSource, elevenLabsSource, openaiCosts, orgSource, pushHistory, shownAccounts, usageAlerts, worstFirst, worstPct, type UsageAlert } from '../shared/usageSources.ts';
+import { usageSplit } from '../shared/usageSplit.ts';
+import type { CostSession } from '../shared/costs.ts';
 import type { AccountView, UsageSource } from '../shared/types.ts';
 
 /** The providers' own APIs (usageApi.ts; the demo's are fake). Each answers the provider's JSON, or throws a UsageFetchError. */
@@ -33,8 +35,8 @@ export interface UsageBoardDeps {
   keys: () => UsageKeys;
   /** Boxes on the Upstash account and the plan's limit; null without an Upstash key. */
   boxes: () => { total: number; running: number; limit: number } | null;
-  /** The cost ledger's sessions, for API keys' spend this week. */
-  spend: () => readonly { at: number; usd: number; account?: string }[];
+  /** The cost ledger's sessions, for API keys' spend this week and who spent each account's window (#409). */
+  spend: () => readonly CostSession[];
   /** Where the told notifications are kept (<SWARM_HOME>/usage-alerts.json). */
   alertsFile: string;
   changed: () => void;
@@ -67,8 +69,9 @@ export class UsageBoard {
   /** Every source, worst first: the accounts' rows from their view, Boxes now, the fetched ones as last read. */
   sources(accounts: readonly AccountView[], now = Date.now()): UsageSource[] {
     const week = new Map<string, number>();
-    for (const l of this.deps.spend()) if (l.account && now - l.at < 7 * DAY) week.set(l.account, (week.get(l.account) ?? 0) + l.usd);
-    const rows = shownAccounts(accounts).map((a) => accountSource(a, Math.round((week.get(a.id) ?? 0) * 100) / 100, now));
+    const lines = this.deps.spend();
+    for (const l of lines) if (l.account && now - l.at < 7 * DAY) week.set(l.account, (week.get(l.account) ?? 0) + l.usd);
+    const rows = shownAccounts(accounts).map((a) => accountSource(a, Math.round((week.get(a.id) ?? 0) * 100) / 100, now, usageSplit(lines, a, now)));
     const b = this.deps.boxes();
     if (b) rows.push(boxSource(b, b.limit, now));
     rows.push(...this.fetched.values());
