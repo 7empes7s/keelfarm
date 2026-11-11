@@ -1,7 +1,10 @@
 // The demo's Providers & accounts (#247): made-up accounts (a second Max subscription, an Ultra login whose token
-// expired after its week reset, an Anthropic API key, an OpenAI key), a Test that never leaves the computer, and
+// expired after its week reset, an Anthropic API key, an OpenAI key, a Google AI Plus login), a Test that never leaves the computer, and
 // sign-ins drawn as the CLIs' own (demoSignIn.ts).
+import fs from 'node:fs';
+import path from 'node:path';
 import type { AccountsBackend } from './backend.ts';
+import { HOME_DIR } from './config.ts';
 import type { AccountsDeps } from './accounts.ts';
 import type { UsageApi } from './usageSources.ts';
 import { codexReadings } from '../shared/usageSources.ts';
@@ -17,6 +20,7 @@ const SEED: ProviderAccount[] = [
   { id: 'claude-ultra', cli: 'claude', kind: 'subscription-login', label: 'Claude Ultra', tags: ['ultra'], priority: 3, enabled: true, plan: 'Ultra' },
   { id: 'claude-apikey', cli: 'claude', kind: 'api-key', label: 'Anthropic API', tags: ['api'], priority: 2, enabled: true, plan: 'API', dailyCostCap: 20 },
   { id: 'codex-apikey', cli: 'codex', kind: 'api-key', label: 'OpenAI API', tags: ['api'], priority: 1, enabled: false, plan: 'API' },
+  { id: 'gemini-plus', cli: 'gemini', kind: 'subscription-login', label: 'Google AI Plus', tags: ['gemini'], priority: 0, enabled: true, plan: 'Plus' }, // the demo's Gemini CLI agent runs on it (#365)
 ];
 
 /** Login folders the demo has "signed in": a session on any other login account opens on its sign-in (demo/sessions.ts). */
@@ -25,7 +29,7 @@ export const demoSignedIn = new Set<string>();
 export function demoAccounts(signIn: AccountsDeps['signIn']): AccountsBackend {
   const signedIn = demoSignedIn;
   signedIn.clear();
-  for (const id of ['claude-keelop', 'claude-ultra']) signedIn.add(id);
+  for (const id of ['claude-keelop', 'claude-ultra', 'gemini-plus']) signedIn.add(id);
   return {
     check: async (a) => {
       await new Promise((r) => setTimeout(r, 300));
@@ -45,8 +49,22 @@ export function demoAccounts(signIn: AccountsDeps['signIn']): AccountsBackend {
         exited(code);
       });
     },
+    shareFrom: demoClaudeHome,
     seed: () => ({ accounts: SEED.map((a) => ({ ...a, tags: [...a.tags] })), keys: { 'claude-apikey': 'sk-ant-demo-0000000000000000demo', 'codex-apikey': 'sk-demo-00000000000000000000demo' } }),
   };
+}
+
+/** The demo's "built-in login folder" (#377): a memory file, settings and a CLAUDE.md the seeded logins share. */
+function demoClaudeHome(): string {
+  const dir = path.join(HOME_DIR, 'demo-claude');
+  const memory = path.join(dir, 'projects', 'demo-ceo', 'memory');
+  fs.mkdirSync(memory, { recursive: true });
+  const seed = (file: string, text: string) => fs.existsSync(file) || fs.writeFileSync(file, text);
+  seed(path.join(memory, 'MEMORY.md'), '- [Manager prefers short replies](short-replies.md)\n');
+  seed(path.join(memory, 'short-replies.md'), '---\nname: short-replies\ndescription: The manager reads on a phone\n---\nKeep replies short.\n');
+  seed(path.join(dir, 'CLAUDE.md'), '# Demo user instructions\n');
+  seed(path.join(dir, 'settings.json'), '{}\n');
+  return dir;
 }
 
 // ---------- usage for every provider (#361) ----------

@@ -5,6 +5,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { prepareGeminiHome } from './geminiHome.ts';
 
 /** What a Claude Code config gets: keys set, keys only filled in when missing, and per-project flags. */
 export interface ClaudeSeed {
@@ -104,7 +105,8 @@ export function builtInPrefs(file = builtInClaudeConfig()): Record<string, unkno
  * Sets up an account's own login folder before a session (or its sign-in) starts there. `dirs`: the worktrees the
  * session trusts. A config that isn't JSON is left alone (the CLI would rewrite it anyway). Returns whether it changed.
  */
-export function prepareLogin(cli: 'claude' | 'codex', dir: string, dirs: readonly string[], opts: { version?: string | null; prefs?: Record<string, unknown> } = {}): boolean {
+export function prepareLogin(cli: 'claude' | 'codex' | 'gemini', dir: string, dirs: readonly string[], opts: { version?: string | null; prefs?: Record<string, unknown> } = {}): boolean {
+  if (cli === 'gemini') return prepareGeminiHome(dir, dirs); // #365
   if (cli === 'codex') {
     if (!dirs.length) return false;
     const file = path.join(dir, 'config.toml');

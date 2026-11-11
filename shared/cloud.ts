@@ -56,8 +56,8 @@ export function cloudSettings(base: CloudSettings, raw: unknown): CloudSettings 
   };
 }
 
-/** A CLI that can run in a Box (OpenCode can't yet). */
-export const boxCli = (cli: AgentCli) => cli !== 'opencode';
+/** A CLI that can run in a Box (OpenCode and Gemini CLI can't yet). */
+export const boxCli = (cli: AgentCli): cli is 'claude' | 'codex' => cli === 'claude' || cli === 'codex';
 
 /** Where an agent works, for their card: "☁ Cloud" or "This computer". */
 export const hostLabel = (host: MachineHost | '' | undefined) => (host === 'box' ? '☁ Cloud (Upstash Box)' : 'This computer');
