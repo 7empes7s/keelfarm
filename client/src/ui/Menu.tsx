@@ -5,6 +5,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { pushLayer } from './backStack';
 import { Icon } from './Icon';
+import { badgeCount } from './badgeCount';
 import { menuKey, menuPlacement, menuSections, openKey, type MenuItem } from './menuLogic';
 
 export type { MenuItem } from './menuLogic';
@@ -157,7 +158,7 @@ export function Menu({
         </span>
         {badge > 0 && (
           <span className="badge badge-dot ds-menu-badge" aria-hidden>
-            {badge}
+            {badgeCount(badge)}
           </span>
         )}
       </button>

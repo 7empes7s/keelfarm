@@ -53,6 +53,7 @@ import { PreviewsHost, PreviewsRailButton, usePreviewsLink } from './PocketPrevi
 import { pushLayer } from '../ui/backStack';
 import { markTeamLanding, pocketJump } from './pocketJump';
 import { Icon, IconText } from '../ui/Icon';
+import { badgeCount } from '../ui/badgeCount';
 import type { IconName } from '../ui/icons';
 import { floorColumns, statusLine } from './companyLayout';
 import { layerOf, panels, topPanel, usePanels, type PanelEntry, type Panels } from '../ui/panels';
@@ -339,7 +340,7 @@ function ChatButton({ open, toggle }: { open: boolean; toggle: () => void }) {
         {working && <span className="pk-chat-working" />}
       </span>
       {name}
-      {unread > 0 && !open && <span className="badge badge-dot">{unread}</span>}
+      {unread > 0 && !open && <span className="badge badge-dot">{badgeCount(unread)}</span>}
     </button>
   );
 }
@@ -687,7 +688,7 @@ export default function Pocket() {
               >
                 <span className="pk-tab-icon">
                   <Icon name={icon} />
-                  {badge > 0 && <span className="badge badge-dot">{badge}</span>}
+                  {badge > 0 && <span className="badge badge-dot">{badgeCount(badge)}</span>}
                 </span>
                 <span className="pk-tab-label">{label}</span>
               </button>
