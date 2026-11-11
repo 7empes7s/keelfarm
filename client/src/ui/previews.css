@@ -284,6 +284,10 @@
   justify-content: flex-start;
   gap: var(--ds-space-1);
 }
+/* beside the timer chip there's room for the channel only (PR #123 and a 📌 chip at 390 px) */
+.app-slim:has(> .use-chip) .pv-open-project {
+  display: none;
+}
 /* only the switcher gives way in the slim bar: the chip, Full screen and ⋯ keep their size */
 .app-slim > :not(.pv-open-list) {
   flex-shrink: 0;
