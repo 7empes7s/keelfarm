@@ -43,6 +43,7 @@ export interface PhoneMessage {
   refs?: ChatRef[]; // the office things it names (@Ada, floor 2 #13, file: …), in text order (shared/chatRefs.ts)
   research?: { topic: string; repoId?: string }; // the CEO's reply to a research job (repoId: from a floor's Plan dialog); a reply to it becomes a plan (server/research.ts)
   question?: string; // the CEO's: it asks the manager this agent question (its id): answers go to the agent
+  answered?: number; // that question's answer reached the agent then (#508)
   steps?: string[]; // the CEO's, before #150: the steps it took for this reply, as labels
   log?: StepLog; // the CEO's: the steps it took for this reply, timed (shared/ceoStream.ts)
   summary?: string; // the CEO's: its turn's closing text after this reply, folded into the steps row (#378, shared/reactions.ts)
