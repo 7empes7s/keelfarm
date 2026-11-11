@@ -31,8 +31,10 @@ test('approvals: each count in the summary stays on one line with its label', as
 
 test("a usage card's plan warning opens the card like the rest of it", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  const root = await pocket(page, 'company');
-  const warning = root.locator('.us-row .plan-flag-warn').first();
+  // Mission control lists every source; Company's card shows only the worst four, which may not hold the warning.
+  await page.goto('/?pocket=1#company/ops');
+  await expect(page.locator('html[data-route-ready="1"]')).toBeAttached();
+  const warning = page.locator('.us-row .plan-flag-warn').first();
   await warning.scrollIntoViewIfNeeded();
   // The warning lets taps fall through to the card's button: tap the spot, as a finger would.
   const b = (await warning.boundingBox())!;
