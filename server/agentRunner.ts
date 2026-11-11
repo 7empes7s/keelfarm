@@ -307,6 +307,15 @@ export function describeOfficeTool(action: string, input: Record<string, unknown
       return `🔄 rerun_checks PR #${String(input.pr ?? '?')}${floor}`;
     case 'close_pull':
       return `🗂️ close_pull PR #${String(input.pr ?? '?')}${floor}`;
+    case 'merge_pull':
+      return `🔀 merge_pull PR #${String(input.pr ?? '?')}${floor}`;
+    case 'set_issue_priority':
+      return `⭐ set_issue_priority #${String(input.number ?? '?')}${floor}`;
+    case 'set_floor_switches':
+    case 'apply_charter':
+      return `🎛️ ${action}${floor}`;
+    case 'run_experiment':
+      return `🧪 run_experiment ${String(input.action ?? '')} ${String(input.experiment ?? '')}`;
     case 'attach_file':
       return `📎 attach_file ${path.basename(String(input.path ?? ''))}`;
     case 'keep_file':

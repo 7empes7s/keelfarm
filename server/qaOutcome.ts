@@ -28,6 +28,14 @@ export function lastQaRound(rec: QaRoundRecord): boolean {
   return rec.round - rec.retests >= MAX_QA_ROUNDS;
 }
 
+/**
+ * A retry of QA that the manager or the CEO asked for (#403). At the round cap the last report goes, so the next round
+ * is a full fresh test with a new session and a new report, not a re-test of the old findings; below it nothing changes.
+ */
+export function freshRetry(rec: QaRoundRecord): { summary: null; checks: []; commentUrl: null; fixInstructions: null; testedSha: null; fixReason: null; shots: [] } | Record<string, never> {
+  return lastQaRound(rec) ? { summary: null, checks: [], commentUrl: null, fixInstructions: null, testedSha: null, fixReason: null, shots: [] } : {};
+}
+
 /** Decide where a PR goes after QA. pr: its mergeability right now, or null when it wasn't (or couldn't be) asked. */
 export function qaOutcome(pass: boolean, rec: QaRoundRecord, pr: QaPull | null): QaNext {
   if (pass) return 'passed';

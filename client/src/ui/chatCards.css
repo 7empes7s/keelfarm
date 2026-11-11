@@ -31,6 +31,22 @@ button.action-card {
 button.action-card:hover {
   background: var(--ds-surface-hover);
 }
+/* an action card with its Undo beside it (#403) */
+.action-row {
+  display: flex;
+  align-items: stretch;
+  gap: var(--ds-space-1);
+  min-width: 0;
+}
+.action-row > .action-card {
+  flex: 1;
+}
+.action-undo {
+  flex: none;
+}
+.action-card-asked {
+  color: var(--ds-text-muted);
+}
 .action-card-refused {
   border-left-color: var(--ds-bad-fill);
 }
