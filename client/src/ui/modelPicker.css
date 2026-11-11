@@ -13,6 +13,11 @@
 .model-pick {
   width: 100%;
 }
+.model-picker > .model-pick {
+  /* a value like the selects beside it (coding agent, effort), not a button's bold label */
+  font-size: var(--ds-text-md);
+  font-weight: normal;
+}
 .model-pick-text {
   flex: 1;
   min-width: 0;

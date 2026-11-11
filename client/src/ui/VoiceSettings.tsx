@@ -384,8 +384,10 @@ export function VoiceSettings() {
         </>
       )}
       <label className="toggle">
-        <input type="checkbox" checked={voice.agentsSpeak} onChange={(e) => save({ agentsSpeak: e.target.checked })} /> Agents speak when clicked
-        <span className="muted small"> · a short line in their own voice{eleven && keySet ? '' : ', with ElevenLabs and a key'}</span>
+        <input type="checkbox" checked={voice.agentsSpeak} onChange={(e) => save({ agentsSpeak: e.target.checked })} />
+        <span>
+          Agents speak when clicked<span className="muted small"> · a short line in their own voice{eleven && keySet ? '' : ', with ElevenLabs and a key'}</span>
+        </span>
       </label>
       {(eleven || cache.clips > 0) && <SavedClips voice={voice} save={save} />}
       <Listening keyShown={eleven} />
@@ -460,8 +462,10 @@ function Listening({ keyShown }: { keyShown: boolean }) {
             <input type="checkbox" checked={listen.autoSend} onChange={(e) => save({ autoSend: e.target.checked })} /> Send automatically when I stop talking
           </label>
           <label className="toggle" title={voiceOn ? undefined : `Needs ${ceoName}'s voice: pick one under Speak messages`}>
-            <input type="checkbox" checked={listen.handsFree} disabled={!voiceOn && !listen.handsFree} onChange={(e) => void setHandsFree(e.target.checked, ceoName)} /> Hands-free on the phone: after{' '}
-            {ceoName}'s spoken reply, listen for up to 8 s and send what I say{!voiceOn && <span className="muted"> (needs Speak messages above)</span>}
+            <input type="checkbox" checked={listen.handsFree} disabled={!voiceOn && !listen.handsFree} onChange={(e) => void setHandsFree(e.target.checked, ceoName)} />
+            <span>
+              Hands-free on the phone: after {ceoName}'s spoken reply, listen for up to 8 s and send what I say{!voiceOn && <span className="muted"> (needs Speak messages above)</span>}
+            </span>
           </label>
         </>
       )}
