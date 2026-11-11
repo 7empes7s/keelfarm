@@ -146,7 +146,8 @@ export const Bubble = memo(function Bubble({ item, ceoName, quoted, highlight, l
   const log = m ? replyLog(m) : null;
 
   // Touch: swipe right to reply, hold for the actions. A mouse uses the hover buttons (or right-click). A second
-  // finger anywhere in the chat makes it a pinch of the text size (ChatZoom.tsx), never a reply or the menu.
+  // finger anywhere in the chat makes it a pinch of the text size (ChatZoom.tsx), never a reply or the menu. A press on
+  // code is the browser's: it selects the text to copy (#438).
   const end = () => {
     const p = press.current;
     press.current = null;
@@ -157,7 +158,7 @@ export const Bubble = memo(function Bubble({ item, ceoName, quoted, highlight, l
   };
   const gestures = {
     onPointerDown: (e: ReactPointerEvent) => {
-      if (e.pointerType === 'mouse' || isPinching() || (e.target as HTMLElement).closest('a, button')) return;
+      if (e.pointerType === 'mouse' || isPinching() || (e.target as HTMLElement).closest('a, button, code, pre')) return;
       const p = { x: e.clientX, y: e.clientY, at: performance.now(), long: false, swipe: false, timer: 0 };
       p.timer = window.setTimeout(() => {
         if (pinchCancels(p.at, lastPinchAt())) return;
@@ -180,7 +181,7 @@ export const Bubble = memo(function Bubble({ item, ceoName, quoted, highlight, l
     onPointerUp: end,
     onPointerCancel: end,
     onContextMenu: (e: ReactMouseEvent) => {
-      if ((e.target as HTMLElement).closest('a')) return;
+      if ((e.target as HTMLElement).closest('a, code, pre')) return;
       e.preventDefault();
       if (!press.current?.long) onActions(item);
     },
@@ -262,7 +263,7 @@ export const Bubble = memo(function Bubble({ item, ceoName, quoted, highlight, l
           </Suspense>
         )}
         {m?.artifacts?.map((a) => <ArtifactCard key={a.id} artifact={a} onOpen={() => onArtifact(m.id, a.id)} />)}
-        {!!m?.actions?.length && <ActionCards actions={m.actions} />}
+        {!!m?.actions?.length && <ActionCards actions={m.actions} messageId={m.id} />}
         {m && (log || m.summary) && <StepsRow log={rowLog(m)} actions={m.actions?.length ?? 0} used={m.used} summary={m.summary} linked={linked} onFloor={onFloor} />}
         {m?.ceoJob && <CeoJobLine tag={m.ceoJob} onJump={onQuote} />}
         {req && req.status === 'pending' && m?.from === 'ceo' && <Resume req={req} />}

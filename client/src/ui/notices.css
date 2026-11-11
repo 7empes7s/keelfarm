@@ -225,3 +225,21 @@
   padding-left: 0;
   margin-left: auto;
 }
+
+/* ---------- the bell's popover (#416) ---------- */
+.notice-pop .pop-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-3);
+}
+.notice-pop-bar {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--ds-space-2);
+}
+.notice-pop-bar .btn {
+  min-height: var(--ds-target);
+}
+.notice-pop .notice-group h3 {
+  top: calc(-1 * var(--ds-space-3));
+}

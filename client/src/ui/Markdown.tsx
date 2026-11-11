@@ -4,7 +4,7 @@ import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 import { FLOOR_HREF } from './chatLinks';
 import { copyText } from './clipboard';
-import { COLLAPSE_LINES, codeLanguage, codeTitle, copiedText, isShell, shellLines } from './codeBlock';
+import { COLLAPSE_LINES, codeLanguage, codeTitle, copiedText, isShell, looksLikeCommand, shellLines } from './codeBlock';
 import './chat.css';
 import { REF_HREF } from '../../../shared/chatRefs';
 import { Icon } from './Icon';
@@ -120,8 +120,30 @@ function CodeBlock({ node }: { node?: HastNode }) {
   );
 }
 
+/** Inline code (#438): a command gets a Copy chip that copies exactly its text, `!` included. */
+function InlineCode({ children }: { children?: ReactNode }) {
+  const text = typeof children === 'string' ? children : Array.isArray(children) && children.every((c) => typeof c === 'string') ? children.join('') : '';
+  const [copied, setCopied] = useState<boolean | null>(null);
+  if (!looksLikeCommand(text)) return <code>{children}</code>;
+  const copy = () =>
+    void copyText(text.trim()).then((ok) => {
+      setCopied(ok);
+      setTimeout(() => setCopied(null), 1500);
+    });
+  return (
+    <span className="md-cmd">
+      <code>{children}</code>
+      <button type="button" className={`ds-btn ds-btn-ghost md-cmd-copy${copied === null ? ' ds-btn-icon' : ''}`} onClick={copy} aria-label={copied === null ? `Copy ${text.trim()}` : copied ? 'Copied' : "Couldn't copy"}>
+        <CopyGlyph done={copied === true} />
+        {copied !== null && <span aria-live="polite">{copied ? 'Copied' : "Couldn't copy"}</span>}
+      </button>
+    </span>
+  );
+}
+
 const components: Components = {
   a: Link,
+  code: ({ children }) => <InlineCode>{children}</InlineCode>,
   // Images would load arbitrary URLs and blow up the layout; show them as links instead.
   img: ({ src, alt }) =>
     typeof src === 'string' && src ? (

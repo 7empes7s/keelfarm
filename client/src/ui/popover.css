@@ -1,0 +1,108 @@
+/* Header popovers (#416): Popover.tsx, and HoverCard.tsx's anchored peeks. Under their button, on the top layer, an
+   arrow at the button (--pop-arrow, from the card's left edge). */
+
+:root {
+  --pop-layer: calc(var(--ds-z-toast) + 5); /* over the chat, windows and toasts; under the tour and confirmations */
+}
+
+.pop {
+  position: fixed;
+  z-index: var(--pop-layer);
+  display: flex;
+  flex-direction: column;
+  width: min(380px, calc(100vw - 24px));
+  max-height: 70vh;
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-lg);
+  background: var(--ds-surface);
+  box-shadow: var(--ds-shadow-float);
+  color: var(--ds-text);
+  font-family: var(--font);
+  text-align: left;
+  outline: none;
+  animation: pop-in var(--ds-dur) var(--ds-ease-spring) both;
+}
+.pop-bottom {
+  transform-origin: var(--pop-arrow, 50%) top;
+}
+.pop-top {
+  transform-origin: var(--pop-arrow, 50%) bottom;
+}
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pop {
+    animation: none;
+  }
+}
+.pop-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: var(--pop-layer);
+  background: transparent;
+}
+
+/* the arrow: a square turned 45°, half of it out of the card, its outline on the two outer sides */
+.pop-arrow,
+.peek-anchored .pop-arrow {
+  position: absolute;
+  left: calc(var(--pop-arrow, 50%) - 7px);
+  width: 14px;
+  height: 14px;
+  background: inherit;
+  border: var(--ds-border) solid var(--ds-outline);
+  pointer-events: none;
+}
+.pop-bottom > .pop-arrow,
+.peek-bottom > .pop-arrow {
+  top: -8px;
+  border-right: 0;
+  border-bottom: 0;
+  transform: rotate(45deg);
+}
+.pop-top > .pop-arrow,
+.peek-top > .pop-arrow {
+  bottom: -8px;
+  border-left: 0;
+  border-top: 0;
+  transform: rotate(45deg);
+}
+
+.pop-head {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  padding: var(--ds-space-1) var(--ds-space-1) var(--ds-space-1) var(--ds-space-4);
+  border-bottom: 1px solid var(--ds-line-strong);
+}
+.pop-title {
+  flex: 1;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  font-size: var(--ds-text-md);
+}
+.pop-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--ds-space-3) var(--ds-space-4) var(--ds-space-4);
+}
+
+/* a hover peek anchored to a header button: over the chat like the popovers, its arrow drawn by .pop-arrow */
+.peek.peek-anchored {
+  z-index: var(--pop-layer);
+  overflow: visible;
+}
+.peek-anchored.peek-bottom {
+  transform-origin: var(--pop-arrow, 50%) top;
+}
+.peek-anchored.peek-top {
+  transform-origin: var(--pop-arrow, 50%) bottom;
+}

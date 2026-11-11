@@ -12,6 +12,7 @@ import { cardPlace, pickSpot, PROBE_PX, stageChange, toVisual, type Box } from '
 import { openWhatsNew, saveSeen, seenNow, useTour } from './tour';
 import { useTourGate } from './tourGate';
 import { Icon } from './Icon';
+import { useNoticePop } from './Notices';
 import './tour.css';
 import { useChatMode } from './chatMode';
 import { isTouch, useTouchStick } from '../world/touch/touchState';
@@ -35,7 +36,7 @@ const DONE: Record<string, { done: (s: S) => boolean; minMs?: number }> = {
   watch: { done: (s) => s.overlay?.kind === 'terminal' && s.overlay.agentId !== CEO_ID },
   search: { done: () => useFinder.getState().search },
   guide: { done: () => useFinder.getState().guide },
-  bell: { done: (s) => s.overlay?.kind === 'notices' },
+  bell: { done: (s) => s.overlay?.kind === 'notices' || useNoticePop.getState().open },
   'agent-chat': { done: () => useChatMode.getState().on, minMs: 3000 },
 };
 

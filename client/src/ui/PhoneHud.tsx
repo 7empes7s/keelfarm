@@ -10,6 +10,7 @@ import { officeUpdateChip } from '../officeUpdate';
 import { togglePhoto } from '../photo/gate';
 import { switchOffice } from '../pocket/switchOffice';
 import { enterOverview } from '../world/camera/rig';
+import { canGoFullscreen, toggleBrowserFull, useBrowserFull } from './browserFull';
 import { keyName } from './controls';
 import { useChatMode } from './chatMode';
 import { useCoinGain } from './CoinChip';
@@ -31,6 +32,7 @@ const RUN: Record<HudOptionId, () => void> = {
   overview: enterOverview,
   photo: togglePhoto,
   switch: switchOffice,
+  'browser-full': () => toggleBrowserFull(),
   mute: () => toast(flip('mute', keyName('mute'))),
   captions: () => toast(flip('captions', keyName('mute'))),
   'sound-settings': () => useStore.getState().openOverlay({ kind: 'help' }),
@@ -47,13 +49,14 @@ const RUN: Record<HudOptionId, () => void> = {
 setOptionRunner((id) => RUN[id]());
 
 /** Switches that flip in place: the sheet stays open to show the new state. */
-const IN_PLACE = new Set<HudOptionId>(['mute', 'captions', 'chat-mode']);
+const IN_PLACE = new Set<HudOptionId>(['mute', 'captions', 'chat-mode', 'browser-full']);
 
 /** What a row shows at its end: a switch's state or a count. */
 function useValues(): Partial<Record<HudOptionId, string>> {
   const muted = useSyncExternalStore(subscribeAudio, () => getAudioPrefs().muted);
   const captions = useA11y((s) => s.prefs.captions);
   const chat = useChatMode((s) => s.on);
+  const full = useBrowserFull();
   const running = useStore((s) => Object.values(s.agents).filter((a) => a.status === 'working' || a.status === 'preparing').length);
   const limit = useStore((s) => s.settings.sessionLimit);
   const coins = useStore((s) => {
@@ -61,7 +64,7 @@ function useValues(): Partial<Record<HudOptionId, string>> {
     return repo ? (s.progress.floors[repo.id]?.coins ?? 0) : Object.values(s.progress.floors).reduce((n, f) => n + f.coins, 0);
   });
   const on = (x: boolean) => (x ? 'On' : 'Off');
-  return { mute: on(!muted), captions: on(captions), 'chat-mode': on(chat), sessions: limit ? `${running}/${limit}` : `${running}`, coins: `${coins}` };
+  return { 'browser-full': on(full), mute: on(!muted), captions: on(captions), 'chat-mode': on(chat), sessions: limit ? `${running}/${limit}` : `${running}`, coins: `${coins}` };
 }
 
 /** Whether something holds work back or needs a look: the floor chip's dot. */
@@ -108,7 +111,7 @@ function OptionsSheet({ chips, onClose }: { chips: ReactNode; onClose: () => voi
         <section key={g} className="opt-group" aria-label={g}>
           <h3 className="opt-group-title">{g}</h3>
           <div className="opt-list">
-            {HUD_OPTIONS.filter((o) => o.group === g).map((o) => (
+            {HUD_OPTIONS.filter((o) => o.group === g && (o.id !== 'browser-full' || canGoFullscreen())).map((o) => (
               <button key={o.id} type="button" className="ds-menu-item opt-item" onClick={() => pick(o.id)} aria-pressed={IN_PLACE.has(o.id) ? values[o.id] === 'On' : undefined}>
                 <span className="opt-row">
                   <span className="opt-glyph">
@@ -180,7 +183,7 @@ export function PhoneHud({ num, title, sub, accent, phone, chips }: { num: strin
           </span>
           {alert && <span className="hud-floor-dot" aria-hidden />}
         </button>
-        <NoticeBell className="pill" />
+        <NoticeBell className="pill" compact />
         {phone}
         <button type="button" data-tour="options" className="pill hud-options" onClick={() => open('options')} aria-label="Options" title="Options">
           <Icon name="sliders-horizontal" />
