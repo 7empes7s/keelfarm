@@ -645,7 +645,7 @@ export abstract class SwarmCore extends SwarmContract {
       usd: line.usd,
       tokens: line.tokens,
       model: line.model,
-      effort: line.effort,
+      effort: line.effort, ...(line.account && { account: line.account }), // the account it ran on (#376)
       sessionId: run?.sessionId ?? null,
       transcript: null, ...(run?.ceo && { ceo: run.ceo }), // a CEO job's row in the CEO jobs log (#332)
     };

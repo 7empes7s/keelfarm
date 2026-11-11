@@ -81,6 +81,10 @@ After an update adds steps, Company (or a card in the 3D office's corner) says *
 looked** and replays only those; this device remembers what it has seen. **✨ What's new** in Settings → Company and
 in every ⓘ sheet brings them back, and **🧭 Replay the tour** starts it over.
 
+While the tour or What's new shows, it owns the screen: the page dims around a ring on the real control (none, and
+the card centred, when that control isn't on screen), and toasts wait until it's done. A step about the chat's header
+or a console page opens it first, and Back or Done puts back what was on screen.
+
 The steps are in `client/src/ui/tourSteps.ts`; a step's PR adds it there, with its id here:
 
 | Step | Phone | Desktop pocket | 3D office |
@@ -95,12 +99,12 @@ The steps are in `client/src/ui/tourSteps.ts`; a step's PR adds it there, with i
 | `bell`: 🔔 the notification centre | ✓ | ✓ | ✓ |
 | `sound`: 🔊 Sound and CC by the bell (#267): mute and captions in one tap | ✓ | ✓ | ✓ |
 | `chat-cards`: starters, / commands, action cards with live steps | ✓ | ✓ | ✓ |
-| `console`: the console's tabs, side menus and search | ✓ | ✓ | ✓ |
-| `charter`: the charter page and its numbers | ✓ | ✓ | ✓ |
-| `costs`: Mission control's cost insights and cards | ✓ | ✓ | ✓ |
+| `console`: ⚙️ (the rail's Console) opens the console's tabs, side menus and search | ✓ | ✓ | ✓ |
+| `charter`: the charter page and its numbers, opened for it | ✓ | ✓ | ✓ |
+| `costs`: Mission control's cost insights and cards, opened for them | ✓ | ✓ | ✓ |
 | `agent-chat`: an agent's chat, chat mode and reactions | ✓ | ✓ | ✓ |
-| `chat-full`: ⛶ the CEO chat full screen | ✓ | ✓ | ✓ |
-| `chat-charts`: 📊 ready chart prompts in the chat's header, pinned ones on top | ✓ | ✓ | ✓ |
+| `chat-full`: ⛶ the CEO chat full screen, the chat opened for it | ✓ | ✓ | ✓ |
+| `chat-charts`: 📊 ready chart prompts in the chat's header (or its ⋯), pinned ones on top | ✓ | ✓ | ✓ |
 | `info`: every screen's ⓘ | ✓ | ✓ | |
 | `switch`: the 2D office | | | ✓ |
 

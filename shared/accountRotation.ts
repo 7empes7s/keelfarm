@@ -67,6 +67,14 @@ const SIGNED_OUT = [
   /\b401\b[^\n]*unauthori[sz]ed/i,
 ];
 
+/** A session's last terminal lines read for a limit: Codex's message spans several, with its prompt and the session's end below (#400). */
+export const LIMIT_TAIL_LINES = 30;
+
+/** What detectLimit reads when a session ends: its errors and its terminal's last lines. */
+export function endedText(errors: readonly string[], lines: readonly string[]): string {
+  return [...errors, ...lines.slice(-LIMIT_TAIL_LINES)].join('\n');
+}
+
 /**
  * What a failed session's output says about its account: out of usage (until when), or signed out; null: something
  * else went wrong. An API key out of credit counts as limited until tomorrow, one turned away as signed out.

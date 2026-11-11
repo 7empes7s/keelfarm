@@ -1,5 +1,5 @@
 // Who is on an account and who spent it (#409), in its usage sheet (UsageSources.tsx): "On it now" from the sessions
-// really running there (not the pin), "Pinned" agents with nothing running there, and "This window" from the cost
+// really running there (each agent's run, #376, not the pin), "Pinned" agents with nothing running there, and "This window" from the cost
 // ledger by floor, agent and kind of task, with the most expensive issues and PRs. Every row taps through.
 import { fmtUsd } from '../ops';
 import { useStore, type Overlay } from '../store';
@@ -14,8 +14,6 @@ const sessions = (n: number) => `${n} session${n === 1 ? '' : 's'}`;
 
 /** "On it now" and "Pinned" for an account. `close`: the sheet goes as a row opens its page. */
 export function OnItNow({ accountId, pinned, now, close }: { accountId: string; pinned: string[]; now: number; close: () => void }) {
-  const account = useStore((s) => s.accounts.accounts.find((a) => a.id === accountId));
-  const cli = account?.cli ?? 'claude';
   const agents = useStore((s) => s.agents);
   const repos = useStore((s) => s.repos);
   const who = onIt(accountId, pinned, agents);
@@ -36,9 +34,9 @@ export function OnItNow({ accountId, pinned, now, close }: { accountId: string; 
                 <Avatar name={agent.name} color={agent.color} size={32} />
                 <span className="us-who-text">
                   <b>{agent.name}</b>
-                  <span className="muted small">{runWords(cli, run)}</span>
+                  <span className="muted small">{runWords(run)}</span>
                 </span>
-                <span className="muted small us-who-since">{ago(run.since, now)}</span>
+                <span className="muted small us-who-since">{ago(run.at, now)}</span>
               </button>
               <span className="us-who-chips">
                 <button type="button" className="ds-btn us-chip" onClick={() => open({ kind: 'kanban', repoId: agent.repoId })} disabled={!agent.repoId || agent.role === 'ceo'}>

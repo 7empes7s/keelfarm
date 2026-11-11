@@ -56,6 +56,7 @@ import type {
   QaView,
   RepoView,
   ServerEvent,
+  SessionRun,
   SwarmSettings,
   UsageReading,
 } from '../../shared/types.ts';
@@ -262,6 +263,7 @@ export interface AgentRuntime {
   acrossRestart?: boolean; // the current session's CLI kept working through an office restart (#333)
   blocked?: BlockedState | null; // waiting on a prompt the office couldn't answer (unblock.ts), or stuck in their session's live state (liveState.ts)
   chat?: ChatLog; // their chat (#120), from their sessions' transcripts and the manager's messages; not saved
+  run?: SessionRun | null; // what their live session really runs on (#376)
 }
 
 export interface RepoRuntime {

@@ -9,10 +9,11 @@ import { HttpError } from '../httpError.ts';
 import { builtInPrefs, prepareLogin } from '../cliSetup.ts';
 import { cliLabel } from '../clis.ts';
 import { backText, defaultAccount, defaultsBack, defaultText, pruneTaskAccounts, switchNow, taskKey, tasksLeft } from '../../shared/accountDefault.ts';
-import { allOutText, detectLimit, switchesForCeo, switchHandover, switchText, type LimitHit } from '../../shared/accountRotation.ts';
+import { allOutText, detectLimit, endedText, LIMIT_TAIL_LINES, switchesForCeo, switchHandover, switchText, type LimitHit } from '../../shared/accountRotation.ts';
 import { ACCOUNT_CLIS, LOGIN_ENV } from '../../shared/accounts.ts';
+import { sessionRun } from '../../shared/sessionRun.ts';
 import { readingOf, usedPercent } from '../../shared/usage.ts';
-import type { AccountCli, AccountSwitch, AccountsView, AgentCli, AgentLive, AgentView } from '../../shared/types.ts';
+import type { AccountCli, AccountSwitch, AccountsView, AgentCli, SessionRun } from '../../shared/types.ts';
 import { canResume, heldElsewhere } from '../sessionResume.ts';
 import { BUSY, CEO_DIR, LIMIT_PAUSE_MS, type PersistedAgent } from './model.ts';
 import { SwarmUsage } from './usage.ts';
@@ -20,6 +21,12 @@ import { SwarmUsage } from './usage.ts';
 const clock = (t: number) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 /** The demo's "Simulate a limit": that long. */
 const DEMO_LIMIT_MS = 3 * 60_000;
+/** Codex's usage limit as a narrow terminal shows it (#400), resetting at `at`: the demo's simulated one. */
+function codexLimitLines(at: number): string[] {
+  const d = new Date(at);
+  const time = `${d.getHours() % 12 || 12}:${String(d.getMinutes()).padStart(2, '0')} ${d.getHours() < 12 ? 'AM' : 'PM'}`;
+  return ['■ You’ve hit your usage limit.', 'Upgrade to Pro (https://chatgpt.com/explore/pro),', 'visit https://chatgpt.com/settings/usage to', 'purchase more credits or try again at', `${time}.`];
+}
 /** One sign-in notice per account this often (#360). */
 const SIGN_IN_NOTICE_MS = 60 * 60_000;
 /** What an agent's fresh session on another account (a limit, or Switch now) hears first: its worktree is as the last one left it. */
@@ -31,20 +38,13 @@ const RESUMED_NOTE = 'Your session stopped at an account limit and now continues
 
 export abstract class SwarmRotation extends SwarmUsage {
   /** Sessions running on each account: what the demo's "Simulate a limit" ends. */
-  private onAccount = new Map<string, Set<(hit: LimitHit) => void>>();
+  private onAccount = new Map<string, Set<(hit: LimitHit, lines?: string[]) => void>>();
   /** The account each agent's latest session started on (null: the built-in login): where a stuck CEO is (#375). */
   protected sessionAccount = new Map<string, string | null>();
   /** Which account's folder holds each agent's latest session (its id, the built-in login's too), for resuming it there (#401). */
   protected sessionOn = new Map<string, string>();
   /** Coding agents' defaults that were out at the last look: one "is back" line when they're free again (#390). */
   private defaultsOut = new Set<string>();
-  /** Each agent's session running now on an account, as it really started (null once it ended): the usage sheet's "On it now" (#409). */
-  private liveOn = new Map<string, AgentLive | null>();
-
-  protected override agentView(a: PersistedAgent, withLog: boolean): AgentView {
-    const v = super.agentView(a, withLog);
-    return this.liveOn.has(a.id) ? { ...v, live: this.liveOn.get(a.id) } : v;
-  }
 
   /**
    * A session on the account its agent (or the CEO) is pinned to, else the rotation's: the account's folder or key goes
@@ -89,7 +89,8 @@ export abstract class SwarmRotation extends SwarmUsage {
     const cli = opts.terminal ? (opts.cli ?? 'claude') : 'claude';
     if (a.host === 'box' || cli === 'opencode') {
       this.sessionOn.delete(a.id);
-      return this.backend.startSession(this.resumable(a, opts, cli, undefined), cb);
+      const done = this.ranOn(a, opts, null, a.host === 'box' ? 'Cloud agent' : undefined);
+      return this.backend.startSession(this.resumable(a, opts, cli, undefined), { ...cb, finished: (r) => (done(), cb.finished(r)) });
     }
     const others = this.fallbackClis(a, opts);
     if (!this.accounts.canRotate(cli, others)) {
@@ -118,7 +119,7 @@ export abstract class SwarmRotation extends SwarmUsage {
         },
       };
       current = this.onUse(a, o, tracked, use, (result, hit) => {
-        const why = result.ok || stopped || result.interrupted ? null : (hit ?? detectLimit([...result.errors, ...(o.terminal?.tail(8) ?? [])].join('\n'), Date.now()));
+        const why = result.ok || stopped || result.interrupted ? null : (hit ?? detectLimit(endedText(result.errors, o.terminal?.tail(LIMIT_TAIL_LINES, true) ?? []), Date.now()));
         if (sw?.api) sw.usd += result.costUsd;
         if (!use || !why) return cb.finished(result);
         // The built-in login isn't polled, so a sign-out read from its output only rests it a while.
@@ -136,17 +137,30 @@ export abstract class SwarmRotation extends SwarmUsage {
         this.tellSwitch(a, s);
         const retry: SessionOptions = { ...o, resumeSessionId: resumeId, typed: false, reattach: false, prompt: resumeId ? (a.role === 'ceo' || opts.readOnly ? opts.prompt : RESUMED_NOTE) : this.freshPrompt(a, opts) };
         if (!crossed) return attempt(retry, oc, c, next.use, s);
-        const onCli: SessionCallbacks = {
-          ...c,
-          sessionId: (id) => {
-            c.sessionId(id);
-            if (id) a.sessionCli = next.cli; // resumed with that one next time
-          },
-        };
-        attempt({ ...retry, cli: next.cli, model: this.modelFor(a, next.cli), tools: this.sessionToolsFor(a, next.cli) }, next.cli, onCli, next.use, s);
+        cross(retry, c, next, s);
       });
     };
-    attempt(opts, cli, cb, first, null);
+    /** On another coding agent, with its model and tools. */
+    const cross = (o: SessionOptions, c: SessionCallbacks, next: { use: AccountUse; cli: AccountCli }, sw: AccountSwitch | null) => {
+      const onCli: SessionCallbacks = {
+        ...c,
+        sessionId: (id) => {
+          c.sessionId(id);
+          if (id) a.sessionCli = next.cli; // resumed with that one next time
+        },
+      };
+      attempt({ ...o, cli: next.cli, model: this.modelFor(a, next.cli), tools: this.sessionToolsFor(a, next.cli) }, next.cli, onCli, next.use, sw);
+    };
+    // Every account of its coding agent is limited or signed out (#400): straight to the next one's, not a session that can only fail.
+    const instead = first && !a.account && !this.accounts.hasFree(cli) ? this.nextUse(a, cli, others, [first.id]) : null;
+    if (first && instead && instead.cli !== cli) {
+      first.release();
+      this.appendLog(a, [{ kind: 'system', text: `🔀 ${this.accounts.label(first.id)} is out: starting on ${this.accounts.label(instead.use.id)}.` }]);
+      cross(opts.resumeSessionId ? this.fresh(a, opts, SWITCHED_NOTE) : opts, cb, instead, null);
+    } else {
+      instead?.use.release();
+      attempt(opts, cli, cb, first, null);
+    }
     return {
       send: (text) => current.send(text),
       stop: () => {
@@ -233,16 +247,14 @@ export abstract class SwarmRotation extends SwarmUsage {
     const cli = opts.terminal ? (opts.cli ?? 'claude') : 'claude';
     // Gemini CLI on the manager's own login: its limit is its own, not a pause for the office (paced on Claude's).
     const own = cli === 'gemini' ? { ...cb, limited: undefined } : cb;
+    const done = this.ranOn(a, opts, use?.id ?? null);
     if (!use) {
       this.sessionOn.delete(a.id);
-      return this.backend.startSession(opts, ended ? { ...own, finished: (r) => ended(r, null) } : own);
+      return this.backend.startSession(opts, { ...own, finished: (r) => (done(), ended ? ended(r, null) : own.finished(r)) });
     }
     this.readyLogin(a, use, cli, opts.cwd);
     this.sessionAccount.set(a.id, use.builtIn ? null : use.id);
     this.sessionOn.set(a.id, use.id);
-    const run = { account: use.id, model: opts.model, effort: opts.effort, since: Date.now() };
-    this.liveOn.set(a.id, run);
-    this.emitAgent(a);
     this.spend.account(a.id, use.id);
     this.accounts.emit();
     const env = { ...opts.env, ...use.env };
@@ -250,7 +262,8 @@ export abstract class SwarmRotation extends SwarmUsage {
     let handle: SessionHandle | null = null;
     const live = this.onAccount.get(use.id) ?? new Set();
     this.onAccount.set(use.id, live);
-    const simulate = (h: LimitHit) => {
+    const simulate = (h: LimitHit, lines?: string[]) => {
+      if (lines) this.appendLog(a, lines.map((text) => ({ kind: 'error' as const, text })));
       hit = h;
       handle?.stop();
     };
@@ -276,11 +289,8 @@ export abstract class SwarmRotation extends SwarmUsage {
         },
         finished: (result) => {
           live.delete(simulate);
-          if (this.liveOn.get(a.id) === run) {
-            this.liveOn.set(a.id, null);
-            this.emitAgent(a);
-          }
           use.release();
+          done();
           if (result.signedOut) this.signInLost(a, use, cli);
           if (ended) ended(result, hit);
           else cb.finished(result);
@@ -289,6 +299,25 @@ export abstract class SwarmRotation extends SwarmUsage {
     );
     return handle;
   }
+
+  /**
+   * The session starting now runs on account `id` (null: on none, `instead` says what): its chip on the agent, and on the
+   * CEO's thread, until the returned `done` (#376). A switch's next session takes over the chip.
+   */
+  private ranOn(a: PersistedAgent, opts: SessionOptions, id: string | null, instead?: string): () => void {
+    const rt = this.agentRt.get(a.id);
+    if (!rt) return () => undefined;
+    const run = sessionRun(a.account, id, this.accounts.view().accounts, { cli: opts.terminal ? (opts.cli ?? 'claude') : 'claude', model: opts.model ?? '', effort: opts.effort ?? '', at: Date.now(), instead });
+    rt.run = run;
+    this.sessionRan(a, run);
+    this.emitAgent(a);
+    return () => {
+      if (rt.run === run) rt.run = null;
+    };
+  }
+
+  /** A session's run, for the layers above: the CEO's goes on the thread it answers in. */
+  protected sessionRan(_a: PersistedAgent, _run: SessionRun) {}
 
   /**
    * An account's own login folder, set up before a session starts in it (#360): onboarding done, the built-in login's
@@ -374,11 +403,14 @@ export abstract class SwarmRotation extends SwarmUsage {
   simulateAccountLimit(id: string): AccountsView {
     if (!this.backend.demo) throw new HttpError(404, 'A limit can only be simulated in the demo office.');
     if (!this.accounts.list().some((x) => x.id === id)) throw new HttpError(404, 'No such account.');
-    const until = Date.now() + DEMO_LIMIT_MS;
+    // A Codex account's limit is Codex's own message as its terminal shows it (#400), read like a real one.
+    const lines = this.accounts.list().find((x) => x.id === id)?.cli === 'codex' ? codexLimitLines(Date.now() + DEMO_LIMIT_MS) : undefined;
+    const hit = lines ? detectLimit(lines.join('\n'), Date.now()) : null;
+    const until = hit?.kind === 'limited' ? hit.until : Date.now() + DEMO_LIMIT_MS;
     this.accounts.limited(id, until);
     const live = [...(this.onAccount.get(id) ?? [])];
-    for (const end of live) end({ kind: 'limited', until });
-    if (!live.length) this.toast('info', `${this.accounts.label(id)} is limited for 3 minutes: new sessions start on the next account.`);
+    for (const end of live) end({ kind: 'limited', until }, lines);
+    if (!live.length) this.toast('info', `${this.accounts.label(id)} is limited until ${clock(until)}: new sessions start on the next account.`);
     return this.accounts.view();
   }
 }
