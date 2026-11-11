@@ -6,6 +6,9 @@ import { ceoDigest, ceoJobSession, freshStart, HANDOVER_PROMPT, handoverOf, load
 import { ceoSessionStep } from '../ceoWaits.ts';
 import { recordCost } from '../metrics.ts';
 import { liveMandates } from '../../shared/followups.ts';
+import { sameRun } from '../../shared/sessionRun.ts';
+import { conversationsView, currentConversation } from '../../shared/conversations.ts';
+import type { SessionRun } from '../../shared/types.ts';
 import { CEO_DIR, CEO_MODEL, type PersistedAgent } from './model.ts';
 import { SwarmCeoModels } from './ceoModels.ts';
 
@@ -14,6 +17,15 @@ const HANDOVER_MS = 3 * 60_000; // a handover that takes longer is stopped: the 
 type SessionPlan = { fresh: boolean; resume: boolean; why: string | null };
 
 export abstract class SwarmCeoFresh extends SwarmCeoModels {
+  /** The CEO's session answering in the chat (not a background job's fresh one): what it runs on goes on the thread (#376). */
+  protected sessionRan(a: PersistedAgent, run: SessionRun) {
+    if (a.role !== 'ceo' || this.ceoFresh) return;
+    const thread = currentConversation(this.state.ceo.chats);
+    const same = !!thread.run && sameRun(thread.run, run);
+    thread.run = run;
+    if (!same) this.broadcast({ type: 'ceoChat', conversations: conversationsView(this.state.ceo.chats) }); // the whole list: only when the chip changes
+  }
+
   /**
    * How the job's session starts: a chat carries on from the CEO's last session, so "why did you propose that?" has an
    * answer; with keep-alive on, every job does until its context fills up or it sat idle too long (#28). Background

@@ -28,7 +28,7 @@ export function sampleCeoJobs(now: number, ceo: { id: string; name: string; mode
     const at = now - j.ago * MIN;
     return {
       id: historyId(at, ceo.id, `ceo-${j.kind}`), at, startedAt: at - j.mins * MIN, repoId: '', repo: '', floor: null, agentId: ceo.id, agent: ceo.name, kind: `ceo-${j.kind}`, issue: null, pr: null, title: j.title,
-      outcome: j.reply === 'replied' ? 'ceo-acted' : 'ceo-idle', note: '', usd: j.usd, tokens: null, model: j.model, effort: 'medium', sessionId: null, transcript: null,
+      outcome: j.reply === 'replied' ? 'ceo-acted' : 'ceo-idle', note: '', usd: j.usd, tokens: null, model: j.model, effort: 'medium', account: j.job === 2 ? 'claude-keelop' : 'claude-login', sessionId: null, transcript: null,
       ceo: { job: j.job, kind: j.kind, trigger: j.trigger, fresh: j.kind !== 'chat', reply: j.reply, message: null, tools: j.tools, issues: 0, inputTokens: j.inTok, outputTokens: j.outTok, ...(j.redoOf && { redoOf: j.redoOf }) },
     };
   });
