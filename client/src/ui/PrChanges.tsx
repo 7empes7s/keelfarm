@@ -1,6 +1,6 @@
 // "What this PR changes" (#203): beside a PR's preview, its goal, the pages to look at (tap one and the preview
 // loads it), the agent testing or fixing it live, before/after, and QA's verdict and report. A side column on a
-// computer, a pull-up sheet on a phone; open the first time each PR is viewed.
+// computer, a pull-up sheet on a phone; open the first time each PR is viewed. "Try this" (#381) comes first.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PullInfo, QaView, RepoView } from '../../../shared/types';
 import { screenshotUrl } from '../screenshot';
@@ -12,6 +12,7 @@ import { QaPeek } from './Peeks';
 import { cardOpen, liveAgent, openingPath, pagePath, prPages, remember, type PrMemory, type PrPage } from './prChangesRules';
 import './prChanges.css';
 import { CloseButton, Icon } from './Icon';
+import { tryThisLabel, TryThisList, useTryThis } from './TryThis';
 import type { IconName } from './icons';
 
 const MEMORY_KEY = 'cubefarm:prChanges';
@@ -50,6 +51,8 @@ export function usePrChanges(repo: RepoView | undefined, channel: Channel, force
   const [open, setOpenState] = useState(true);
   const opened = useRef<string | null>(null);
   const first = pages[0]?.path;
+  const steps = useTryThis(repo?.id, pull, qa);
+  const nothing = !first && !steps;
 
   // A PR newly on screen: where it opens, and the card as it was left.
   useEffect(() => {
@@ -60,8 +63,8 @@ export function usePrChanges(repo: RepoView | undefined, channel: Channel, force
     if (r.memory !== memory) note(key, { path: r.path });
     setAt({ key, path: r.path });
     setFollow(false);
-    setOpenState(!!forceOpen || cardOpen(memory, key, sheet && !first));
-  }, [key, first, forceOpen, sheet]);
+    setOpenState(!!forceOpen || cardOpen(memory, key, sheet && nothing));
+  }, [key, first, nothing, forceOpen, sheet]);
 
   // Follow: the preview goes where the agent's browser goes, while they're on it.
   const livePage = pagePath(agent?.browserUrl);
@@ -76,6 +79,8 @@ export function usePrChanges(repo: RepoView | undefined, channel: Channel, force
     agent,
     livePage,
     pages,
+    /** "Try this" (#381): QA's steps, the PR's, else the issue's acceptance criteria. */
+    steps,
     path: key && at?.key === key ? at.path : '/',
     follow,
     setFollow,
@@ -106,7 +111,7 @@ const CHECK_ICON: Record<'pass' | 'fail' | 'skip', IconName> = { pass: 'circle-c
 
 /** The card. `sheet`: a phone's pull-up sheet, its handle always showing; otherwise the side column. */
 export function PrChangesCard({ repo, pull, state, sheet, onCompare }: { repo: RepoView; pull: PullInfo; state: PrChangesState; sheet: boolean; onCompare: () => void }) {
-  const { qa, agent, livePage, pages, path, follow, setFollow, open, openPage, setOpen } = state;
+  const { qa, agent, livePage, pages, steps, path, follow, setFollow, open, openPage, setOpen } = state;
   const box = useRef<HTMLDivElement>(null);
   const shots = qa?.shots ?? [];
   const issue = repo.issues.find((i) => pull.closesIssues.includes(i.number));
@@ -115,10 +120,11 @@ export function PrChangesCard({ repo, pull, state, sheet, onCompare }: { repo: R
 
   if (sheet && !open) {
     return (
-      <button className={`prc prc-sheet prc-peek ${pages.length ? '' : 'prc-peek-slim'}`} onClick={() => setOpen(true)} aria-expanded={false}>
+      <button className={`prc prc-sheet prc-peek ${pages.length || steps ? '' : 'prc-peek-slim'}`} onClick={() => setOpen(true)} aria-expanded={false}>
         <span className="prc-grip" aria-hidden />
-        <b>{title}</b>
+        <b>{steps ? tryThisLabel(steps) : title}</b>
         <span className="muted small">
+          {steps ? `${title} · ` : ''}
           {pages.length} {pages.length === 1 ? 'page' : 'pages'}
           {qa ? ` · ${QA_BADGE[qa.status].text}` : ''}
           {agent ? ` · @${agent.name} live` : ''}
@@ -139,6 +145,8 @@ export function PrChangesCard({ repo, pull, state, sheet, onCompare }: { repo: R
           <CloseButton className="panel-x" onClick={() => setOpen(false)} label="Hide what this PR changes" />
         )}
       </div>
+
+      {steps && <TryThisList repoId={repo.id} pull={pull} steps={steps} onOpen={openPage} current={path} />}
 
       <section className="prc-goal">
         <div className="small">

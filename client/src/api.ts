@@ -19,6 +19,7 @@ import type { LibraryFilter, LibraryPage } from '../../shared/library';
 import type { CleanPlan, CleanResult, DiskSettings } from '../../shared/disk';
 import type { HealthView } from '../../shared/health';
 import type { ChatPage } from '../../shared/chatPage';
+import type { TryThis } from '../../shared/tryIt';
 
 async function call<T = unknown>(method: string, url: string, body?: unknown, toast = true): Promise<T> {
   // The time-lapse shows a recorded day: nothing in it can be acted on.
@@ -242,6 +243,7 @@ export const api = {
   clearVoiceCache: () => call<VoiceCacheView>('DELETE', '/api/voice/cache'),
   journalDays: () => call<JournalDayView[]>('GET', '/api/journal/days'),
   history: (f: HistoryFilter, toast = true) => call<HistoryPage>('GET', `/api/history?${new URLSearchParams(Object.entries(f).flatMap(([k, v]) => (v === undefined || v === '' ? [] : [[k === 'repoId' ? 'repo' : k, String(v)]])))}`, undefined, toast),
+  tryIt: (repoId: string, pr: number) => call<{ tryThis: TryThis | null }>('GET', `/api/repos/${encodeURIComponent(repoId)}/pulls/${pr}/try-it`, undefined, false),
   historyEntry: (id: string) => call<HistoryDetail>('GET', `/api/history/${encodeURIComponent(id)}`),
   historyUsage: () => call<HistoryUsage>('GET', '/api/history/usage'),
   serverTrend: () => call<ServerPoint[]>('GET', '/api/server/trend'),

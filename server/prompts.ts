@@ -136,7 +136,7 @@ export function devSystemPrompt({ agent: a, repo, port, cwd, branch, linked, fix
     `6. Push: ${push}`,
     fixing
       ? '7. Reply with a short summary of what you fixed and a Self-review line: what it found and you fixed.'
-      : `7. Open a pull request with the GitHub CLI: gh pr create --base ${repo.defaultBranch} --head ${branch} --title "<concise title>" --body "<what changed, how you verified it, assumptions, and a Self-review line: what it found and you fixed>". The body must contain "Closes #<issue number>".`,
+      : `7. Open a pull request with the GitHub CLI: gh pr create --base ${repo.defaultBranch} --head ${branch} --title "<concise title>" --body "<what changed, how you verified it, assumptions, a Self-review line: what it found and you fixed, and a '## Try it' section: 2-5 numbered steps (where to go, what to tap, what you should see; paths in backticks)>". The body must contain "Closes #<issue number>".`,
     fixing ? '' : '8. End your final message with the pull request URL on its own line.',
     '',
     'Rules: never push to the default branch, never force-push, never merge pull requests yourself (the office merges them once QA and the checks pass), and never edit files outside your worktree. If you cannot finish, open a draft PR (gh pr create --draft) explaining what is left and why.',
