@@ -17,3 +17,4 @@ import './samples.ts';
 import './doctor.ts';
 import './disk.ts';
 import './setup.ts';
+import './liveLeases.ts';
