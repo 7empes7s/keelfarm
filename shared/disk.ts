@@ -8,12 +8,13 @@ export interface DiskSettings {
   warnPct: number; // warn when a disk has less than this share free…
   warnGb: number; // …or less than this many GB free
   holdGb: number; // below this many GB free new builds, QA and previews wait
+  rearmGb: number; // after a warning, warn again only once free space was back this many GB above the warning (#502)
   keepDays: number; // agents' temp files idle this many days go in a cleanup
   cleanEveryHours: number; // the automatic cleanup's interval; 0 = only by hand
   workRoot: string; // where agents' working copies live: '' = the office folder, else a folder on another mounted disk
 }
 
-export const DEFAULT_DISK: DiskSettings = { warnPct: 15, warnGb: 10, holdGb: 5, keepDays: 2, cleanEveryHours: 1, workRoot: '' };
+export const DEFAULT_DISK: DiskSettings = { warnPct: 15, warnGb: 10, holdGb: 5, rearmGb: 3, keepDays: 2, cleanEveryHours: 1, workRoot: '' };
 
 const num = (raw: unknown, min: number, max: number) => (raw !== null && raw !== '' && Number.isFinite(Number(raw)) ? Math.max(min, Math.min(max, Number(raw))) : null);
 
@@ -25,6 +26,7 @@ export function diskSettings(base: DiskSettings, patch: unknown): DiskSettings {
     warnPct: num(p.warnPct, 0, 90) ?? b.warnPct,
     warnGb: num(p.warnGb, 0, 10_000) ?? b.warnGb,
     holdGb: num(p.holdGb, 0, 10_000) ?? b.holdGb,
+    rearmGb: num(p.rearmGb, 0, 10_000) ?? b.rearmGb,
     keepDays: Math.round(num(p.keepDays, 0, 365) ?? b.keepDays),
     cleanEveryHours: Math.round(num(p.cleanEveryHours, 0, 168) ?? b.cleanEveryHours),
     workRoot: typeof p.workRoot === 'string' ? p.workRoot.trim() : b.workRoot,
@@ -78,9 +80,40 @@ export function diskHold(disks: readonly DiskReading[], s: DiskSettings): string
 /** The kinds of session a disk hold stops: what writes worktrees, installs and builds. The CEO and consults carry on. */
 export const DISK_HELD_KINDS: readonly string[] = ['build', 'fix', 'qa', 'preview', 'labRun', 'labBrowser'];
 
-/** Ring the manager's devices? Once when a disk goes below the warning, and again only after it recovered. */
-export function diskAlert(level: DiskLevel, told: boolean): { send: boolean; told: boolean } {
-  return { send: level !== 'ok' && !told, told: level !== 'ok' };
+/** The last disk notification (#502), kept in the state file so a restart doesn't send it again. */
+export interface DiskAlertMark {
+  level: Exclude<DiskLevel, 'ok'>;
+  at: number;
+  freeMb: number;
+}
+
+/** The mark from a saved state, if it is one. */
+export function loadDiskAlert(raw: unknown): DiskAlertMark | null {
+  const m = (raw && typeof raw === 'object' ? raw : {}) as Partial<DiskAlertMark>;
+  return (m.level === 'warn' || m.level === 'hold') && Number.isFinite(m.at) && Number.isFinite(m.freeMb) ? { level: m.level, at: m.at!, freeMb: m.freeMb! } : null;
+}
+
+/** While a disk stays low, a reminder at most this often. */
+export const DISK_REMIND_MS = 24 * 3_600_000;
+/** The share of the disk free, above the warning's, that counts as recovered (rearmGb is the GB margin). */
+const REARM_PCT = 2;
+
+/** Every disk is back above the warning by the margin: the next low stretch rings again. */
+function diskRecovered(disks: readonly DiskReading[], s: DiskSettings): boolean {
+  return disks.every((d) => d.freeMb >= (s.warnGb + s.rearmGb) * 1024 && (d.totalMb <= 0 || (d.freeMb / d.totalMb) * 100 >= s.warnPct + REARM_PCT));
+}
+
+/**
+ * Ring the manager's devices? When the disks get worse (ok → warn, warn → hold), or a reminder after DISK_REMIND_MS while
+ * they stay low. Only recovering past the margin forgets the last one, so free space hovering at the line rings once.
+ */
+export function diskAlert(disks: readonly DiskReading[], s: DiskSettings, last: DiskAlertMark | null, now: number): { send: boolean; last: DiskAlertMark | null } {
+  if (!disks.length) return { send: false, last }; // not read yet
+  const level = worstLevel(disks, s);
+  if (level === 'ok') return { send: false, last: last && !diskRecovered(disks, s) ? last : null };
+  const worse = !last || (level === 'hold' && last.level === 'warn');
+  if (!worse && now - last.at < DISK_REMIND_MS) return { send: false, last };
+  return { send: true, last: { level, at: now, freeMb: Math.min(...disks.map((d) => d.freeMb)) } };
 }
 
 /** The warning's words: the fullest disk, what happens next, and what helps. */

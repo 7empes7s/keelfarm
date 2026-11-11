@@ -12,7 +12,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { browserNote, DEFAULT_ESTIMATES, gb, type HealthView, type HeldWork, type MemoryReading, type MemorySettings, type SessionKind } from '../shared/health.ts';
-import { diskAlert, diskHold, diskLevel, DISK_HELD_KINDS, diskWarning, uniqueDisks, worstLevel, type CleanResult, type DiskReading, type DiskSettings, type DiskView } from '../shared/disk.ts';
+import { diskAlert, diskHold, diskLevel, DISK_HELD_KINDS, diskWarning, uniqueDisks, worstLevel, type CleanResult, type DiskAlertMark, type DiskReading, type DiskSettings, type DiskView } from '../shared/disk.ts';
 import type { ServerNow, ServerPoint } from '../shared/serverLoad.ts';
 import { HttpError } from './httpError.ts';
 import { realLoad, type LoadContext } from './serverLoad.ts';
@@ -292,12 +292,14 @@ export interface DiskHost {
   settings(): DiskSettings;
   alert(title: string, body: string): void;
   lastClean(): CleanResult | null;
+  /** The last disk notification, from the state file, and saving a new one (#502). */
+  lastAlert(): DiskAlertMark | null;
+  setLastAlert(mark: DiskAlertMark | null): void;
 }
 
 export class OfficeHealth {
   private disk: DiskHost | null = null;
   private disks: DiskReading[] = [];
-  private diskTold = false;
   private memory: MemoryReading | null = null;
   private rss = new Map<string, number>(); // agent id → what their processes use now, MB
   private peaks = new Map<string, number>(); // agent id → the most their current session used, MB
@@ -479,8 +481,9 @@ export class OfficeHealth {
   private async readDisks(disk: DiskHost) {
     this.disks = uniqueDisks(await disk.read().catch(() => this.disks));
     const s = disk.settings();
-    const alert = diskAlert(worstLevel(this.disks, s), this.diskTold);
-    this.diskTold = alert.told;
+    const last = disk.lastAlert();
+    const alert = diskAlert(this.disks, s, last, Date.now());
+    if (alert.last !== last) disk.setLastAlert(alert.last);
     const m = alert.send && diskWarning(this.disks, s);
     if (m) disk.alert(m.title, m.body);
   }

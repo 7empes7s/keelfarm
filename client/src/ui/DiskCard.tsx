@@ -135,7 +135,7 @@ export function DiskCard() {
 export function DiskFields({ disk }: { disk: DiskSettings | undefined }) {
   const s = diskSettings(DEFAULT_DISK, disk);
   const save = (patch: Partial<DiskSettings>) => void api.diskSettings(patch).catch(() => undefined); // api() already toasted it
-  const num = (key: 'warnPct' | 'warnGb' | 'holdGb' | 'keepDays' | 'cleanEveryHours', label: string, max: number) => (
+  const num = (key: 'warnPct' | 'warnGb' | 'holdGb' | 'rearmGb' | 'keepDays' | 'cleanEveryHours', label: string, max: number) => (
     <label className="field">
       <span>{label}</span>
       <input key={s[key]} type="number" inputMode="decimal" min={0} max={max} defaultValue={s[key]} onBlur={(e) => e.target.value !== '' && Number(e.target.value) !== s[key] && save({ [key]: Number(e.target.value) })} />
@@ -146,7 +146,8 @@ export function DiskFields({ disk }: { disk: DiskSettings | undefined }) {
       {num('warnPct', 'Warn me when a disk has less free than (%)', 90)}
       {num('warnGb', '…or less free than (GB)', 10_000)}
       {num('holdGb', 'Hold new builds, QA and previews below (GB free)', 10_000)}
-      <p className="muted small">You get one notification when a disk goes below the warning. Below the hold, running work carries on and new work waits until there is room again.</p>
+      {num('rearmGb', 'Warn again once free space was back above the warning by (GB)', 10_000)}
+      <p className="muted small">You get one notification when a disk goes below the warning, one more if it reaches the hold, and a reminder a day while it stays low. Below the hold, running work carries on and new work waits until there is room again.</p>
       {num('cleanEveryHours', 'Clean up the office’s leftovers every (hours, 0 = only by hand)', 168)}
       {num('keepDays', 'Remove agents’ temp files untouched for (days)', 365)}
       <p className="muted small">
