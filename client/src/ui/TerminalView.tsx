@@ -232,6 +232,11 @@ export function TerminalView({ agentId, view, jump, details: requestedDetails, p
           <Icon name="ban" /> Blocked: {agent.blocked}. Answer it in the terminal.
         </div>
       )}
+      {agent.nudge && agent.status === 'working' && (
+        <div className="small muted">
+          <Icon name="git-merge" /> {agent.nudge}
+        </div>
+      )}
       {signIn && agent.signInWhy && (
         <div className="sign-in-note sign-in-sheet" role="status">
           <b>

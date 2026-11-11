@@ -54,7 +54,7 @@
   min-width: 0;
   background: var(--paper);
 }
-/* expanded: the threads column (280px, threads.css) beside the chat, which keeps its dragged width (#212), and the
+/* expanded: the threads column (280px, threads.css; folded to a rail or hidden, the chat takes its width, #396) beside the chat, which keeps its dragged width (#212), and the
    artifact or file it opens beside the dock, not over it (#132) */
 .pk-dock-body {
   flex: 1;

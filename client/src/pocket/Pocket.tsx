@@ -15,6 +15,7 @@ import { CiOutageBanner } from '../ui/CiOutageBanner';
 import { Panel } from '../ui/Panel';
 import { Chat } from '../ui/Chat';
 import { ThreadsColumn } from '../ui/ChatHistory';
+import { useShowing } from '../ui/surfaces';
 import { useCall } from '../ui/voiceCallStore';
 import { setMode, useLayout, useMode } from './mode';
 import { switchOffice, typingIn } from './switchOffice';
@@ -399,6 +400,7 @@ export default function Pocket() {
   const [dockW, setDockW] = useDockWidth();
   // the chat's width for what opens beside the docked chat and its threads column (pocket.css, #132)
   useEffect(() => document.documentElement.style.setProperty('--pk-dock-w', `${dockW}px`), [dockW]);
+  const threadsSheet = useShowing('threads'); // the column steps aside while the Threads sheet shows them (#396)
   const [drawer, setDrawer] = useState(false);
   const tucked = useCall((s) => s.chatTucked); // behind a voice call (#287)
   const dock = (layout === 'expanded' ? dockPref : layout === 'medium' && drawer) && !tucked;
@@ -752,7 +754,7 @@ export default function Pocket() {
             </div>
             {/* wide, the threads in a column beside the chat, and what it opens beside them (#132) */}
             <div className="pk-dock-body">
-              {layout === 'expanded' && <ThreadsColumn ceoName={ceoName} />}
+              {layout === 'expanded' && <ThreadsColumn ceoName={ceoName} hidden={threadsSheet} />}
               {chat}
             </div>
           </aside>

@@ -86,6 +86,7 @@ export interface AccountsView {
   accounts: AccountView[];
   rotation?: RotationStats; // absent in old journals
   sources?: UsageSource[]; // usage for every account and provider (#361), worst first: in the snapshot, then usageSources events
+  next?: { claude: string | null; ceo: string | null }; // the Claude account the next agent's and the CEO's session start on (#383)
   switching?: Switching[]; // a new default while open tasks finish on the old one (#390); absent: none
 }
 

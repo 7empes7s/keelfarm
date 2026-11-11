@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { feedbackLine, feedbackPrompt, nextStatus, react, reactionCounts, reactionWho, reactTarget, replyTarget, statusLabel, telegramReaction, turnEnding, type StatusEvent } from './reactions.ts';
+import { feedbackLine, feedbackPrompt, foldedReply, nextStatus, react, reactionCounts, reactionWho, reactTarget, replyTarget, statusLabel, telegramReaction, turnEnding, type StatusEvent } from './reactions.ts';
 import type { PhoneMessage, StatusReaction } from './types.ts';
 
 const msg = (id: number, from: PhoneMessage['from'], extra: Partial<PhoneMessage> = {}): PhoneMessage => ({ id, from, text: `message ${id}`, at: id, ...extra });
@@ -64,6 +64,32 @@ describe('a turn that ends without words', () => {
     expect(turnEnding('Done.', {})).toBe('reply');
     expect(turnEnding('', { attachments: [{ id: 'f1', name: 'plan.md', type: 'text/markdown', size: 10, from: 'ceo', at: 1, keep: false }] })).toBe('reply');
     expect(turnEnding('', { actions: [{} as NonNullable<PhoneMessage['actions']>[number]] })).toBe('reply');
+  });
+});
+
+describe('a turn that answered with reply or react (#378)', () => {
+  const card = { label: 'Filed floor 3 #377 · queued' } as unknown as NonNullable<PhoneMessage['actions']>[number];
+  const log = { steps: [{ label: 'Answered message 4', icon: '💬', state: 'done' as const, ms: 10 }], count: 15, ms: 24_000 };
+
+  it('folds a recap after a reply into its steps row: one bubble, the summary inside', () => {
+    const text = 'Both messages are answered on your phone.\n\n```spoken\nBoth answered.\n```';
+    expect(turnEnding(text, {}, 'reply')).toBe('fold');
+    const reply: PhoneMessage = { id: 7, from: 'ceo', text: 'On it.', at: 1, replyTo: 4 };
+    expect(foldedReply(reply, text, { log, actions: [card] })).toEqual({ summary: 'Both messages are answered on your phone.', log, actions: [card] });
+    expect(turnEnding('', { actions: [card] }, 'reply')).toBe('fold'); // its cards move onto the reply
+  });
+
+  it('keeps a bubble for what the recap carries: suggestions, an artifact, files, a research plan', () => {
+    expect(turnEnding('Done.\n```suggestions\nYes\nNo\n```', {}, 'reply')).toBe('reply');
+    expect(turnEnding('```artifact title="Plan"\n# Plan\n```', {}, 'reply')).toBe('reply');
+    expect(turnEnding('Here.', { attachments: [{ id: 'f1', name: 'plan.md', type: 'text/markdown', size: 10, from: 'ceo', at: 1, keep: false }] }, 'reply')).toBe('reply');
+    expect(turnEnding('The plan.', { research: { topic: 'x' } }, 'reply')).toBe('reply');
+  });
+
+  it('makes a recap after only a reaction a quiet pill, its action cards a bubble, a spoken line nothing', () => {
+    expect(turnEnding('Reacted 👍.', {}, 'react')).toBe('pill');
+    expect(turnEnding('Filed it.', { actions: [card] }, 'react')).toBe('reply');
+    expect(turnEnding('```spoken\nDone.\n```', {}, 'react')).toBe('quiet');
   });
 });
 

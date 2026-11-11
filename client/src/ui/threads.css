@@ -230,9 +230,53 @@ button.thread-project {
   flex-direction: column;
   border-right: var(--ds-border) solid var(--ds-line-strong);
   background: var(--ds-surface-sunken);
+  transition: width var(--ds-dur-slow) var(--ds-ease); /* none with reduced motion (the tokens are 0 then) */
+}
+.threads-col:not(.threads-rail) {
+  overflow: hidden; /* its list, while it widens */
+}
+.threads-col[hidden] {
+  display: none;
 }
 .threads-col > .conv-body {
   overflow-y: auto;
+}
+/* its header: the title and the fold (#396) */
+.threads-col-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  padding: var(--ds-space-2) var(--ds-space-2) 0 var(--ds-space-3);
+}
+/* folded, a rail: Show the threads (with the unread dot), New thread, Search, the current thread's project dot */
+.threads-rail {
+  position: relative;
+  z-index: 1; /* the buttons' labels slide out over the chat */
+  width: 56px;
+  align-items: center;
+  gap: var(--ds-space-2);
+  padding-top: var(--ds-space-2);
+}
+.threads-rail .xbtn-label {
+  inset: 0 auto 0 0;
+  padding: 0 var(--ds-space-3) 0 calc(100% + var(--ds-space-1));
+}
+.threads-rail .xbtn:not(:hover, :focus-visible) .xbtn-label {
+  clip-path: inset(-6px 100% -6px -6px);
+}
+.threads-rail-project {
+  width: 12px;
+  height: 12px;
+  margin-top: var(--ds-space-1);
+  border-radius: 50%;
+  border: 1px solid var(--ds-line-strong);
+  background: var(--ds-surface-raised);
+}
+.threads-rail-btn .thread-unread {
+  position: absolute;
+  top: 4px;
+  right: 4px;
 }
 /* narrow column: titles (short, capped by titling) and the project chips wrap, so nothing is cut off */
 .threads-col .thread-top {
