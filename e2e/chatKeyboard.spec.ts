@@ -139,6 +139,8 @@ test("the 3D office's phone: the message box on a late, tall keyboard", async ({
   await kb(200, true); // mid-slide
   await page.waitForTimeout(300);
   await kb(474, false); // where it settles, never reported
+  // a frame measuring the settled size before the next check (it must still tell the phone)
+  await page.evaluate(() => document.dispatchEvent(new FocusEvent('focusin')));
   await page.waitForTimeout(1500);
 
   const [input, v] = await Promise.all([phone.locator('.chat-input').boundingBox(), visible(page)]);
