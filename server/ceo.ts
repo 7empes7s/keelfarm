@@ -187,7 +187,7 @@ export interface OfficeHandlers extends WaitHandlers, ReactHandlers, SetupHandle
   stopAgent(a: { agent_id: string; reason: string }): string;
   messageAgent(a: { floor: number; agent_id: string; text: string }): Promise<string>;
   assignIssue(a: { floor: number; number: number; agent?: string }): Promise<string>;
-  answerAgent(a: { agent_id: string; text: string }): Promise<string>;
+  answerAgent(a: { agent_id: string; text: string; asked_in?: number }): Promise<string>;
   askManagerChoice(a: { agent_id: string; question: string; options: string[]; recommendation: string }): string;
   qaReport(a: { floor: number; pr: number }): string;
   worktreeFile(a: { agent_id: string; mode: 'file' | 'diff_stat' | 'diff'; path?: string }): Promise<string>;
@@ -477,7 +477,7 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
       { floor: z.number().int(), number: z.number().int().positive().describe('The issue number'), agent: z.string().max(80).optional().describe('An id or name from company_status, or "next free"') },
       (a) => run(() => h.assignIssue(a)),
     ),
-    tool('answer_agent', "Answer an agent's open question (company_status questions, or a follow-up's event): typed into their session as their next message, and they carry on.", { agent_id: z.string().describe('An id (or name) from company_status'), text: z.string().min(1).max(2000).describe('Your answer, with the reason in a sentence') }, (a) => run(() => h.answerAgent(a))),
+    tool('answer_agent', "Answer an agent's open question (company_status questions, or a follow-up's event): typed into their session as their next message, and they carry on. One with the manager: only with asked_in, their message that answers it.", { agent_id: z.string().describe('An id (or name) from company_status'), text: z.string().min(1).max(2000).describe('Your answer, with the reason in a sentence'), asked_in: ASKED_IN.optional() }, (a) => run(() => h.answerAgent(a))),
     tool('ask_manager_choice', "Bring an agent's open question to the manager when only they can decide (a product call, credentials, something only they know). Their phone gets the question with one-tap options; their answer goes straight to the agent.", { agent_id: z.string(), question: z.string().min(1).max(600).describe('One plain sentence the manager can answer from their phone'), options: z.array(z.string().min(1).max(80)).min(2).max(4).describe('The choices, shortest wording'), recommendation: z.string().min(1).max(300).describe('Your pick and why, in a sentence') }, (a) => run(() => h.askManagerChoice(a))),
     tool(
       'qa_report',

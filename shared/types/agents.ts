@@ -216,6 +216,7 @@ export interface AgentView {
   blocked?: string | null; // waiting on a prompt the office couldn't answer (server/unblock.ts): why
   nudge?: string; // live leases (#398): what the office last told them about a file conflict, e.g. "Told to merge main: server/swarm/core.ts"
   waiting?: AgentQuestion['to'] | null; // waiting on an answer to their question (shared/questions.ts): from whom
+  answered?: number | null; // when the answer to their latest question reached them (#508)
   reviewedBy?: string | null; // the CEO's name while it decides about a manager's change to their running work (#207)
   career: CareerView | null; // their record on the team (#226); null for the CEO
   log: LogLine[]; // the terminal log: hiring answers with it; snapshots leave it empty (tabs get lines by watch, shared/watch.ts)

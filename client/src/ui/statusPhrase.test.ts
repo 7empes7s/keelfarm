@@ -6,6 +6,13 @@ const pr = { isDraft: false, mergeable: 'MERGEABLE', checks: 'passing' as const 
 const names = (id: string | null) => ({ m: 'Margaret', d: 'Dev' })[id ?? ''];
 
 describe('status phrases', () => {
+  it("say when the answer to their question reached them, until they ask again (#508)", () => {
+    const at = new Date(2026, 10, 11, 17, 12).getTime();
+    const working = { ...agent, status: 'working' as const, task: 'issue' as const, issueNumber: 12 };
+    expect(agentPhrase({ ...working, answered: at })).toBe('Building #12 · opens a PR, then QA tests it · Answer delivered 17:12');
+    expect(agentPhrase({ ...working, answered: at, waiting: 'manager' })).not.toContain('Answer delivered');
+  });
+
   it('say what an agent does and what happens next', () => {
     expect(agentPhrase(agent, { autoAssign: true })).toBe('Free · gets the next ready issue by itself');
     expect(agentPhrase(agent)).toBe('Free · waiting for you to hand them work');

@@ -24,6 +24,7 @@ export interface AgentLike {
   prNumber: number | null;
   blocked?: string | null;
   waiting?: 'ceo' | 'manager' | null;
+  answered?: number | null; // when the answer to their question reached them (#508)
   reviewedBy?: string | null;
   needsSignIn?: boolean;
 }
@@ -35,8 +36,15 @@ const NEXT: Record<NeedsWhy, string> = {
   'sign-in': 'open their terminal',
 };
 
-/** What an agent is doing, and what happens next. `autoAssign`: their floor hands out work by itself. */
+const hhmm = (at: number) => new Date(at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+
+/** What an agent is doing, and what happens next (and when their question's answer reached them). `autoAssign`: their floor hands out work by itself. */
 export function agentPhrase(a: AgentLike, o: { autoAssign?: boolean } = {}): string {
+  const p = doing(a, o);
+  return a.answered && !a.waiting ? `${p} · Answer delivered ${hhmm(a.answered)}` : p;
+}
+
+function doing(a: AgentLike, o: { autoAssign?: boolean }): string {
   const working = a.status === 'working' || a.status === 'preparing';
   const why = needsYou(a);
   if (why) return `${needsYouLine(a.name ?? 'this agent', why)} · ${NEXT[why]}`;
