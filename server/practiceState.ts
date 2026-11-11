@@ -13,6 +13,7 @@ export class FloorPractice {
   private heldSince = new Map<number, number>();
   holds: LeaseHold[] = [];
   issueFiles = new Map<number, string[]>(); // the files earlier PRs for each issue changed, closed ones too (#256)
+  diffs = new Map<string, { files: string[]; base: string }>(); // live leases (#398): agent id -> what their worktree changed, since which main commit
 
   /** Paths the floor is known to have: what bare file names in an issue resolve to. */
   known(): string[] {
