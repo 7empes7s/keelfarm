@@ -3,6 +3,7 @@
 // CEO reply quotes, when a turn ends without a bubble, the manager's 👍 / 👎 as feedback for the CEO's next job, and
 // Telegram's nearest reaction.
 import { excerpt } from './chat.ts';
+import { parseCeoMessage } from './chatParts.ts';
 import type { MessageReaction, PhoneMessage, StatusReaction } from './types.ts';
 
 /** What the CEO's react tool may put under a message. */
@@ -58,9 +59,36 @@ export function reactTarget(messages: readonly PhoneMessage[], id?: number): Pho
   return mine.filter(isOpen).at(-1) ?? mine.at(-1) ?? 'The manager has sent nothing to react to yet.';
 }
 
-/** A turn's ending: a bubble when it says something, sends files or did something (its action cards); else it ends quietly (a reaction, or nothing to add). */
-export function turnEnding(text: string, extra: Pick<PhoneMessage, 'attachments' | 'actions'>): 'reply' | 'quiet' {
-  return text.trim() || extra.attachments?.length || extra.actions?.length ? 'reply' : 'quiet';
+/**
+ * A turn's ending: a bubble when it says something, sends files or did something (its action cards); else it ends
+ * quietly (a reaction, or nothing to add). After the turn answered with the reply tool (`answered`: 'reply') or only a
+ * reaction ('react'), its closing text is a recap, deterministically (#378): it folds into that reply's steps row
+ * ('fold'), or a quiet pill when no reply bubble took it ('pill'). It stays its own bubble when it carries something of
+ * its own: suggestions, an artifact, a chart, an idea, files or a research plan (and, after a reaction only, action cards).
+ */
+export function turnEnding(text: string, extra: Pick<PhoneMessage, 'attachments' | 'actions' | 'research'>, answered: 'reply' | 'react' | null = null): 'reply' | 'quiet' | 'fold' | 'pill' {
+  if (!(text.trim() || extra.attachments?.length || extra.actions?.length)) return 'quiet';
+  if (!answered || extra.attachments?.length || extra.research || carriesContent(text)) return 'reply';
+  if (answered === 'reply') return 'fold';
+  return extra.actions?.length ? 'reply' : parseCeoMessage(text).text.trim() ? 'pill' : 'quiet';
+}
+
+function carriesContent(text: string): boolean {
+  const p = parseCeoMessage(text);
+  return !!(p.suggestions?.length || p.artifacts?.length || p.visuals?.length || p.idea);
+}
+
+/** The most of a folded closing text the reply keeps. */
+const SUMMARY_MAX = 1000;
+
+/**
+ * What a turn's last reply bubble takes when its closing text folds into it (#378): the text (its ```spoken block
+ * dropped) as the steps row's Summary, the turn's steps, what it used, and its action cards after any it had.
+ */
+export function foldedReply(reply: Pick<PhoneMessage, 'actions'>, text: string, extra: Pick<PhoneMessage, 'log' | 'actions' | 'used'>): Pick<PhoneMessage, 'summary' | 'log' | 'actions' | 'used'> {
+  const summary = parseCeoMessage(text).text.trim().slice(0, SUMMARY_MAX);
+  const actions = [...(reply.actions ?? []), ...(extra.actions ?? [])];
+  return { ...(summary && { summary }), ...(extra.log && { log: extra.log }), ...(extra.used && { used: extra.used }), ...(actions.length && { actions }) };
 }
 
 /** The reactions after `by` reacts with `emoji`: the CEO keeps one (a new one replaces it), the manager toggles theirs (at most MANAGER_MAX). */

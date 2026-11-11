@@ -69,6 +69,7 @@ export abstract class SwarmAgents extends SwarmMerge {
     shareFrom: this.backend.accounts.shareFrom?.(),
     poll: !process.env.VITEST,
     rotation: () => rotationSettings(this.state.settings.rotation, undefined),
+    tasks: () => this.runningTaskAccounts(),
   });
 
   // ---------- agents ----------
