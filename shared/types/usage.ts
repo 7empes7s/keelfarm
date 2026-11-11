@@ -30,6 +30,7 @@ export interface UsageSource {
   agents?: string[]; // ids of the agents (and the CEO) pinned to it
   history?: [number, number][]; // [at, worst window %], the last day, for its detail
   split?: UsageSplit; // a Claude or Codex account's: who spent its window, from the cost ledger (#409)
+  watchBack?: boolean; // limited, and the manager asked to be told when it's back (#404)
 }
 
 /** One row of a split: a floor ('' the CEO), an agent or a kind of task, by spend. */

@@ -1,5 +1,5 @@
 // The demo's Providers & accounts (#247): made-up accounts (a second Max subscription, an Ultra login whose token
-// expired after its week reset, an Anthropic API key, an OpenAI key, a Google AI Plus login), a Test that never leaves the computer, and
+// expired after its week reset, an Anthropic API key, an OpenAI key, a ChatGPT Pro login never signed in, a Google AI Plus login), a Test that never leaves the computer, and
 // sign-ins drawn as the CLIs' own (demoSignIn.ts).
 import fs from 'node:fs';
 import path from 'node:path';
@@ -22,6 +22,7 @@ const SEED: ProviderAccount[] = [
   { id: 'claude-ultra', cli: 'claude', kind: 'subscription-login', label: 'Claude Ultra', tags: ['ultra'], priority: 3, enabled: true, plan: 'Ultra' },
   { id: 'claude-apikey', cli: 'claude', kind: 'api-key', label: 'Anthropic API', tags: ['api'], priority: 2, enabled: true, plan: 'API', dailyCostCap: 20 },
   { id: 'codex-apikey', cli: 'codex', kind: 'api-key', label: 'OpenAI API', tags: ['api'], priority: 1, enabled: false, plan: 'API' },
+  { id: 'codex-pro', cli: 'codex', kind: 'subscription-login', label: 'ChatGPT Pro', tags: ['pro'], priority: 2, enabled: true, plan: 'Pro' }, // never signed in: the usage card's Sign in (#404)
   { id: 'gemini-plus', cli: 'gemini', kind: 'subscription-login', label: 'Google AI Plus', tags: ['gemini'], priority: 0, enabled: true, plan: 'Plus' }, // the demo's Gemini CLI agent runs on it (#365)
 ];
 

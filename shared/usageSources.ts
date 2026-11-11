@@ -239,6 +239,21 @@ export interface UsageAlert {
   text: string;
 }
 
+/**
+ * "Notify me when it's back" (#404): the sources watched that aren't limited any more, as notifications, and the
+ * watches left (a source gone from the card is dropped without one).
+ */
+export function backAlerts(list: readonly UsageSource[], watching: readonly string[]): { alerts: Omit<UsageAlert, 'key'>[]; watching: string[] } {
+  const alerts: Omit<UsageAlert, 'key'>[] = [];
+  const left = watching.filter((id) => {
+    const s = list.find((x) => x.id === id);
+    if (s?.status === 'limited') return true;
+    if (s) alerts.push({ title: `${s.label} is back`, text: 'Its limit has reset: agents can work on it again.' });
+    return false;
+  });
+  return { alerts, watching: left };
+}
+
 /** A window's key for "already told": the source, the window and its reset (to the hour, as readings jitter). */
 const alertKey = (s: UsageSource, w: UsageWindow) => `${s.id}|${w.name}|${w.resetsAt === null ? '-' : Math.round(w.resetsAt / HOUR)}`;
 

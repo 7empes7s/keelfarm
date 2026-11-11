@@ -39,11 +39,11 @@ export function OnItNow({ accountId, pinned, now, close }: { accountId: string; 
                 <span className="muted small us-who-since">{ago(run.at, now)}</span>
               </button>
               <span className="us-who-chips">
-                <button type="button" className="ds-btn us-chip" onClick={() => open({ kind: 'kanban', repoId: agent.repoId })} disabled={!agent.repoId || agent.role === 'ceo'}>
+                <button type="button" className="ds-btn us-who-chip" onClick={() => open({ kind: 'kanban', repoId: agent.repoId })} disabled={!agent.repoId || agent.role === 'ceo'}>
                   {agent.role === 'ceo' ? 'CEO' : floorName(agent.repoId, repos)}
                 </button>
                 {task.open ? (
-                  <button type="button" className="ds-btn us-chip" onClick={() => open(task.open!)}>
+                  <button type="button" className="ds-btn us-who-chip" onClick={() => open(task.open!)}>
                     {task.words}
                   </button>
                 ) : (
@@ -59,7 +59,7 @@ export function OnItNow({ accountId, pinned, now, close }: { accountId: string; 
           <b className="small">Pinned</b> <span className="muted small">their next session starts here while it has room</span>
           <span className="us-who-chips">
             {who.pinned.map((a) => (
-              <button key={a.id} type="button" className="ds-btn us-chip" onClick={() => open({ kind: 'terminal', agentId: a.id })} title={`Open ${a.name}'s window`}>
+              <button key={a.id} type="button" className="ds-btn us-who-chip" onClick={() => open({ kind: 'terminal', agentId: a.id })} title={`Open ${a.name}'s window`}>
                 <span className="dot" style={{ background: a.color }} aria-hidden /> {a.name}
                 {a.role === 'ceo' ? ' (CEO)' : ''}
               </button>

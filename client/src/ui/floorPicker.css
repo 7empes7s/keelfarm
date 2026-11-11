@@ -1,0 +1,91 @@
+/* The floor picker (#412, FloorPicker.tsx): an elevator panel's row of level plates. */
+
+.floor-picker {
+  position: relative; /* the plates' offsetLeft is measured from the row */
+  display: flex;
+  gap: var(--ds-space-2);
+  max-width: 100%;
+  padding: var(--ds-space-2);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  border: var(--ds-border) solid var(--ds-line-strong);
+  border-radius: var(--ds-radius-lg);
+  background: var(--ds-surface-sunken);
+  box-shadow: inset 0 var(--ds-border) 0 var(--ds-line);
+}
+.floor-picker::-webkit-scrollbar {
+  display: none;
+}
+
+/* a level plate: the theme's tint down its left edge, raised until pressed */
+.fp-plate {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-height: var(--ds-target);
+  max-width: 14rem;
+  padding: var(--ds-space-1) var(--ds-space-3) var(--ds-space-1) var(--ds-space-3);
+  scroll-snap-align: start;
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-md);
+  background:
+    linear-gradient(var(--fp-tint), var(--fp-tint)) left / var(--ds-space-1) 100% no-repeat,
+    var(--ds-surface-raised);
+  color: var(--ds-text);
+  font: inherit;
+  font-weight: var(--ds-weight-strong);
+  font-size: var(--ds-text-sm);
+  box-shadow: var(--ds-shadow-2);
+  cursor: pointer;
+  transition:
+    transform var(--ds-dur-fast) var(--ds-ease),
+    box-shadow var(--ds-dur-fast) var(--ds-ease);
+}
+.fp-plate:hover {
+  background:
+    linear-gradient(var(--fp-tint), var(--fp-tint)) left / var(--ds-space-1) 100% no-repeat,
+    var(--ds-surface-hover);
+}
+.fp-plate:active,
+.fp-plate-on {
+  transform: translateY(var(--ds-border));
+  box-shadow: inset 0 var(--ds-border) 0 var(--ds-line-strong);
+}
+
+/* the floor number's display: unlit on the panel, lit in the floor's colour and ringed when picked */
+.fp-num {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  min-width: var(--ds-space-8);
+  height: var(--ds-space-8);
+  padding: 0 var(--ds-space-1);
+  border: var(--ds-border) solid var(--ds-line-strong);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface-sunken);
+  color: var(--ds-text);
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--ds-text-md);
+  line-height: 1;
+  transition:
+    background var(--ds-dur) var(--ds-ease),
+    color var(--ds-dur) var(--ds-ease);
+}
+.fp-plate-on .fp-num {
+  border-color: var(--ds-outline);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-outline);
+  color: var(--accent);
+  box-shadow: 0 0 0 var(--ds-border) var(--ds-surface-raised), 0 0 0 calc(var(--ds-border) * 2) var(--accent);
+  text-shadow: 0 0 var(--ds-space-2) var(--accent);
+}
+.fp-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
