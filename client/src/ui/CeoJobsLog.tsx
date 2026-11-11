@@ -19,6 +19,7 @@ const tokens = (n: number | null) => (n === null ? '—' : n >= 1000 ? `${Math.r
 export function CeoJobsLog({ onOpen }: { onOpen: (id: string) => void }) {
   const seq = useStore((s) => s.historySeq);
   const ceo = useCeoModel();
+  const accounts = useStore((s) => s.accounts.accounts);
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
   const [more, setMore] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -80,7 +81,7 @@ export function CeoJobsLog({ onOpen }: { onOpen: (id: string) => void }) {
                   </b>
                   <span className="small">{j.trigger}</span>
                   <span className="muted small">
-                    {[modelLabel(e.model), e.effort && `${e.effort} effort`, j.fresh ? 'fresh' : 'resumed', `${tokens(j.inputTokens)} in / ${tokens(j.outputTokens)} out`, e.usd > 0 && fmtUsd(e.usd), `${Math.max(0, Math.round((e.at - e.startedAt) / 60_000))}m`].filter(Boolean).join(' · ')}
+                    {[e.account && (accounts.find((x) => x.id === e.account)?.label ?? e.account), modelLabel(e.model), e.effort && `${e.effort} effort`, j.fresh ? 'fresh' : 'resumed', `${tokens(j.inputTokens)} in / ${tokens(j.outputTokens)} out`, e.usd > 0 && fmtUsd(e.usd), `${Math.max(0, Math.round((e.at - e.startedAt) / 60_000))}m`].filter(Boolean).join(' · ')}
                   </span>
                   {(tools || j.issues > 0) && <span className="muted small">{[tools, j.issues > 0 && `${j.issues} issue${j.issues === 1 ? '' : 's'} filed`].filter(Boolean).join(' · ')}</span>}
                   {(j.redoOf !== undefined || redoneBy !== null) && <span className="small">{j.redoOf !== undefined ? `Redo of job #${j.redoOf}` : `Redone on ${ceo.family} as job #${redoneBy}`}</span>}

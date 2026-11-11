@@ -29,6 +29,7 @@ import { HistoryButton } from './HistoryTab';
 import { useTermKeysPref } from './TermKeyBar';
 import { PHONE_WINDOW_QUERY, stepFont, termFontSize, unzoomedFont } from './termLayout';
 import { useA11y } from './a11y';
+import { RunChip } from './RunChip';
 import { Icon } from './Icon';
 import { copySignInLink, SignInSteps } from './SignInCard';
 import { troubleLine } from '../../../shared/keyTrouble';
@@ -450,6 +451,7 @@ export function TerminalView({ agentId, view, jump, details: requestedDetails, p
     <Panel wide accent={agent.color} className={`aw ${phone ? 'term-phone' : 'aw-desk'}`} title={title}>
       <div className={`aw-body ${!phone && details ? 'aw-body-side' : ''}`}>
         <div className="aw-main">
+          <RunChip run={agent.run} className="aw-run" />
           {notes}
           {noChat && chatMode.on && agent.role !== 'ceo' && <p className="ac-note">{noChat}</p>}
           {split}

@@ -5,6 +5,7 @@ import './threads.css';
 import { groupThreads, inScope, unreadThread, type Conversation, type ConversationHit, type ThreadScope } from '../../../shared/conversations';
 import { Sheet } from './ChatArtifacts';
 import { Icon } from './Icon';
+import { RunChip } from './RunChip';
 import { CeoMemory } from './CeoMemory';
 import { Menu } from './Menu';
 import { openOnce } from './surfaces';
@@ -63,6 +64,7 @@ function Row({ c, current, unread, snippet, floorOf, onOpen }: { c: Conversation
             ) : null}
           </span>
         </span>
+        <RunChip run={c.run} />
         {snippet && <span className="small conv-snippet">{snippet}</span>}
       </button>
       <Menu

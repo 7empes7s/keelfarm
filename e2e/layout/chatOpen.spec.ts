@@ -56,6 +56,18 @@ const SCREENS: Screen[] = [
     tabs: [],
   },
   {
+    // the chat header's and the threads list's run chips (#376), with the threads list open beside the chat
+    name: 'chat open: run chips',
+    widths: [390, 1280],
+    open: async (page) => {
+      await page.request.post('/api/ceo/message', { data: { text: 'Which account are you on?' } });
+      const root = await pocket(page, 'chat');
+      await expect(root.locator('.thread-bar .run-chip')).toBeVisible({ timeout: 90_000 });
+      return root;
+    },
+    tabs: [],
+  },
+  {
     name: 'chat open: terminal',
     widths: WIDTHS,
     open: async (page) => {
