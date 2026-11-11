@@ -25,7 +25,9 @@ export abstract class SwarmSetup extends SwarmDisk {
   protected reviewNew = false; // set once init starts: floors moved in from then on get the checklist
 
   protected override repoView(r: PersistedRepo): RepoView {
-    return { ...super.repoView(r), setup: this.floorSetupView(r) };
+    const setup = this.floorSetupView(r);
+    // a floor not guessed yet with nothing to fix: left out, the client draws it empty (the snapshot's budget, #228)
+    return setup.useCase || setup.gaps.length || setup.snoozed ? { ...super.repoView(r), setup } : super.repoView(r);
   }
 
   private floorSetupView(r: PersistedRepo): FloorSetupView {

@@ -6,7 +6,7 @@ import { create } from 'zustand';
 import { api } from '../api';
 import { useStore } from '../store';
 import { USE_CASES, caseDef } from '../../../shared/useCases';
-import type { RepoView, SetupAction, SetupGap, SetupSheet, UseCase } from '../../../shared/types';
+import type { FloorSetupView, RepoView, SetupAction, SetupGap, SetupSheet, UseCase } from '../../../shared/types';
 import { go } from './goTo';
 import { Icon } from './Icon';
 import type { IconName } from './icons';
@@ -15,6 +15,9 @@ import './floorSetup.css';
 
 /** The guide Settings → Guides shows (null: the list). */
 export const useGuide = create<{ open: UseCase | null }>(() => ({ open: null }));
+
+/** A floor not guessed yet: the server leaves its empty setup out of the snapshot. */
+const NOT_GUESSED: FloorSetupView = { useCase: null, guessed: false, guessWhy: '', gaps: [], snoozed: 0, review: false };
 
 export const caseIcon = (u: UseCase) => caseDef(u).icon as IconName;
 
@@ -71,8 +74,7 @@ function GapCard({ repo, gap, onAct }: { repo: RepoView; gap: SetupGap; onAct?: 
 /** The floor's use case, and the sheet to change it. */
 function UseCaseRow({ repo }: { repo: RepoView }) {
   const [picking, setPicking] = useState(false);
-  const s = repo.setup;
-  if (!s) return null;
+  const s = repo.setup ?? NOT_GUESSED;
   return (
     <div className="fs-usecase">
       {s.useCase ? (
@@ -165,8 +167,7 @@ export function RecommendedSetup({ useCase, repo }: { useCase: UseCase; repo?: R
 
 /** The floor's card in Floors & repos: its use case, then its open gaps (or that it's set up). */
 export function FloorSetupCard({ repo }: { repo: RepoView }) {
-  const s = repo.setup;
-  if (!s) return null;
+  const s = repo.setup ?? NOT_GUESSED;
   return (
     <section className="fs-card" aria-label={`Floor ${repo.floor} setup`}>
       <h4>

@@ -18,6 +18,7 @@ type Inside = {
   initProviders(): Promise<void>;
   reviewNew: boolean;
   refreshFloorSetup(): void;
+  floorGaps: Map<string, unknown[]>;
   isFree(a: PersistedAgent): boolean;
   ensureCeo(interrupted: unknown[]): void;
   officeTools(): OfficeTools;
@@ -47,6 +48,13 @@ describe('the setup advisor in the office', () => {
     const snap = JSON.stringify(swarm.snapshot());
     for (const secret of swarm.providers.secretValues()) expect(snap).not.toContain(secret);
     expect(swarm.providers.secretValues().length).toBeGreaterThan(0);
+  });
+
+  it("leaves a floor not guessed yet with nothing to fix out of the snapshot (#228's budget)", async () => {
+    const { swarm, inside, id, repo } = await office();
+    repo().setup = undefined;
+    inside.floorGaps.delete(id);
+    expect(swarm.snapshot().repos.find((r) => r.id === id)).not.toHaveProperty('setup');
   });
 
   it('applies a fix, remembers Not now, and notifies once per gap', async () => {
