@@ -10,6 +10,7 @@ import { matchCommands } from './chatCardRules';
 import { reduceMotion } from './a11y';
 import { newSince, stepsFor, textParts, TOUR, isStep, type TourStep, type Track, type TryIt } from './tourSteps';
 import { openWhatsNew, saveSeen, seenNow, useTour } from './tour';
+import { useTourGate } from './tourGate';
 import { Icon } from './Icon';
 import './tour.css';
 import { useChatMode } from './chatMode';
@@ -166,6 +167,9 @@ export function Tutorial({ track }: { track: Track }) {
 
   // Move on by itself once the thing the step asks for has happened.
   const id = active ? steps[at]?.id : undefined;
+  // In the 3D office the step on screen decides what else may open (tourGate.ts).
+  useEffect(() => useTourGate.setState({ step: track === 'office' ? (id ?? null) : null }), [track, id]);
+  useEffect(() => () => useTourGate.setState({ step: null }), []);
   useEffect(() => {
     const rule = id ? DONE[id] : undefined;
     if (!rule) return;

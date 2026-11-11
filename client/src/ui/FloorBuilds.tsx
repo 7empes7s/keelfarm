@@ -1,10 +1,12 @@
 // "What's new on this floor" (#129): a swipeable row of cards on a floor's board and its pocket Company card, one per
-// recent build (floorBuildCards.ts), each opening its preview (a merged PR's: main's), or the builder's terminal while
-// there's nothing to run. A card with nothing to open is not a button.
+// recent build (floorBuildCards.ts). A PR's card opens the PR's page and its "Open preview" button the preview (a
+// merged PR's: main's, #407); other cards open their preview, or the builder's terminal while there's nothing to run.
+// A card with nothing to open is not a button.
 import { useMemo } from 'react';
 import { useStore } from '../store';
 import { BUILD_LABEL, cardAction, cardActionLabel, floorBuilds, type CardAction, type BuildStatus } from './floorBuildCards';
 import { Icon } from './Icon';
+import { prPage } from './prNav';
 import type { IconName } from './icons';
 import './floorBuilds.css';
 
@@ -37,40 +39,57 @@ export function FloorBuilds({ repoId }: { repoId: string }) {
           const agent = c.agentId ? agents[c.agentId] : undefined;
           const act = cardAction(c);
           const label = cardActionLabel(c, act);
-          const Card = act ? 'button' : 'div';
-          return (
-            <div key={c.key} role="listitem" className="fb-item">
-              <Card className={`fb-card fb-${c.status} ${act ? '' : 'fb-card-still'}`} onClick={act ? () => open(act) : undefined} title={c.pr ? `PR #${c.pr} ${c.title}` : c.title}>
-                <span className="fb-thumb" aria-hidden>
-                  {c.shot ? (
-                    <img src={c.shot} alt="" loading="lazy" />
-                  ) : (
-                    <span className="fb-thumb-glyph">
-                      <Icon name={c.status === 'live' ? 'monitor' : GLYPH[c.status]} />
-                    </span>
-                  )}
-                  {c.preview === 'running' && <span className="fb-running"><Icon name="circle-dot" /> live</span>}
-                </span>
-                <span className="fb-title">
-                  {c.pr ? <span className="muted">#{c.pr} </span> : null}
-                  {c.title}
-                </span>
-                <span className="fb-meta">
-                  {agent && (
-                    <span className="fb-avatar" style={{ background: agent.color }} title={agent.name}>
-                      {agent.name[0]}
-                    </span>
-                  )}
-                  <span className="fb-chip">
-                    <Icon name={GLYPH[c.status]} /> {BUILD_LABEL[c.status]}
-                  </span>
-                </span>
-                {label && (
-                  <span className="fb-open">
-                    {label} <Icon name="chevron-right" />
+          const page = c.pr != null ? prPage(repo, c.pr) : null;
+          const tap = page ? () => openOverlay(page) : act ? () => open(act) : undefined;
+          const Card = tap ? 'button' : 'div';
+          const title = c.pr ? `PR #${c.pr} ${c.title}` : c.title;
+          const body = (
+            <Card className={page ? 'fb-main' : `fb-card fb-${c.status} ${tap ? '' : 'fb-card-still'}`} onClick={tap} title={page ? `Open PR #${c.pr}'s page` : title}>
+              <span className="fb-thumb" aria-hidden>
+                {c.shot ? (
+                  <img src={c.shot} alt="" loading="lazy" />
+                ) : (
+                  <span className="fb-thumb-glyph">
+                    <Icon name={c.status === 'live' ? 'monitor' : GLYPH[c.status]} />
                   </span>
                 )}
-              </Card>
+                {c.preview === 'running' && <span className="fb-running"><Icon name="circle-dot" /> live</span>}
+              </span>
+              <span className="fb-title">
+                {c.pr ? <span className="muted">#{c.pr} </span> : null}
+                {c.title}
+              </span>
+              <span className="fb-meta">
+                {agent && (
+                  <span className="fb-avatar" style={{ background: agent.color }} title={agent.name}>
+                    {agent.name[0]}
+                  </span>
+                )}
+                <span className="fb-chip">
+                  <Icon name={GLYPH[c.status]} /> {BUILD_LABEL[c.status]}
+                </span>
+              </span>
+              {label && !page && (
+                <span className="fb-open">
+                  {label} <Icon name="chevron-right" />
+                </span>
+              )}
+            </Card>
+          );
+          return (
+            <div key={c.key} role="listitem" className="fb-item">
+              {page ? (
+                <div className={`fb-card fb-split fb-${c.status}`} title={title}>
+                  {body}
+                  {act && label && (
+                    <button type="button" className="fb-open fb-open-btn" onClick={() => open(act)}>
+                      {label} <Icon name="chevron-right" />
+                    </button>
+                  )}
+                </div>
+              ) : (
+                body
+              )}
             </div>
           );
         })}
