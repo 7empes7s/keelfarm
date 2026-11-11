@@ -162,9 +162,7 @@ html[data-reduce-motion] {
 .ds-btn:hover:not(:disabled, [aria-disabled='true']) {
   background: var(--ds-surface-hover);
 }
-/* the recommended action, as .btn-good on a .btn (#404) */
-.ds-btn.btn-good,
-.ds-btn.btn-good:hover:not(:disabled, [aria-disabled='true']) {
+.ds-btn.btn-good, .ds-btn.btn-good:hover:not(:disabled, [aria-disabled='true']) { /* the recommended action (#404) */
   background: var(--ds-good-fill);
   color: var(--ds-on-color);
 }
