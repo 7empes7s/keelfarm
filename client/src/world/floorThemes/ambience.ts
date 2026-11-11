@@ -1,5 +1,6 @@
 // A themed floor's ambience (#370), quietly under everything in the score's mixer group: the game studio's low synth
-// pad and distant arcade blips, the trading floor's murmur of voices and keys. Short sounds scheduled every few
+// pad and distant arcade blips, the trading floor's murmur of voices and keys, the lab's and ops room's server hum and
+// beeps (#371). Short sounds scheduled every few
 // seconds rather than a loop, and none while you're behind a panel, between floors or in another tab.
 import { useStore } from '../../store';
 import { noise, tone } from '../../ui/sfx';
@@ -24,6 +25,12 @@ function murmur() {
   if (Math.random() < 0.5) for (let i = 0; i < 4; i++) noise({ ...o, name: 'ambience:keys', at: 0.4 + i * 0.11 + Math.random() * 0.05, dur: 0.03, peak: 0.004, filter: 'bandpass', freq: 3200, q: 2, attack: 0.002, pan: Math.random() - 0.5 });
 }
 
+function hum(n: number) {
+  const o = { name: 'ambience:hum', group: 'score' } as const;
+  if (n % 3 === 0) noise({ ...o, dur: 6.8, peak: 0.012, filter: 'lowpass', freq: 180, q: 0.5, attack: 2 });
+  if (Math.random() < 0.3) tone({ ...o, name: 'ambience:beep', freq: Math.random() < 0.5 ? 1760 : 2093, type: 'sine', dur: 0.08, peak: 0.004, attack: 0.004, pan: Math.random() * 1.4 - 0.7 });
+}
+
 /** Starts the pack's ambience; returns its stop. */
 export function startAmbience(kind: ThemePack['ambience']) {
   let n = 0;
@@ -31,6 +38,7 @@ export function startAmbience(kind: ThemePack['ambience']) {
     const s = useStore.getState();
     if (document.hidden || s.travel !== null || s.overlay !== null) return;
     if (kind === 'synth') synth(n++);
+    else if (kind === 'hum') hum(n++);
     else murmur();
   }, STEP_MS);
   return () => clearInterval(t);

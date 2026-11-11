@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import * as THREE from 'three';
 import { floorPrCounts, pendingRequests, useStore } from '../store';
 import { useKeyName } from '../ui/controls';
@@ -10,8 +10,9 @@ import { Kiosk, TrophyShelf } from './decor/RewardsCorner';
 import { drawSign, roundRect, SANS } from './draw';
 import { Elevator } from './Elevator';
 import { ErrandDirector } from './ErrandDirector';
-import { useCanvasTexture, useInteractable } from './interact';
+import { useCanvasTexture, useInteractable, type Pick as AimPick } from './interact';
 import { Jukebox } from './Jukebox';
+import { directoryRowAt, directoryRows, DIRECTORY_PX } from './lobbyDirectory';
 import { MapTable } from './MapTable';
 import { MeetingRoom } from './MeetingRoom';
 import { MissionControl } from './MissionControl';
@@ -48,6 +49,7 @@ function useOfficeStats() {
       floor: r.floor,
       name: r.fullName,
       color: r.color,
+      theme: r.theme,
       team: list.filter((a) => a.repoId === r.id).length,
       working: list.filter((a) => a.repoId === r.id && (a.status === 'working' || a.status === 'preparing')).length,
       prs: r.pulls.filter((p) => p.state === 'OPEN').length,
@@ -135,61 +137,79 @@ function ManagerComputer() {
   );
 }
 
+/** The building directory by the elevator (#371): every floor with its theme's glyph and colour; tap a row to go there. */
 function Directory() {
   const stats = useOfficeStats();
-  const ref = useInteractable<THREE.Group>({ id: 'directory', label: 'Floor directory — take the elevator', action: { kind: 'elevator' } }, 4);
+  const rows = useMemo(() => directoryRows(stats.floors), [stats.floors]);
+  const pick = useCallback<AimPick>(
+    (point, root) => {
+      const v = 0.5 - root.worldToLocal(point.clone()).y / LOBBY_SCREENS.directory.h;
+      const row = directoryRowAt(rows, v);
+      if (!row) return null;
+      const label = row.floor === 0 ? "Lobby & manager's office: you're here" : `Go to floor ${row.floor} · ${row.name} (${row.theme})`;
+      return { id: `directory:${row.floor}`, label, action: { kind: 'floor', floor: row.floor } };
+    },
+    [rows],
+  );
+  const ref = useInteractable<THREE.Group>({ id: 'directory', label: 'Floor directory — take the elevator', action: { kind: 'elevator' } }, 4, pick);
+  const P = DIRECTORY_PX;
   const tex = useCanvasTexture(
-    768,
-    560,
+    P.w,
+    P.h,
     (ctx) => {
-      roundRect(ctx, 0, 0, 768, 560, 30);
+      roundRect(ctx, 0, 0, P.w, P.h, 30);
       ctx.fillStyle = '#23263a';
       ctx.fill();
       ctx.fillStyle = '#ffd6a5';
       ctx.font = `700 46px ${SANS}`;
       ctx.textBaseline = 'middle';
-      ctx.fillText('Directory', 36, 52);
-      const floors = [...stats.floors].sort((a, b) => b.floor - a.floor).slice(0, 7);
-      floors.forEach((f, i) => {
-        const y = 118 + i * 58;
-        ctx.fillStyle = f.color;
-        roundRect(ctx, 36, y - 22, 54, 44, 12);
+      ctx.fillText('Directory', 36, 50);
+      ctx.fillStyle = '#a9adc6';
+      ctx.font = `500 22px ${SANS}`;
+      ctx.textAlign = 'right';
+      ctx.fillText('tap a floor to go there', 732, 52);
+      ctx.textAlign = 'left';
+      for (const r of rows) {
+        const y = r.y + r.h / 2;
+        const chip = Math.min(44, r.h - 6);
+        const big = Math.max(12, Math.min(28, r.h * 0.5));
+        ctx.fillStyle = r.accent;
+        roundRect(ctx, 26, r.y + 3, 6, r.h - 6, 3);
+        ctx.fill();
+        ctx.fillStyle = r.color;
+        roundRect(ctx, 40, y - chip / 2, chip * 1.2, chip, chip * 0.28);
         ctx.fill();
         ctx.fillStyle = '#1f2233';
-        ctx.font = `700 30px ${SANS}`;
+        ctx.font = `700 ${Math.round(chip * 0.66)}px ${SANS}`;
         ctx.textAlign = 'center';
-        ctx.fillText(String(f.floor), 63, y + 1);
+        ctx.fillText(r.floor === 0 ? 'G' : String(r.floor), 40 + chip * 0.6, y + 1);
+        ctx.font = `${Math.round(chip * 0.62)}px ${SANS}`;
+        ctx.fillText(r.glyph, 64 + chip * 1.2, y + 1);
         ctx.textAlign = 'left';
+        const x = 82 + chip * 1.6;
         ctx.fillStyle = '#ffffff';
-        ctx.font = `600 28px ${SANS}`;
-        const name = f.name.length > 24 ? `${f.name.slice(0, 23)}…` : f.name;
-        ctx.fillText(name, 108, y);
-        ctx.fillStyle = '#a9adc6';
-        ctx.font = `500 24px ${SANS}`;
+        ctx.font = `600 ${Math.round(big)}px ${SANS}`;
+        const name = r.name.length > 22 ? `${r.name.slice(0, 21)}…` : r.name;
+        ctx.fillText(name, x, y);
         ctx.textAlign = 'right';
-        ctx.fillText(`${f.working}/${f.team} busy · ${f.prs} PR`, 740, y);
+        ctx.font = `600 ${Math.round(big * 0.78)}px ${SANS}`;
+        ctx.fillStyle = r.accent;
+        const right = r.stats ? `${r.theme} · ` : r.theme;
+        const statsW = r.stats ? ctx.measureText(r.stats).width : 0;
+        ctx.fillText(right, 740 - statsW, y);
+        ctx.fillStyle = '#a9adc6';
+        if (r.stats) ctx.fillText(r.stats, 740, y);
         ctx.textAlign = 'left';
-      });
-      const gy = 118 + floors.length * 58;
-      ctx.fillStyle = ACCENT;
-      roundRect(ctx, 36, gy - 22, 54, 44, 12);
-      ctx.fill();
-      ctx.fillStyle = '#1f2233';
-      ctx.font = `700 30px ${SANS}`;
-      ctx.textAlign = 'center';
-      ctx.fillText('G', 63, gy + 1);
-      ctx.textAlign = 'left';
-      ctx.fillStyle = '#ffffff';
-      ctx.font = `600 28px ${SANS}`;
-      ctx.fillText("Lobby & manager's office", 108, gy);
+      }
       if (stats.floors.length === 0) {
+        const gy = rows[0].y + rows[0].h;
         ctx.fillStyle = '#a9adc6';
         ctx.font = `500 26px ${SANS}`;
-        ctx.fillText('No floors yet: connect a repo in the', 36, gy + 80);
-        ctx.fillText("manager's office (back left corner).", 36, gy + 116);
+        ctx.fillText('No floors yet: connect a repo in the', 36, gy + 60);
+        ctx.fillText("manager's office (back left corner).", 36, gy + 96);
       }
     },
-    [stats],
+    [rows, stats.floors.length],
   );
   return (
     <group ref={ref} position={LOBBY_SCREENS.directory.at} rotation={[0, Math.PI, 0]}>

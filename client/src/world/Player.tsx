@@ -133,6 +133,10 @@ export function runFocusAction(focus: Focus, via: 'key' | 'click' = 'key') {
     themeAction(focus.action.id);
     return;
   }
+  if (focus.action.kind === 'floor') {
+    s.goToFloor(focus.action.floor);
+    return;
+  }
   if (focus.action.kind === 'roof') {
     roofAction(focus.action.op);
     return;
