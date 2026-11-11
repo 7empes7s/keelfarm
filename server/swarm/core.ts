@@ -438,7 +438,7 @@ export abstract class SwarmCore extends SwarmContract {
       .filter((a) => a.repoId === r.id && a.role !== 'ceo' && a.task !== 'qa' && a.issueNumber != null && BUSY.includes(a.status))
       .map((a) => {
         const issue = rt.issues.find((i) => i.number === a.issueNumber);
-        return { agentId: a.id, issue: a.issueNumber!, pr: a.prNumber, declared: a.declared ?? null, predicted: issue ? predictFiles(`${issue.title}\n${issue.body}`, known) : [] };
+        return { agentId: a.id, issue: a.issueNumber!, pr: a.prNumber, declared: a.declared ?? null, predicted: issue ? predictFiles(`${issue.title}\n${issue.body}`, known) : [], real: fp.diffs.get(a.id)?.files ?? null };
       });
     const pulls = rt.pulls.filter((p) => p.state === 'OPEN' && p.headRefName.startsWith('swarm/')).map((p) => ({ number: p.number, issues: p.closesIssues, files: fp.prFiles.get(p.number)?.files ?? [] }));
     return floorLeases(work, pulls);
@@ -447,7 +447,7 @@ export abstract class SwarmCore extends SwarmContract {
   protected practiceView(r: PersistedRepo): Pick<RepoView, 'practices' | 'practiceOverrides' | 'leases' | 'leaseHolds' | 'hotFiles'> {
     const leases = this.leasesWanted(r);
     const fp = this.practiceRt.get(r.id);
-    return { practices: this.practicesOf(r), practiceOverrides: r.practices ?? {}, leases: leases ? this.leasesOf(r) : [], leaseHolds: (leases && fp?.holds) || [], hotFiles: (leases && fp?.hot) || [] };
+    return { practices: this.practicesOf(r), practiceOverrides: r.practices ?? {}, leases: leases || fp?.diffs.size ? this.leasesOf(r) : [], leaseHolds: (leases && fp?.holds) || [], hotFiles: (leases && fp?.hot) || [] };
   }
 
   protected agentView(a: PersistedAgent, withLog: boolean): AgentView {
