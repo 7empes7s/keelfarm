@@ -10,6 +10,7 @@ import { mergeSecrets, readSecrets } from './secrets.ts';
 import { CloudError, type BoxApi, type BoxInfo } from './box.ts';
 import type { AgentCli, CloudCredentialView, CloudView, KeyTrouble } from '../shared/types.ts';
 import { secretMismatch } from '../shared/secretFormats.ts';
+import { boxCli } from '../shared/cloud.ts';
 
 /** The environment variable the manager keeps their `claude setup-token` token in. */
 export const CLAUDE_TOKEN_ENV = 'CUBEFARM_CLAUDE_TOKEN';
@@ -227,7 +228,7 @@ export class Cloud {
 
   /** The trouble the key a CLI runs on has, while it's saved (#258). */
   trouble(cli: AgentCli): KeyTrouble | null {
-    if (cli === 'opencode' || (cli === 'claude' && this.claudeToken())) return null; // the subscription token comes first
+    if (!boxCli(cli) || (cli === 'claude' && this.claudeToken())) return null; // the subscription token comes first
     const kind = keyKindOf(cli);
     return this.secrets[TOKEN_FIELD[kind]] ? (this.troubles[kind]?.kind ?? null) : null;
   }

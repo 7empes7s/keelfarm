@@ -18,6 +18,10 @@ describe('noticeJump', () => {
     expect(noticeJump({ kind: 'approval', target: { kind: 'floor', repoId: 'r1' }, requestId: 'q1' }, 'office', world)).toEqual({ kind: 'approvals', requestId: 'q1' });
     expect(noticeJump({ kind: 'usage' }, 'office', world)).toBeNull();
   });
+  it("opens the found keys' review, from the notice and its Review button (#367)", () => {
+    expect(noticeJump({ kind: 'keys' }, 'pocket', world)).toEqual({ kind: 'keys' });
+    expect(noticeStep('reviewKeys', {}, 'office', world)).toEqual({ kind: 'keys' });
+  });
 });
 
 describe('noticeStep', () => {

@@ -7,6 +7,8 @@ import { CLAUDE_MODELS, effectiveModel, modelAfterCliChange } from '../../../sha
 import { ModelMissing, ModelPicker } from './ModelPicker';
 import { TALL_HAIR, appearanceFor, randomStyle } from '../world/appearance';
 import { workerCli } from './floorRows';
+import { builderCli, CLI_NOTES } from '../../../shared/cliNotes';
+import { boxCli } from '../../../shared/cloud';
 import { confirmDialog } from './Confirm';
 import { Icon } from './Icon';
 import { AgentTools } from './ToolsSettings';
@@ -32,10 +34,11 @@ async function save(id: string, patch: Patch) {
 }
 
 /** The coding agents to pick from, installed ones first, each saying if it's missing on this machine. */
-export function CliOptions({ clis }: { clis: CliView[] }) {
+/** `builders`: only the ones the office's default may be (not Gemini CLI). */
+export function CliOptions({ clis, builders = false }: { clis: CliView[]; builders?: boolean }) {
   return (
     <>
-      {[...clis].sort((a, b) => Number(b.installed) - Number(a.installed)).map((c) => (
+      {[...clis].filter((c) => !builders || builderCli(c.id)).sort((a, b) => Number(b.installed) - Number(a.installed)).map((c) => (
         <option key={c.id} value={c.id} disabled={!c.installed}>
           {c.label}
           {c.installed ? '' : ' (not installed)'}
@@ -99,8 +102,10 @@ export const CLOUD_STATE: Record<CloudMachineState, string> = {
 export function HostSelect({ agent, id, style }: FieldProps) {
   const settings = useStore((s) => s.settings);
   const keySet = useStore((s) => s.cloud.keySet);
+  const clis = useStore((s) => s.clis);
   const box = agent.host === 'box';
-  const opencode = workerCli(agent, settings) === 'opencode';
+  const cli = workerCli(agent, settings);
+  const noBox = !boxCli(cli);
   const busy = !!agent.task || isBusy(agent);
   const move = async (to: MachineHost) => {
     const ok = await confirmDialog({
@@ -113,8 +118,8 @@ export function HostSelect({ agent, id, style }: FieldProps) {
   return (
     <select id={id} value={box ? 'box' : 'local'} disabled={busy} style={style} title={busy ? 'Move them once their task is done' : 'Where they work'} aria-label={id ? undefined : 'Works on'} onChange={(e) => void move(e.target.value as MachineHost)}>
       <option value="local">This computer</option>
-      <option value="box" disabled={!box && (!keySet || opencode)}>
-        Upstash Box{!box && !keySet ? ' (connect Upstash in Settings first)' : !box && opencode ? " (OpenCode can't run there)" : ''}
+      <option value="box" disabled={!box && (!keySet || noBox)}>
+        Upstash Box{!box && !keySet ? ' (connect Upstash in Settings first)' : !box && noBox ? ` (${cliName(clis, cli)} can't run there)` : ''}
       </option>
     </select>
   );
@@ -372,6 +377,7 @@ export function AgentSetup({ agent }: { agent: Agent }) {
           <label className="field" htmlFor={`${id}-cli`}>
             <span>Coding agent</span>
             <CliSelect agent={agent} id={`${id}-cli`} />
+            {CLI_NOTES[workerCli(agent, settings)] && <span className="muted small">{CLI_NOTES[workerCli(agent, settings)]}</span>}
           </label>
         )}
         {!ceo && (

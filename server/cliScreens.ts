@@ -60,9 +60,11 @@ const SIGN_IN: Record<AgentCli, ((screen: string) => boolean)[]> = {
   ],
   codex: [(s) => options(s).some((o) => /^Sign in with ChatGPT/i.test(o.text)) && options(s).some((o) => /^Provide your own API key/i.test(o.text))],
   opencode: [],
+  // Gemini CLI marks its selected option with ●.
+  gemini: [(s) => /How would you like to authenticate/i.test(s) && /^\s*[●❯›>]?\s*(?:\d+\.\s+)?Sign in with Google\s*$/m.test(s), (s) => /^\s*Waiting for authentication\.\.\./im.test(s)],
 };
 /** A sign-in phrase anywhere on screen: worth a line in the log, never a reason to end a session. */
-const SIGN_IN_HINT = /Not logged in|run \/login|Select login method|Sign in with ChatGPT|Please login|Invalid API key|Browser didn't open|Paste code here/i;
+const SIGN_IN_HINT = /Not logged in|run \/login|Select login method|Sign in with ChatGPT|Please login|Invalid API key|Browser didn't open|Paste code here|How would you like to authenticate/i;
 
 export type ScreenStep = { do: 'keys'; screen: KnownScreen; key: ScreenKey } | { do: 'sign-in' } | { do: 'sign-in-hint' } | null;
 

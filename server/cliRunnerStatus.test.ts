@@ -22,7 +22,7 @@ afterEach(() => { session?.stop(); session = undefined; vi.useRealTimers(); });
 
 function start() {
   vi.useFakeTimers();
-  const term = { write: vi.fn(), note() {}, bind() {}, screen: () => '', cols: 120, rows: 32 } as unknown as AgentTerminal;
+  const term = { write: vi.fn(), note() {}, bind() {}, screen: () => '', tail: () => [], cols: 120, rows: 32 } as unknown as AgentTerminal;
   const cb = { blocked: vi.fn(), log: vi.fn(), tool: vi.fn(), sessionId: vi.fn(), browserUrl: vi.fn(), screenshot: vi.fn(), finished: vi.fn() };
   session = startCliSession({ cwd: process.cwd(), prompt: 'test', systemAppend: '', model: '', effort: 'medium', browserTesting: false, additionalDirectories: [], role: 'agent', cli: 'codex', terminal: term, env: { TEST_SECRET: 'private-status-value' } }, cb);
   return { term, cb };

@@ -1,5 +1,6 @@
 // The demo CEO (#257): a scripted CEO that works through the real office tools: onboarding, plans, research, reviews,
 // triage, follow-ups and chat replies (features add theirs with registerCeoReply).
+import crypto from 'node:crypto';
 import type { LogEntry, SessionCallbacks, SessionHandle, SessionOptions } from '../agentRunner.ts';
 import { describeOfficeTool } from '../agentRunner.ts';
 import { demoAwake, demoRound } from '../demoAwake.ts';
@@ -437,6 +438,11 @@ export function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionH
     setTimeout(async () => {
       try {
         cb.log([{ kind: 'system', text: `✻ Claude Code (demo) · ${opts.model} · ${opts.effort} effort · CEO` }]);
+        // On a second login (or resuming one's), a conversation like a real session's, resumed on whichever Claude login
+        // the CEO moves to (#377); on the built-in login the demo CEO keeps reporting none.
+        const resumed = opts.resumeSessionId?.startsWith('demo-ceo-') ? opts.resumeSessionId : undefined;
+        if (resumed || opts.env?.CLAUDE_CONFIG_DIR) cb.sessionId(resumed ?? `demo-ceo-${crypto.randomUUID()}`);
+        if (resumed) cb.log([{ kind: 'system', text: `  ↻ Resumed conversation ${resumed.slice(0, 17)}…${opts.env?.CLAUDE_CONFIG_DIR ? ` on ${opts.env.CLAUDE_CONFIG_DIR}` : ''}` }]);
         const reply = withSpoken(await run());
         await writeReply(reply, opts, cb, () => stopped);
         finish(true, reply);

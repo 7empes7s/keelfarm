@@ -2,7 +2,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { launchArgs, type LaunchContext } from './clis.ts';
-import { ANSWER_AFTER_MS, answerHook, blockedNotice, cliEnv, DEFAULT_REPLY, nonInteractiveEnv, NOTIFY_BLOCKED_MS, permissionAnswer, permissionScreen, PROTECTED_DIRS, rulePath, sessionRoots, STALL_MS, watchdogStep, worktreePermissions, type Waiting } from './unblock.ts';
+import { ANSWER_AFTER_MS, answerHook, cliEnv, DEFAULT_REPLY, nonInteractiveEnv, permissionAnswer, permissionScreen, PROTECTED_DIRS, rulePath, sessionRoots, STALL_MS, watchdogStep, worktreePermissions, type Waiting } from './unblock.ts';
 
 const home = os.homedir();
 const worktree = path.join(home, '.cubefarm', 'machines', 'm1', 'work', 'acme__shop');
@@ -124,14 +124,6 @@ describe('the prompt watchdog', () => {
     expect(watchdogStep(waiting({ tries: 1, blocked: true }), at + STALL_MS * 2, roots)).toEqual({ do: 'wait' }); // said once
   });
 
-  it("tells the manager only after five minutes blocked, and once", () => {
-    const b = { reason: "a permission prompt the office couldn't answer.", since: at, told: false };
-    expect(blockedNotice('Ada', b, at + NOTIFY_BLOCKED_MS - 1)).toBeNull();
-    expect(blockedNotice('Ada', b, at + NOTIFY_BLOCKED_MS, 2)).toEqual({ title: 'Ada is blocked', body: "Waiting 5 minutes on a permission prompt the office couldn't answer on floor 2. Open their terminal to answer it.", who: 'Ada (floor 2)' });
-    expect(blockedNotice('Ada', { ...b, told: true }, at + NOTIFY_BLOCKED_MS * 2)).toBeNull();
-    expect(blockedNotice('Ada', null, at)).toBeNull();
-  });
-
   it("recognises Claude Code's permission dialog on screen", () => {
     expect(permissionScreen('Edit file\n Do you want to make this edit to SKILL.md?\n ❯ 1. Yes\n   2. Yes, allow all edits\n   3. No')).toBe(true);
     expect(permissionScreen('● Done. Do you want to proceed with the next step?')).toBe(false);
@@ -143,7 +135,7 @@ describe('cliEnv', () => {
   const wanted = nonInteractiveEnv({});
 
   it('gives every CLI, here and in a Box, an environment where nothing waits on a prompt', () => {
-    for (const cli of ['claude', 'codex', 'opencode'] as const) {
+    for (const cli of ['claude', 'codex', 'opencode', 'gemini'] as const) {
       const launch = launchArgs(cli, ctx).env;
       expect(cliEnv({ PATH: '/bin', GIT_EDITOR: 'vim' }, launch, { machine: { TMPDIR: '/t' } })).toMatchObject({ ...wanted, PATH: '/bin', TMPDIR: '/t' });
       expect(cliEnv({ PATH: '/bin' }, launch, { box: { CLAUDE_CODE_OAUTH_TOKEN: 'x' } })).toMatchObject(wanted);

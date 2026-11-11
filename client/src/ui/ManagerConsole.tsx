@@ -17,6 +17,7 @@ import { canPostpone, canUpdateNow, drainDeadline, officeUpdateText } from '../o
 import { confirmDialog } from './Confirm';
 import { letGo } from './dangerActions';
 import { IssueForm } from './KanbanView';
+import { IssueActions } from './IssueActions';
 import { LiveTerminal } from './LiveTerminal';
 import { MicButton } from './MicButton';
 import { Menu } from './Menu';
@@ -632,7 +633,6 @@ export function IssuesTab({ initialRepo }: { initialRepo?: string }) {
         <div className="repo-list tall issue-list">
           {repo?.issues.length === 0 && <EmptyState kind="backlog" compact target={{ kind: 'ceo', text: `Plan the next milestone for floor ${repo.floor} (${repo.fullName}) and file the issues.` }} />}
           {repo?.issues.map((i) => {
-            const holder = agents.find((a) => a.role !== 'ceo' && a.task !== 'qa' && a.issueNumber === i.number && a.status !== 'idle');
             return (
               <div key={i.number} className="ds-row issue-row">
                 <div className="ds-row-main">
@@ -643,41 +643,7 @@ export function IssuesTab({ initialRepo }: { initialRepo?: string }) {
                   {i.labels.length > 0 && <div className="ds-row-meta">{i.labels.join(', ')}</div>}
                 </div>
                 <span className="ds-row-actions">
-                  {holder ? (
-                    <span className="agent-chip">
-                      <span className="dot" style={{ background: holder.color }} />
-                      {holder.name}
-                    </span>
-                  ) : (
-                    <select value="" onChange={(e) => e.target.value && void attempt(() => api.assign(e.target.value, i.number))} aria-label={`Assign issue #${i.number}`}>
-                      <option value="">Assign…</option>
-                      {agents
-                        .filter((a) => a.role !== 'ceo' && a.status !== 'working' && a.status !== 'preparing')
-                        .map((a) => (
-                          <option key={a.id} value={a.id}>
-                            {a.name}
-                          </option>
-                        ))}
-                    </select>
-                  )}
-                  <Menu
-                    label={`More for issue #${i.number}`}
-                    title={`#${i.number} ${i.title}`}
-                    items={[
-                      {
-                        label: 'Close as not planned…',
-                        hint: 'Closes it on GitHub',
-                        danger: true,
-                        onSelect: () =>
-                          void confirmDialog({
-                            tone: 'danger',
-                            title: `Close #${i.number}?`,
-                            body: `“${i.title}” will be closed on GitHub as not planned${holder ? `, and ${holder.name} stops working on it` : ''}.`,
-                            confirm: 'Close issue',
-                          }).then((ok) => ok && attempt(() => api.closeIssue(repo.id, i.number))),
-                      },
-                    ]}
-                  />
+                  <IssueActions repo={repo} number={i.number} />
                 </span>
               </div>
             );

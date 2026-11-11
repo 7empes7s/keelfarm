@@ -11,7 +11,7 @@ import { chatUnavailable, paneFor, useChatMode, type AgentPane } from './chatMod
 import { AgentRing } from './AgentRing';
 import { speakAgent, useLineVoice } from './agentSpeech';
 import { TaskRing } from './TaskProgress';
-import { canPickWork, sheetAfterDrag, SWIPE_PX, taskLine } from './agentWindow';
+import { canPickWork, sheetAfterDrag, showsTimer, SWIPE_PX, taskLine } from './agentWindow';
 import { clearDesk, letGo, stopAgent } from './dangerActions';
 import { LiveTerminal } from './LiveTerminal';
 import { effectiveModel } from '../../../shared/models';
@@ -204,7 +204,7 @@ export function TerminalView({ agentId, view, jump, details: requestedDetails, p
     setOpened(p);
     chatMode.set(p === 'chat');
   };
-  const time = agent.startedAt ? elapsed(agent.startedAt, working ? null : agent.endedAt) : '';
+  const time = showsTimer(agent) ? elapsed(agent.startedAt, null) : '';
   const send = (t: string) => {
     const body = t.trim();
     if (!body) return;

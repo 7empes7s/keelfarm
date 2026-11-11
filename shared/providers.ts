@@ -24,7 +24,11 @@ export interface ProviderDef {
   usageNote?: string;
   /** Another catalogue entry whose saved key it can reuse: an empty key field takes that one's key. */
   sharesKeyWith?: string;
+  /** A Lucide icon name (client/src/ui/icons.ts has it). */
+  icon?: string;
   blurb: string;
+  /** A line on its add form, after the blurb. */
+  note?: string;
 }
 
 export const CATEGORIES: { id: ProviderCategory; label: string }[] = [
@@ -41,24 +45,42 @@ export const PROVIDERS: ProviderDef[] = [
   { id: 'claude', name: 'Claude Code', category: 'coding', auth: 'login', home: 'accounts', docsUrl: 'https://docs.claude.com/en/docs/claude-code', usage: 'claude', blurb: 'Claude subscription logins, Anthropic API keys and setup tokens for agents' },
   { id: 'codex', name: 'Codex', category: 'coding', auth: 'login', home: 'accounts', docsUrl: 'https://developers.openai.com/codex', usage: 'codex', blurb: 'ChatGPT plan logins and OpenAI API keys for agents' },
   { id: 'opencode', name: 'OpenCode', category: 'coding', auth: 'none', home: 'own-setup', docsUrl: 'https://opencode.ai/docs', blurb: 'Runs with its own setup (opencode auth login)' },
+  { id: 'gemini-cli', name: 'Gemini CLI', category: 'coding', auth: 'login', home: 'accounts', docsUrl: 'https://geminicli.com/docs', blurb: 'Google AI plan logins (Plus or Pro), for QA second opinions, docs, research and small fixes' },
   { id: 'anthropic', name: 'Anthropic API', category: 'text', auth: 'api-key', home: 'providers', keyEnv: 'ANTHROPIC_API_KEY', placeholder: 'sk-ant-…', docsUrl: 'https://docs.claude.com/en/api/overview', usage: 'anthropic', blurb: 'Claude models over the API' },
   { id: 'openai', name: 'OpenAI API', category: 'text', auth: 'api-key', home: 'providers', keyEnv: 'OPENAI_API_KEY', placeholder: 'sk-…', docsUrl: 'https://platform.openai.com/docs/api-reference', usage: 'openai', blurb: 'GPT models over the API' },
   { id: 'gemini', name: 'Google Gemini API', category: 'text', auth: 'api-key', home: 'providers', keyEnv: 'GEMINI_API_KEY', placeholder: 'AIza…', docsUrl: 'https://ai.google.dev/gemini-api/docs', usage: 'gemini', blurb: 'Gemini models over the API' },
   { id: 'openrouter', name: 'OpenRouter', category: 'text', auth: 'api-key', home: 'providers', keyEnv: 'OPENROUTER_API_KEY', placeholder: 'sk-or-…', docsUrl: 'https://openrouter.ai/docs', usage: 'openrouter', blurb: 'Many models behind one key, with its credit' },
+  { id: 'groq', name: 'Groq', category: 'text', auth: 'api-key', home: 'providers', keyEnv: 'GROQ_API_KEY', placeholder: 'gsk_…', docsUrl: 'https://console.groq.com/docs', blurb: 'Fast open models over the API' },
+  { id: 'cerebras', name: 'Cerebras', category: 'text', auth: 'api-key', home: 'providers', keyEnv: 'CEREBRAS_API_KEY', placeholder: 'csk-…', docsUrl: 'https://inference-docs.cerebras.ai', blurb: 'Fast open models over the API' },
+  { id: 'nvidia', name: 'NVIDIA NIM', category: 'text', auth: 'api-key', home: 'providers', keyEnv: 'NVIDIA_API_KEY', placeholder: 'nvapi-…', docsUrl: 'https://docs.api.nvidia.com', blurb: "Models on NVIDIA's API catalogue" },
+  { id: 'aihubmix', name: 'AIHubMix', category: 'text', auth: 'api-key', home: 'providers', keyEnv: 'AIHUBMIX_API_KEY', placeholder: 'sk-…', docsUrl: 'https://docs.aihubmix.com', blurb: 'Many models behind one OpenAI-style key' },
   { id: 'elevenlabs', name: 'ElevenLabs', category: 'audio', auth: 'api-key', home: 'voice', keyEnv: 'ELEVENLABS_API_KEY', placeholder: 'sk_…', docsUrl: 'https://elevenlabs.io/docs', usage: 'elevenlabs', blurb: 'Voices for agents and messages read aloud' },
   { id: 'openai-audio', name: 'OpenAI TTS & Whisper', category: 'audio', auth: 'api-key', home: 'providers', keyEnv: 'OPENAI_API_KEY', placeholder: 'sk-…', docsUrl: 'https://platform.openai.com/docs/guides/text-to-speech', usage: 'openai', blurb: 'Speech and transcription over the OpenAI API' },
+  { id: 'nano-banana', name: 'Nano Banana (Gemini image)', category: 'image', auth: 'api-key', home: 'providers', keyEnv: 'GEMINI_API_KEY', placeholder: 'AIza…', docsUrl: 'https://ai.google.dev/gemini-api/docs/image-generation', usage: 'gemini', usageNote: 'No balance API: the office ledger counts its spend', sharesKeyWith: 'gemini', icon: 'banana', blurb: 'Gemini image generation and editing over the Gemini API key', note: "Google AI Plus's Nano Banana and Veo work only in the Gemini app and Flow, not through the API: it takes a Gemini API key." },
+  { id: 'openai-images', name: 'OpenAI Images', category: 'image', auth: 'api-key', home: 'providers', keyEnv: 'OPENAI_API_KEY', placeholder: 'sk-…', docsUrl: 'https://platform.openai.com/docs/guides/image-generation', usage: 'openai', usageNote: 'No balance API: the office ledger counts its spend', sharesKeyWith: 'openai', icon: 'image', blurb: 'GPT Image generation and editing over the OpenAI API key' },
   { id: 'runway', name: 'Runway', category: 'video', auth: 'api-key', home: 'providers', keyEnv: 'RUNWAYML_API_SECRET', placeholder: 'key_…', docsUrl: 'https://docs.dev.runwayml.com/guides/setup/', usage: 'runway', blurb: 'Gen-4 video with its credit balance' },
   { id: 'gemini-video', name: 'Google video (Gemini API)', category: 'video', auth: 'api-key', home: 'providers', keyEnv: 'GEMINI_API_KEY', placeholder: 'AIza…', docsUrl: 'https://ai.google.dev/gemini-api/docs/video', usage: 'gemini', usageNote: 'No balance API: the office ledger counts its spend', sharesKeyWith: 'gemini', blurb: 'Gemini Omni video over the Gemini API key' },
   { id: 'luma', name: 'Luma Dream Machine', category: 'video', auth: 'api-key', home: 'providers', keyEnv: 'LUMAAI_API_KEY', placeholder: 'luma-…', docsUrl: 'https://docs.lumalabs.ai/docs/api', usage: 'luma', usageNote: 'No balance in its answer: the office ledger counts its spend', blurb: 'Ray video on credits shared with the Luma app' },
   { id: 'kling', name: 'Kling', category: 'video', auth: 'api-key', home: 'providers', keyEnv: 'KLING_ACCESS_KEY', placeholder: 'access key:secret key', docsUrl: 'https://app.klingai.com/global/dev/document-api', usage: 'kling', usageNote: 'No resource pack on the account', blurb: 'Kling video on resource packs' },
   // No OpenAI Sora: its API was removed on 2026-09-24 with no successor. Don't add it back.
   { id: 'upstash', name: 'Upstash Box', category: 'cloud', auth: 'api-key', home: 'cloud', docsUrl: 'https://upstash.com/docs/box', usage: 'upstash', blurb: 'Cloud machines for cloud agents' },
+  { id: 'cloudflare', name: 'Cloudflare', category: 'cloud', auth: 'api-key', home: 'providers', keyEnv: 'CLOUDFLARE_API_TOKEN', placeholder: 'API token', docsUrl: 'https://developers.cloudflare.com/fundamentals/api/', blurb: 'DNS, tunnels and Workers' },
+  { id: 'github', name: 'GitHub token', category: 'cloud', auth: 'api-key', home: 'providers', keyEnv: 'GITHUB_TOKEN', placeholder: 'ghp_… or github_pat_…', docsUrl: 'https://docs.github.com/en/rest', blurb: 'A personal access token for the GitHub API' },
   { id: 'hetzner', name: 'Hetzner Cloud', category: 'cloud', auth: 'api-key', home: 'providers', keyEnv: 'HCLOUD_TOKEN', placeholder: 'API token', docsUrl: 'https://docs.hetzner.cloud', usage: 'hetzner', blurb: 'Servers on Hetzner Cloud' },
 ];
 
 export const providerDef = (id: string) => PROVIDERS.find((p) => p.id === id);
 
 // ---------- test calls ----------
+
+/**
+ * The live image models each image entry's test looks for (docs, 2026-11). Left out: Imagen (shut down), dall-e-2/3 and
+ * gpt-image-1 (shut down), gpt-image-1-mini, gpt-image-1.5 and chatgpt-image-latest (removed 2026-12-01).
+ */
+export const IMAGE_MODELS: Record<string, string[]> = {
+  'nano-banana': ['gemini-nano-banana-2.1', 'gemini-3.1-flash-image', 'gemini-3.1-flash-lite-image', 'gemini-3-pro-image', 'gemini-2.5-flash-image'],
+  'openai-images': ['gpt-image-2.6-sunburst', 'gpt-image-2.6-flare', 'gpt-image-2.5-sunburst', 'gpt-image-2.5-flare', 'gpt-image-2'],
+};
 
 /** One cheap read-only call: an HTTP GET with the key in a header, or a command looked up on the PATH. */
 export type ProbeRequest = { kind: 'http'; url: string; headers: Record<string, string> } | { kind: 'command'; command: string };
@@ -81,10 +103,12 @@ export function testRequest(provider: string, key: string, now = Date.now()): Pr
       return { kind: 'http', url: 'https://api.anthropic.com/v1/models?limit=1', headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01' } };
     case 'openai':
     case 'openai-audio':
+    case 'openai-images':
       return { kind: 'http', url: 'https://api.openai.com/v1/models', headers: bearer };
     case 'gemini':
       return { kind: 'http', url: 'https://generativelanguage.googleapis.com/v1beta/models?pageSize=1', headers: { 'x-goog-api-key': key } };
     case 'gemini-video':
+    case 'nano-banana':
       return { kind: 'http', url: 'https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000', headers: { 'x-goog-api-key': key } };
     case 'runway':
       return { kind: 'http', url: 'https://api.dev.runwayml.com/v1/organization', headers: { ...bearer, 'X-Runway-Version': RUNWAY_VERSION } };
@@ -96,6 +120,18 @@ export function testRequest(provider: string, key: string, now = Date.now()): Pr
       return { kind: 'http', url: 'https://openrouter.ai/api/v1/key', headers: bearer };
     case 'hetzner':
       return { kind: 'http', url: 'https://api.hetzner.cloud/v1/servers?per_page=1', headers: bearer };
+    case 'groq':
+      return { kind: 'http', url: 'https://api.groq.com/openai/v1/models', headers: bearer };
+    case 'cerebras':
+      return { kind: 'http', url: 'https://api.cerebras.ai/v1/models', headers: bearer };
+    case 'nvidia': // its /v1/models answers without a key: the functions list doesn't
+      return { kind: 'http', url: 'https://api.nvcf.nvidia.com/v2/nvcf/functions', headers: bearer };
+    case 'aihubmix':
+      return { kind: 'http', url: 'https://aihubmix.com/v1/models', headers: bearer };
+    case 'cloudflare':
+      return { kind: 'http', url: 'https://api.cloudflare.com/client/v4/user/tokens/verify', headers: bearer };
+    case 'github':
+      return { kind: 'http', url: 'https://api.github.com/user', headers: { ...bearer, Accept: 'application/vnd.github+json', 'User-Agent': 'cubefarm' } };
     default:
       return null;
   }
@@ -165,8 +201,20 @@ export function geminiVideoModels(body: unknown): string[] {
   return (Array.isArray(models) ? models : []).map((m) => String(obj(m).name ?? '').replace(/^models\//, '')).filter((n) => /veo|omni/i.test(n));
 }
 
-/** The plan a test's answer tells: Runway's monthly credit cap, Gemini's live video models. */
+/** The catalogue's image models a models list names (Gemini's `models: [{ name: 'models/…' }]`, OpenAI's `data: [{ id }]`). */
+export function imageModels(provider: string, body: unknown): string[] {
+  const b = obj(body);
+  const list = Array.isArray(b.models) ? b.models : Array.isArray(b.data) ? b.data : [];
+  const ids = new Set(list.map((m) => String(obj(m).name ?? obj(m).id ?? '').replace(/^models\//, '')));
+  return (IMAGE_MODELS[provider] ?? []).filter((id) => ids.has(id));
+}
+
+/** The plan a test's answer tells: Runway's monthly credit cap, Gemini's live video models, the key's image models. */
 export function testPlan(provider: string, body: unknown): string | undefined {
+  if (IMAGE_MODELS[provider]) {
+    const models = imageModels(provider, body);
+    return models.length ? models.slice(0, 3).join(', ') + (models.length > 3 ? ` +${models.length - 3}` : '') : 'No image models on this key';
+  }
   if (provider === 'runway') {
     const cap = num(obj(obj(body).tier).maxMonthlyCreditSpend);
     return Number.isFinite(cap) ? `Up to ${cap.toLocaleString('en-US')} credits a month` : undefined;
@@ -187,7 +235,7 @@ export function keyProblem(provider: string, raw: string): string | null {
   if (provider === 'kling' && key.split(':').length > 2) return 'Paste the access key, a colon, then the secret key (or one API key).';
   if (key.length > 400 || /\s/.test(key)) return "That doesn't look like a key.";
   if (provider === 'anthropic') return secretMismatch('anthropic', key);
-  if (provider === 'openai' || provider === 'openai-audio') return key.startsWith('sk-ant-') || key.startsWith('sk-or-') ? 'This looks like another provider’s key, not an OpenAI one.' : secretMismatch('openai', key);
+  if (provider === 'openai' || provider === 'openai-audio' || provider === 'openai-images') return key.startsWith('sk-ant-') || key.startsWith('sk-or-') ? 'This looks like another provider’s key, not an OpenAI one.' : secretMismatch('openai', key);
   if (provider === 'openrouter' && !key.startsWith('sk-or-')) return 'OpenRouter keys start with sk-or-.';
   return null;
 }
@@ -236,10 +284,11 @@ export function providerCards(i: CardInput): ProviderCard[] {
   const out: ProviderCard[] = [];
   for (const a of i.accounts) {
     if (a.removing) continue;
-    const def = providerDef(a.cli)!;
+    const provider = a.cli === 'gemini' ? 'gemini-cli' : a.cli; // 'gemini' is the Gemini API's card
+    const def = providerDef(provider)!;
     out.push({
       key: `account:${a.id}`,
-      provider: a.cli,
+      provider,
       name: def.name,
       label: a.label,
       category: 'coding',

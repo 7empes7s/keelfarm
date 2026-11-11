@@ -5,13 +5,14 @@ import { run } from './exec.ts';
 import { localModel, type LocalProvider } from '../shared/models.ts';
 import type { AgentCli, CliView, EffortLevel, KeyTrouble } from '../shared/types.ts';
 import { keyTrouble } from '../shared/keyTrouble.ts';
+import { resetTime } from '../shared/accountRotation.ts';
 import type { BoxVersions } from './boxScripts.ts';
 import { CEO_DISALLOWED, CROSS_TURN_TOOLS, OFFICE_DISALLOWED, toolsEnv, type SessionTools } from '../shared/tooling.ts';
 
 // The coding-agent CLIs an agent can run in its terminal, how to find them on this machine, and how to start one on
 // a task. Claude Code is fully wired in: its hooks report every tool call to the office.
-// The others start on the same prompt and report only when a turn ends (Codex's notify program, an OpenCode plugin);
-// the office shows their task instead of their tool calls.
+// The others start on the same prompt and report only when a turn ends (Codex's notify program, an OpenCode plugin,
+// Gemini CLI's AfterAgent hook); the office shows their task instead of their tool calls.
 
 export interface CliDef {
   id: AgentCli;
@@ -24,9 +25,11 @@ export const CLIS: CliDef[] = [
   { id: 'claude', label: 'Claude Code', command: 'claude', integrated: true },
   { id: 'codex', label: 'Codex', command: 'codex', integrated: false },
   { id: 'opencode', label: 'OpenCode', command: 'opencode', integrated: false },
+  { id: 'gemini', label: 'Gemini CLI', command: 'gemini', integrated: false },
 ];
 
 export const isCli = (v: unknown): v is AgentCli => CLIS.some((c) => c.id === v);
+export { builderCli } from '../shared/cliNotes.ts';
 export const cliLabel = (id: AgentCli) => CLIS.find((c) => c.id === id)?.label ?? id;
 
 // ---------- finding a CLI ----------
@@ -194,6 +197,8 @@ export function boxVersions(): BoxVersions {
 export interface Launch {
   args: string[];
   env: Record<string, string>;
+  /** Files the CLI reads, written before it starts: [path, text]. */
+  write?: [string, string][];
 }
 
 /** A local model server's address: `CUBEFARM_<ID>_URL` (e.g. CUBEFARM_OLLAMA_URL) when set, else its usual one. */
@@ -224,6 +229,13 @@ function opencodeLocal(local: ReturnType<typeof localModel>): Record<string, unk
 }
 
 const EFFORT_CODEX: Record<EffortLevel, string> = { low: 'low', medium: 'medium', high: 'high', xhigh: 'xhigh', max: 'xhigh' };
+
+/** Gemini CLI's hooks the office listens to: its steps and turn endings (gemini-hook.cjs renames them). */
+export const GEMINI_HOOK_EVENTS = ['BeforeTool', 'AfterTool', 'AfterAgent'];
+/** The office's instructions for a Gemini CLI session, a context file of its own in the session's folder. */
+export const GEMINI_CONTEXT_FILE = 'CUBEFARM.md';
+/** The project instruction files Gemini CLI reads besides its own GEMINI.md: other agents' are the same rules. */
+const GEMINI_CONTEXT_NAMES = ['GEMINI.md', 'AGENTS.md', 'CLAUDE.md'];
 
 /** Codex hooks the office listens to: its steps, and Esc interrupting a turn. Turn endings come from notify. */
 export const CODEX_HOOK_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Interrupt'];
@@ -310,7 +322,43 @@ export function launchArgs(id: AgentCli, ctx: LaunchContext): Launch {
       ];
       return { args, env: { OPENCODE_CONFIG_CONTENT: JSON.stringify(config), CUBEFARM_NOTIFY_URL: ctx.notify.url } };
     }
+    case 'gemini': {
+      // Gemini CLI 0.68 (geminicli.com/docs). Its settings for this session come as the system settings file, which
+      // wins over the manager's own; the office's instructions are a context file in the session's folder.
+      const dir = path.dirname(ctx.files.system);
+      const settingsFile = path.join(dir, 'gemini-settings.json');
+      const script = path.join(path.dirname(ctx.notify.script), 'gemini-hook.cjs'); // next to the other helpers (HELPER_FILES)
+      const hook = [{ hooks: [{ type: 'command', name: 'cubefarm', command: codexHookCommand(ctx.node ?? process.execPath, script), timeout: 10_000 }] }];
+      const settings = {
+        hooks: Object.fromEntries(GEMINI_HOOK_EVENTS.map((e) => [e, hook])),
+        context: { fileName: [...GEMINI_CONTEXT_NAMES, GEMINI_CONTEXT_FILE], includeDirectories: [dir, ...ctx.additionalDirectories], loadMemoryFromIncludeDirectories: true },
+        general: { enableAutoUpdate: false, enableAutoUpdateNotification: false }, // several agents starting at once
+        ...(ctx.browser ? { mcpServers: { playwright: { command: ctx.browser.command, args: ctx.browser.args } } } : {}),
+      };
+      // It can't stop to ask: yolo approves every tool call, --skip-trust trusts the worktree for this session.
+      const args = [
+        '--approval-mode',
+        'yolo',
+        '--skip-trust',
+        ...(/^(gemini|auto)/i.test(ctx.model) ? ['--model', ctx.model] : []), // another CLI's model means its default
+        ...(ctx.resumeId ? ['--resume', ctx.resumeId] : []),
+        `--prompt-interactive=${ctx.prompt}`, // one argument: a prompt starting with "-" isn't read as a flag
+      ];
+      return {
+        args,
+        env: { GEMINI_CLI_SYSTEM_SETTINGS_PATH: settingsFile, CUBEFARM_HOOK_URL: ctx.notify.url },
+        write: [
+          [path.join(dir, GEMINI_CONTEXT_FILE), ctx.systemAppend],
+          [settingsFile, JSON.stringify(settings, null, 2)],
+        ],
+      };
+    }
   }
+}
+
+/** Before a CLI starts on this computer: the files it reads (Gemini CLI's settings and instructions). */
+export function prepareLaunch(launch: Launch) {
+  for (const [file, text] of launch.write ?? []) fs.writeFileSync(file, text);
 }
 
 // ---------- Codex's saved threads ----------
@@ -392,6 +440,20 @@ export function signedOutScreen(screen: string): boolean {
 }
 
 /**
+ * Gemini CLI out of usage, as its terminal shows it: "Usage limit reached for gemini-3-pro." over "Access resets at
+ * 4:15 PM UTC." and "/model to switch models.", then a Switch / Stop menu that would wait forever. Its line and when
+ * it resets; null when that isn't on screen (a file that only quotes the words doesn't count).
+ */
+export function geminiLimit(screen: string, now: number): { line: string; until: number } | null {
+  if (!screen.includes('/model to switch models')) return null;
+  const line = screen
+    .split('\n')
+    .map((l) => l.replace(/^[\s│┃|✕×*>]+/, '').trim())
+    .find((l) => /^(?:Usage limit reached for \S+|You have exhausted your (?:daily )?(?:capacity|quota))/i.test(l));
+  return line ? { line: line.replace(/[\s│┃|]+$/, ''), until: resetTime(screen, now) ?? now + 60 * 60_000 } : null;
+}
+
+/**
  * Why a cloud agent's session that failed (or said nothing) ended, when it's their login: the office's API key ran out
  * of credit or was turned away (#258), or the CLI's own login is gone. Only the screen's last lines count for the key:
  * the error is the CLI's last word, not something the agent printed while working.
@@ -458,6 +520,33 @@ process.stdin.on('end', async () => {
 });
 `;
 
+/**
+ * Gemini CLI's hook program: its hooks in the office's words (AfterAgent is a turn ending, BeforeTool / AfterTool its
+ * steps), answering nothing so Gemini carries on as usual.
+ */
+export const GEMINI_HOOK_SOURCE = String.raw`// cubefarm: Gemini CLI's hooks. Tells the office what Gemini is doing; never changes what it does.
+const url = process.env.CUBEFARM_HOOK_URL;
+const chunks = [];
+const text = (r) => (typeof r === 'string' ? r : typeof r?.returnDisplay === 'string' ? r.returnDisplay : typeof r?.llmContent === 'string' ? r.llmContent : '');
+process.stdin.on('data', (c) => chunks.push(c));
+process.stdin.on('end', async () => {
+  try {
+    const b = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+    const id = b.session_id ?? null;
+    const out =
+      b.hook_event_name === 'AfterAgent'
+        ? { hook_event_name: 'TurnComplete', session_id: id, last_assistant_message: String(b.prompt_response ?? '') }
+        : b.hook_event_name === 'BeforeTool'
+          ? { hook_event_name: 'PreToolUse', session_id: id, tool_name: b.tool_name, tool_input: b.tool_input }
+          : b.hook_event_name === 'AfterTool'
+            ? { hook_event_name: 'PostToolUse', session_id: id, tool_name: b.tool_name, tool_response: text(b.tool_response).slice(0, 4000) }
+            : null;
+    if (url && out) await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(out), signal: AbortSignal.timeout(5000) });
+  } catch {}
+  process.stdout.write('{}');
+});
+`;
+
 /** OpenCode plugin: reports its session and when it goes idle (a turn is complete). No imports: loaded from a file. */
 export const OPENCODE_PLUGIN_SOURCE = String.raw`// cubefarm: tells the office when OpenCode's session goes idle.
 export default async function CubefarmPlugin({ client } = {}) {
@@ -488,3 +577,18 @@ export default async function CubefarmPlugin({ client } = {}) {
   };
 }
 `;
+
+/** The helper programs above, by file name. */
+const HELPER_FILES: [string, string][] = [
+  ['statusline.cjs', STATUSLINE_SOURCE],
+  ['notify.cjs', NOTIFY_SOURCE],
+  ['codex-hook.cjs', CODEX_HOOK_SOURCE],
+  ['opencode-plugin.mjs', OPENCODE_PLUGIN_SOURCE],
+  ['gemini-hook.cjs', GEMINI_HOOK_SOURCE],
+];
+
+/** Writes the helper programs into the office's bin folder, for the CLIs to run. */
+export function writeHelperFiles(dir: string) {
+  fs.mkdirSync(dir, { recursive: true });
+  for (const [name, source] of HELPER_FILES) fs.writeFileSync(path.join(dir, name), source);
+}

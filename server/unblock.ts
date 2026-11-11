@@ -12,8 +12,6 @@ export const DEFAULT_REPLY = 'Nobody can answer now: pick the option that best f
 export const ANSWER_AFTER_MS = 3_000;
 /** No output this long with a prompt on screen: the session is waiting on one the office was never told about. */
 export const STALL_MS = 60_000;
-/** Blocked this long, and the manager is told (once). */
-export const NOTIFY_BLOCKED_MS = 5 * 60_000;
 
 /** Folders Claude Code guards even in a session's own worktree: it asks before writing there. */
 export const PROTECTED_DIRS = ['.claude', '.git', '.vscode', '.idea', '.husky'];
@@ -181,12 +179,4 @@ export function watchdogStep(w: Waiting, now: number, roots: string[]): Watchdog
   }
   if (now - w.since >= STALL_MS) return { do: 'blocked', reason: w.kind === 'permission' ? "a permission prompt the office couldn't answer" : "an MCP server's form the office couldn't dismiss" };
   return { do: 'wait' };
-}
-
-/** The manager's notice for a blocked agent, once it has been blocked NOTIFY_BLOCKED_MS and they weren't told yet; else null. */
-export function blockedNotice(name: string, b: { reason: string; since: number; told: boolean } | null | undefined, now: number, floor?: number): { title: string; body: string; who: string } | null {
-  if (!b || b.told || now - b.since < NOTIFY_BLOCKED_MS) return null;
-  const on = floor === undefined ? '' : ` on floor ${floor}`;
-  const reason = b.reason.replace(/\.$/, '').slice(0, 200);
-  return { title: `${name} is blocked`, body: `Waiting ${Math.round((now - b.since) / 60_000)} minutes on ${reason}${on}. Open their terminal to answer it.`, who: floor === undefined ? name : `${name} (floor ${floor})` };
 }

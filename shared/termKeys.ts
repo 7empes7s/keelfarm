@@ -105,6 +105,7 @@ const ARROW_KEYS: BarKey[] = [k('↑', 'Up', 'up', { repeat: true }), k('↓', '
  * https://developers.openai.com/codex/cli/reference
  * https://github.com/openai/codex/blob/main/codex-rs/tui/src/keymap.rs
  * https://opencode.ai/docs/keybinds/
+ * https://geminicli.com/docs/reference/keyboard-shortcuts/
  */
 const CLI_KEYS: Record<AgentCli, BarKey[]> = {
   claude: [
@@ -118,6 +119,7 @@ const CLI_KEYS: Record<AgentCli, BarKey[]> = {
   ],
   codex: [t('Edit last', 'Esc Esc: edit the previous message', '\x1b\x1b'), t('Stop', 'Ctrl+C: interrupt, or quit', '\x03'), t('Transcript', 'Ctrl+T: transcript', '\x14'), t('New line', 'Ctrl+J: new line', '\n')],
   opencode: [t('Stop', 'Ctrl+C: clear input, or exit', '\x03'), t('Leader', 'Ctrl+X: the leader key', '\x18')],
+  gemini: [t('Stop', 'Ctrl+C: cancel, or clear the input', '\x03'), k('Mode', 'Shift+Tab: cycle approval modes', 'tab', { mods: ['shift'] })],
 };
 
 const PASTE: BarKey = { label: 'Paste', title: 'Paste from the clipboard', paste: true };

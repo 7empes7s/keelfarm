@@ -7,6 +7,8 @@ import { DecisionList } from './Decisions';
 import { DecisionLog } from './DecisionLog';
 import { CLAUDE_MODELS, effectiveModel, labelOf, modelAfterCliChange } from '../../../shared/models';
 import { ModelPicker } from './ModelPicker';
+import { CLI_NOTES } from '../../../shared/cliNotes';
+import { boxCli } from '../../../shared/cloud';
 import { attempt, Avatar } from './phoneParts';
 import { Icon } from './Icon';
 import type { IconName } from './icons';
@@ -82,6 +84,7 @@ export function HireSetupFields({ value, onChange, disabled }: { value: HireSetu
               </option>
             ))}
         </select>
+        {CLI_NOTES[cli] && <span className="muted small">{CLI_NOTES[cli]}</span>}
       </label>
       <label className="field" htmlFor={`${id}-model`}>
         <span>Model</span>
@@ -104,8 +107,8 @@ export function HireSetupFields({ value, onChange, disabled }: { value: HireSetu
           <select id={`${id}-host`} value={value.host} disabled={disabled} onChange={(e) => set({ host: e.target.value as MachineHost | '' })}>
             <option value="">{{ box: 'Upstash Box', hybrid: 'Hybrid', local: 'This computer' }[settings.cloud.machineKind]} (default)</option>
             <option value="local">This computer</option>
-            <option value="box" disabled={cli === 'opencode'}>
-              Upstash Box{cli === 'opencode' ? " (OpenCode can't run there)" : ''}
+            <option value="box" disabled={!boxCli(cli)}>
+              Upstash Box{!boxCli(cli) ? ` (${cliLabel(clis, cli)} can't run there)` : ''}
             </option>
           </select>
         </label>

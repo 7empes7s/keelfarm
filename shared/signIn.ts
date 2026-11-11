@@ -53,7 +53,7 @@ interface SignInMenu {
 export interface SignInScreen {
   url: string | null; // the sign-in page
   deviceCode: string | null; // Codex's one-time code for that page
-  waiting: boolean; // Claude Code's prompt waits for the code
+  waiting: boolean; // Claude Code's (or Gemini CLI's) prompt waits for the code
   menu: SignInMenu | null;
   /** The option to pick by itself (the subscription login, the default theme, trusting the folder), or null: ask. */
   pick: number | null;
@@ -63,6 +63,8 @@ export interface SignInScreen {
 /** Each sign-in starts with the office's own line (localSignIn.ts, demoSignIn.ts): what's above it is an older one. */
 const START = /── (?:Signing .* in|Making a .* setup token).*──/;
 const OPTION = /^\s*([❯›>])?\s*(\d)\.\s+(.+?)\s*$/;
+/** The prompt for the code from the sign-in page: Claude Code's, Gemini CLI's. */
+const CODE_PROMPT = /Paste code here|Enter the authorization code/i;
 /** The answers a sign-in needs, by question: Claude Code's login method, its first-run theme, folder trust. */
 const PICKS: [RegExp, RegExp][] = [
   [/login method|sign in with|how would you like to (?:log|sign) in/i, /subscription|claude account|chatgpt/i],
@@ -78,16 +80,16 @@ export function signInScreen(text: string): SignInScreen {
   const body = mine.join('\n');
   const url = body.match(/https:\/\/[^\s"'<>\]]+/g)?.at(-1) ?? null;
   const deviceCode = /one-time code[^\n]*\n\s*([A-Z0-9]{4,}-[A-Z0-9]{4,})\s*$/m.exec(body)?.[1] ?? null;
-  const ok = /Login successful|Successfully logged in|Logged in (?:as|using)/i;
-  const bad = /Login failed|OAuth error|Error logging in|Invalid (?:code|authorization)|Authentication failed/i;
+  const ok = /Login successful|Successfully logged in|Logged in (?:as|using)|Authentication succeeded/i;
+  const bad = /Login failed|OAuth error|Error logging in|Invalid (?:code|authorization)|Authentication failed|Failed to authenticate/i;
   const last = [...mine].reverse().find((l) => ok.test(l) || bad.test(l));
   const result = last ? (ok.test(last) ? 'ok' : 'failed') : null;
   const found = result ? null : menuOf(mine);
   // A menu with the link or the prompt under it was answered already (the CLI left it on screen).
-  const menu = found && !/https:\/\/|Paste code here/i.test(mine.slice(found.end + 1).join('\n')) ? found.menu : null;
+  const menu = found && !/https:\/\//i.test(mine.slice(found.end + 1).join('\n')) && !CODE_PROMPT.test(mine.slice(found.end + 1).join('\n')) ? found.menu : null;
   const pick = menu ? pickFor(menu) : null;
   const prompt = mine.filter((l) => l.trim()).at(-1) ?? '';
-  return { url, deviceCode, waiting: !menu && !result && /Paste code here/i.test(prompt), menu, pick, result };
+  return { url, deviceCode, waiting: !menu && !result && CODE_PROMPT.test(prompt), menu, pick, result };
 }
 
 /** The last numbered menu on screen with a highlighted option (❯), so a numbered list of steps never reads as one. */

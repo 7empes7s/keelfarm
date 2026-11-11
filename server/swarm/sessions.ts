@@ -21,7 +21,7 @@ import { agentPromptPreview, ceoPromptPreview, devBranch, devSystemPrompt } from
 import { leaseTools } from '../leaseTool.ts';
 import { normPath, overlap, practiceLines, qaPracticeLines } from '../../shared/practices.ts';
 import { recordBox, recordCost } from '../metrics.ts';
-import { BOX_SIZE_INFO } from '../../shared/cloud.ts';
+import { BOX_SIZE_INFO, boxCli } from '../../shared/cloud.ts';
 import { cliLabel } from '../clis.ts';
 import { costsRequest, taskKindOf } from '../costLedger.ts';
 import { resolveEffort, type CostsView } from '../../shared/costs.ts';
@@ -553,7 +553,11 @@ export abstract class SwarmSessions extends SwarmRotation {
         usageWarning: (info) => this.paceForWarning(info),
         usage: (readings) => this.recordUsage(readings),
         startup: (st) => this.spend.startup(a.id, st.tokens, st.memoryChars),
-        blocked: (reason) => { rt.blocked = reason ? { reason, since: Date.now(), told: false } : null; this.emitAgent(a); },
+        blocked: (reason, kind) => {
+          rt.blocked = reason ? { reason, since: Date.now(), told: false, kind: kind ?? 'prompt' } : null;
+          this.emitAgent(a);
+          this.alertBlocked(a); // a sign-in, setup screen or the like: the manager and the CEO hear at once (#359)
+        },
         finished: (result) => {
           // A cloud agent's CLI whose login expired: the task carries on (the same conversation) once it's signed in again.
           const again = () => this.startAgentSession(a, repo, cwd, a.sessionId ? SIGNED_IN_AGAIN : prompt, systemAppend, a.sessionId ?? undefined, outputSchema, null);
@@ -572,9 +576,9 @@ export abstract class SwarmSessions extends SwarmRotation {
   protected async signedOutMidTask(a: PersistedAgent, repo: PersistedRepo, result: SessionResult, cli: AgentCli, again: () => void) {
     const rt = this.agentRt.get(a.id);
     if (!rt || !this.state.agents.includes(a)) return;
-    const creds = cli === 'opencode' ? null : await this.cloud.credentials(cli, !!a.ownLogin).catch(() => null);
+    const creds = !boxCli(cli) ? null : await this.cloud.credentials(cli, !!a.ownLogin).catch(() => null);
     const keyStopped = !!creds?.onKey;
-    if (cli === 'opencode' || !(creds?.ownLogin || keyStopped) || a.status === 'stopped' || this.dropping.has(a.id) || a.host !== 'box') {
+    if (!boxCli(cli) || !(creds?.ownLogin || keyStopped) || a.status === 'stopped' || this.dropping.has(a.id) || a.host !== 'box') {
       // A key from Settings that was turned away has nothing to sign in here: the session failed like any other.
       const errors = creds && !creds.ownLogin ? [`${cliLabel(cli)} turned the key it was given away: check it in Settings → Cloud agents.`] : result.errors;
       return this.onFinished(a, repo, { ...result, errors });
