@@ -5,6 +5,7 @@
 import { useEffect } from 'react';
 import { useStore, type State } from './store';
 import { useTour } from './ui/tour';
+import { useTourGate } from './ui/tourGate';
 import { ownsHash, overlayRoute, parseRoute, routeHash, routeTarget, ROUTES, sampleLinks, type Mode, type Stand, type World } from './routes';
 
 const READY_MS = 15_000;
@@ -55,7 +56,10 @@ async function open(mode: Mode, hash: string, cold: boolean, stand?: (s: Stand) 
     if (mine !== seq) return;
     if (!stood) return mark(hash, 'missing');
   }
-  if (t.overlay && !(cold && t.native)) useStore.getState().openOverlay(t.overlay);
+  if (t.overlay && !(cold && t.native)) {
+    useTourGate.setState({ held: true }); // the link's view, not the tour's step, until it closes
+    useStore.getState().openOverlay(t.overlay);
+  }
   const ok = await until(() => mine !== seq || !t.ready || !!document.querySelector(t.ready), READY_MS);
   if (mine !== seq) return;
   await frame();
@@ -93,7 +97,11 @@ export function useRouteLink(mode: Mode, stand?: (s: Stand) => boolean) {
     const onHash = () => void (performance.now() - popped > 50 && open(mode, location.hash, false, stand));
     window.addEventListener('popstate', onPop);
     window.addEventListener('hashchange', onHash);
-    const unsubscribe = useStore.subscribe((s, prev) => void (s.overlay !== prev.overlay && write(mode)));
+    const unsubscribe = useStore.subscribe((s, prev) => {
+      if (s.overlay === prev.overlay) return;
+      write(mode);
+      if (!s.overlay) useTourGate.setState({ held: false }); // the tour comes back
+    });
     (window as unknown as Record<string, unknown>).__swarmRoutes = { table: ROUTES, links: () => sampleLinks(worldOf(useStore.getState()), mode) };
     return () => {
       window.removeEventListener('popstate', onPop);

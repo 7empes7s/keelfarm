@@ -207,7 +207,8 @@ export function Tutorial({ track }: { track: Track }) {
   const tour = setupDone && step >= 0 && step < all.length && (track === 'office' ? started : pocketTour);
   const steps: TourStep[] = replay && !tour ? replay.ids.map((id) => TOUR.find((e) => e.id === id)).filter((e): e is TourStep => !!e && isStep(e)) : all;
   const at = replay && !tour ? replay.at : step;
-  const active = tour || (!!replay && at < steps.length);
+  const held = useTourGate((s) => s.held); // a deep link's view is open (#413)
+  const active = !held && (tour || (!!replay && at < steps.length));
 
   const go = (to: number) => {
     setCheer(false);
