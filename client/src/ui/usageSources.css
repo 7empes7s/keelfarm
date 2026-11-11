@@ -94,6 +94,109 @@
   min-inline-size: 0;
   min-block-size: var(--ds-target);
 }
+/* Who is on it and who spent it (#409, UsageWho.tsx). */
+.us-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  min-inline-size: 0;
+}
+.us-who {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  padding: var(--ds-space-2);
+  border: 1px solid var(--ds-line);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-raised);
+  min-inline-size: 0;
+}
+.us-who-main {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-block-size: var(--ds-target);
+  min-inline-size: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ds-text);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.us-who-main:focus-visible,
+.us-task:focus-visible {
+  outline: var(--ds-border) solid var(--ds-focus);
+  outline-offset: 1px;
+}
+.us-who-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-inline-size: 0;
+}
+.us-who-text > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.us-who-since {
+  flex: none;
+}
+.us-who-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-inline-size: 0;
+}
+.us-chip {
+  max-inline-size: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.us-who-task {
+  overflow-wrap: anywhere;
+}
+.us-tasks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--ds-space-2);
+}
+.us-task {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-block-size: var(--ds-target);
+  min-inline-size: 0;
+  padding: var(--ds-space-2);
+  border: 1px solid var(--ds-line);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-raised);
+  color: var(--ds-text);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.us-task:hover:not(:disabled),
+.us-who-main:hover {
+  background: var(--ds-surface-hover);
+}
+.us-task-title {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+.us-slices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  min-inline-size: 0;
+}
 /* The Company page's card (pocket mode): its title opens Mission control. */
 .pk-usage-head {
   display: flex;

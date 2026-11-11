@@ -1,6 +1,6 @@
 // Usage for every account and provider (#361): one row per source (Claude and Codex accounts, ElevenLabs, Upstash
 // Boxes, API spend), worst first, with a bar per window, "resets in 3h" and a status chip. A tap opens the source's
-// detail: every window, the last day's history, the agents on it, and (for API spend) the Admin key that reads the
+// detail: every window, the last day's history, who is on it and who spent it (UsageWho.tsx, #409), and (for API spend) the Admin key that reads the
 // organisation's cost report. On the Company page (pocket mode) and in Mission control.
 import { useEffect, useState } from 'react';
 import { api } from '../api';
@@ -8,7 +8,7 @@ import { fmtUsd } from '../ops';
 import { useStore } from '../store';
 import { ago } from '../../../shared/usage';
 import { resetsIn, windowWords } from '../../../shared/usageSources';
-import { CEO_ID, type UsageProvider, type UsageSource, type UsageSourceStatus, type UsageWindow } from '../../../shared/types';
+import { type UsageProvider, type UsageSource, type UsageSourceStatus, type UsageWindow } from '../../../shared/types';
 import { Chip } from './DetailsPage';
 import type { ChipTone } from './detailsRules';
 import { Icon } from './Icon';
@@ -16,6 +16,7 @@ import type { IconName } from './icons';
 import { ProgressBar } from './ProgressBar';
 import { Sheet } from './Sheet';
 import { sharesNote, shareStats } from './peekFacts';
+import { OnItNow, WindowSplit } from './UsageWho';
 import './usageSources.css';
 
 const ICON: Record<UsageProvider, IconName> = { claude: 'asterisk', codex: 'terminal', elevenlabs: 'mic', upstash: 'cloud', anthropic: 'wallet', openai: 'wallet', gemini: 'sparkles', openrouter: 'shuffle', hetzner: 'server', runway: 'clapperboard', luma: 'film', kling: 'video' };
@@ -75,10 +76,8 @@ export function UsageSources({ limit }: { limit?: number }) {
 }
 
 function UsageDetail({ s, now, onClose }: { s: UsageSource; now: number; onClose: () => void }) {
-  const agents = useStore((st) => st.agents);
   const repos = useStore((st) => st.repos);
   const allShares = useStore((st) => st.claudeUsageShares);
-  const names = (s.agents ?? []).map((id) => `${agents[id]?.name ?? id}${id === CEO_ID ? ' (CEO)' : ''}`);
   // The agents' Claude login: who spent the office's part of this week, as Mission control's meter shows (#213, #334).
   const week = s.id === 'claude-login' ? allShares.find((x) => x.type === 'seven_day') : undefined;
   const shares = week
@@ -118,16 +117,18 @@ function UsageDetail({ s, now, onClose }: { s: UsageSource; now: number; onClose
         )}
         {s.note && <p className="muted small">{s.note}</p>}
         <History points={s.history ?? []} />
-        {shares.length > 0 && (
+        {shares.length > 0 && !s.split && (
           <div>
             <b className="small">Floor shares this week</b> <span className="muted small">{sharesNote(week!, now, fmtUsd)}</span>
             <p className="small">{shares.map(([name, v]) => `${name} ${v}`).join(' · ')}</p>
           </div>
         )}
-        <div>
-          <b className="small">On it</b>
-          <p className="small">{names.length ? names.join(', ') : 'No agent is pinned to it: the rotation uses it in its turn.'}</p>
-        </div>
+        {s.accountId && (
+          <>
+            <OnItNow accountId={s.accountId} pinned={s.agents ?? []} now={now} close={onClose} />
+            <WindowSplit split={s.split} close={onClose} />
+          </>
+        )}
         {admin && <AdminKey provider={admin} />}
       </div>
     </Sheet>

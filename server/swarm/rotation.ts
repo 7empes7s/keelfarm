@@ -12,7 +12,7 @@ import { backText, defaultAccount, defaultsBack, defaultText, pruneTaskAccounts,
 import { allOutText, detectLimit, switchesForCeo, switchHandover, switchText, type LimitHit } from '../../shared/accountRotation.ts';
 import { ACCOUNT_CLIS, LOGIN_ENV } from '../../shared/accounts.ts';
 import { readingOf, usedPercent } from '../../shared/usage.ts';
-import type { AccountCli, AccountSwitch, AccountsView, AgentCli } from '../../shared/types.ts';
+import type { AccountCli, AccountSwitch, AccountsView, AgentCli, AgentLive, AgentView } from '../../shared/types.ts';
 import { canResume, heldElsewhere } from '../sessionResume.ts';
 import { BUSY, CEO_DIR, LIMIT_PAUSE_MS, type PersistedAgent } from './model.ts';
 import { SwarmUsage } from './usage.ts';
@@ -38,6 +38,13 @@ export abstract class SwarmRotation extends SwarmUsage {
   protected sessionOn = new Map<string, string>();
   /** Coding agents' defaults that were out at the last look: one "is back" line when they're free again (#390). */
   private defaultsOut = new Set<string>();
+  /** Each agent's session running now on an account, as it really started (null once it ended): the usage sheet's "On it now" (#409). */
+  private liveOn = new Map<string, AgentLive | null>();
+
+  protected override agentView(a: PersistedAgent, withLog: boolean): AgentView {
+    const v = super.agentView(a, withLog);
+    return this.liveOn.has(a.id) ? { ...v, live: this.liveOn.get(a.id) } : v;
+  }
 
   /**
    * A session on the account its agent (or the CEO) is pinned to, else the rotation's: the account's folder or key goes
@@ -233,6 +240,9 @@ export abstract class SwarmRotation extends SwarmUsage {
     this.readyLogin(a, use, cli, opts.cwd);
     this.sessionAccount.set(a.id, use.builtIn ? null : use.id);
     this.sessionOn.set(a.id, use.id);
+    const run = { account: use.id, model: opts.model, effort: opts.effort, since: Date.now() };
+    this.liveOn.set(a.id, run);
+    this.emitAgent(a);
     this.spend.account(a.id, use.id);
     this.accounts.emit();
     const env = { ...opts.env, ...use.env };
@@ -266,6 +276,10 @@ export abstract class SwarmRotation extends SwarmUsage {
         },
         finished: (result) => {
           live.delete(simulate);
+          if (this.liveOn.get(a.id) === run) {
+            this.liveOn.set(a.id, null);
+            this.emitAgent(a);
+          }
           use.release();
           if (result.signedOut) this.signInLost(a, use, cli);
           if (ended) ended(result, hit);

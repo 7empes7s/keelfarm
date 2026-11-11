@@ -7,6 +7,7 @@ import { sampleCareers, sampleHistory, samplePastCareers } from '../careerSample
 import { sampleLog } from '../charterSample.ts';
 import { demoThread } from '../chatSample.ts';
 import { sampleOffice } from '../costSample.ts';
+import { demoAccountSpend } from '../demoAccounts.ts';
 import { demoSurvival, sampleLab } from '../experimentSample.ts';
 import { sampleNotices } from '../noticeSample.ts';
 import { demoPastWeek } from '../opsSample.ts';
@@ -17,7 +18,7 @@ import { fakeSha, issue, repos, takeNumber } from './world.ts';
 registerDemo('samples', ({ scale, noTour }) => ({
   survivalSignals: demoSurvival,
   seedOps: (ids, at) => demoPastWeek(ids, at),
-  seedCosts: (floors, agents, at) => sampleOffice(floors.map((f) => ({ id: f.id, open: repos.get(f.fullName)?.issues.map((i) => i.number) })), agents, at, Math.random, scale ? 7 : 28), // four weeks for the Charter tab's sparklines; the big company keeps one
+  seedCosts: (floors, agents, at) => demoAccountSpend(sampleOffice(floors.map((f) => ({ id: f.id, open: repos.get(f.fullName)?.issues.map((i) => i.number) })), agents, at, Math.random, scale ? 7 : 28), agents, at), // four weeks for the Charter tab's sparklines; the big company keeps one
   seedCharterLog: (charter, ledger, now) => sampleLog(charter, ledger, now, Math.random),
   seedCareers: sampleCareers, seedPastCareers: samplePastCareers, seedHistory: sampleHistory,
   demoTeam: (floor) => demoTeam(scale, floor),

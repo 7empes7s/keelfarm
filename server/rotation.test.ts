@@ -56,7 +56,7 @@ async function wait(ms: number) {
 }
 
 /** The account a session ran on, from its environment: a login's folder, the API key, or the built-in login. */
-const accountOf = (o: SessionOptions) => (o.env?.CLAUDE_CONFIG_DIR?.includes('claude-keelop') ? 'claude-keelop' : o.apiKeyEnv ? 'claude-apikey' : 'claude-login');
+const accountOf = (o: SessionOptions) => (o.cli === 'codex' ? 'codex-login' : o.env?.CLAUDE_CONFIG_DIR?.includes('claude-keelop') ? 'claude-keelop' : o.apiKeyEnv ? 'claude-apikey' : 'claude-login');
 
 /** A demo office whose Claude sessions on the accounts in `out` end at once on a usage limit. */
 async function office(out: string[]) {
@@ -194,6 +194,25 @@ describe('account rotation', { timeout: 30_000 }, () => {
     expect(swarm.snapshot().qa.length).toBe(qa);
     expect(notify.mock.calls.filter(([event]) => event === 'needsHuman' || event === 'error')).toHaveLength(0);
     expect(i.state.messages.filter((m) => m.switch)).toHaveLength(0); // an agent's switch isn't a chat pill
+  });
+
+  it("an agent configured as Claude on a Codex fallback is on the Codex login's On it now, not Claude's (#409)", async () => {
+    const { swarm, repo, runs } = await office(['claude-login', 'claude-keelop', 'claude-apikey']);
+    swarm.updateSettings({ rotation: { on: true, apiLast: true, ceoClis: [], agentsSwitchCli: true } });
+    (swarm as unknown as { clis: unknown[] }).clis = ['claude', 'codex'].map((id) => ({ id, label: id, installed: true, version: 'demo', integrated: id === 'claude' }));
+    const ada = swarm.hireAgent(repo.id, { name: 'Ada', strict: true });
+    await wait(10_000);
+    const [issue] = swarm.snapshot().repos.find((r) => r.id === repo.id)!.issues;
+    void swarm.assign(ada.id, issue.number);
+    await wait(5_000);
+    expect(swarm.snapshot().agents.find((a) => a.id === ada.id)).toMatchObject({ cli: '', status: 'working' }); // still configured as Claude Code
+    expect(runs.filter((r) => r.role !== 'ceo').at(-1)).toMatchObject({ cli: 'codex', account: 'codex-login' });
+    // The usage sheets list a session under the account its agent's view says it runs on (client/src/ui/usageWhoRules.ts).
+    const live = () => swarm.snapshot().agents.find((a) => a.id === ada.id)!.live;
+    expect(live()).toMatchObject({ account: 'codex-login', model: expect.any(String), since: expect.any(Number) });
+    swarm.stopAgent(ada.id);
+    await wait(1_000);
+    expect(live()).toBeNull();
   });
 
   it("never moves an agent's task onto Gemini CLI, which isn't a builder (#365)", async () => {
