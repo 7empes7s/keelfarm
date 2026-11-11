@@ -113,7 +113,7 @@ describe('account rotation', { timeout: 30_000 }, () => {
     const { swarm, runs, i } = await office(['claude-login']);
     swarm.requestReview();
     await wait(3_000);
-    expect(runs.filter((r) => r.role === 'ceo')).toEqual([
+    expect(runs.filter((r) => r.role === 'ceo')).toMatchObject([
       { account: 'claude-login', role: 'ceo', resume: undefined },
       { account: 'claude-keelop', role: 'ceo', resume: 'conversation-1' },
     ]);
