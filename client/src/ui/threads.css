@@ -231,8 +231,34 @@ button.thread-project {
   border-right: var(--ds-border) solid var(--ds-line-strong);
   background: var(--ds-surface-sunken);
 }
+.threads-col[hidden] {
+  display: none;
+}
 .threads-col > .conv-body {
   overflow-y: auto;
+}
+/* its header: the title and the fold (#396) */
+.threads-col-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  padding: var(--ds-space-2) var(--ds-space-2) 0 var(--ds-space-3);
+}
+/* folded, a rail of Show the threads (with the unread dot) and New thread */
+.threads-rail {
+  width: 56px;
+  align-items: center;
+  gap: var(--ds-space-2);
+  padding-top: var(--ds-space-2);
+}
+.threads-rail-btn {
+  position: relative;
+}
+.threads-rail-btn .thread-unread {
+  position: absolute;
+  top: 4px;
+  right: 4px;
 }
 /* narrow column: titles (short, capped by titling) and the project chips wrap, so nothing is cut off */
 .threads-col .thread-top {

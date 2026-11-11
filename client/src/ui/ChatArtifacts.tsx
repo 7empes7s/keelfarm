@@ -9,6 +9,7 @@ import { useDialogFocus } from './dialogFocus';
 import { copyText } from './clipboard';
 import { CloseButton, Icon } from './Icon';
 import { ChatTextPill, useChatPinch } from './ChatZoom';
+import { useSurface, type SurfaceId } from './surfaces';
 
 // The CEO's artifacts in the phone chat (shared/chatParts.ts): a card in the bubble, the document full-screen on a
 // phone (a side panel on a desktop) with Copy, Share / Download, "Reply about this" and "Open in thread" (#132).
@@ -54,8 +55,10 @@ async function share(title: string, markdown: string) {
   }
 }
 
-export function Sheet({ label, onClose, className, children }: { label: ReactNode; onClose: () => void; className?: string; children: ReactNode }) {
+/** `surface`: the page it shows (surfaces.ts), so the chat's side panels don't show it again and a second ask focuses this one. */
+export function Sheet({ label, onClose, className, surface, children }: { label: ReactNode; onClose: () => void; className?: string; surface?: SurfaceId; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
+  useSurface(surface);
   const titleId = useId();
   useDialogFocus(ref);
   useEffect(() => ref.current?.focus(), []);
@@ -68,6 +71,7 @@ export function Sheet({ label, onClose, className, children }: { label: ReactNod
       <div
         ref={ref}
         className={`artifact-sheet ${className ?? ''}`}
+        data-surface={surface}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

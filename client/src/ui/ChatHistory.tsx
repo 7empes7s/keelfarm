@@ -7,6 +7,7 @@ import { Sheet } from './ChatArtifacts';
 import { Icon } from './Icon';
 import { CeoMemory } from './CeoMemory';
 import { Menu } from './Menu';
+import { openOnce } from './surfaces';
 
 // The CEO chat's threads (#51, #132), like Claude's sidebar: a new one (a fresh CEO session) in a floor's project or
 // the Company, the list by project with search, grouped Pinned / Today / This week / Older, each with its floors,
@@ -173,19 +174,66 @@ function Threads({ ceoName, onDone, onMemory }: { ceoName: string; onDone: () =>
 /** `onMemory`: opens what the CEO remembers (#81: it shares the top bar's 🔍 with the threads). */
 export function Conversations({ ceoName, onClose, onMemory }: { ceoName: string; onClose: () => void; onMemory: () => void }) {
   return (
-    <Sheet label="Threads" onClose={onClose} className="conv-sheet">
+    <Sheet label="Threads" onClose={onClose} className="conv-sheet" surface="threads">
       <Threads ceoName={ceoName} onDone={onClose} onMemory={onMemory} />
     </Sheet>
   );
 }
 
-/** The threads in a column beside the chat on a wide screen (#132). */
-export function ThreadsColumn({ ceoName }: { ceoName: string }) {
+// The column folds to a rail (#396), remembered on this device.
+const RAIL_KEY = 'cubefarm:threads-rail';
+function savedRail() {
+  try {
+    return localStorage.getItem(RAIL_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+/** The threads column folded to a rail or not, remembered on this device. */
+export function useThreadsRail(): [boolean, (rail: boolean) => void] {
+  const [rail, setRail] = useState(savedRail);
+  const set = (v: boolean) => {
+    setRail(v);
+    try {
+      localStorage.setItem(RAIL_KEY, v ? '1' : '0');
+    } catch {
+      // remembered for this visit only
+    }
+  };
+  return [rail, set];
+}
+
+/**
+ * The threads in a column beside the chat on a wide screen (#132), folded to a rail of Show and New thread (#396), and
+ * `hidden` while the Threads sheet is open (one list on screen).
+ */
+export function ThreadsColumn({ ceoName, rail, onRail, hidden }: { ceoName: string; rail: boolean; onRail: (rail: boolean) => void; hidden: boolean }) {
   const [memory, setMemory] = useState(false);
+  const unread = useStore((s) => s.chat.conversations.filter((c) => c.id !== s.chat.current && !c.archived && unreadThread(c, s.phoneReadAt)).length);
+  const sheet = memory && <CeoMemory ceoName={ceoName} onClose={() => setMemory(false)} />;
+  if (rail)
+    return (
+      <nav className="threads-col threads-rail" aria-label="Threads" hidden={hidden}>
+        <button type="button" className="pk-icon-btn threads-rail-btn" onClick={() => onRail(false)} aria-expanded={false} aria-label={unread ? `Show the threads, ${unread} unread` : 'Show the threads'} title="Show the threads">
+          <Icon name="panel-left-open" />
+          {unread > 0 && <span className="thread-unread" aria-hidden />}
+        </button>
+        <button type="button" className="pk-icon-btn" onClick={() => void api.newConversation(null).catch(() => undefined)} aria-label="New thread" title="A fresh start: the CEO begins a new session, its notes carry over">
+          <Icon name="square-pen" />
+        </button>
+        {sheet}
+      </nav>
+    );
   return (
-    <nav className="threads-col" aria-label="Threads">
-      <Threads ceoName={ceoName} onDone={() => undefined} onMemory={() => setMemory(true)} />
-      {memory && <CeoMemory ceoName={ceoName} onClose={() => setMemory(false)} />}
+    <nav className="threads-col" aria-label="Threads" hidden={hidden}>
+      <div className="threads-col-head">
+        <b className="grow">Threads</b>
+        <button type="button" className="pk-icon-btn" onClick={() => onRail(true)} aria-expanded aria-label="Hide the threads" title="Hide the threads">
+          <Icon name="panel-left-close" />
+        </button>
+      </div>
+      <Threads ceoName={ceoName} onDone={() => undefined} onMemory={() => openOnce('memory', () => setMemory(true))} />
+      {sheet}
     </nav>
   );
 }
