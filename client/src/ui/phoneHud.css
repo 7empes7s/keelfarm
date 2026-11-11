@@ -1,0 +1,164 @@
+/* ---------- the 3D office's top bar on a phone (PhoneHud.tsx, #406): one row, four controls ---------- */
+
+.hud-bar {
+  position: absolute;
+  top: max(var(--ds-space-2), var(--ds-safe-top));
+  left: max(var(--ds-space-2), var(--ds-safe-left));
+  right: max(var(--ds-space-2), var(--ds-safe-right));
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+}
+.hud-bar .hud-floor-chip {
+  position: relative;
+  top: auto;
+  left: auto;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: none;
+  min-height: var(--ds-target);
+  gap: var(--ds-space-2);
+  padding: var(--ds-space-1) var(--ds-space-3) var(--ds-space-1) var(--ds-space-1);
+  border-radius: var(--ds-radius-lg);
+  color: var(--ds-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.hud-floor-chip .floor-num {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--ds-radius-md);
+  font-size: var(--ds-text-lg);
+}
+.hud-floor-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: var(--ds-leading-tight);
+}
+.hud-floor-chip .floor-name {
+  font-size: var(--ds-text-sm);
+}
+.hud-floor-chip .floor-sub {
+  overflow: hidden;
+  font-size: var(--ds-text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* something holds work back (memory, usage, the doctor, an update): the floor sheet says what */
+.hud-floor-dot {
+  position: absolute;
+  top: var(--ds-space-1);
+  right: var(--ds-space-1);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--ds-outline);
+  background: var(--ds-warn-fill);
+}
+.hud-bar > .pill {
+  flex: none;
+  justify-content: center;
+  min-width: var(--ds-target);
+  min-height: var(--ds-target);
+  font: inherit;
+  --ds-icon: var(--ds-icon-md);
+}
+.hud-bar .phone-btn {
+  position: relative;
+  right: auto;
+  bottom: auto;
+  flex: none;
+  justify-content: center;
+  width: var(--ds-target);
+  height: var(--ds-target);
+  padding: 0;
+  border-radius: var(--ds-radius-pill);
+}
+.hud-bar .phone-btn-label {
+  display: none;
+}
+.hud-bar .phone-btn-icon {
+  font-size: var(--ds-text-xl);
+}
+.hud-bar .phone-btn-badge {
+  top: calc(-1 * var(--ds-space-2));
+  left: auto;
+  right: calc(-1 * var(--ds-space-2));
+}
+
+/* ---------- the Options and floor sheets: an iOS grouped list ---------- */
+
+.opt-sub {
+  margin: 0 0 var(--ds-space-2);
+  color: var(--ds-text-muted);
+}
+.opt-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-3);
+  padding-bottom: var(--ds-space-3);
+}
+.opt-chips {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--ds-space-2);
+  padding-bottom: var(--ds-space-3);
+}
+.opt-chips:empty {
+  display: none;
+}
+.opt-chips .office-chip {
+  position: static;
+  max-width: 100%;
+  min-height: var(--ds-target);
+}
+.opt-group + .opt-group {
+  margin-top: var(--ds-space-4);
+}
+.opt-group-title {
+  margin: 0 0 var(--ds-space-1) var(--ds-space-3);
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.opt-list {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: var(--ds-border) solid var(--ds-line);
+  border-radius: var(--ds-radius-lg);
+  background: var(--ds-surface-raised);
+}
+.opt-item {
+  border-radius: 0;
+}
+.opt-item + .opt-item {
+  border-top: 1px solid var(--ds-line);
+}
+.opt-row {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-3);
+}
+.opt-glyph {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface-sunken);
+}
+.opt-label {
+  flex: 1;
+  min-width: 0;
+}
+.opt-value {
+  color: var(--ds-text-muted);
+  font-weight: var(--ds-weight);
+}

@@ -10,6 +10,7 @@ import { reduceMotion } from './a11y';
 import { newSince, stepsFor, textParts, TOUR, isStep, type TourPage, type TourStep, type Track, type TryIt } from './tourSteps';
 import { cardPlace, pickSpot, PROBE_PX, stageChange, toVisual, type Box } from './tourSpot';
 import { openWhatsNew, saveSeen, seenNow, useTour } from './tour';
+import { useTourGate } from './tourGate';
 import { Icon } from './Icon';
 import './tour.css';
 import { useChatMode } from './chatMode';
@@ -234,6 +235,9 @@ export function Tutorial({ track }: { track: Track }) {
 
   // Move on by itself once the thing the step asks for has happened.
   const id = active ? steps[at]?.id : undefined;
+  // In the 3D office the step on screen decides what else may open (tourGate.ts).
+  useEffect(() => useTourGate.setState({ step: track === 'office' ? (id ?? null) : null }), [track, id]);
+  useEffect(() => () => useTourGate.setState({ step: null }), []);
 
   // Owns the screen while it shows: toasts wait behind it.
   useEffect(() => {
