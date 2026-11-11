@@ -54,6 +54,14 @@ export function checkTally(checks: readonly QaCheck[]): { passed: number; failed
 
 export type ChipTone = 'good' | 'bad' | 'warn' | 'plain';
 
+/** What a card says about QA when the office holds no QA record for its PR: an open PR's was never sent, a merged or
+ *  closed one's goes with it (its rounds stay in the card's History). */
+export function noQaWords(pull: Pick<PullInfo, 'state'> | undefined): { stat: string; tile: string; checks: string; section: string } {
+  if (pull?.state === 'MERGED') return { stat: 'merged', tile: 'see History', checks: 'see History', section: "QA's report isn't kept after the merge: its rounds are in History." };
+  if (pull?.state === 'CLOSED') return { stat: 'closed', tile: 'see History', checks: 'see History', section: "QA's report isn't kept for a closed PR: its rounds are in History." };
+  return { stat: 'not in QA yet', tile: 'not sent yet', checks: 'no report yet', section: 'Not sent to QA yet.' };
+}
+
 /** The state chip on a card's header: where it is in the build → QA → fix → merge loop. */
 export function stateChip(qa: Pick<QaView, 'status'> | undefined, pull: Pick<PullInfo, 'state' | 'isDraft'> | undefined, issueOnly: boolean): { label: string; tone: ChipTone } {
   if (pull?.state === 'MERGED') return { label: 'Merged', tone: 'good' };

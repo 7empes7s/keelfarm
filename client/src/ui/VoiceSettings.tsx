@@ -384,8 +384,12 @@ export function VoiceSettings() {
         </>
       )}
       <label className="toggle">
-        <input type="checkbox" checked={voice.agentsSpeak} onChange={(e) => save({ agentsSpeak: e.target.checked })} /> Agents speak when clicked
-        <span className="muted small"> · a short line in their own voice{eleven && keySet ? '' : ', with ElevenLabs and a key'}</span>
+        <input type="checkbox" checked={voice.agentsSpeak} onChange={(e) => save({ agentsSpeak: e.target.checked })} />
+        {/* one span: pocket mode's switch rows put the label's parts in reverse */}
+        <span>
+          Agents speak when clicked
+          <span className="muted small"> · a short line in their own voice{eleven && keySet ? '' : ', with ElevenLabs and a key'}</span>
+        </span>
       </label>
       {(eleven || cache.clips > 0) && <SavedClips voice={voice} save={save} />}
       <Listening keyShown={eleven} />

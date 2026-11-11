@@ -13,7 +13,7 @@ import type { Col } from '../world/stickies';
 import { Icon } from './Icon';
 import { copyText } from './clipboard';
 import { Actions, AgentChip, ChecksList, ChecksStat, Chip, DetailsHeader, LinkButton, Section, Stat as Tile, StatStrip, StatusRows, Verdict } from './DetailsPage';
-import { mergeRows, stateChip, type ChipTone } from './detailsRules';
+import { mergeRows, noQaWords, stateChip, type ChipTone } from './detailsRules';
 import { go } from './goTo';
 import { acceptanceProgress, goneCard, issueCost, issueTimeline, splitSections, stageAt, STAGES, STATUS } from './issueCard';
 import { Key } from './Key';
@@ -159,7 +159,7 @@ function Card({ repo, card, col, allAgents, ceo }: { repo: RepoView; card: Kanba
           <>
             <Chip tone={chip.tone}>{chip.label}</Chip>
             {q && <Chip>Round {q.round}</Chip>}
-            <Chip tone={STATUS_TONE[col]}>{STATUS[col]}</Chip>
+            {STATUS[col] !== chip.label && <Chip tone={STATUS_TONE[col]}>{STATUS[col]}</Chip>}
             {objective && <Chip>{objective}</Chip>}
             {card.note && !card.note.toLowerCase().includes(chip.label.toLowerCase()) && <Chip tone={card.tone}>{card.note}</Chip>}
             {issue?.labels.map((l) => <Chip key={l}>{l}</Chip>)}
@@ -185,7 +185,7 @@ function Card({ repo, card, col, allAgents, ceo }: { repo: RepoView; card: Kanba
         {pull && (
           <Stat icon={<Icon name="git-merge" />} title={`PR #${pull.number}`} tone={pull.checks === 'failing' || card.qa?.status === 'failed' ? 'bad' : undefined} href={card.qa?.commentUrl ?? pull.url}>
             {checksWord(pull)}
-            {card.qa ? ` · QA round ${card.qa.round}: ${card.qa.status}` : ' · not in QA yet'}
+            {card.qa ? ` · QA round ${card.qa.round}: ${card.qa.status}` : ` · ${noQaWords(pull).stat}`}
           </Stat>
         )}
         {pull?.state === 'OPEN' && !pull.untrusted && (
@@ -359,6 +359,7 @@ function PrDetails({ repo, card, pull, id }: { repo: RepoView; card: KanbanCard;
   const blocked = rows.some((r) => r.tone === 'bad');
   const opened = age(pull?.createdAt);
   const steps = useTryThis(repo.id, pull, q);
+  const none = noQaWords(pull);
   return (
     <>
       {pull && steps && (
@@ -373,8 +374,8 @@ function PrDetails({ repo, card, pull, id }: { repo: RepoView; card: KanbanCard;
         </Section>
       )}
       <StatStrip>
-        <ChecksStat checks={q?.checks ?? []} to={id('checks')} />
-        <Tile title="QA round" value={q ? q.round : '–'} note={q ? 'rounds so far' : 'not sent yet'} to={id('qa')} />
+        <ChecksStat checks={q?.checks ?? []} to={id('checks')} empty={q ? undefined : none.checks} />
+        <Tile title="QA round" value={q ? q.round : '–'} note={q ? 'rounds so far' : none.tile} to={id('qa')} />
         <Tile title="Opened" value={opened ?? '–'} note="ago" />
         {pull && <Tile title="Lines" value={`+${pull.additions} −${pull.deletions}`} note="changed" />}
         {pull && <Tile title="CI" value={CI[pull.checks]} note={blocked ? 'merge blocked' : 'merge clear'} tone={blocked ? 'warn' : pull.checks === 'passing' ? 'good' : undefined} to={id('ci')} />}
@@ -389,7 +390,7 @@ function PrDetails({ repo, card, pull, id }: { repo: RepoView; card: KanbanCard;
         }
         tone={failed ? 'bad' : undefined}
       >
-        {!q && <p className="muted small">Not sent to QA yet.</p>}
+        {!q && <p className="muted small">{none.section}</p>}
         {q && !q.summary && <p className="muted small">No report yet{q.status === 'testing' ? ': the test is running' : ''}.</p>}
         {q && <Verdict summary={q.summary} fix={q.fixInstructions} failed={failed} />}
       </Section>
