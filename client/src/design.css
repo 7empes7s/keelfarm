@@ -60,7 +60,6 @@
   --ds-bad-fill: #ff8fa3;
   --ds-warn-fill: #ffd166;
   --ds-danger-text: #b3123a;
-  --ds-good-text: #1b873a; /* a done or sent line: green text that reads on paper */
   --ds-warn-text: #a63c06;
   --ds-scrim: rgba(21, 21, 31, 0.35);
   --ds-segment-track: rgba(255, 255, 255, 0.45); /* a segmented control's track on a coloured header: lifts any floor colour */

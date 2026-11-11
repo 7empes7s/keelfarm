@@ -202,5 +202,5 @@ npm run build && E2E_PORT=<your port> E2E_SKIP_BUILD=1 npx playwright test layou
 Pocket-mode screens run at all four widths; screens inside the 3D office at 390 and 1280 (WebGL is slow, and phones
 get pocket mode). `-g "phone at 390"` runs one; `LAYOUT_DEBUG=1` lists every axe node with its colours.
 
-`--ds-good-text` (#515): green text for a done or sent line (a channel's test result, a finished setup step), beside
-`--ds-danger-text` and `--ds-warn-text`. Settings' own stylesheets are at 0 colour literals in `designTokens.test.ts`.
+Settings' own stylesheets (#515) are at 0 colour literals in `designTokens.test.ts`; a done or sent line's green is
+`color-mix(in srgb, var(--ds-good-fill) 35%, var(--ds-text))`, which reads on paper.

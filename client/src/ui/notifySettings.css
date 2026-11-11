@@ -35,6 +35,6 @@
   flex-direction: column;
 }
 .notify-ok {
-  color: var(--ds-good-text);
+  color: color-mix(in srgb, var(--ds-good-fill) 35%, var(--ds-text));
   font-weight: 600;
 }
