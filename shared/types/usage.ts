@@ -29,4 +29,5 @@ export interface UsageSource {
   accountId?: string; // a Claude or Codex account's row: its id in Providers & accounts, whose readings it shows
   agents?: string[]; // ids of the agents (and the CEO) pinned to it
   history?: [number, number][]; // [at, worst window %], the last day, for its detail
+  watchBack?: boolean; // limited, and the manager asked to be told when it's back (#404)
 }

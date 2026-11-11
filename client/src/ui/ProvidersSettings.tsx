@@ -136,7 +136,7 @@ function AccountCard({ a, first, last, isDefault, left, edit, signIn }: { a: Acc
     if (ok) await api.makeDefaultAccount(a.id, true).catch(() => undefined);
   };
   return (
-    <div className={`acc-card ${a.enabled ? '' : 'acc-paused'}`}>
+    <div id={`acc-card-${a.id}`} className={`acc-card ${a.enabled ? '' : 'acc-paused'}`}>
       <div className="ds-card-head">
         <div className="ds-row-main">
           <div className="ds-row-title">{a.label}</div>

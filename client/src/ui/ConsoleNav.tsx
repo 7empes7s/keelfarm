@@ -43,9 +43,25 @@ function openOffice() {
   setMode('office');
 }
 
+/** A Settings card asked for by its element id (a usage row's account, #404): scrolled to and outlined once it renders. */
+function useCardFocus(card: string | undefined) {
+  useEffect(() => {
+    if (!card) return;
+    const t = setTimeout(() => {
+      const el = document.getElementById(card);
+      if (!el) return;
+      el.scrollIntoView({ block: 'center' });
+      el.classList.add('cn-found');
+      setTimeout(() => el.classList.remove('cn-found'), 2500);
+    }, 60); // lazy sections render a moment later
+    return () => clearTimeout(t);
+  }, [card]);
+}
+
 /** One section's content. */
 export function SectionBody({ id, where, focus = {} }: { id: SectionId; where: Where; focus?: SectionFocus }) {
-  const one = (body: ReactNode) => <div className="cn-one">{body}</div>;
+  useCardFocus(id === 'ops' ? undefined : focus.card);
+  const one =(body: ReactNode) => <div className="cn-one">{body}</div>;
   switch (id) {
     case 'floors':
       return <FloorsTab />;
