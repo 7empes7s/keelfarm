@@ -1,6 +1,7 @@
 // The CEO jobs log and "Redo on Opus" (#332): each job's number, the tools it called and its last reply, its row in the
 // session history, its inputs kept for a redo, and the redo itself on the CEO's own model with the links between the
-// two replies. The rules are pure, in server/ceoRedo.ts and shared/ceoJobLog.ts.
+// two replies; a turn's closing recap folded into its last reply (#378). The rules are pure, in server/ceoRedo.ts,
+// shared/ceoJobLog.ts and shared/reactions.ts.
 import type { SessionResult } from '../agentRunner.ts';
 import type { CeoJob } from '../ceo.ts';
 import type { CostRun } from '../costLedger.ts';
@@ -8,6 +9,8 @@ import { HttpError } from '../httpError.ts';
 import { jobTrigger, keepJob, redoJob } from '../ceoRedo.ts';
 import { sampleCeoJobs } from '../ceoJobSample.ts';
 import { jobReply } from '../../shared/ceoJobLog.ts';
+import { parseMessage } from '../../shared/chatParts.ts';
+import { foldedReply, turnEnding } from '../../shared/reactions.ts';
 import { isAutomatedJob } from '../../shared/ceoModels.ts';
 import { CEO_ID, type CeoJobTag, type PhoneMessage } from '../../shared/types.ts';
 import { CEO_MODEL, type PersistedAgent } from './model.ts';
@@ -21,6 +24,7 @@ export abstract class SwarmCeoLog extends SwarmCeoFresh {
     const c = this.state.ceo;
     job.id ??= c.jobSeq = (c.jobSeq ?? 0) + 1;
     this.jobMessage = null;
+    this.turnAnswer = null;
     return super.ceoJobModel(a, job);
   }
 
@@ -37,6 +41,25 @@ export abstract class SwarmCeoLog extends SwarmCeoFresh {
     if (!job?.id) return;
     if (job.redo && this.jobMessage === null) this.retag(job.redo.message, { redoneBy: { job: job.id, message: m.id } });
     this.jobMessage = m.id;
+  }
+
+  /**
+   * A turn's closing text (shared/reactions.ts turnEnding): after the turn answered with the reply tool, it folds into
+   * that reply's steps row, one bubble per answer with no push and nothing more to Telegram (#378); after only a
+   * reaction it is a quiet note. True when it needs no bubble of its own.
+   */
+  protected foldTurn(text: string, extra: Pick<PhoneMessage, 'attachments' | 'actions' | 'research' | 'log' | 'used'>): boolean {
+    const answered = this.turnAnswer;
+    this.turnAnswer = null;
+    const ending = turnEnding(text, extra, answered?.by ?? null);
+    const last = ending === 'fold' ? this.state.messages.find((m) => m.id === answered?.message) : undefined;
+    if (last) {
+      Object.assign(last, foldedReply(last, text, extra), this.ceoJobTag());
+      this.broadcast({ type: 'ceoChat', message: last });
+      this.save();
+      this.ceoJobReplied(last);
+    } else if (ending === 'pill') this.postMessage('office', `${this.ceo().name}: ${parseMessage('ceo', text).text.trim()}`);
+    return !!last || ending === 'pill' || ending === 'quiet'; // quiet: a reaction said it, or nothing needed saying: no blank bubble, no push
   }
 
   /**
