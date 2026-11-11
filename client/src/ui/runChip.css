@@ -1,15 +1,21 @@
-/* What a session really runs on (#376): one line, cut with an ellipsis rather than pushing its row wider. */
+/* What a session really runs on (#376): the account and the model always show; a long one wraps, never cut. */
 .run-chip {
   max-width: 100%;
   min-width: 0;
+  box-sizing: border-box;
+  border-radius: var(--ds-radius-sm);
   font-weight: var(--ds-weight);
   vertical-align: middle;
 }
+.run-chip > svg {
+  flex: none;
+  align-self: flex-start;
+  margin-top: 1px;
+}
 .run-chip-text {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .run-chip-moved {
   border-color: var(--ds-warn-text);
@@ -19,8 +25,11 @@
 }
 .aw-run {
   align-self: flex-start;
-  margin-top: 2px;
+  margin: 0 0 var(--ds-space-2);
 }
 .pk-run {
   margin: 0 0 var(--ds-space-2);
+}
+.term-phone .aw-run {
+  margin: var(--ds-space-2) var(--ds-space-3);
 }

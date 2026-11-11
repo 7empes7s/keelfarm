@@ -388,7 +388,6 @@ export function TerminalView({ agentId, view, jump, details: requestedDetails, p
           {time && <span className="aw-time"> · {time}</span>}
         </span>
         <span className="aw-task">{taskLine(agent)}</span>
-        <RunChip run={agent.run} className="aw-run" />
       </button>
       {working && (
         <button type="button" className="aw-icon aw-stop" aria-label={`Stop ${agent.name}…`} title={`Stop ${agent.name} (asks first)`} disabled={busy} onClick={() => void stop()}>
@@ -447,6 +446,7 @@ export function TerminalView({ agentId, view, jump, details: requestedDetails, p
     <Panel wide accent={agent.color} className={`aw ${phone ? 'term-phone' : 'aw-desk'}`} title={title}>
       <div className={`aw-body ${!phone && details ? 'aw-body-side' : ''}`}>
         <div className="aw-main">
+          <RunChip run={agent.run} className="aw-run" />
           {notes}
           {noChat && chatMode.on && agent.role !== 'ceo' && <p className="ac-note">{noChat}</p>}
           {split}
