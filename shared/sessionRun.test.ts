@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { runLabel, runPinNote, runsByAccount, runText, sessionRun } from './sessionRun';
+import { runLabel, runPinNote, runsByAccount, runText, sameRun, sessionRun } from './sessionRun';
 
 const accounts = [
   { id: 'claude-ultra', label: 'Claude Ultra', tags: ['ultra'], status: 'limited' as const },
@@ -14,6 +14,13 @@ describe('sessionRun', () => {
     expect(runLabel(r)).toBe('Pro secondary · Opus 5.5');
     expect(runPinNote(r)).toBe('pinned: Claude Ultra, limited');
     expect(runText(r)).toBe('Pro secondary · Opus 5.5 high effort (pinned: Claude Ultra, limited)');
+  });
+
+  it('a later session on the same account and model is the same chip; a switch is not', () => {
+    const r = sessionRun(undefined, 'claude-pro2', accounts, s);
+    expect(sameRun(r, { ...r, at: 99 })).toBe(true);
+    expect(sameRun(r, sessionRun(undefined, 'claude-ultra', accounts, s))).toBe(false);
+    expect(sameRun(r, { ...r, model: 'claude-sonnet-5' })).toBe(false);
   });
 
   it('says nothing about a pin it is on: by id, by tag, or the rotation', () => {

@@ -36,6 +36,9 @@ export const runPinNote = (r: SessionRun) => (r.pinned ? `pinned: ${r.pinned}${r
 /** The chip's whole line, for its title and screen readers. */
 export const runText = (r: SessionRun) => [runLabel(r), r.effort && `${r.effort} effort`, runPinNote(r) && `(${runPinNote(r)})`].filter(Boolean).join(' ');
 
+/** The same chip: account, coding agent, model, effort and pin (not when it started). */
+export const sameRun = (a: SessionRun, b: SessionRun) => runText(a) === runText(b) && a.account === b.account && a.cli === b.cli;
+
 // ---------- "Who runs on what" (#376) ----------
 
 const THREAD_DAY_MS = 24 * 60 * 60_000;

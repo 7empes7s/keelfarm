@@ -6,6 +6,7 @@ import { ceoDigest, ceoJobSession, freshStart, HANDOVER_PROMPT, handoverOf, load
 import { ceoSessionStep } from '../ceoWaits.ts';
 import { recordCost } from '../metrics.ts';
 import { liveMandates } from '../../shared/followups.ts';
+import { sameRun } from '../../shared/sessionRun.ts';
 import { conversationsView, currentConversation } from '../../shared/conversations.ts';
 import type { SessionRun } from '../../shared/types.ts';
 import { CEO_DIR, CEO_MODEL, type PersistedAgent } from './model.ts';
@@ -19,8 +20,10 @@ export abstract class SwarmCeoFresh extends SwarmCeoModels {
   /** The CEO's session answering in the chat (not a background job's fresh one): what it runs on goes on the thread (#376). */
   protected sessionRan(a: PersistedAgent, run: SessionRun) {
     if (a.role !== 'ceo' || this.ceoFresh) return;
-    currentConversation(this.state.ceo.chats).run = run;
-    this.broadcast({ type: 'ceoChat', conversations: conversationsView(this.state.ceo.chats) });
+    const thread = currentConversation(this.state.ceo.chats);
+    const same = !!thread.run && sameRun(thread.run, run);
+    thread.run = run;
+    if (!same) this.broadcast({ type: 'ceoChat', conversations: conversationsView(this.state.ceo.chats) }); // the whole list: only when the chip changes
   }
 
   /**

@@ -2,10 +2,14 @@
 .who-runs {
   min-width: 0;
 }
+.who-runs-group {
+  min-width: 0; /* a grid item: a long title truncates instead of widening it */
+}
 .who-runs-group + .who-runs-group {
   margin-top: var(--ds-space-3);
 }
 .who-runs-account {
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   gap: var(--ds-space-2);
@@ -20,16 +24,21 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.who-runs-account .chip {
+  flex: none;
+}
 .who-runs-hot {
   background: var(--ds-warn-fill);
   color: var(--ds-on-color);
 }
 .who-runs-rows {
+  min-width: 0;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 .who-runs-row {
+  box-sizing: border-box;
   width: 100%;
   min-height: var(--ds-target);
   border: 0;
