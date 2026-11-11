@@ -34,6 +34,7 @@ import {
   recentHits,
   removal,
   resolveAccount,
+  sameSubscription,
   type AccountPatch,
   type AccountSetup,
 } from '../shared/accounts.ts';
@@ -56,6 +57,8 @@ export interface AccountsDeps {
   file: string;
   /** Test an account (accountCheck.ts; the demo's is fake). */
   check: (a: ProviderAccount, dir: string, secret: string) => Promise<AccountCheck>;
+  /** The built-in Claude login's plan and owner, read from its files without a request (#460; the demo's is fake). */
+  login?: (a: ProviderAccount, dir: string) => Promise<{ plan: string | null; who: string | null }>;
   /** A login's CLI signing in in a terminal, with its folder (localSignIn.ts; the demo's is fake). */
   signIn: (o: { cli: AccountCli; env: Record<string, string>; term: AgentTerminal; mode: SignInMode }, exited: (code: number) => void) => BoxSignIn;
   /** The cost ledger's sessions, for today's spend per account. */
@@ -101,6 +104,7 @@ export class Accounts {
   private sessionOut = new Set<string>(); // a session found it signed out: a poll's expired-but-refreshable token doesn't put it back (#442)
   private refresh = new Set<string>(); // Claude logins whose access token expired, for their next session to refresh (#442)
   private plans = new Map<string, string | null>(); // the plan each Claude login really has (#442)
+  private owners = new Map<string, string | null>(); // who each Claude login belongs to, never sent to tabs (#460)
   private running = new Map<string, number>();
   private terms = new Map<string, AgentTerminal>();
   private signIns = new Map<string, BoxSignIn>();
@@ -238,6 +242,7 @@ export class Accounts {
 
   view(now = Date.now()): AccountsView {
     const agents = this.deps.agents();
+    const shared = sameSubscription(this.list().filter((a) => a.enabled && !a.removing).map((a) => ({ id: a.id, label: a.label, plan: this.plans.get(a.id), who: this.owners.get(a.id) })));
     const accounts = this.candidates(now)
         .sort((x, y) => x.account.cli.localeCompare(y.account.cli) || x.account.priority - y.account.priority)
         .map(({ account: a, signedIn, usage, todayUsd, sessions }): AccountView => {
@@ -258,6 +263,7 @@ export class Accounts {
             signIn: this.runs.get(a.id) ?? null,
             ...(plan ? { loginPlan: plan } : {}),
             ...(warning ? { planWarning: warning } : {}),
+            ...(shared.has(a.id) ? { sameAs: shared.get(a.id) } : {}),
             ...(this.refresh.has(a.id) && signedIn ? { tokenRefresh: true } : {}),
             ...(this.ownsFolder(a) ? { shareMissing: shareStatus(this.dirOf(a), this.shareSource()) } : {}),
           };
@@ -501,6 +507,7 @@ export class Accounts {
     if (r.refresh && !out) this.refresh.add(id);
     else this.refresh.delete(id);
     if (r.plan !== undefined) this.plans.set(id, r.plan);
+    if (r.who !== undefined) this.owners.set(id, r.who);
     if (r.readings.length) this.usage.set(id, mergeReadings(this.usage.get(id) ?? [], r.readings));
     // A limit a session hit is over once the poll shows room again (#248).
     const now = Date.now();
@@ -512,6 +519,14 @@ export class Accounts {
 
   private async pollAll() {
     for (const a of this.list()) if (!a.builtIn && a.kind !== 'api-key' && a.enabled) await this.test(a.id).catch(() => undefined);
+    // The built-in Claude login's plan and owner (#460): its usage the office reads already.
+    const claude = this.list().find((a) => a.builtIn && a.cli === 'claude' && a.enabled);
+    const own = claude && (await this.deps.login?.(claude, this.dirOf(claude)).catch(() => null));
+    if (claude && own) {
+      this.plans.set(claude.id, own.plan);
+      this.owners.set(claude.id, own.who);
+      this.emit();
+    }
     // The built-in Codex login's rate limits (#361): nothing else reads them. Only its readings: whether it counts as
     // signed in stays as it was (Codex may run on OPENAI_API_KEY with no login file).
     const codex = this.list().find((a) => a.builtIn && a.cli === 'codex' && a.enabled);
@@ -682,6 +697,7 @@ export class Accounts {
     this.sessionOut.delete(a.id);
     this.refresh.delete(a.id);
     this.plans.delete(a.id);
+    this.owners.delete(a.id);
     this.running.delete(a.id);
     this.save(this.list().filter((x) => x.id !== a.id));
     await mergeSecrets(this.deps.secretsFile, { [secretKey(a.id)]: undefined });

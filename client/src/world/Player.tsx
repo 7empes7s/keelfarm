@@ -49,6 +49,10 @@ const PAD_PADDLE = 600;
 
 let canvasEl: HTMLCanvasElement | null = null;
 
+let standHere: ((x: number, z: number, yaw: number, pitch: number) => void) | null = null;
+/** Stands the player at a spot on the floor shown (a deep link, routeLink.ts); false until the player is in the scene. */
+export const standAt = (x: number, z: number, yaw: number, pitch: number) => !!standHere && (standHere(x, z, yaw, pitch), true);
+
 // After an action, mouse presses are swallowed for a moment, so the second half of a double click
 // (or a click right after E) can't land on the panel's backdrop and close it, or confirm a hire.
 const QUIET_MS = 400;
@@ -274,6 +278,18 @@ export function Player({ colliders, floor }: { colliders: Rect[]; floor: number 
     arriveOnFloor({ x: camera.position.x, z: camera.position.z, ...look.current }); // a view carries on from here
   }, [floor, camera]);
   const lastSave = useRef(0);
+
+  // A deep link's place (#413): stand here on this floor, in your own eyes.
+  useEffect(() => {
+    standHere = (x, z, yaw, pitch) => {
+      exitView();
+      perched.current = null;
+      camera.position.set(x, EYE_HEIGHT, z);
+      look.current = { yaw, pitch };
+      arriveOnFloor({ x, z, yaw, pitch });
+    };
+    return () => void (standHere = null);
+  }, [camera]);
 
   useEffect(() => {
     if (!import.meta.env.DEV) return;

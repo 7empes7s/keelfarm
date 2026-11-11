@@ -52,3 +52,18 @@ describe('paged chat after the store split (#145)', () => {
     }
   });
 });
+
+describe('whole views as patches (#491)', () => {
+  it("merge into the CEO's, the test lab's and the accounts' state, keeping the usage rows", () => {
+    const before = useStore.getState();
+    try {
+      useStore.getState().apply({ type: 'ceo', ceo: { queue: [], job: null, lastReviewAt: 1, nextReviewAt: null, held: null } });
+      useStore.getState().apply({ type: 'usageSources', sources: [] });
+      useStore.getState().apply({ type: 'views', ceo: { set: { lastReviewAt: 2 }, drop: ['held'] }, accounts: { set: { accounts: [] } } });
+      expect(useStore.getState().ceo).toEqual({ queue: [], job: null, lastReviewAt: 2, nextReviewAt: null });
+      expect(useStore.getState().accounts).toEqual({ accounts: [], sources: [] });
+    } finally {
+      useStore.setState(before);
+    }
+  });
+});

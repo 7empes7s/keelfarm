@@ -10,6 +10,12 @@ export { demoThreads } from './demoThreads.ts'; // the older threads beside the 
 
 const NOTES = `# Company notes
 
+## CURRENT
+- **msg 1855 (2026-11-08):** the checkout redesign (#4) ships after QA on a phone.
+  **Why:** the manager reads the office on their phone first.
+  **How to apply:** check \`src/checkout.ts\` at 390 px before approving.
+- **msg 1871 (2026-11-10):** floor 2's rate limit lives in server/limits.ts:42; keep it under 100 a minute.
+
 ## The manager
 - Prefers short replies on the phone; the long version goes in an artifact.
 - Wants a heads-up before any team grows past 4 agents on a floor.
@@ -21,6 +27,11 @@ const NOTES = `# Company notes
 ## Lessons
 1. Issues that touch the same file collide: file them with \`Depends on #N\`.
 2. A red check on Windows is usually a path built by hand: use \`path.join\`.
+
+## ARCHIVE
+### October
+- **msg 1204 (2026-10-21):** paused hiring on floor 1 until #2 merged.
+- 2026-10-14: moved the nightly build to 03:00.
 `;
 
 /** Writes the demo's notes once (the CEO's own edits, if any, stay). */
