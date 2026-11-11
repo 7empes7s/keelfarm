@@ -90,6 +90,8 @@ seed('demo-co/recipe-box', 'Recipes with a shopping list', [
   ['Recipe page on a phone', 'Ingredients, then steps, at 375px.\n\nObjective: O2'],
   ['Import a recipe from a link', 'Paste a link and the form fills itself.\n\nDepends on #1'],
 ], [], true);
+// Listed but not moved in (#366): connecting it shows the setup advisor's checklist for a three.js game.
+seed('demo-co/star-hopper', 'A three.js space hopper', [['Boost pads', 'Pads that launch the ship. Touches src/level.ts.'], ['Touch controls', 'A stick and a jump button on phones.']]);
 {
   const r = repos.get(CI_DOWN_REPO)!;
   const n = r.nextNumber++;

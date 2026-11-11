@@ -15,6 +15,7 @@ export type NoticeStep =
 
 /** Tapping the notice itself: its target, else the chat (the CEO) or the approvals (a team change). */
 export function noticeJump(n: Pick<NoticeView, 'kind' | 'target' | 'requestId'>, mode: 'office' | 'pocket', w: RefWorld): NoticeStep {
+  if (n.kind === 'setup') return noticeStep('setup', n, mode, w);
   if (n.target && n.kind !== 'approval') return jumpFor({ ...n.target, start: 0, end: 0 }, mode, w);
   if (n.kind === 'ceo') return { kind: 'chat' };
   if (n.kind === 'approval') return { kind: 'approvals', ...(n.requestId && { requestId: n.requestId }) };
@@ -44,6 +45,8 @@ export function noticeStep(a: NoticeAction, n: Pick<NoticeView, 'target' | 'requ
       return { kind: 'approvals', ...(n.requestId && { requestId: n.requestId }) };
     case 'approve':
       return n.requestId ? { kind: 'call', call: 'approve', requestId: n.requestId } : null;
+    case 'setup': // the floor's setup card (#366)
+      return t?.kind === 'floor' && w.repos.some((r) => r.id === t.repoId) ? { kind: 'overlay', overlay: { kind: 'manager', tab: 'floors', repoId: t.repoId } } : null;
     case 'reviewKeys':
       return { kind: 'keys' };
   }

@@ -53,6 +53,7 @@ const ACTS: Record<string, string> = {
   define_experiment: '🧪',
   set_floor_profile: '🏢',
   set_office_playbook: '📘',
+  apply_setup: '🧭',
   send_telegram: '✈️',
   scan_keys: '🔑',
   make_default_account: '🔀',

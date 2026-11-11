@@ -21,7 +21,7 @@ describe('what can I do here', () => {
 
   it('links to docs files that exist', () => {
     for (const h of Object.values(SCREEN_HELP)) {
-      const file = h.docs.match(/\/docs\/([\w-]+\.md)/)![1];
+      const file = h.docs.match(/\/docs\/([\w/-]+\.md)/)![1];
       expect(fs.existsSync(path.join(here, '../../../docs', file)), file).toBe(true);
     }
   });

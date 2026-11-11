@@ -19,6 +19,7 @@ import { DEFAULT_RESEARCH_MIN, RESEARCH_NO_FILING, researchPrompt, short } from 
 import { MAX_TRIAGES, type TriagePr } from './triage.ts';
 import { waitTools, type WaitHandlers } from './ceoWaitTools.ts';
 import { reactTools, type ReactHandlers } from './ceoReactTools.ts';
+import { setupTools, type SetupHandlers } from './ceoSetupTool.ts';
 
 // The CEO: a Claude Code session in the lobby that runs the company instead of writing code.
 // It studies each floor's repo, sizes its team of interchangeable agents from its throughput (team changes the
@@ -156,7 +157,7 @@ export function qaReportText(
   return JSON.stringify(report, null, 1);
 }
 
-export interface OfficeHandlers extends WaitHandlers, ReactHandlers {
+export interface OfficeHandlers extends WaitHandlers, ReactHandlers, SetupHandlers {
   companyStatus(a: { full?: boolean }): string;
   floorDetail(a: { floor: number }): string;
   agentDetail(a: { agent_id: string }): string;
@@ -509,6 +510,7 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
     tool('edit_message', "Correct one of your earlier replies to the manager (#N from the chat; default your latest): its text is replaced, and the manager sees your old words struck through next to the new ones, marked edited. Their Telegram copy follows. For a real mistake only; new information goes in a new message.", { id: z.number().int().optional(), text: z.string().min(1).max(6000).describe('The whole corrected message'), reason: z.string().max(200).optional().describe('Why, in a few words') }, (a) => run(() => h.editMessage(a))),
     ...waitTools(h, run),
     ...reactTools(h, run),
+    ...setupTools(h, run),
   ];
   const server = createSdkMcpServer({ name: 'office', version: '1.0.0', tools: defs });
   return {

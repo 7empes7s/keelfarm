@@ -88,6 +88,7 @@ const OFFICE: Record<string, [string, Words]> = {
   agent_log: ['📜', (t, n) => `Reading ${whose(who(t.agent ?? t.rest.split(' ')[0], n))} log`],
   set_floor_profile: ['🗂️', (t) => `Updating ${t.floor ? `floor ${t.floor}'s` : "a floor's"} profile`],
   set_office_playbook: ['📘', () => 'Updating the office playbook'],
+  apply_setup: ['🧭', (t) => `Setting up ${t.floor ? `floor ${t.floor}` : 'a floor'} as recommended`],
   scale_team: ['👥', (t) => `Sizing ${t.floor ? `floor ${t.floor}'s` : 'a'} team${t.rest.match(/→ (\d+)/) ? ` to ${t.rest.match(/→ (\d+)/)![1]}` : ''}`],
   configure_agent: ['⚙️', (t, n) => `Setting up ${who(t.agent ?? t.rest.split(/[\s:]/)[0], n)}`],
   file_issue: ['📝', (t) => `Filing an issue${onFloor(t)}${t.quote ? `: ${quoted(t.quote)}` : ''}`],
