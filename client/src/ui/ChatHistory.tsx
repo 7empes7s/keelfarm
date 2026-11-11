@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
 import './threads.css';
@@ -8,6 +8,8 @@ import { Icon } from './Icon';
 import { CeoMemory } from './CeoMemory';
 import { Menu } from './Menu';
 import { openOnce } from './surfaces';
+import { XLabel } from './HoverCard';
+import { RAIL_KEYS, saveRail, savedRail, togglesRail } from './threadsRail';
 
 // The CEO chat's threads (#51, #132), like Claude's sidebar: a new one (a fresh CEO session) in a floor's project or
 // the Company, the list by project with search, grouped Pinned / Today / This week / Older, each with its floors,
@@ -180,56 +182,66 @@ export function Conversations({ ceoName, onClose, onMemory }: { ceoName: string;
   );
 }
 
-// The column folds to a rail (#396), remembered on this device.
-const RAIL_KEY = 'cubefarm:threads-rail';
-function savedRail() {
-  try {
-    return localStorage.getItem(RAIL_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-/** The threads column folded to a rail or not, remembered on this device. */
-export function useThreadsRail(): [boolean, (rail: boolean) => void] {
-  const [rail, setRail] = useState(savedRail);
-  const set = (v: boolean) => {
-    setRail(v);
-    try {
-      localStorage.setItem(RAIL_KEY, v ? '1' : '0');
-    } catch {
-      // remembered for this visit only
-    }
-  };
-  return [rail, set];
-}
-
 /**
- * The threads in a column beside the chat on a wide screen (#132), folded to a rail of Show and New thread (#396), and
- * `hidden` while the Threads sheet is open (one list on screen).
+ * The threads in a column beside the chat on a wide screen (#132), folded to a rail (#346, #396: Show, New thread,
+ * Search and the current thread's project and unread dots), and `hidden` while the Threads sheet is open (one list on
+ * screen). The chat takes the width it leaves.
  */
-export function ThreadsColumn({ ceoName, rail, onRail, hidden }: { ceoName: string; rail: boolean; onRail: (rail: boolean) => void; hidden: boolean }) {
+export function ThreadsColumn({ ceoName, hidden }: { ceoName: string; hidden: boolean }) {
   const [memory, setMemory] = useState(false);
+  const [rail, setRail] = useState(savedRail);
+  const nav = useRef<HTMLElement>(null);
+  const search = useRef(false);
+  const fold = (v: boolean) => (setRail(v), saveRail(v));
   const unread = useStore((s) => s.chat.conversations.filter((c) => c.id !== s.chat.current && !c.archived && unreadThread(c, s.phoneReadAt)).length);
+  const project = useStore((s) => {
+    const cur = s.chat.conversations.find((c) => c.id === s.chat.current);
+    return cur?.repoId ? s.repos.find((r) => r.id === cur.repoId) : undefined;
+  });
+  // Ctrl/⌘ + \ while the focus is in the docked chat (its column included)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const dock = nav.current?.closest('.pk-dock');
+      if (!togglesRail(e, !!dock && e.target instanceof Node && dock.contains(e.target))) return;
+      e.preventDefault();
+      setRail((v) => (saveRail(!v), !v));
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+  useEffect(() => {
+    if (rail || !search.current) return;
+    search.current = false;
+    nav.current?.querySelector<HTMLInputElement>('.conv-search')?.focus();
+  }, [rail]);
   const sheet = memory && <CeoMemory ceoName={ceoName} onClose={() => setMemory(false)} />;
   if (rail)
     return (
-      <nav className="threads-col threads-rail" aria-label="Threads" hidden={hidden}>
-        <button type="button" className="pk-icon-btn threads-rail-btn" onClick={() => onRail(false)} aria-expanded={false} aria-label={unread ? `Show the threads, ${unread} unread` : 'Show the threads'} title="Show the threads">
+      <nav ref={nav} className="threads-col threads-rail" aria-label="Threads" hidden={hidden}>
+        <button type="button" className="pk-icon-btn threads-rail-btn xbtn" onClick={() => fold(false)} aria-expanded={false} aria-label={unread ? `Show the threads, ${unread} unread` : 'Show the threads'}>
           <Icon name="panel-left-open" />
           {unread > 0 && <span className="thread-unread" aria-hidden />}
+          <XLabel text="Show the threads" keys={RAIL_KEYS} />
         </button>
-        <button type="button" className="pk-icon-btn" onClick={() => void api.newConversation(null).catch(() => undefined)} aria-label="New thread" title="A fresh start: the CEO begins a new session, its notes carry over">
+        <button type="button" className="pk-icon-btn xbtn" onClick={() => void api.newConversation(null).catch(() => undefined)} aria-label="New thread">
           <Icon name="square-pen" />
+          <XLabel text="New thread" />
         </button>
+        <button type="button" className="pk-icon-btn xbtn" onClick={() => ((search.current = true), fold(false))} aria-label="Search every thread">
+          <Icon name="search" />
+          <XLabel text="Search every thread" />
+        </button>
+        <span className="threads-rail-project" style={project ? { background: project.color } : undefined} role="img" aria-label={project ? `This thread: floor ${project.floor}` : 'This thread: the Company'} title={project ? `Floor ${project.floor}` : 'Company'} />
         {sheet}
       </nav>
     );
   return (
-    <nav className="threads-col" aria-label="Threads" hidden={hidden}>
+    <nav ref={nav} className="threads-col" aria-label="Threads" hidden={hidden}>
       <div className="threads-col-head">
         <b className="grow">Threads</b>
-        <button type="button" className="pk-icon-btn" onClick={() => onRail(true)} aria-expanded aria-label="Hide the threads" title="Hide the threads">
+        <button type="button" className="pk-icon-btn xbtn" onClick={() => fold(true)} aria-expanded aria-label="Hide the threads">
           <Icon name="panel-left-close" />
+          <XLabel text="Hide the threads" keys={RAIL_KEYS} />
         </button>
       </div>
       <Threads ceoName={ceoName} onDone={() => undefined} onMemory={() => openOnce('memory', () => setMemory(true))} />

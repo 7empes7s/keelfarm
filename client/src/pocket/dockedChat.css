@@ -54,7 +54,7 @@
   min-width: 0;
   background: var(--paper);
 }
-/* expanded: the threads column (280px, a 56px rail folded, none while the Threads sheet is open: --pk-threads-w, threads.css) beside the chat, which keeps its dragged width (#212), and the
+/* expanded: the threads column (280px, threads.css; folded to a rail or hidden, the chat takes its width, #396) beside the chat, which keeps its dragged width (#212), and the
    artifact or file it opens beside the dock, not over it (#132) */
 .pk-dock-body {
   flex: 1;
@@ -62,10 +62,10 @@
   display: flex;
 }
 .pk-dock-threads {
-  width: clamp(calc(360px + var(--pk-threads-w, 280px)), calc(var(--pk-dock-w, 380px) + var(--pk-threads-w, 280px)), max(calc(360px + var(--pk-threads-w, 280px)), 100% - 692px));
+  width: clamp(640px, calc(var(--pk-dock-w, 380px) + 280px), max(640px, 100% - 692px));
 }
 html:has(.pocket:not(.pk-chat-full) .pk-dock-threads) .artifact-back {
-  right: calc(var(--pk-dock-w, 380px) + var(--pk-threads-w, 280px));
+  right: calc(var(--pk-dock-w, 380px) + 280px);
 }
 /* the chat full screen (#201): wide, the docked chat covers the pages beside the rail (#242: the rail stays, and tapping
    it leaves full screen), the pages keeping their place behind it; on a phone the tab bar and the working strip's
