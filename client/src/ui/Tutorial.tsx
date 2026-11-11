@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { api } from '../api';
 import { useStore } from '../store';
 import { CEO_ID } from '../../../shared/types';
@@ -151,7 +150,11 @@ function findTarget(targets: readonly string[]): Box | null {
 
 const same = (a: Box | null, b: Box | null) => a === b || (!!a && !!b && a.left === b.left && a.top === b.top && a.width === b.width && a.height === b.height);
 
-/** Where the step's control is drawn, following it on resize, scroll and layout changes; null when it isn't on screen. */
+/**
+ * Where to ring the step's control, in the px of the box the card is drawn in (inside the pocket, the UI scale's), so
+ * the ring sits under the card in its stacking order; following it on resize, scroll and layout changes, null when it
+ * isn't on screen.
+ */
 function useSpot(targets: string): Box | null {
   const [rect, setRect] = useState<Box | null>(null);
   useEffect(() => {
@@ -159,7 +162,10 @@ function useSpot(targets: string): Box | null {
     let frame = 0;
     const look = () => {
       frame = 0;
-      const r = findTarget(targets.split(' '));
+      const seen = findTarget(targets.split(' '));
+      const host = document.querySelector('.tour')?.parentElement;
+      const z = host ? zoomOf(host) : 1;
+      const r = seen && z !== 1 ? { left: seen.left / z, top: seen.top / z, width: seen.width / z, height: seen.height / z } : seen;
       setRect((was) => (same(was, r) ? was : r));
     };
     const soon = () => void (frame ||= requestAnimationFrame(look));
@@ -180,11 +186,7 @@ function useSpot(targets: string): Box | null {
 /** A ring around the control a step is about, and the page dimmed around it; the dim alone when it isn't on screen. */
 function Spotlight({ rect }: { rect: Box | null }) {
   const pad = 4;
-  // on the body: inside a zoomed box (the UI scale) its place would be scaled again
-  return createPortal(
-    rect ? <div className={`tour-ring ${reduceMotion() ? '' : 'tour-ring-pulse'}`} aria-hidden style={{ left: rect.left - pad, top: rect.top - pad, width: rect.width + pad * 2, height: rect.height + pad * 2 }} /> : <div className="tour-dim" aria-hidden />,
-    document.body,
-  );
+  return rect ? <div className={`tour-ring ${reduceMotion() ? '' : 'tour-ring-pulse'}`} aria-hidden style={{ left: rect.left - pad, top: rect.top - pad, width: rect.width + pad * 2, height: rect.height + pad * 2 }} /> : <div className="tour-dim" aria-hidden />;
 }
 
 /** The tour on this screen: the full one while settings.tutorialStep says so, else a What's new replay. */
