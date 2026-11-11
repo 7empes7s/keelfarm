@@ -48,7 +48,7 @@ import type { LabRunner } from './testLab.ts';
 import { createLabRunner } from './testLabRunner.ts';
 import { claudeProjectsDir, findTranscript } from './history.ts';
 import type { HistoryEntry } from '../shared/history.ts';
-import type { CliView, ModelCatalogView, GhRepoSummary, IssueInfo, NoticeView, PhoneMessage, ProviderAccount, PullInfo, UseCase } from '../shared/types.ts';
+import type { CliView, ModelCatalogView, GhRepoSummary, IssueInfo, MergedPage, NoticeView, PhoneMessage, ProviderAccount, PullInfo, UseCase } from '../shared/types.ts';
 import type { SampleFloor } from './chatSample.ts';
 import { realProbe } from './providers.ts';
 import { realKeyScan } from './keyScan.ts';
@@ -63,6 +63,8 @@ export interface Backend {
   repoMeta(fullName: string): Promise<github.RepoMeta>;
   listIssues(fullName: string): Promise<IssueInfo[]>;
   listPulls(fullName: string): Promise<PullInfo[]>;
+  /** One page of merged PRs, newest first, for the Merged column's older pages (#411). */
+  listMergedPage(fullName: string, page: number): Promise<MergedPage>;
   /** The logins of collaborators with write access, for trust (#185). */
   writers(fullName: string): Promise<string[]>;
   createIssue(fullName: string, title: string, body: string, labels?: string[]): Promise<number>;
@@ -301,6 +303,7 @@ export const realBackend: Backend = {
   repoMeta: github.repoMeta,
   listIssues: github.listIssues,
   listPulls: github.listPulls,
+  listMergedPage: github.listMergedPage,
   writers: github.writers,
   createIssue: github.createIssue,
   exportCharter: github.exportCharter,
