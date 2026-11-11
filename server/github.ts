@@ -217,7 +217,7 @@ function toPull(p: RawPull): PullInfo {
     checkRun: checkRunOf(p.statusCheckRollup),
     files: (p.files ?? []).slice(0, PR_FILES_MAX).map((f) => f.path),
     summary: p.state === 'OPEN' ? prSummary(p.body) : undefined, // the open ones' only: a short line in the snapshot
-    ...(p.state === 'OPEN' && tryItField(p.body)), // the snapshot carries the steps, never the body
+    ...(p.state === 'OPEN' && tryItField(p.body)), // the sync takes them off (takeSteps): read on demand, never in the snapshot
     author: p.author?.login ?? null,
     isCrossRepository: p.isCrossRepository ?? true, // unknown: treated as a fork's
   };
