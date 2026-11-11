@@ -643,7 +643,7 @@ export default function Pocket() {
         <UpdatePill className="btn btn-small btn-good pk-update" short={!wide} />
         {/* the chat has its own 🔍 (its conversations); Ctrl+K and the other tabs reach this one */}
         {(tab !== 'chat' || wide) && <SearchButton className="pk-icon-btn" />}
-        {(wide || tab !== 'chat') && <NoticeBell className="pk-icon-btn" />}
+        {(wide || tab !== 'chat') && <NoticeBell className="pk-icon-btn" compact={!wide} />}
         <QuickToggles className="pk-icon-btn" compact={!wide} />
         {wide && <BrowserFullButton className="pk-icon-btn" />}
         {tab !== 'chat' && <InfoButton screen={HELP[tab]} className="pk-icon-btn" />}
