@@ -82,6 +82,7 @@
     "knip": "6.44.1",
     "lucide-react": "^1.70.0",
     "n8ao": "^2.0.1",
+    "onnxruntime-web": "^1.30.0",
     "oxc-parser": "^0.155.0",
     "oxlint": "1.91.0",
     "oxlint-tsgolint": "7.0.2005",

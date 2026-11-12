@@ -22,6 +22,17 @@ describe('officeUpdateText', () => {
 });
 
 describe('officeUpdateChip', () => {
+  it('says why a ready update waits, so the header is never silent (#600)', () => {
+    const w = (kind: NonNullable<OfficeUpdateView['wait']>['kind'], state: OfficeUpdateView['state'] = 'available') => officeUpdateChip(u({ state, behind: 1, wait: { kind, text: '' } }));
+    expect(w('manual')).toBe('Update ready · automatic updates off');
+    expect(w('postponed', 'waiting')).toBe('Update ready · postponed');
+    expect(w('preflight', 'failed')).toBe('Update held back · preflight failed');
+    expect(w('failed', 'failed')).toBe('Update held back · the last one failed');
+    expect(w('probation', 'updating')).toBe('Update waits for the last one’s probation');
+    expect(w('lock', 'updating')).toBe('Update stuck in the launcher');
+    expect(officeUpdateChip(u({ state: 'draining', running: 2, wait: { kind: 'busy', text: '' } }))).toBe('Updating the office after 2 sessions finish');
+  });
+
   it('only shows while an update is on its way', () => {
     expect(officeUpdateChip(undefined)).toBeNull();
     expect(officeUpdateChip(u({}))).toBeNull();

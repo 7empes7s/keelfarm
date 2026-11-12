@@ -2,7 +2,8 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { DRAIN_TIMEOUT_MS, LAB_DRAIN_CAP_MS, LAB_UNIT_MS, POSTPONE_MS, SETTLE_MAX_MS, drainDecision, labGate, labHold, settleAt, settleMinutes, lastUpdateNotice, parseLastUpdate, takeLastUpdate, underLauncher, type DrainInput } from './officeUpdate.ts';
+import { PROBATION_MS as LAUNCHER_PROBATION_MS } from '../scripts/officeSteps.mjs';
+import { DRAIN_TIMEOUT_MS, LAB_DRAIN_CAP_MS, LAB_UNIT_MS, LAUNCHER_STUCK_MS, POSTPONE_MS, PROBATION_MS, SETTLE_MAX_MS, STEP_GRACE_MS, drainDecision, labGate, labHold, settleAt, settleMinutes, lastUpdateNotice, parseLastUpdate, takeLastUpdate, underLauncher, updateWait, type DrainInput, type WaitInput } from './officeUpdate.ts';
 
 const NOW = 1_000_000_000;
 const input = (over: Partial<DrainInput> = {}): DrainInput => ({
@@ -181,6 +182,58 @@ describe('drainDecision', () => {
       expect(settleMinutes('x')).toBe(3);
     });
   });
+});
+
+describe('the next safe point after the drain timeout (#600)', () => {
+  const late = (ms: number, midStep: number) => drainDecision(input({ drainingSince: NOW - ms, midStep }));
+  it('waits for a session mid tool call to reach its next step, then applies the update', () => {
+    expect(late(DRAIN_TIMEOUT_MS, 1)).toMatchObject({ state: 'draining', send: false, timedOut: false });
+    expect(late(DRAIN_TIMEOUT_MS + 60_000, 0)).toMatchObject({ send: true, timedOut: true });
+  });
+
+  it('never waits for a step longer than STEP_GRACE_MS', () => {
+    expect(late(DRAIN_TIMEOUT_MS + STEP_GRACE_MS - 1, 2).send).toBe(false);
+    expect(late(DRAIN_TIMEOUT_MS + STEP_GRACE_MS, 2)).toMatchObject({ send: true, timedOut: true });
+  });
+});
+
+describe('updateWait (#600)', () => {
+  const wait = (over: Partial<WaitInput> = {}) => {
+    const s: WaitInput = { ...input(), failedStage: null, probationUntil: null, sentAt: null, ...over };
+    return updateWait(s, drainDecision(s));
+  };
+
+  it('ready with busy agents: waits, saying how many', () => {
+    expect(wait({ running: 2 })).toEqual({ kind: 'busy', text: '2 agents busy: waiting for them to finish (after 20 min, at their next safe step).' });
+    expect(wait({ running: 1 })?.text).toMatch(/^1 agent busy: waiting for it/);
+    expect(wait({ running: 0, lab: 1 })).toMatchObject({ kind: 'lab' });
+  });
+
+  it('says nothing when up to date or when it goes ahead now', () => {
+    expect(wait({ behind: 0 })).toBeNull();
+    expect(wait({ running: 0 })).toBeNull();
+  });
+
+  it('a failed preflight: the reason and its log, and no restart', () => {
+    const failed = 'tests failed (npm test failed (exit 1): FAIL server/swarm.test.ts)';
+    const s = { failed, failedBehind: 3, failedStage: 'preflight' as const };
+    expect(drainDecision(input(s))).toMatchObject({ state: 'failed', send: false });
+    expect(wait(s)).toEqual({ kind: 'preflight', text: `The preflight failed: ${failed}. Still on the old version; Update now tries again.`, log: failed });
+    expect(wait({ ...s, failedStage: 'probation' })).toMatchObject({ kind: 'failed', log: failed });
+    expect(wait({ ...s, failedStage: 'switch' })?.text).toMatch(/^The last update failed: tests failed/);
+  });
+
+  it("names every other wait: off, Later, settling, the last update's probation, the launcher's lock, no launcher", () => {
+    expect(wait({ autoUpdate: false })?.kind).toBe('manual');
+    expect(wait({ postponedUntil: NOW + POSTPONE_MS, postponedBehind: 3 })?.kind).toBe('postponed');
+    expect(wait({ pendingSince: NOW, lastCommitAt: NOW })?.kind).toBe('settling');
+    expect(wait({ sent: true, probationUntil: NOW + 1 })?.kind).toBe('probation');
+    expect(wait({ sent: true, probationUntil: NOW, sentAt: NOW - 1000 })?.kind).toBe('launcher');
+    expect(wait({ sent: true, sentAt: NOW - LAUNCHER_STUCK_MS })?.kind).toBe('lock');
+    expect(wait({ launcher: false })?.kind).toBe('no-launcher');
+  });
+
+  it("knows the launcher's probation length", () => expect(PROBATION_MS).toBe(LAUNCHER_PROBATION_MS));
 });
 
 describe('underLauncher', () => {

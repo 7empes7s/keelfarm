@@ -99,6 +99,7 @@ const OFFICE: Record<string, [string, Words]> = {
   rerun_checks: ['🔁', (t) => `Re-running ${pr(t)}'s checks${onFloor(t)}`],
   close_pull: ['✖️', (t) => `Closing ${pr(t)}${onFloor(t)}`],
   merge_pull: ['🔀', (t) => `Merging ${pr(t)}${onFloor(t)}`],
+  apply_update: ['⬆️', () => 'Updating the office as you asked'],
   set_issue_priority: ['⭐', (t) => `Reprioritising ${issue(t)}${onFloor(t)}`],
   set_floor_switches: ['🎛️', (t) => `Changing ${t.floor ? `floor ${t.floor}'s` : "a floor's"} switches`],
   apply_charter: ['🧭', (t) => `Changing ${t.floor ? `floor ${t.floor}'s` : "a floor's"} charter`],

@@ -19,6 +19,7 @@ import { openSettings, openTeam } from './HudSettings';
 import { HUD_OPTIONS, OPTION_GROUPS, type HudOptionId } from './hudOptions';
 import { Icon } from './Icon';
 import { NoticeBell } from './Notices';
+import { WakeLight } from './wake/WakeRunner';
 import { flip } from './quickToggleRules';
 import { getAudioPrefs, subscribeAudio } from './sfx';
 import { useA11y } from './a11y';
@@ -184,6 +185,7 @@ export function PhoneHud({ num, title, sub, accent, phone, chips }: { num: strin
           {alert && <span className="hud-floor-dot" aria-hidden />}
         </button>
         <NoticeBell className="pill" compact />
+        <WakeLight className="pill" />
         {phone}
         <button type="button" data-tour="options" className="pill hud-options" onClick={() => open('options')} aria-label="Options" title="Options">
           <Icon name="sliders-horizontal" />

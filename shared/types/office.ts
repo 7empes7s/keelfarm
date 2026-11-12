@@ -67,6 +67,13 @@ export interface DoctorFinding {
  */
 export type OfficeUpdateState = 'none' | 'available' | 'waiting' | 'settling' | 'draining' | 'updating' | 'failed';
 
+/** Why a ready update isn't applied yet (#600): never a silent wait. */
+export interface UpdateWait {
+  kind: 'busy' | 'lab' | 'settling' | 'manual' | 'postponed' | 'preflight' | 'probation' | 'launcher' | 'lock' | 'failed' | 'no-launcher';
+  text: string; // one plain line for the header and Settings
+  log?: string; // a failed update's output
+}
+
 export interface OfficeUpdateView {
   state: OfficeUpdateState;
   behind: number; // commits the office's folder is behind GitHub
@@ -77,6 +84,7 @@ export interface OfficeUpdateView {
   updateAt: number | null; // settling: when the update goes ahead unless another commit lands
   holds: boolean; // nothing new starts until the office has restarted
   detail: string | null;
+  wait?: UpdateWait | null; // why it isn't applied yet (#600)
 }
 
 /** What the manager did on a board (#207): the kinds of action the CEO hears about. */

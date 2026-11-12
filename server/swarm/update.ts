@@ -1,7 +1,7 @@
 // The office's own update: settling, draining, the hand-over to the launcher, the result after a restart.
 import crypto from 'node:crypto';
 import { HttpError } from '../httpError.ts';
-import { drainDecision, labGate, labHold, labWaits, LAB_DRAIN_CAP_MS, lastUpdateNotice, POSTPONE_MS, settleMinutes, type DrainInput, type LastUpdate } from '../officeUpdate.ts';
+import { drainDecision, labGate, labHold, labWaits, LAB_DRAIN_CAP_MS, LAUNCHER_STUCK_MS, lastUpdateNotice, POSTPONE_MS, PROBATION_MS, settleMinutes, updateWait, type DrainInput, type LastUpdate, type UpdateStage, type WaitInput } from '../officeUpdate.ts';
 import { cleanTerminalText } from '../../shared/terminalText.ts';
 import { packCareers } from '../../shared/careers.ts';
 import type { OfficeUpdateView } from '../../shared/types.ts';
@@ -16,8 +16,15 @@ export abstract class SwarmUpdate extends SwarmScheduling {
    * into one update), and whether nothing new starts (the drain, or the hand-over if new sessions wouldn't outlive the restart).
    */
   protected updateRun = { pendingSince: null as number | null, lastCommitAt: null as number | null, holding: false };
+  /**
+   * What says why a ready update waits (#600): where the last one failed, when this one went to the launcher, the last
+   * one's probation there, and the ready update the manager was last told about (by how far behind).
+   */
+  protected updateWaits = { failedStage: null as UpdateStage | null, sentAt: null as number | null, probationUntil: null as number | null, notifiedBehind: 0 };
   /** The test lab's update gate last given to it (#333), so it reopens only when that changes. */
   private labGateKey = 'null';
+  /** Demo only (#600): which of demoWaits() the Office row shows instead of the real update, or null. */
+  private demoWait: number | null = null;
 
   /**
    * Busy agents an office restart would stop: not cloud agents in their Boxes, nor CLIs in the terminal keeper, which
@@ -61,6 +68,32 @@ export abstract class SwarmUpdate extends SwarmScheduling {
     return this.updateOffice('now');
   }
 
+  /** Demo only (#600): each reason a ready update waits for, as inputs to the real updateWait. */
+  private demoWaits(now: number): Partial<WaitInput>[] {
+    const failedHold = { failedBehind: Math.max(1, this.officeUpdate.behind) };
+    return [
+      { running: 2, drainingSince: now },
+      { running: 0, lab: 1, drainingSince: now },
+      { pendingSince: now, lastCommitAt: now },
+      { autoUpdate: false },
+      { postponedUntil: now + POSTPONE_MS, postponedBehind: 1 },
+      { ...failedHold, failed: 'tests failed (npm test failed (exit 1): FAIL server/swarm.test.ts > schedules work)', failedStage: 'preflight' },
+      { sent: true, probationUntil: now + PROBATION_MS },
+      { sent: true, sentAt: now - LAUNCHER_STUCK_MS },
+      { ...failedHold, failed: 'npm run build failed (exit 2)', failedStage: 'switch' },
+      { launcher: false },
+    ];
+  }
+
+  /** Demo only (#600): the Office row and header show the next reason an update waits for; after the last, the real update again. */
+  demoUpdateWait(): OfficeUpdateView {
+    if (!this.backend.demo || !this.officeHead) throw new HttpError(404, 'Only the demo office makes up office updates');
+    const next = this.demoWait === null ? 0 : this.demoWait + 1;
+    this.demoWait = next < this.demoWaits(0).length ? next : null;
+    this.emitOfficeUpdate();
+    return this.officeUpdateView();
+  }
+
   protected drainInput(): DrainInput {
     const u = this.officeUpdate;
     return {
@@ -76,6 +109,7 @@ export abstract class SwarmUpdate extends SwarmScheduling {
       drainingSince: u.drainingSince,
       sent: u.sent,
       running: this.unkept().length,
+      midStep: this.unkept().filter((a) => this.agentRt.get(a.id)?.currentTool).length,
       lab: this.labHold().count,
       pendingSince: this.updateRun.pendingSince,
       lastCommitAt: this.updateRun.lastCommitAt,
@@ -86,11 +120,19 @@ export abstract class SwarmUpdate extends SwarmScheduling {
 
   protected officeUpdateView(): OfficeUpdateView {
     const u = this.officeUpdate;
+    if (this.demoWait !== null) {
+      const now = Date.now();
+      const base: WaitInput = { ...this.drainInput(), now, behind: Math.max(1, u.behind), launcher: true, autoUpdate: true, requested: false, postponedUntil: null, failed: null, failedBehind: null, drainingSince: null, sent: false, running: 0, lab: 0, pendingSince: null, lastCommitAt: null, failedStage: null, probationUntil: null, sentAt: null };
+      const input = { ...base, ...this.demoWaits(now)[this.demoWait] };
+      const d = drainDecision(input);
+      return { state: d.state, behind: input.behind, launcher: input.launcher, drainingSince: d.drainingSince, running: input.running, lab: input.lab, updateAt: d.updateAt, holds: false, detail: d.state === 'failed' ? input.failed : null, wait: updateWait(input, d) };
+    }
     const input = this.drainInput();
     const d = drainDecision(input);
     const until = u.postponedUntil ? new Date(u.postponedUntil).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
     const detail = d.state === 'failed' ? u.failed : d.state === 'waiting' ? `Postponed until ${until}, or until a newer commit lands.` : null;
-    return { state: d.state, behind: input.behind, launcher: input.launcher, drainingSince: u.drainingSince ?? d.drainingSince, running: input.running, lab: input.lab, updateAt: d.updateAt, holds: d.holds || (d.send && !input.keeper), detail };
+    const wait = updateWait({ ...input, ...this.updateWaits }, d);
+    return { state: d.state, behind: input.behind, launcher: input.launcher, drainingSince: u.drainingSince ?? d.drainingSince, running: input.running, lab: input.lab, updateAt: d.updateAt, holds: d.holds || (d.send && !input.keeper), detail, wait };
   }
 
   protected emitOfficeUpdate() {
@@ -105,7 +147,10 @@ export abstract class SwarmUpdate extends SwarmScheduling {
   /** The own-folder check found the office this many commits behind GitHub. */
   protected setOfficeBehind(behind: number) {
     const u = this.officeUpdate;
-    if (u.failed && u.failedBehind === null) u.failedBehind = behind; // only a newer commit retries a failed update by itself
+    if (u.failed && u.failedBehind === null) {
+      u.failedBehind = behind; // only a newer commit retries a failed update by itself
+      this.updateWaits.notifiedBehind = behind; // its failure was posted already
+    }
     const now = Date.now();
     const run = this.updateRun;
     if (behind > 0) run.pendingSince ??= now;
@@ -113,6 +158,7 @@ export abstract class SwarmUpdate extends SwarmScheduling {
     u.behind = behind;
     if (behind === 0) {
       Object.assign(u, { requested: false, failed: null, failedBehind: null });
+      Object.assign(this.updateWaits, { failedStage: null, notifiedBehind: 0 });
       Object.assign(run, { pendingSince: null, lastCommitAt: null });
     }
     this.officeUpdateTick();
@@ -142,9 +188,19 @@ export abstract class SwarmUpdate extends SwarmScheduling {
     if (d.state === 'draining') this.cancelHolds('Cancelled: the office is restarting for an update. End this job now; pick it up again after the update.');
     if (d.send && input.lab > 0) this.postMessage('office', `⏱ The test lab still had ${input.lab} job${input.lab === 1 ? '' : 's'} going after ${LAB_DRAIN_CAP_MS / 60_000} minutes: the update goes ahead and cuts ${input.lab === 1 ? 'it' : 'them'} off. Their sessions ask the lab again after the restart.`);
     if (d.send) void this.handOver(d.timedOut);
+    this.notifyReady(d.state);
     this.gateLab();
     this.emitOfficeUpdate();
     return this.updateRun.holding;
+  }
+
+  /** A ready update that won't go ahead by itself (automatic updates off, or held after a failure): one notification per new commit (#600). */
+  private notifyReady(state: string) {
+    const u = this.officeUpdate;
+    if ((state !== 'available' && state !== 'failed') || !this.backend.office.launcher || u.behind <= this.updateWaits.notifiedBehind) return;
+    this.updateWaits.notifiedBehind = u.behind;
+    const why = this.officeUpdateView().wait?.text ?? '';
+    this.notice({ kind: 'update', level: 'info', title: 'An office update is ready', text: `${u.behind} new commit${u.behind === 1 ? '' : 's'}. ${why} Update now is in Settings → Company and on the header's Update.` });
   }
 
   /** Tell the test lab whose queued jobs may start while the office updates (labGate), when that changed. */
@@ -172,6 +228,7 @@ export abstract class SwarmUpdate extends SwarmScheduling {
     const u = this.officeUpdate;
     const from = this.officeHead!;
     u.sent = true;
+    this.updateWaits.sentAt = Date.now();
     const busy = timedOut ? this.unkept() : [];
     if (busy.length) this.postMessage('office', `⏱ ${busy.length} session${busy.length === 1 ? ' was' : 's were'} still running after 20 minutes. Stopped; the work goes back to the queue after the update.`);
     this.emitOfficeUpdate();
@@ -194,6 +251,7 @@ export abstract class SwarmUpdate extends SwarmScheduling {
     const u = this.officeUpdate;
     const interrupted = this.state.agents.filter((a) => u.cutOff.has(a.id) && BUSY.includes(a.status));
     Object.assign(u, { sent: false, requested: false, drainingSince: null, cutOff: new Set<string>() });
+    this.updateWaits.sentAt = null;
     this.updateRun = { pendingSince: null, lastCommitAt: null, holding: false };
     const preparing = new Set(interrupted.filter((a) => a.status === 'preparing'));
     for (const a of interrupted) {
@@ -205,7 +263,10 @@ export abstract class SwarmUpdate extends SwarmScheduling {
     this.recover(interrupted, preparing);
     interrupted.forEach((a) => this.emitAgent(a));
     await this.reportUpdate(result);
-    if (!result.ok) u.failedBehind = u.behind;
+    if (!result.ok) {
+      u.failedBehind = u.behind;
+      this.updateWaits.notifiedBehind = u.behind; // its failure was just posted
+    }
     const own = this.state.repos.find((r) => this.backend.office.isOwnFolder(this.backend.mainDir(r.fullName)));
     if (own) await this.syncFolder(own);
     this.emitCeo();
@@ -218,6 +279,11 @@ export abstract class SwarmUpdate extends SwarmScheduling {
     const commits = result.ok && result.to ? await this.backend.office.commitsBetween(result.from, result.to) : null;
     this.postUpdateNotice(result, commits);
     Object.assign(this.officeUpdate, { failed: result.ok ? null : cleanTerminalText(result.error || '', 1000) || 'unknown error', failedBehind: null });
+    Object.assign(this.updateWaits, {
+      failedStage: result.ok ? null : (result.stage ?? null),
+      // a restart onto a new commit: the launcher watches it for its probation, and holds a new update meanwhile
+      probationUntil: result.ok && result.from !== result.to ? result.at + PROBATION_MS : null,
+    });
   }
 
   /** An update's result as a card in the chat, linking to the office's own repo when it's a floor. */
@@ -235,6 +301,7 @@ export abstract class SwarmUpdate extends SwarmScheduling {
     if (!this.officeHead || !this.backend.office.launcher) throw new HttpError(409, 'The office can only update itself when its launcher started it (npm run dev or npm start).');
     if (u.sent) throw new HttpError(409, 'The update is already under way.');
     if (u.behind <= 0) throw new HttpError(409, 'The office is up to date: there is nothing to update.');
+    this.demoWait = null;
     if (action === 'now') Object.assign(u, { requested: true, postponedUntil: null });
     else Object.assign(u, { requested: false, postponedUntil: Date.now() + POSTPONE_MS, postponedBehind: u.behind });
     this.officeUpdateTick();

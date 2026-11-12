@@ -1,5 +1,5 @@
 // The demo CEO does what the manager tells it in chat (#403): "start the experiment", "send back #3", "merge #3",
-// "turn on auto-merge", "prioritise #4", "use Sonnet", "set floor 1's focus to …", each through the real tool with
+// "turn on auto-merge", "prioritise #4", "use Sonnet", "update the office", "set floor 1's focus to …", each through the real tool with
 // asked_in, so the card names the message and Undo works as in the real office.
 import type { DemoStatus } from './ceo.ts';
 import { refused } from './ceo.ts';
@@ -32,6 +32,7 @@ registerCeoReply('manager asks', async ({ text, s, use }) => {
     const [tool, args] = verb === 'merge' ? ['merge_pull', {}] : verb === 'retry qa on' ? ['retry_qa', {}] : ['send_back', { note: 'The manager asked: bring it up to date with main and recheck the phone layout.' }];
     return said(await use(tool, { floor, pr: n, asked_in, ...args }), 'Done, as you asked:', `${verb} #${n}`);
   }
+  if (/\b(update the office|apply the update)\b/i.test(text)) return said(await use('apply_update', { asked_in }), 'On it:', 'update the office');
   const sw = text.match(/\bturn (on|off) auto-?(merge|assign)\b/i);
   if (sw) {
     const floor = floorOf(s, text).floor;
