@@ -53,6 +53,19 @@ describe('trustKey', () => {
     expect(trustKey(screen)).toBe('enter');
   });
 
+  it("doesn't take a wrapped title line for an option", () => {
+    const screen = (selected: 1 | 2) =>
+      [
+        ' Quick safety check: Is this a project you created or one you',
+        ' trust? (Like your own code, a well-known open source project,',
+        ' or work from your team).',
+        `${selected === 1 ? ' ❯' : '  '} 1. Yes, I trust this folder`,
+        `${selected === 2 ? ' ❯' : '  '} 2. No, exit`,
+      ].join('\n');
+    expect(trustKey(screen(1))).toBe('enter');
+    expect(trustKey(screen(2))).toBe('up');
+  });
+
   it('leaves every other screen alone', () => {
     expect(trustKey('❯ Try "refactor <filepath>"')).toBeNull();
   });

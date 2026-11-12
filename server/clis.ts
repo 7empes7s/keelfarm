@@ -422,8 +422,9 @@ export function trustKey(screen: string): 'enter' | 'down' | 'up' | null {
   const title = lines.findLastIndex((l) => TRUST_PROMPT.test(l));
   if (title < 0) return null;
   const opts = lines.slice(title + 1).flatMap((l) => {
-    const m = /^[\s│┃|]*([❯›>])?\s*(?:\d+\.\s+)?((?:yes|no|trust|continue|proceed|exit|quit|cancel)\b.*?)[\s│┃|]*$/i.exec(l);
-    return m ? [{ text: m[2], selected: !!m[1] }] : [];
+    // An option has a ❯ or a number, or reads "Yes, …" / "No, …": a wrapped title line ("trust? (Like your own…") isn't one.
+    const m = /^[\s│┃|]*([❯›>])?\s*(\d+\.\s+)?((?:yes|no|trust|continue|proceed|exit|quit|cancel)\b.*?)[\s│┃|]*$/i.exec(l);
+    return m && (m[1] || m[2] || /^(yes|no),/i.test(m[3])) ? [{ text: m[3], selected: !!m[1] }] : [];
   });
   const yes = opts.findIndex((o) => /^(yes|trust|continue|proceed)\b/i.test(o.text));
   const at = opts.findIndex((o) => o.selected);
