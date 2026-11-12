@@ -5,6 +5,7 @@
 import { cardPlan } from './accounts.ts';
 import { secretMismatch } from './secretFormats.ts';
 import { USE_CASES } from './useCases.ts';
+import { INSTALL_TARGETS, RENEW_NOTE } from './keyInstall.ts';
 import type { AccountView, AgentCli, CloudView, CliView, KeyCheck, McpServerConfig, ProviderAuth, ProviderCategory, ProvidersView, ProviderTest, ProviderUse, UsageProvider, UsageSource, UsageWindow } from './types.ts';
 
 /** Where a provider's key or login lives: its old store (whose settings stay where they were) or the Providers page. */
@@ -70,6 +71,11 @@ export const PROVIDERS: ProviderDef[] = [
   { id: 'cloudflare', name: 'Cloudflare', category: 'cloud', auth: 'api-key', home: 'providers', keyEnv: 'CLOUDFLARE_API_TOKEN', placeholder: 'API token', docsUrl: 'https://developers.cloudflare.com/fundamentals/api/', blurb: 'DNS, tunnels and Workers' },
   { id: 'github', name: 'GitHub token', category: 'cloud', auth: 'api-key', home: 'providers', keyEnv: 'GITHUB_TOKEN', placeholder: 'ghp_… or github_pat_…', docsUrl: 'https://docs.github.com/en/rest', blurb: 'A personal access token for the GitHub API' },
   { id: 'entra', name: 'Microsoft Entra', category: 'cloud', auth: 'api-key', home: 'providers', placeholder: 'client id:client secret', docsUrl: 'https://developers.cloudflare.com/cloudflare-one/identity/idp-integration/entra-id/', icon: 'id-card', blurb: 'Entra ID sign-in for Cloudflare Access, set up by the office', note: 'Only the tenant you enter here is used.' },
+  // #609: keys services on this machine use; IT installs them into the services' env files (install_key)
+  { id: 'twitch', name: 'Twitch', category: 'cloud', auth: 'api-key', home: 'providers', keyEnv: 'TWITCH_CLIENT_ID', placeholder: 'client ID:client secret', docsUrl: 'https://dev.twitch.tv/docs/authentication/register-app/', blurb: "A Twitch app's client ID and secret, for streams and clips", note: 'Paste the client ID, a colon, then the client secret.' },
+  { id: 'youtube', name: 'YouTube Data API', category: 'cloud', auth: 'api-key', home: 'providers', keyEnv: 'YOUTUBE_API_KEY', placeholder: 'AIza…', docsUrl: 'https://developers.google.com/youtube/v3/getting-started', blurb: 'An API key for reading YouTube videos, channels and search' },
+  { id: 'postiz', name: 'Postiz', category: 'cloud', auth: 'api-key', home: 'providers', keyEnv: 'POSTIZ_API_KEY', placeholder: 'API key', docsUrl: 'https://docs.postiz.com/public-api', blurb: "Scheduling posts through Postiz's public API" },
+  { id: 'other-key', name: 'Other key', category: 'cloud', auth: 'api-key', home: 'providers', placeholder: 'the key', docsUrl: '', blurb: 'Any other key: its name, its value and what uses it' },
   { id: 'hetzner', name: 'Hetzner Cloud', category: 'cloud', auth: 'api-key', home: 'providers', keyEnv: 'HCLOUD_TOKEN', placeholder: 'API token', docsUrl: 'https://docs.hetzner.cloud', usage: 'hetzner', blurb: 'Servers on Hetzner Cloud' },
   // One sign-in per company (#533): every scope the office needs in one consent (shared/oauth.ts).
   { id: 'google', name: 'Google', category: 'signin', auth: 'oauth', home: 'providers', docsUrl: 'https://developers.google.com/youtube/v3/guides/auth/server-side-web-apps', icon: 'id-card', blurb: 'Gemini, Imagen, Veo, YouTube upload and analytics, Drive read: one sign-in' },
@@ -172,6 +178,13 @@ export function testRequest(provider: string, key: string, now = Date.now()): Pr
       return { kind: 'http', url: 'https://aihubmix.com/v1/models', headers: bearer };
     case 'cloudflare':
       return { kind: 'http', url: 'https://api.cloudflare.com/client/v4/user/tokens/verify', headers: bearer };
+    case 'twitch': {
+      // an app access token for the pair: the one POST, to Twitch's token URL
+      const i = key.indexOf(':');
+      return { kind: 'form', url: 'https://id.twitch.tv/oauth2/token', form: { client_id: key.slice(0, Math.max(0, i)), client_secret: key.slice(i + 1), grant_type: 'client_credentials' } };
+    }
+    case 'youtube':
+      return { kind: 'http', url: 'https://www.googleapis.com/youtube/v3/i18nRegions?part=snippet&hl=en', headers: { 'x-goog-api-key': key } };
     case 'github':
       return { kind: 'http', url: 'https://api.github.com/user', headers: { ...bearer, Accept: 'application/vnd.github+json', 'User-Agent': 'cubefarm' } };
     // a company sign-in's `key` is its access token, refreshed on the server first
@@ -287,6 +300,7 @@ export function keyProblem(provider: string, raw: string): string | null {
   if (!def || def.home !== 'providers') return 'Pick a provider from the list.';
   if (def.auth === 'oauth') return `${def.name} connects with Sign in with ${def.name}, not a key.`;
   if (!key) return 'Paste the key first.';
+  if (provider === 'twitch' && !/^[^:]+:[^:]+$/.test(key)) return 'Paste the client ID, a colon, then the client secret.';
   if (provider === 'kling' && key.split(':').length > 2) return 'Paste the access key, a colon, then the secret key (or one API key).';
   if (key.length > 400 || /\s/.test(key)) return "That doesn't look like a key.";
   if (provider === 'anthropic') return secretMismatch('anthropic', key);
@@ -322,6 +336,9 @@ export interface ProviderCard {
   testedAt?: number;
   scopes?: string[]; // a company sign-in's granted scopes (#533)
   missing?: string[]; // permissions its last test found missing (#533)
+  expiresAt?: number; // a key's expiry (#609), drawn with shared/keyInstall.ts' expiryLine
+  renews?: boolean; // the office made it and renews it (#609)
+  renewNote?: string; // what the provider's API lets the office do about its keys (#609)
   /** Where it's changed: its old settings section, or here. */
   settings: 'accounts' | 'voice' | 'cloud-agents' | 'tools' | null;
 }
@@ -385,7 +402,7 @@ export function providerCards(i: CardInput): ProviderCard[] {
     out.push({ key: 'cli:opencode', provider: 'opencode', name: 'OpenCode', label: 'OpenCode', category: 'coding', status: 'ready', note: 'Its own setup on this computer', plan: '', keyHint: '', uses: [], settings: null, check: 'live', usedFor: 'inference' });
   }
   if (i.voiceKeySet) {
-    out.push({ key: 'voice', provider: 'elevenlabs', name: 'ElevenLabs', label: 'ElevenLabs', category: 'audio', status: 'ready', note: 'API key', plan: '', keyHint: i.voiceKeyHint, uses: ['Voice'], usageId: 'elevenlabs', settings: 'voice', check: 'live', usedFor: 'inference' });
+    out.push({ key: 'voice', provider: 'elevenlabs', name: 'ElevenLabs', label: 'ElevenLabs', category: 'audio', status: 'ready', note: 'API key', plan: '', keyHint: i.voiceKeyHint, uses: ['Voice'], usageId: 'elevenlabs', settings: 'voice', check: 'live', usedFor: 'inference', renewNote: RENEW_NOTE.elevenlabs });
   }
   if (i.cloud.keySet) {
     out.push({
@@ -403,6 +420,7 @@ export function providerCards(i: CardInput): ProviderCard[] {
       settings: 'cloud-agents',
       check: i.cloud.keyError ? 'dead' : 'live',
       usedFor: 'operations',
+      renewNote: RENEW_NOTE.upstash,
     });
   }
   // a provider's keys side by side, so duplicates read together
@@ -420,7 +438,7 @@ export function providerCards(i: CardInput): ProviderCard[] {
       note: c.test?.note ?? 'Not tested yet',
       plan: c.test?.plan ?? 'API',
       keyHint: c.keyHint,
-      uses: connectionUsers(c.provider, i),
+      uses: [...connectionUsers(c.provider, i), ...(c.usedBy ? [c.usedBy] : []), ...(c.installs ?? []).map((x) => `${INSTALL_TARGETS.find((t) => t.file === x.file)?.name ?? x.file} (${x.var})`)],
       usageId: `provider:${c.id}`,
       settings: null,
       check: testCheck(c.test),
@@ -430,6 +448,8 @@ export function providerCards(i: CardInput): ProviderCard[] {
       ...(c.test ? { testedAt: c.test.at } : {}),
       ...(c.scopes ? { scopes: c.scopes } : {}),
       ...(c.test?.missing?.length ? { missing: c.test.missing } : {}),
+      ...(c.expiresAt && def.category !== 'signin' ? { expiresAt: c.expiresAt } : {}),
+      ...(c.mint ? { renews: true } : RENEW_NOTE[c.provider] ? { renewNote: RENEW_NOTE[c.provider] } : {}),
     });
   }
   for (const m of i.providers.mcp) {

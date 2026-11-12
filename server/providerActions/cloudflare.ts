@@ -5,6 +5,7 @@ import { applyIdp, applyWrite, CfError, ingressGet, planIdp, planWrite, tokenSco
 import { envSecretFile } from '../cfSecretFile.ts';
 import type { CfChange } from '../../shared/cloudflare.ts';
 import type { ActionCtx, ActionPlan, ProviderModule } from './types.ts';
+import { applyTokenCreate, planTokenCreate, tokenCreateArgs } from './cfTokens.ts';
 
 const host = z.string().min(4).max(253);
 const tunnel = z.string().min(1).max(100).optional();
@@ -59,8 +60,10 @@ export const cloudflareModule: ProviderModule = {
       plan: (ctx, a) => plan(ctx, { ...a, op: 'access_service_token_ensure', hostname: String(a.hostname) }),
     },
     access_idp_ensure: { args: z.object({ name: z.string().min(1).max(60).optional() }), plan: (ctx, a) => planIdpCard(ctx, a) },
+    token_create: { args: tokenCreateArgs, plan: (ctx, a) => planTokenCreate(ctx, tokenCreateArgs.parse(a)) },
   },
   apply: (ctx, c) => {
+    if (c.op === 'token_create') return applyTokenCreate(ctx, c);
     const change = c.data as unknown as CfChange;
     if (change.op === 'access_idp_ensure') {
       const cred = ctx.entra?.get();

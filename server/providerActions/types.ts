@@ -6,6 +6,7 @@ import type { BoxApi } from '../box.ts';
 import type { CfApi } from '../cloudflare.ts';
 import type { CfSecretFile } from '../cfSecretFile.ts';
 import type { ProviderChange } from '../../shared/providerActions.ts';
+import type { KeyMint } from '../../shared/types.ts';
 
 /** How the key goes on a request: a bearer token, ElevenLabs' header, GitHub's bearer with its API headers, or (#621) an Entra "client id:secret" as a client-credentials form. */
 type ActionAuth = 'bearer' | 'xi-api-key' | 'github' | 'entra-token';
@@ -47,6 +48,8 @@ export interface ActionCtx {
   repo?: string;
   /** Where a Cloudflare service token's secret is written (#607): the env file asked for (checked), else the office's own. Throws when refused. */
   secretFile?: (envFile: string | undefined, name: string) => CfSecretFile;
+  /** Saves a key the office made (#609) as its own Providers key; returns its name. */
+  saveMinted?: (k: { provider: string; value: string; label: string; expiresAt: number; mint: KeyMint }) => Promise<string>;
   /** Cloudflare's keys, for the Entra app's callback (its team domain) (#621). */
   cfKeys?: readonly ActionKey[];
   /** The office's own Entra app secret (#621), in secrets.json: written by entra_app_ensure, read by access_idp_ensure. */

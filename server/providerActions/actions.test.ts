@@ -25,6 +25,7 @@ const SAMPLE: Record<string, Record<string, Record<string, unknown>>> = {
     access_app_ensure: { hostname: 'clip.techinsiderbytes.com', emails: ['manager@example.com'] },
     access_service_token_ensure: { hostname: 'keel.techinsiderbytes.com', name: 'clipfarm e2e' },
     access_idp_ensure: {},
+    token_create: { name: 'clipfarm DNS', permissions: ['DNS Write'] },
   },
   entra: { key_test: {}, entra_app_ensure: {} },
   github: {
