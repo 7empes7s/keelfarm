@@ -29,6 +29,8 @@ export interface SessionOptions {
   browserTesting: boolean;
   additionalDirectories: string[]; // read-only reference clones of linked repos
   role: AgentRole;
+  /** The IT department's lead (#524): a CEO-like session with the IT tools; the demo runs its scripted IT lead. */
+  dept?: 'it';
   /** The task the session is for (an agent's: building an issue, testing a PR or fixing one); null or absent for the CEO. */
   task?: AgentTask | null;
   /** The agent's machine's environment (its temp folder), on top of the office's. */

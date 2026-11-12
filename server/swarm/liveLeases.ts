@@ -6,13 +6,13 @@ import { LIVE_EVERY_MS, dueDiffs, mainNudges, nudgeNote, nudgeText, pairNudges }
 import type { AgentView } from '../../shared/types.ts';
 import type { SessionResult } from '../agentRunner.ts';
 import { BUSY, type PersistedAgent, type PersistedRepo } from './model.ts';
-import { SwarmSetup } from './setup.ts';
+import { SwarmItDept } from './itDept.ts';
 
 /** A worktree is read at most this often, also when a merge or a session end asks sooner. */
 const MIN_GAP_MS = 60_000;
 const names = (n: string[]) => (n.length > 1 ? `${n.slice(0, -1).join(', ')} and ${n.at(-1)}` : n.join(''));
 
-export abstract class SwarmLiveLeases extends SwarmSetup {
+export abstract class SwarmLiveLeases extends SwarmItDept {
   private liveAt = new Map<string, number>(); // agent id -> their worktree's last read
   private liveBusy = new Set<string>(); // floors whose tick is running
   private toldMain = new Map<string, string>(); // agent id -> the main SHA they were last told to merge

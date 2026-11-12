@@ -172,7 +172,7 @@ describe('office tools', () => {
       sessionHistory: (a) => (calls.push(['session_history', a]), 'history'),
       react: (a) => (calls.push(['react', a]), 'reacted'),
       reply: (a) => (calls.push(['reply', a]), 'answered'),
-      runExperiment: () => '', setFloorSwitches: () => '', setIssuePriority: async () => '', setCeoSetup: () => '', applyCharter: () => '', mergePull: async () => '', itRun: async () => '', itPropose: () => '',
+      runExperiment: () => '', setFloorSwitches: () => '', setIssuePriority: async () => '', setCeoSetup: () => '', applyCharter: () => '', mergePull: async () => '', askIt: () => '',
     });
     const [serverSide, clientSide] = InMemoryTransport.createLinkedPair();
     await office.server.instance.connect(serverSide);
@@ -190,6 +190,7 @@ describe('office tools', () => {
       'answer_agent',
       'apply_charter',
       'apply_setup',
+      'ask_it',
       'ask_manager',
       'ask_manager_choice',
       'assign_issue',
@@ -204,8 +205,6 @@ describe('office tools', () => {
       'escalate',
       'file_issue',
       'floor_detail',
-      'it_propose',
-      'it_run',
       'keep_file',
       'make_default_account',
       'merge_pull',
@@ -291,7 +290,7 @@ describe('office tools', () => {
       set_ceo_setup: { model: 'claude-sonnet-5', asked_in: 4 },
       apply_charter: { ...f, reason: 'r', asked_in: 4 },
       merge_pull: { ...f, pr: 7, asked_in: 4 },
-      it_propose: { argv: ['journalctl', '--vacuum-size=500M'], why: 'Old logs', affects: 'frees 3 GB', undo: "can't", risk: 'low' },
+      ask_it: { question: 'Why is the disk full?' },
     };
     const acting = tools.map((t) => t.name).filter((name) => !NOT_CARDS.has(name));
     for (const name of acting) {
@@ -717,7 +716,7 @@ describe('follow-ups (#27)', () => {
           closePull: async () => 'ok', escalate: async () => 'ok', attachFile: async () => 'ok', worktreeFile: async () => 'ok', prDiff: async () => 'ok', sendTelegram: async () => 'ok', scanKeys: async () => 'ok', makeDefaultAccount: () => 'ok', editMessage: async () => 'ok',
           restartAgent: ok, stopAgent: ok, messageAgent: async () => 'ok', assignIssue: async () => 'ok', answerAgent: async () => 'ok', askManagerChoice: ok, defineExperiment: ok, sessionHistory: ok, proposeCharter: ok, resolveDecision: ok, proposeDesign: async () => 'ok',
           waitFor: async () => 'ok', askManager: async () => 'ok', consult: async () => 'ok', react: ok, reply: ok,
-          runExperiment: ok, setFloorSwitches: ok, setIssuePriority: async () => 'ok', setCeoSetup: ok, applyCharter: ok, mergePull: async () => 'ok', itRun: async () => 'ok', itPropose: ok,
+          runExperiment: ok, setFloorSwitches: ok, setIssuePriority: async () => 'ok', setCeoSetup: ok, applyCharter: ok, mergePull: async () => 'ok', askIt: ok,
         },
         () => researching,
       ),

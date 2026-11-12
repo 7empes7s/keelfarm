@@ -177,6 +177,12 @@ export const api = {
   cleanDisk: () => call<CleanResult>('POST', '/api/disk/clean'),
   itRun: (ids: string[]) => call('POST', '/api/it/run', { ids }),
   itDismiss: (ids: string[]) => call('POST', '/api/it/dismiss', { ids }),
+  // The IT department (#524): its chat, and its own Telegram bot (no toasts on the token: the card shows why).
+  messageIt: (text: string, replyTo?: number) => call<{ id: number }>('POST', '/api/it/message', { text, replyTo }),
+  setItTelegram: (token: string) => call<{ view: TelegramView; startUrl: string }>('PUT', '/api/it/telegram', { token }, false),
+  itTelegramLink: () => call<{ startUrl: string }>('POST', '/api/it/telegram/link', {}, false),
+  removeItTelegram: () => call<TelegramView>('DELETE', '/api/it/telegram'),
+  itTelegramDemo: (kind: 'start' | 'message' | 'approve' | 'decline', text = '') => call('POST', '/api/it/telegram/demo', { kind, text }),
   diskSettings: (patch: Partial<DiskSettings>) => call<DiskSettings>('PATCH', '/api/disk/settings', patch),
   simulateDisk: (low: boolean) => call<HealthView>('POST', '/api/disk/simulate', { low }),
   /** The office doctor: a finding's one-click fix, or Ignore. */

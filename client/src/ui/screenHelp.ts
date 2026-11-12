@@ -88,6 +88,12 @@ export const SCREEN_HELP: Record<ScreenId, ScreenHelp> = {
     actions: ['Choose whether team changes wait for you.', 'Set how often the company is reviewed.', 'Pick which events wake the CEO.'],
     docs: `${HOW}#the-team`,
   },
+  'it-dept': {
+    title: 'IT department',
+    shows: "Your chat with the IT lead, who owns this machine's health, and how IT runs: its account, model and Telegram bot.",
+    actions: ['Ask how much disk is free.', 'Run or skip a proposed clean-up.', 'Pick the account and model IT runs on.'],
+    docs: `${HOW}#the-team`,
+  },
   tools: {
     title: 'Tools & skills',
     shows: 'The plugins, skills and MCP servers a session can load, and switches for everyone, the CEO and each agent.',
