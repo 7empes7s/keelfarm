@@ -1,6 +1,6 @@
 // Notification settings shared by the server (validation, defaults) and the settings UI (labels): which events the
 // office tells the manager about, on which channels, and the office URL messages link back to (docs/pocket.md).
-import type { NotifyChannel, NotifyEvent, NotifySettings, NotifyWebhook } from './types.ts';
+import type { NotifyChannel, NotifyChannelsView, NotifyEvent, NotifySettings, NotifyWebhook } from './types.ts';
 
 /** In the order the settings list them. */
 export const NOTIFY_EVENTS: { id: NotifyEvent; label: string }[] = [
@@ -70,4 +70,16 @@ export function noteTab(event: NotifyEvent | 'test'): string {
   if (event === 'ceoMessage' || event === 'question') return 'chat';
   if (event === 'agentError') return 'team';
   return 'company';
+}
+
+/**
+ * The channels that reach the manager's phone with the office closed (#538): push to a signed-up device, a linked
+ * Telegram chat, an ntfy topic, each only while it's on. Desktop notifications need an open office tab, so they don't count.
+ */
+export function phoneReach(c: Pick<NotifyChannelsView, 'pushDevices' | 'telegram' | 'webhooks'>, s: Pick<NotifySettings, 'channels'>): string[] {
+  const out: string[] = [];
+  if (s.channels.push && c.pushDevices > 0) out.push('push');
+  if (s.channels.telegram && c.telegram.linked) out.push('Telegram');
+  if (s.channels.ntfy && c.webhooks.ntfy?.set) out.push('ntfy');
+  return out;
 }

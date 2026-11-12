@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { api } from '../api';
 import { useStore, type Agent, type ManagerTab } from '../store';
 import { CEO_ID, type AccountView, type UsageSource } from '../../../shared/types';
+import { phoneReach } from '../../../shared/notify';
 import { AgentChip } from './DetailsPage';
 import { workerCli } from './floorRows';
 import { Icon } from './Icon';
@@ -15,11 +16,48 @@ import { settingsTarget, type UsageAction, type UsageContext } from './usageActi
 /** A row's account (if it's one) and what the rules need to know about it. */
 export function useUsageContext(s: UsageSource): UsageContext & { account?: AccountView } {
   const accounts = useStore((st) => st.accounts.accounts);
+  const reach = usePhoneReach().length > 0;
   const account = s.accountId ? accounts.find((a) => a.id === s.accountId) : undefined;
-  if (!account) return { watching: !!s.watchBack };
+  if (!account) return { watching: !!s.watchBack, reach };
   // The default is the first account of its coding agent that's on (as Settings marks it).
   const isDefault = accounts.find((a) => a.cli === account.cli && a.enabled && !a.removing)?.id === account.id;
-  return { account, kind: account.kind, enabled: account.enabled, isDefault, watching: !!s.watchBack };
+  return { account, kind: account.kind, enabled: account.enabled, isDefault, watching: !!s.watchBack, reach };
+}
+
+/** The channels that reach the phone with the office closed (#538). */
+function usePhoneReach(): string[] {
+  const channels = useStore((st) => st.notifyChannels);
+  const notify = useStore((st) => st.settings.notify);
+  return phoneReach(channels, notify);
+}
+
+/** What the toast and the sheet say about where the "it's back" notification goes. */
+const reachWords = (reach: string[]) => (reach.length ? `on ${reach.join(' and ')}` : 'in open office tabs only');
+
+/**
+ * The detail sheet's line under a limited row (#538): that the bell is armed and where it'll ring, and, when nothing
+ * reaches the phone, the way to set it up (installed app for push, or Telegram) one tap away.
+ */
+export function NotifyReach({ s, host }: { s: UsageSource; host: UsageHost }) {
+  const reach = usePhoneReach();
+  if (s.status !== 'limited') return null;
+  return (
+    <div className="us-reach" role="note">
+      {s.watchBack && (
+        <p className="small">
+          <Icon name="bell" /> We'll tell you when <b>{s.label}</b> is back, {reachWords(reach)}.
+        </p>
+      )}
+      {!reach.length && (
+        <>
+          <p className="small muted">To get this on your phone: Add to Home Screen and turn on push, or link Telegram.</p>
+          <button type="button" className="ds-btn" onClick={() => openConsole(host, 'notifications')}>
+            <Icon name="smartphone" /> Set up my phone
+          </button>
+        </>
+      )}
+    </div>
+  );
 }
 
 /** Settings or Mission control at a card; the sheet goes first, so it doesn't sit over them. */
@@ -43,7 +81,10 @@ export function runUsageAction(a: UsageAction, s: UsageSource, host: UsageHost) 
     case 'sign-in':
       return host.signIn(id);
     case 'notify-back':
-      return void api.notifyUsageBack(s.id, !s.watchBack).then((r) => toast(r.watching ? `You'll get a notification when ${s.label} is back.` : `No notification for ${s.label}.`), () => undefined);
+      return void api.notifyUsageBack(s.id, !s.watchBack).then((r) => {
+        const st = useStore.getState();
+        toast(r.watching ? `We'll tell you when ${s.label} is back, ${reachWords(phoneReach(st.notifyChannels, st.settings.notify))}.` : `No notification for ${s.label}.`);
+      }, () => undefined);
     case 'make-default':
       return void api.makeDefaultAccount(id, false).then((r) => toast(r.note || `New work starts on ${s.label}.`), () => undefined);
     case 'agents':

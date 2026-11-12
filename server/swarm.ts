@@ -13,7 +13,7 @@ import { followKeptCli, resumeNote, resumesAfterRestart } from './restartRecover
 import { DEFAULT_MEMORY, memorySettings, sessionKind } from './health.ts';
 import { DEFAULT_TEST_LAB, testLabSettings } from '../shared/testLab.ts';
 import { reconcileStep, restartMessage, workState, type ReconcileStep, type RestartCounts } from './reconcile.ts';
-import { keptWaiver, mergeReadings } from '../shared/usage.ts';
+import { keptWaiver, loadUsageWatch, mergeReadings } from '../shared/usage.ts';
 import { loadDiskAlert } from '../shared/disk.ts';
 import { loadItDesk } from '../shared/itDesk.ts';
 import { loadHistory } from './metrics.ts';
@@ -155,7 +155,7 @@ export class Swarm extends SwarmLiveLeases {
         claudeUsage: Array.isArray(loaded.claudeUsage) ? mergeReadings([], loaded.claudeUsage.filter((r) => r && typeof r.type === 'string' && Number.isFinite(r.pct) && Number.isFinite(r.at))) : [],
         diskAlert: loadDiskAlert(loaded.diskAlert),
         itDesk: loadItDesk(loaded.itDesk), it: this.loadItState(loaded.it), itTickets: this.loadTickets(loaded.itTickets), itImprove: this.loadImproveState(loaded.itImprove), itWatch: this.loadItWatchState(loaded.itWatch),
-        usageWaiver: keptWaiver(loaded.usageWaiver, loaded.settings?.usageWarnings, Date.now()),
+        usageWatch: loadUsageWatch(loaded.usageWatch), usageWaiver: keptWaiver(loaded.usageWaiver, loaded.settings?.usageWarnings, Date.now()),
         experiments: loadLab(loaded.experiments, Date.now()), taskAccounts: loadTaskAccounts(loaded.taskAccounts),
       };
       for (const m of [...this.state.messages, ...this.state.it.messages]) this.messageSeq = Math.max(this.messageSeq, m.id + 1);

@@ -254,6 +254,7 @@ export interface Persisted {
   itTickets: TicketsState; // office problems reported to IT, and their outcomes (#542)
   itImprove: ItImproveState; // closed tickets' records, the weekly review's cards and the changes approved (#543)
   diskAlert?: DiskAlertMark | null; // the last disk notification, so a restart doesn't repeat it (#502)
+  usageWatch: string[]; // usage rows the manager asked to hear about once they're back (#404, kept across restarts since #538)
   usageWaiver?: Waiver | null; // pacing the manager cleared with Resume full speed, kept for its window across restarts (#323)
   experiments: LabState; // the lab's experiments and the issues in them (experiments.ts)
   questions: AgentQuestion[]; // agents waiting on an answer (shared/questions.ts)

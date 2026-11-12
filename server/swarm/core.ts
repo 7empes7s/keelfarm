@@ -153,7 +153,7 @@ export abstract class SwarmCore extends SwarmContract {
     progress: emptyLedger(),
     pong: {},
     officeId: officeId(),
-    claudeUsage: [],
+    claudeUsage: [], usageWatch: [],
     questions: [], decisions: { list: [], digestAt: 0 }, taskAccounts: {}, itDesk: { waiting: [], log: [] }, it: loadIt(undefined), itTickets: { seq: 0, list: [] }, itImprove: { records: [], cards: [], changes: [], reviewWeek: '', reviewedAt: 0 }, itWatch: { checks: [], marks: {}, recs: [], digestDay: '', samples: [] },
     experiments: loadLab(undefined, Date.now()),
   };
@@ -686,13 +686,13 @@ export abstract class SwarmCore extends SwarmContract {
   }
 
   /** A rich toast that joins the notification centre (#107); with `push`, the manager's devices hear of it with the same id. */
-  protected notice(input: NoticeInput, push?: { event: NotifyEvent; title?: string; line?: string; changes?: Parameters<Notifier['notify']>[4]; message?: number }) {
+  protected notice(input: NoticeInput, push?: { event: NotifyEvent; title?: string; line?: string; changes?: Parameters<Notifier['notify']>[4]; message?: number; asked?: boolean }) {
     const at = Date.now(), t = input.target;
     const repoId = !t ? undefined : t.kind === 'agent' ? this.state.agents.find((a) => a.id === t.agentId)?.repoId : t.repoId;
     const n = makeNotice({ ...input, floor: input.floor ?? this.state.repos.find((r) => r.id === repoId)?.floor }, `${at.toString(36)}-${++this.noticeSeq}`, at);
     this.state.notices = addNotice(this.state.notices, n, at);
     this.broadcast({ type: 'toast', ...n });
-    if (push) this.notifier.notify(push.event, push.title ?? n.title, n.text, push.line, push.changes, n.id, push.message);
+    if (push) void (push.asked ? this.notifier.asked(push.event, push.title ?? n.title, n.text, n.id) : this.notifier.notify(push.event, push.title ?? n.title, n.text, push.line, push.changes, n.id, push.message));
     this.save();
   }
 
