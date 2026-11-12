@@ -88,13 +88,14 @@ export const keyBytes = (key: ScreenKey, app: boolean) => (key === 'enter' ? '\r
 export const SCREEN_TRIES = 6;
 
 /**
- * Whether one more key goes to start-up screen `id` (counted in `tries`): 'send' while it has tries left, 'give-up'
- * once when they're spent (say so), then 'skip', so a screen that never goes isn't pressed forever.
+ * Whether one more key goes to start-up screen `id` (counted in `tries`): true while it has tries left; once they're
+ * spent, `giveUp` runs once (to say so) and it's false from then on, so a screen that never goes isn't pressed forever.
  */
-export function screenTry(tries: Map<string, number>, id: string): 'send' | 'give-up' | 'skip' {
+export function screenTry(tries: Map<string, number>, id: string, giveUp: () => void): boolean {
   const n = (tries.get(id) ?? 0) + 1;
   tries.set(id, n);
-  return n <= SCREEN_TRIES ? 'send' : n === SCREEN_TRIES + 1 ? 'give-up' : 'skip';
+  if (n === SCREEN_TRIES + 1) giveUp();
+  return n <= SCREEN_TRIES;
 }
 
 /** The agent's log line when the office stops answering a screen. */

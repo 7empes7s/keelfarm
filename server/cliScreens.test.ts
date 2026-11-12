@@ -129,10 +129,11 @@ describe('the folder-trust screen (#575)', () => {
 
   it('stops after a few tries and says the agent needs setup', () => {
     const tries = new Map<string, number>();
-    const got = Array.from({ length: SCREEN_TRIES + 3 }, () => screenTry(tries, 'trust'));
-    expect(got.filter((g) => g === 'send')).toHaveLength(SCREEN_TRIES);
-    expect(got.slice(SCREEN_TRIES)).toEqual(['give-up', 'skip', 'skip']);
-    expect(screenTry(tries, 'theme')).toBe('send');
+    let gaveUp = 0;
+    const got = Array.from({ length: SCREEN_TRIES + 3 }, () => screenTry(tries, 'trust', () => (gaveUp += 1)));
+    expect(got).toEqual([...Array<boolean>(SCREEN_TRIES).fill(true), false, false, false]);
+    expect(gaveUp).toBe(1);
+    expect(screenTry(tries, 'theme', () => (gaveUp += 1))).toBe(true);
     const step = screenStep(TRUST, 'claude');
     if (step?.do === 'keys') expect(gaveUpNote('Alan', step.screen)).toBe(`⚠ Alan needs setup: the office answered their folder-trust question ${SCREEN_TRIES} times and it is still on screen. Open their terminal and pick the answer there.`);
   });

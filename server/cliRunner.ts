@@ -970,10 +970,8 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
       if (done || Date.now() - started > BOOT_MS * 2) return clearInterval(screenTimer);
       const screen = term.screen();
       const step = screenStep(screen, cli);
-      if (step?.do === 'keys' && Date.now() - trustedAt > 3000) {
-        const go = screenTry(screenTries, step.screen.id);
-        if (go === 'give-up') log([{ kind: 'error', text: gaveUpNote(label, step.screen) }]);
-        if (go !== 'send') return; // the live state reports it as needing setup (liveState.ts)
+      // A screen's tries spent: no more keys, the live state reports it as needing setup (liveState.ts).
+      if (step?.do === 'keys' && Date.now() - trustedAt > 3000 && screenTry(screenTries, step.screen.id, () => log([{ kind: 'error', text: gaveUpNote(label, step.screen) }]))) {
         if (step.key === 'enter') {
           trustedAt = Date.now(); // the screen takes a moment to go: don't answer it twice
           log([{ kind: 'system', text: answerNote(label, step.screen, opts.account, countAnswer(opts.account, step.screen.id)) }]);
