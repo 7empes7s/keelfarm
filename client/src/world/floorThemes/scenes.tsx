@@ -1,7 +1,8 @@
 // A themed floor's dressing (#370), the lazy chunk FloorThemeLayer.tsx loads only while a themed floor is on screen
 // (#371's themes are drawn by studioScenes.tsx, in the same chunk): the pack's props in the free decoration slots,
 // the extra monitors on working desks, and its own wall pieces (the game studio's Playtest screen and neon, the
-// trading floor's market board, world clocks and hanging ticker).
+// trading floor's market board, world clocks and hanging ticker, the newsroom's headline ticker). Its sign and set
+// pieces (#570) are drawn by setScenes.tsx.
 // Repeated props are one InstancedMesh each; pictures are canvases drawn once (or when their numbers change).
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -27,6 +28,7 @@ import type { ThemePack, ThemeProp } from './packs';
 import { themeProps, type PlacedProp } from './placement';
 import { screenMat, staticTexture, WallPicture, WallScreen, type Pose } from './screenKit';
 import * as SD from './studioDraw';
+import { NEWS_TICKER, PlayingLevel, SetProps, ThemeSign, TvWall } from './setScenes';
 import { Calendar, Gallery, LossCurve, NocWall, OnAirSign, Pendants, StudioProps } from './studioScenes';
 import * as D from './themeDraw';
 import * as M from './themeModels';
@@ -124,6 +126,7 @@ function ThemeProps({ list, office }: { list: PlacedProp[]; office: Office }) {
     for (const p of list) {
       if (p.prop === 'arcade') arcades.push(p);
       else if (p.prop === 'arcade-pair') arcades.push(offset(p, -0.45), offset(p, 0.45));
+      else if (p.prop === 'arcade-row') arcades.push(offset(p, -0.82), p, offset(p, 0.82));
       else if (MODELS[p.prop]) models.set(p.prop, [...(models.get(p.prop) ?? []), p]);
     }
     return { arcades, models: [...models] };
@@ -183,6 +186,7 @@ const DESK_PICTURES: Record<ThemePack['deskScreens'], (ctx: CanvasRenderingConte
   timeline: SD.drawTimeline,
   plots: SD.drawPlots,
   dashboards: SD.drawDashboards,
+  headlines: (c, w, h) => D.drawNews(c, w, h, 1),
 };
 /** The desks with a monitor on each side: the trading floor's, the media studio's editing desks and the ops room's. */
 const TWO_SCREENS: readonly ThemePack['deskScreens'][] = ['charts', 'timeline', 'dashboards'];
@@ -273,6 +277,7 @@ function Playtest({ repo, agents, office }: { repo: RepoView; agents: Agent[]; o
         <planeGeometry args={[W, H]} />
         <meshBasicMaterial map={tex} toneMapped={false} userData={BLOOM} />
       </mesh>
+      {!live && <PlayingLevel at={[0, -0.475, 0.083]} w={W} h={0.37} />}
       <mesh ref={blink} position={[0, -0.32, 0.085]} material={start}>
         <planeGeometry args={[1.2, 0.15]} />
       </mesh>
@@ -322,13 +327,15 @@ function MarketWall({ repo }: { repo: RepoView }) {
 // ---------- the trading floor's hanging ticker ----------
 
 const TICKER = { x: 0, y: 3.02, z: 5.6, w: 10, h: 0.42 };
+type TickerAt = typeof TICKER;
 const TICKER_PX_H = 64;
 
 let measurer: CanvasRenderingContext2D | null = null;
 /** A context for measuring the ticker's text before its texture is made. */
 const measureCtx = () => (measurer ??= document.createElement('canvas').getContext('2d')!);
 
-function Ticker({ repo }: { repo: RepoView }) {
+/** The scrolling ticker: hung from the ceiling with both faces (the trading floor's), or one face on a wall (`wall`, the newsroom's). */
+function Ticker({ repo, at = TICKER, label: title, wall }: { repo: RepoView; at?: TickerAt; label?: string; wall?: boolean }) {
   const n = useStore((s) => s.ops.floors.find((f) => f.repoId === repo.id) ?? EMPTY_NUMBERS);
   const open = repo.pulls.filter((p) => p.state === 'OPEN').length;
   const prev = useRef<QuoteValues>({});
@@ -337,7 +344,7 @@ function Ticker({ repo }: { repo: RepoView }) {
     prev.current = q.values;
     return q.quotes;
   }, [n, open]);
-  const label = `FLOOR ${repo.floor} · ${(repo.fullName.split('/')[1] ?? repo.fullName).toUpperCase()}`;
+  const label = title ?? `FLOOR ${repo.floor} · ${(repo.fullName.split('/')[1] ?? repo.fullName).toUpperCase()}`;
   const key = quotes.map((q) => `${q.symbol}${q.text}${q.dir}${q.good}`).join('|');
   // as wide as one pass of every quote (measured), shown at the housing's proportions and repeated as it scrolls
   // (rounded up, so a number ticking over doesn't remake the texture)
@@ -345,18 +352,18 @@ function Ticker({ repo }: { repo: RepoView }) {
   const tex = useCanvasTexture(W, TICKER_PX_H, (ctx) => D.drawTickerStrip(ctx, W, TICKER_PX_H, quotes, label), [key, label, W]);
   useEffect(() => {
     tex.wrapS = THREE.RepeatWrapping;
-    tex.repeat.x = ((TICKER.w / TICKER.h) * TICKER_PX_H) / W;
+    tex.repeat.x = ((at.w / at.h) * TICKER_PX_H) / W;
     tex.needsUpdate = true;
-  }, [tex, W]);
+  }, [tex, W, at]);
   useFrame((_, dt) => {
     tex.offset.x = (tex.offset.x + (dt * 0.6 * TICKER_PX_H) / W) % 1; // the same speed however long the strip is
   });
   return (
-    <group position={[TICKER.x, TICKER.y, TICKER.z]}>
-      <mesh geometry={M.tickerModel(TICKER.w)} material={vertexToon} />
-      {[0, Math.PI].map((r) => (
-        <mesh key={r} rotation={[0, r, 0]} position={[0, 0, r ? -0.101 : 0.101]}>
-          <planeGeometry args={[TICKER.w, TICKER.h]} />
+    <group position={[at.x, at.y, at.z]}>
+      {!wall && <mesh geometry={M.tickerModel(at.w)} material={vertexToon} />}
+      {(wall ? [0] : [0, Math.PI]).map((r) => (
+        <mesh key={r} rotation={[0, r, 0]} position={[0, 0, r ? -0.101 : wall ? 0 : 0.101]}>
+          <planeGeometry args={[at.w, at.h]} />
           <meshBasicMaterial map={tex} toneMapped={false} userData={BLOOM} />
         </mesh>
       ))}
@@ -399,12 +406,20 @@ export function ThemeScene({ pack, repo, agents, office }: SceneProps) {
       <ThemeProps list={list} office={office} />
       <DeskScreens kind={pack.deskScreens} slots={slots} />
       <StudioProps list={list} office={office} agents={agents} />
+      <SetProps list={list} office={office} floor={repo.fullName.split('/')[1] ?? repo.fullName} />
+      <ThemeSign sign={pack.sign} />
       {pack.wallScreen === 'playtest' && <Playtest repo={repo} agents={agents} office={office} />}
       {pack.wallScreen === 'market' && <MarketWall repo={repo} />}
       {pack.wallScreen === 'gallery' && <Gallery repo={repo} agents={agents} />}
       {pack.wallScreen === 'calendar' && <Calendar repo={repo} agents={agents} />}
       {pack.wallScreen === 'loss' && <LossCurve repo={repo} />}
       {pack.wallScreen === 'noc' && <NocWall />}
+      {pack.wallScreen === 'tv-wall' && (
+        <>
+          <TvWall repo={repo} />
+          <Ticker repo={repo} at={NEWS_TICKER} label={`BREAKING NEWS · FLOOR ${repo.floor}`} wall />
+        </>
+      )}
       {pack.id === 'trading' && <Ticker repo={repo} />}
       {pack.id === 'game-studio' && <NeonStrips />}
       {pack.id === 'design-studio' && <Pendants slots={slots} office={office} />}

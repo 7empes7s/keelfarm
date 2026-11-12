@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { FLOOR_THEMES } from '../../../../shared/floorThemes';
 import { DECOR_SLOTS } from '../../../../shared/progress';
 import { EMPTY_NUMBERS } from '../../ops';
 import { reservedDecorRects } from '../decor/decor';
@@ -7,8 +8,8 @@ import { SONGS } from '../jukeboxSongs';
 import { DECOR_SLOT_AT, HALF_D, HALF_W, officeColliders, type Rect } from '../layout';
 import { findPath, spot, walkways, WALK_R } from '../walkways';
 import { THEME_PACKS, themePack } from './packs';
-import { nocBankRect, nocPanels, NOC_BANK, placeProp, PROP_SPECS, themePropRects, themeProps, themeWallRects } from './placement';
-import { buildProgress, candles, marketOpen, tickerQuotes, worldClocks } from './ticker';
+import { nocBankRect, nocPanels, NOC_BANK, placeProp, PROP_SPECS, reservedSetRects, SET_SPOTS, themePropRects, themeProps, themeWallRects } from './placement';
+import { buildProgress, candles, headlines, marketOpen, tickerQuotes, worldClocks } from './ticker';
 
 const PACKS = Object.values(THEME_PACKS);
 const overlaps = (a: Rect, b: Rect, pad = 0) => a.minX < b.maxX + pad && a.maxX > b.minX - pad && a.minZ < b.maxZ + pad && a.maxZ > b.minZ - pad;
@@ -31,6 +32,29 @@ describe('theme resolution', () => {
     expect(studio.saturation).toBeGreaterThan(1);
   });
 
+  it('never darkens the room: bright lights, a light tint and light shells, the colour in the accents (#570)', () => {
+    const lum = (hex: string) => {
+      const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    for (const p of PACKS) {
+      expect(p.mood.light, p.id).toBeGreaterThanOrEqual(0.95);
+      expect(p.mood.tintAmount, p.id).toBeLessThanOrEqual(0.15);
+      expect(p.mood.grade.amount, p.id).toBeLessThanOrEqual(0.15);
+      expect(lum(p.shell.floor), `${p.id} floor`).toBeGreaterThanOrEqual(0.55);
+      expect(lum(p.shell.wall), `${p.id} wall`).toBeGreaterThanOrEqual(0.8);
+      expect(lum(p.shell.rug), `${p.id} rug`).toBeGreaterThanOrEqual(0.35);
+    }
+  });
+
+  it('has a pack for every theme but the office, each with its sign', () => {
+    expect(PACKS.map((p) => p.id).sort()).toEqual(FLOOR_THEMES.filter((t) => t !== 'office').sort());
+    for (const p of PACKS) expect(p.sign.text.length, p.id).toBeGreaterThan(3);
+    expect(THEME_PACKS['game-studio'].sign.text).toBe('GAME STUDIO');
+    expect(THEME_PACKS['media-studio'].sign.text).toBe('VIDEO STUDIO');
+    expect(THEME_PACKS.newsroom.sign.text).toBe('NEWSROOM');
+  });
+
   it("names only songs the jukebox has", () => {
     for (const p of PACKS) for (const id of p.playlist) expect(SONGS.some((s) => s.id === id), id).toBe(true);
   });
@@ -51,7 +75,7 @@ describe('theme props', () => {
   });
 
   it.each(PACKS.map((p) => [p.id, p] as const))('%s: what stands on the floor stays inside the room its slot keeps, off walkways, desks and furniture', (_, pack) => {
-    const reserved = reservedDecorRects();
+    const reserved = [...reservedDecorRects(), ...reservedSetRects()];
     const rects = themePropRects(pack, {});
     expect(rects.length).toBeGreaterThan(0);
     const w = walkways('office');
@@ -64,6 +88,26 @@ describe('theme props', () => {
     // every spot is still reachable from the elevator (the walkways already plan round the slots' rooms)
     const lift = spot(w, 'elevator')!;
     for (const s of [...w.spots, ...w.homes]) expect(findPath(w, lift, s), s.id).not.toBeNull();
+  });
+
+  it.each(PACKS.map((p) => [p.id, p] as const))('%s: stands two big set pieces in the aisles, in view from the elevator (#570)', (_, pack) => {
+    const pieces = themeProps(pack, {}).filter((p) => p.slot in SET_SPOTS);
+    expect(pieces).toHaveLength(2);
+    for (const p of pieces) {
+      const spot = SET_SPOTS[p.slot as keyof typeof SET_SPOTS];
+      const spec = PROP_SPECS[p.prop];
+      expect(spec.kind, p.prop).toBe('big');
+      expect(spec.w, p.prop).toBeLessThanOrEqual(spot.w);
+      expect(spec.d, p.prop).toBeLessThanOrEqual(spot.d);
+      expect(spec.w * spec.h, `${p.prop} is a big piece`).toBeGreaterThanOrEqual(2.2);
+      // between the elevator and the north wall, inside the room
+      expect(Math.abs(p.x)).toBeLessThan(HALF_W - 2);
+      expect(p.z).toBeGreaterThan(-HALF_D);
+      expect(p.z).toBeLessThan(HALF_D - 4);
+    }
+    // an earned decoration never moves them
+    const all = Object.fromEntries(DECOR_SLOTS.map((d) => [d.id, 'plant' as const]));
+    expect(themeProps(pack, all).map((p) => p.slot).sort()).toEqual(['aisle-e', 'aisle-w']);
   });
 
   it('steps aside for an earned decoration, which keeps its slot', () => {
@@ -168,5 +212,18 @@ describe("the game studio's build bar", () => {
     const late = buildProgress(['toMerge', 'toMerge']);
     expect(late.done).toBeGreaterThan(early.done);
     expect(late.caption).toBe('2 PRs in the build · 2 ready to ship');
+  });
+});
+
+describe("the newsroom's TVs (#570)", () => {
+  it('lead with what shipped, then PRs in review and the issues being worked on', () => {
+    const pulls = [
+      { title: 'Dark mode', state: 'OPEN' },
+      { title: 'Faster search', state: 'MERGED' },
+      { title: 'Old idea', state: 'CLOSED' },
+    ];
+    expect(headlines(pulls, [{ title: 'Login bug' }])).toEqual(['Shipped: Faster search', 'In review: Dark mode', 'Developing: Login bug']);
+    expect(headlines([], [])).toEqual(['No news is good news']);
+    expect(headlines([], Array.from({ length: 9 }, (_, i) => ({ title: `#${i}` })), 5)).toHaveLength(5);
   });
 });
