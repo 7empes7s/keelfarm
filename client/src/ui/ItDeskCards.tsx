@@ -21,6 +21,11 @@ function ProposalCard({ p, busy, act }: { p: ItProposal; busy: boolean; act: (id
         <span className={`it-risk it-risk-${p.risk}`}>{RISK[p.risk]}</span>
       </div>
       <p className="it-why">{p.why}</p>
+      {p.diff && (
+        <pre className="it-diff" aria-label="Before and after: + marks what's added">
+          {p.diff}
+        </pre>
+      )}
       <dl className="it-facts small">
         <dt>Frees or changes</dt>
         <dd>{p.affects}</dd>
@@ -29,7 +34,7 @@ function ProposalCard({ p, busy, act }: { p: ItProposal; busy: boolean; act: (id
       </dl>
       <div className="it-actions">
         <button type="button" className="btn btn-good" disabled={busy} onClick={() => act([p.id], true)}>
-          <Icon name="play" /> Run
+          <Icon name={p.cf ? 'check' : 'play'} /> {p.cf ? 'Approve' : 'Run'}
         </button>
         <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => act([p.id], false)}>
           Not now
@@ -53,7 +58,8 @@ export function ItDeskCards({ inChat = false }: { inChat?: boolean }) {
     setBusy(true);
     void (run ? api.itRun(ids) : api.itDismiss(ids)).catch(() => undefined).finally(() => setBusy(false)); // api() already toasted the error
   };
-  const asks = `${waiting[0].by ?? ceo} asks to run ${waiting.length === 1 ? 'a command' : `${waiting.length} commands`}`; // the IT lead's since #524
+  const what = waiting.every((p) => p.cf) ? ['approve a Cloudflare change', 'Cloudflare changes'] : ['run a command', 'commands']; // #586
+  const asks = `${waiting[0].by ?? ceo} asks to ${waiting.length === 1 ? what[0] : `${what[0].split(' ')[0]} ${waiting.length} ${what[1]}`}`; // the IT lead's since #524
   const cards = (
     <>
       {waiting.length > 1 && (

@@ -13,8 +13,24 @@ import type { ItRecommendArgs } from './swarm/itWatch.ts';
 import type { ItImproveArgs } from './swarm/itImprove.ts';
 import { IMPROVE_KINDS } from '../shared/itImprove.ts';
 import { problemTools, type ProblemHandlers } from './ceoProblemTools.ts';
+import { CF_OPS } from '../shared/cloudflare.ts';
 
-export interface ItHandlers {
+/** The cloudflare action's arguments (#586). */
+export interface CloudflareArgs {
+  op: (typeof CF_OPS)[number];
+  hostname?: string;
+  service?: string;
+  tunnel?: string;
+  emails?: string[];
+  bypass?: string[];
+  why?: string;
+}
+
+export interface CloudflareHandlers {
+  cloudflare(a: CloudflareArgs): Promise<string>;
+}
+
+export interface ItHandlers extends CloudflareHandlers {
   itRun(a: ItRunArgs): Promise<string>;
   itPropose(a: ItProposeArgs): string;
   itRecommend(a: ItRecommendArgs): string;
@@ -89,6 +105,7 @@ function itTools(h: ItHandlers, run: Run) {
       },
       (a) => run(() => h.itRecommend(a)),
     ),
+    ...cloudflareTools(h, run),
     tool('it_health', "The office's own readings: memory, swap and load, sessions running, free disk and what agents' machines hold, the watchdog's findings, the IT desk's latest commands and the open tickets.", {}, () => run(() => h.itHealth())),
     tool(
       'it_ticket',
@@ -134,6 +151,26 @@ function itTools(h: ItHandlers, run: Run) {
 
 /** The IT lead's office server: its tools and the problems register's (#544). */
 export const itOfficeTools = (h: ItHandlers & ProblemHandlers): OfficeTools => toolServer([...itTools(h, runTool), ...problemTools(h, runTool)]);
+
+/** cloudflare (#586): the IT lead's and the CEO's. */
+export function cloudflareTools(h: CloudflareHandlers, run: Run) {
+  return [
+    tool(
+      'cloudflare',
+      "Cloudflare through the office's own key (never shown to you): tunnel_ingress_get and token_scopes read now (token_scopes names any missing permission); tunnel_ingress_add (hostname → service before the catch-all, every rule kept), dns_cname_ensure (proxied CNAME to the tunnel) and access_app_ensure (an email allow-list, optional bypass paths) put a diff card to the manager with Approve / Not now, then apply and read back.",
+      {
+        op: z.enum(CF_OPS),
+        hostname: z.string().min(4).max(253).optional().describe('e.g. "clip.techinsiderbytes.com"; needed by the writes'),
+        service: z.string().min(1).max(200).optional().describe('tunnel_ingress_add: e.g. "http://localhost:80"'),
+        tunnel: z.string().min(1).max(100).optional().describe("The tunnel's name or id, when the account has several"),
+        emails: z.array(z.string().email().max(200)).min(1).max(50).optional().describe('access_app_ensure: who may sign in'),
+        bypass: z.array(z.string().min(1).max(200)).max(10).optional().describe('access_app_ensure: paths without sign-in, e.g. ["/api/health"]'),
+        why: z.string().min(1).max(300).optional().describe('For the card: why, in a sentence'),
+      },
+      (a) => run(() => h.cloudflare(a)),
+    ),
+  ];
+}
 
 export function askItTools(h: AskItHandlers, run: Run) {
   return [
