@@ -145,6 +145,12 @@ export const agentErrorProblem = (a: { id: string; name: string; error: string |
   title: `${a.name} is stuck on an error`, ...(a.error && { detail: a.error.slice(0, DETAIL_MAX) }), key: `agent-error:${a.id}`,
 });
 
+/** A login read signed out (#579): the manager's to sign in again, open until it reads signed in. */
+export const signedOutProblem = (a: { id: string; label: string }): ProblemInput => ({
+  kind: 'infrastructure', cause: 'sign-in', floor: null, repoId: null, pr: null, issue: null, agentId: null, ongoing: true, owner: 'manager', needsYou: true,
+  title: `${a.label} is signed out`, detail: 'Sessions on it open on the sign-in screen. Tap Sign in on its card in the chat, or on its row in Settings → Providers.', key: `signed-out:${a.id}`,
+});
+
 /** An issue waiting on its dependencies longer than BLOCKED_MS. */
 export const blockedProblem = (i: { repoId: string; number: number; blockers: number[] }, w: Where): ProblemInput => ({
   kind: 'work', cause: 'blocked', floor: w.floor, repoId: i.repoId, pr: null, issue: i.number, agentId: null, ongoing: true, owner: 'ceo',

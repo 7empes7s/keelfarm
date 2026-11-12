@@ -11,7 +11,7 @@ import { shareLogin, shareStatus, unshareLogin } from './sharedLogin.ts';
 import { mergeSecrets, readSecrets } from './secrets.ts';
 import { AgentTerminal } from './terminal.ts';
 import { POLL_MS } from './usagePoll.ts';
-import type { AccountCheck } from './accountCheck.ts';
+import { loginSignedIn, type AccountCheck, type LoginFile } from './accountCheck.ts';
 import type { BoxSignIn } from './cliRunner.ts';
 import {
   accountDir,
@@ -58,7 +58,7 @@ export interface AccountsDeps {
   /** Test an account (accountCheck.ts; the demo's is fake). */
   check: (a: ProviderAccount, dir: string, secret: string) => Promise<AccountCheck>;
   /** The built-in Claude login's plan and owner, read from its files without a request (#460; the demo's is fake). */
-  login?: (a: ProviderAccount, dir: string) => Promise<{ plan: string | null; who: string | null }>;
+  login?: (a: ProviderAccount, dir: string) => Promise<{ plan: string | null; who: string | null; file?: LoginFile | null }>;
   /** A login's CLI signing in in a terminal, with its folder (localSignIn.ts; the demo's is fake). */
   signIn: (o: { cli: AccountCli; env: Record<string, string>; term: AgentTerminal; mode: SignInMode }, exited: (code: number) => void) => BoxSignIn;
   /** The cost ledger's sessions, for today's spend per account. */
@@ -102,6 +102,7 @@ export class Accounts {
   private usage = new Map<string, UsageReading[]>();
   private signedIn = new Map<string, boolean>();
   private sessionOut = new Set<string>(); // a session found it signed out: a poll's expired-but-refreshable token doesn't put it back (#442)
+  private outAt = new Map<string, number>(); // when a session found it signed out: the built-in login's file must change after (#579)
   private refresh = new Set<string>(); // Claude logins whose access token expired, for their next session to refresh (#442)
   private plans = new Map<string, string | null>(); // the plan each Claude login really has (#442)
   private owners = new Map<string, string | null>(); // who each Claude login belongs to, never sent to tabs (#460)
@@ -132,7 +133,7 @@ export class Accounts {
     if (seed || saved === null) void this.write(); // the built-ins are there from the first start
     for (const a of this.list()) this.share(a.id);
     if (!this.deps.poll) return;
-    // Every login but the built-in one (the office reads that one already) is checked now, then every POLL_MS.
+    // Every login but the built-in ones (the office reads Claude's usage already; its sign-in from its file) is checked now, then every POLL_MS.
     void this.pollAll();
     this.timer ??= setInterval(() => void this.pollAll(), POLL_MS);
     this.timer.unref?.();
@@ -390,9 +391,10 @@ export class Accounts {
   }
 
   /** A session on an account found its login expired or its key turned away: out of the rotation until a Test or sign-in says otherwise. */
-  signedOut(id: string) {
+  signedOut(id: string, now = Date.now()) {
     this.signedIn.set(id, false);
     this.sessionOut.add(id);
+    this.outAt.set(id, now);
     this.refresh.delete(id);
     this.emit();
   }
@@ -513,7 +515,10 @@ export class Accounts {
     const r = await this.deps.check(a, this.dirOf(a), this.secretOf(a));
     // An expired token to refresh counts as signed in (#442), unless a session already failed to sign in with it.
     const out = !!r.refresh && this.sessionOut.has(id);
-    if (r.signedIn && !r.refresh) this.sessionOut.delete(id);
+    if (r.signedIn && !r.refresh) {
+      this.sessionOut.delete(id);
+      this.outAt.delete(id);
+    }
     this.signedIn.set(id, r.signedIn && !out);
     if (r.refresh && !out) this.refresh.add(id);
     else this.refresh.delete(id);
@@ -536,6 +541,7 @@ export class Accounts {
     if (claude && own) {
       this.plans.set(claude.id, own.plan);
       this.owners.set(claude.id, own.who);
+      if (own.file !== undefined) this.builtInFile(claude.id, own.file);
       this.emit();
     }
     // The built-in Codex login's rate limits (#361): nothing else reads them. Only its readings: whether it counts as
@@ -543,6 +549,17 @@ export class Accounts {
     const codex = this.list().find((a) => a.builtIn && a.cli === 'codex' && a.enabled);
     const r = codex && (await this.deps.check(codex, this.dirOf(codex), '').catch(() => null));
     if (codex && r?.readings.length) this.readings(codex.id, r.readings);
+  }
+
+  /** The built-in Claude login's sign-in from its credentials file (#579): signed out, limited and signed in told apart without a request. */
+  private builtInFile(id: string, file: LoginFile | null) {
+    const on = loginSignedIn(file, this.outAt.get(id) ?? null);
+    if (on === null) return;
+    if (on) {
+      this.signedIn.delete(id); // the built-in login's default: signed in
+      this.sessionOut.delete(id);
+      this.outAt.delete(id);
+    } else this.signedIn.set(id, false);
   }
 
   /** The terminal a login signs in in (/ws/term?agent=account:<id>), made when it's first asked for. */

@@ -3,7 +3,7 @@
 // header and nowhere else, and errors never carry the request.
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import { checkUsage, loginOwner, loginPlan, oauthReadings, type UsageCheck } from './usagePoll.ts';
+import { checkUsage, loginOwner, loginPlan, oauthReadings, tokenOf, type UsageCheck } from './usagePoll.ts';
 import { readCodexLimits } from './codexLimits.ts';
 import { codexReadings } from '../shared/usageSources.ts';
 import type { AccountCli, AccountKind, UsageReading } from '../shared/types.ts';
@@ -57,6 +57,36 @@ export async function readClaudeLogin(dir: string): Promise<{ plan: string | nul
   const raw = await read(path.join(dir, '.credentials.json'));
   const cfg = (await read(path.join(dir, '.claude.json'))) || (await read(path.join(path.dirname(dir), `${path.basename(dir)}.json`)));
   return { plan: raw ? loginPlan(raw) : null, who: cfg ? loginOwner(cfg) : null };
+}
+
+/** A Claude login's .credentials.json as the office reads it without a request (#579): its token's state and when it last changed. */
+export interface LoginFile {
+  state: 'in' | 'out' | 'refresh'; // a token; none, or expired with no refresh token; expired with one, for the next session
+  changedAt: number;
+}
+
+/** The login file's state from its text (pure). */
+export function loginFileState(raw: string, now: number): LoginFile['state'] {
+  const t = tokenOf(raw, now);
+  return 'token' in t ? 'in' : t.refresh ? 'refresh' : 'out';
+}
+
+/** The built-in login's .credentials.json, read and stat'ed (no request); null when there's none (a keychain, a token in the environment). Never throws. */
+export async function readLoginFile(dir: string, now = Date.now()): Promise<LoginFile | null> {
+  const file = path.join(dir, '.credentials.json');
+  const [raw, st] = await Promise.all([fs.readFile(file, 'utf8').catch(() => null), fs.stat(file).catch(() => null)]);
+  return raw === null || !st ? null : { state: loginFileState(raw, now), changedAt: st.mtimeMs };
+}
+
+/**
+ * Whether the built-in Claude login is signed in, from its file (#579, pure): not when there's no token or it expired
+ * with nothing to refresh it, nor when a session found it signed out (`outAt`) and the file hasn't changed since (a
+ * sign-in or a refresh rewrites it). null: no file to judge by, so it stays as it was.
+ */
+export function loginSignedIn(file: LoginFile | null, outAt: number | null): boolean | null {
+  if (!file) return null;
+  if (file.state === 'out') return false;
+  return outAt === null || file.changedAt > outAt;
 }
 
 /** Test an account: `dir` is its login folder, `secret` its key or token ('' for a login). Never throws. */

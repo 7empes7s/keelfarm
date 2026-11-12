@@ -226,6 +226,8 @@ export interface AgentView {
   activity?: AgentActivity | null; // what they're doing right now, safe to show anyone (null: nothing, e.g. idle)
   tools?: ToolSwitches; // their own Tools & skills switches on top of Everyone's (absent for the CEO, whose are in settings)
   account?: string; // the account (id) or tag they're pinned to (#247); absent: the rotation
+  accountFallback?: boolean; // pinned: false waits while their account is signed out or limited, true runs on another and says why (#579)
+  accountWait?: string | null; // pinned to an account that's out, they take no work: "Waiting for Claude Pro sign-in" (#579)
   run?: SessionRun | null; // what their live session really runs on: account, coding agent, model (#376); null or absent: none running
   voiceId?: string; // their ElevenLabs voice ('' none; absent for the CEO, whose voice is settings.voice); #320
   voiceName?: string;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addSpan, allOutText, detectLimit, endedText, hasRoom, LIMIT_TAIL_LINES, pickAccount, resetTime, rotationSettings, rotationStats, spanBars, switchHandover, switchText, type Candidate } from './accountRotation';
+import { addSpan, allOutText, detectLimit, endedText, fallbackText, hasRoom, LIMIT_TAIL_LINES, pickAccount, pinnedWaits, pinOut, resetTime, rotationSettings, rotationStats, sessionEnd, spanBars, switchesForCeo, switchHandover, switchText, waitText, type Candidate } from './accountRotation';
 import type { AccountSwitch, ProviderAccount } from './types';
 
 const NOW = new Date(2026, 10, 7, 13, 0, 0).getTime(); // 13:00 local
@@ -184,5 +184,52 @@ describe('switchHandover (#377)', () => {
     expect(h).toContain('Manager: m3');
     expect(h).toContain(`You: ${'x'.repeat(400)}…`);
     expect(switchHandover([], 'N')).toContain('(none)');
+  });
+});
+
+describe('signed out is not limited (#579)', () => {
+  const now = Date.UTC(2026, 10, 12, 12);
+  const SIGN_IN = ['Select login method:', '❯ 1. Claude account with subscription · Pro, Max, Team, or Enterprise', "Browser didn't open? Use the url below to sign in:"];
+
+  it('a session that showed its sign-in screen is signed out, whatever else its terminal says', () => {
+    expect(sessionEnd({ signedOut: true, errors: ['Claude Code is not signed in on the built-in login: it showed its sign-in screen, so the task goes back in line.'] }, SIGN_IN, now)).toEqual({ kind: 'signed-out' });
+    expect(sessionEnd({ signedOut: true, errors: [] }, ['5-hour limit reached ∙ resets 4pm', ...SIGN_IN], now)).toEqual({ kind: 'signed-out' });
+    expect(sessionEnd({ errors: [] }, ['  ⎿  Not logged in · Please run /login'], now)).toEqual({ kind: 'signed-out' });
+  });
+
+  it('a usage limit message is limited, until the time it names', () => {
+    expect(sessionEnd({ errors: ['Claude Code stopped: rate limit (5-hour limit reached ∙ resets 4pm)'] }, [], now)).toMatchObject({ kind: 'limited' });
+    expect(sessionEnd({ errors: [] }, ['You’ve hit your weekly limit · resets Nov 13, 2pm (UTC)'], now)).toEqual({ kind: 'limited', until: Date.UTC(2026, 10, 13, 14) });
+    expect(sessionEnd({ errors: ['Some other error'] }, [], now)).toBeNull();
+  });
+
+  const accounts = [
+    { id: 'claude-pro', label: 'Claude Pro', status: 'signed-out' },
+    { id: 'claude-ultra', label: 'Claude Ultra', status: 'ready' },
+    { id: 'claude-max', label: 'Max', status: 'limited' },
+  ];
+
+  it("a pinned agent's account out: one with no fallback waits, one with fallback runs elsewhere and says why", () => {
+    const out = pinOut('claude-pro', accounts);
+    expect(out).toEqual({ id: 'claude-pro', label: 'Claude Pro', why: 'signed-out' });
+    expect(pinOut('claude-ultra', accounts)).toBeNull();
+    expect(pinOut('pro', accounts)).toBeNull(); // a tag: rotation among its accounts
+    expect(pinOut(undefined, accounts)).toBeNull();
+    expect(pinnedWaits(out, false, true)).toBe(true);
+    expect(pinnedWaits(out, undefined, true)).toBe(false); // the default: falls back
+    expect(pinnedWaits(out, true, false)).toBe(true); // rotation off: a sign-in screen per task otherwise
+    expect(pinnedWaits(pinOut('claude-max', accounts), true, false)).toBe(false); // a limit with rotation off is the office's pause
+    expect(pinnedWaits(pinOut('claude-max', accounts), false, true)).toBe(true);
+    expect(pinnedWaits(null, false, true)).toBe(false);
+    expect(waitText(out!)).toBe('Waiting for Claude Pro sign-in');
+    expect(waitText(pinOut('claude-max', accounts)!)).toBe("Waiting for Max's limit to reset");
+    expect(fallbackText('Fable', 'Claude Ultra', out!)).toBe('Fable is running on Claude Ultra because Claude Pro is signed out.');
+  });
+
+  it("the CEO hears an agent's switch with its reason", () => {
+    const clock = (t: number) => new Date(t).toISOString().slice(11, 16);
+    const s = { at: now, agentId: 'a1', agentName: 'Fable', fromId: 'claude-pro', from: 'Claude Pro', toId: 'claude-ultra', to: 'Claude Ultra', why: 'signed-out' as const, until: null, api: false, usd: 0 };
+    expect(switchesForCeo([s], clock)).toEqual(['Fable is running on Claude Ultra because Claude Pro is signed out.']);
+    expect(switchesForCeo([{ ...s, why: 'limited', until: Date.UTC(2026, 10, 12, 16) }], clock)).toEqual(['Fable is running on Claude Ultra because Claude Pro is limited until 16:00.']);
   });
 });

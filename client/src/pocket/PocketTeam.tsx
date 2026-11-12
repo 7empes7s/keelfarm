@@ -120,6 +120,11 @@ function AgentCard({ agent, repo, fresh }: { agent: Agent; repo: RepoView; fresh
           <Icon name="git-merge" /> {agent.nudge}
         </div>
       )}
+      {agent.accountWait && (
+        <div className="small pk-sign-in">
+          <Icon name="key-round" /> {agent.accountWait}
+        </div>
+      )}
       {agent.itWait != null && (
         <div className="small pk-sign-in">
           <Icon name="clipboard-list" /> Waiting on IT #{agent.itWait}

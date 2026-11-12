@@ -63,6 +63,7 @@ export interface AgentSetupPatch {
   effort?: EffortLevel | '';
   host?: MachineHost | '';
   account?: string; // an account id or tag (#247); '' for the rotation
+  accountFallback?: boolean; // pinned: false waits while it's out (#579)
 }
 
 /** Choices made when a project moves in: a brief for the CEO, and whether work starts on its own. */
