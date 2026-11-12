@@ -188,7 +188,7 @@ async function read(m: PhoneMessage, replay?: Replay) {
   } catch (err) {
     // A replay says why in plain words under its message (ChatBubble.tsx's ReplayError), unless it was stopped.
     if (replay) {
-      if (!now.rec && !cutShort) useReplay.setState({ error: { id: m.id, text: tapError(provider, err) } });
+      if (!now.rec && !cutShort && (err as Error).name !== 'AbortError') useReplay.setState({ error: { id: m.id, text: tapError(provider, err) } });
       return;
     }
     // No key, ElevenLabs being down, no voice in this browser: the message still rings, just without words.
@@ -238,7 +238,7 @@ async function playClip(id: number, words: string, began: (clipMs: number, parts
     const out = groupOutput('voice');
     if ((!a || !out) && elementPrimed()) {
       const blob = await res.blob();
-      if (!stopped) await playOnElement(blob, (ms) => began(ms, 1), (stop) => (end = stop));
+      if (!stopped) await playOnElement(blob, (ms) => began(ms ?? 0, 1), (stop) => (end = stop));
       return;
     }
     const data = await res.arrayBuffer();
@@ -330,7 +330,7 @@ async function playClip(id: number, words: string, began: (clipMs: number, parts
  * made now and saved under the message, played on the <audio> element the tap unlocked. The ▶ spins meanwhile, and a
  * tap on it cancels.
  */
-async function playTapped(id: number, kind: Exclude<Replay, 'browser'>, began: (clipMs: number, parts: number) => void) {
+async function playTapped(id: number, kind: Exclude<Replay, 'browser'>, began: (clipMs: number | null, parts: number) => void) {
   const abort = new AbortController();
   let end: (() => void) | null = null;
   stopCurrent = () => {
@@ -350,7 +350,7 @@ async function playTapped(id: number, kind: Exclude<Replay, 'browser'>, began: (
       await playOnElement(blob, (ms) => {
         useReplay.setState({ loading: null });
         if (part === 0) began(ms, parts);
-        else speechClip(id, part, parts, ms);
+        else speechClip(id, part, parts, ms ?? 0);
       }, (stop) => (end = stop));
       if (abort.signal.aborted) return;
     }
@@ -374,10 +374,10 @@ function tapError(provider: Exclude<VoiceProvider, 'off'>, err: unknown): string
 }
 
 /**
- * Plays `blob` on the shared <audio> element, resolving when it ends or is stopped: `onStart` gets its length in ms,
+ * Plays `blob` on the shared <audio> element, resolving when it ends or is stopped: `onStart` gets its length in ms (null when unknown),
  * `stopper` the way to stop it. Rejects when the browser refuses to play.
  */
-async function playOnElement(blob: Blob, onStart: (ms: number) => void, stopper: (stop: () => void) => void) {
+async function playOnElement(blob: Blob, onStart: (ms: number | null) => void, stopper: (stop: () => void) => void) {
   const el = voiceElement();
   if (!el) throw new Error('audio is unavailable');
   const url = URL.createObjectURL(blob);
@@ -396,7 +396,7 @@ async function playOnElement(blob: Blob, onStart: (ms: number) => void, stopper:
     volume();
     await el.play();
     const secs = Number.isFinite(el.duration) ? el.duration : 0;
-    onStart(secs * 1000);
+    onStart(secs ? secs * 1000 : null);
     deadline = setTimeout(done, ((secs || 60) + 2) * 1000); // a stalled element never ends the clip
     await ended;
   } finally {
