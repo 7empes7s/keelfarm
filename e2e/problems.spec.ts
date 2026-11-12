@@ -27,14 +27,14 @@ for (const width of [390, 1280]) {
     await expect(page.getByText('QA sent it back for nits on PR #928')).toBeVisible();
     await expect(conflicts).toBeHidden();
 
-    // a link opens the agent's window
+    // a link opens the agent's chat window
     await page.getByRole('button', { name: 'Open', exact: true }).click();
     const row = page.locator('[data-group^="waste:"] [data-problem]').first();
     const agent = row.locator('.pb-links button').last();
     const name = (await agent.innerText()).trim();
     await agent.click();
+    await expect(page.getByRole('button', { name: 'Open terminal' }).last()).toBeVisible(); // their chat window
     await expect(page.getByText(name).first()).toBeVisible();
-    await expect(page.locator('[data-group^="waste:"]')).toBeHidden();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   });
 
