@@ -3,11 +3,13 @@
 // "+ Add provider" opens the catalogue. Claude and Codex accounts, the ElevenLabs key and the Upstash key are still
 // changed in their own sections (linked from their cards); keys added here and MCP servers are changed here.
 // "Keys found on this computer" (#367): Scan, then a review sheet of what the server found and tested, last 4 only.
+// Rename and tags (#523): a key's name, tags and Used for (AI inference or Operations); filters by Used for and status.
 import { useMemo, useState, type FormEvent } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
-import { CATEGORIES, PROVIDERS, providerCards, type CardStatus, type ProviderCard, type ProviderDef } from '../../../shared/providers';
-import { CEO_ID, type FoundKeyView, type KeyCheck, type ProviderCategory } from '../../../shared/types';
+import { CATEGORIES, PROVIDERS, USES, providerCards, usedForMatches, type CardStatus, type ProviderCard, type ProviderDef } from '../../../shared/providers';
+import { CEO_ID, type FoundKeyView, type KeyCheck, type ProviderCategory, type ProviderConnection, type ProviderUse } from '../../../shared/types';
+import { ago } from '../../../shared/usage';
 import { scanSummary } from '../../../shared/keyScan';
 import { useKeyReview } from './keyReview';
 import { Chip } from './DetailsPage';
@@ -46,6 +48,7 @@ function useCards(): ProviderCard[] {
   const providers = useStore((s) => s.providers);
   const clis = useStore((s) => s.clis);
   const agents = useStore((s) => s.agents);
+  const repos = useStore((s) => s.repos);
   return useMemo(
     () =>
       providerCards({
@@ -57,16 +60,32 @@ function useCards(): ProviderCard[] {
         clis,
         agentName: (id) => `${agents[id]?.name ?? id}${id === CEO_ID ? ' (CEO)' : ''}`,
         cloudAgents: Object.values(agents).filter((a) => a.host === 'box').length,
+        floors: repos.map((r) => ({ name: r.fullName.split('/').pop() ?? r.fullName, useCase: r.setup?.useCase ?? null })),
+        agents: Object.values(agents).map((a) => ({ name: a.name, cli: a.cli, model: a.model })),
       }),
-    [accounts, voiceKeySet, voiceKeyHint, cloud, providers, clis, agents],
+    [accounts, voiceKeySet, voiceKeyHint, cloud, providers, clis, agents, repos],
   );
 }
 
+const USE_FILTERS: [ProviderUse | 'all', string][] = [['all', 'Everything'], ...USES.filter((u) => u.id !== 'both').map((u): [ProviderUse, string] => [u.id, u.label])];
+const STATUS_FILTERS: [KeyCheck | 'all', string][] = [
+  ['all', 'Any status'],
+  ['live', 'Live'],
+  ['dead', 'Dead'],
+  ['no-credit', 'No credit'],
+  ['unknown', 'Not tested'],
+];
+
 export function ProvidersPage() {
-  const cards = useCards();
+  const all = useCards();
   const [adding, setAdding] = useState(false);
   const [who, setWho] = useState<string | null>(null); // an MCP server's "Who gets it"
-  const attention = cards.filter((c) => ['error', 'signed-out', 'limited'].includes(c.status)).length;
+  const [editing, setEditing] = useState<string | null>(null); // a key's "Rename and tags"
+  const [use, setUse] = useState<ProviderUse | 'all'>('all');
+  const [status, setStatus] = useState<KeyCheck | 'all'>('all');
+  const filtered = use !== 'all' || status !== 'all';
+  const cards = all.filter((c) => usedForMatches(c.usedFor, use) && (status === 'all' || c.check === status));
+  const attention = all.filter((c) => ['error', 'signed-out', 'limited'].includes(c.status)).length;
   return (
     <div className="pv-page">
       <div className="card">
@@ -81,26 +100,50 @@ export function ProvidersPage() {
         <p className="muted small">Everything the office runs on: coding agents' accounts, text, audio and cloud APIs, and the MCP servers agents get. Keys go in and never come back out: only their last 4 characters.</p>
         <div className="pv-stats" role="list" aria-label="Providers at a glance">
           <span role="listitem">
-            <b>{cards.filter((c) => c.category !== 'mcp').length}</b> connected
+            <b>{all.filter((c) => c.category !== 'mcp').length}</b> connected
           </span>
           <span role="listitem">
             <b>{attention}</b> need{attention === 1 ? 's' : ''} you
           </span>
           <span role="listitem">
-            <b>{cards.filter((c) => c.category === 'mcp' && c.status !== 'off').length}</b> MCP on
+            <b>{all.filter((c) => c.category === 'mcp' && c.status !== 'off').length}</b> MCP on
           </span>
         </div>
+        <div className="pv-filters">
+          <label className="field">
+            <span>Used for</span>
+            <select value={use} onChange={(e) => setUse(e.target.value as ProviderUse | 'all')}>
+              {USE_FILTERS.map(([v, text]) => (
+                <option key={v} value={v}>
+                  {text}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>Status</span>
+            <select value={status} onChange={(e) => setStatus(e.target.value as KeyCheck | 'all')}>
+              {STATUS_FILTERS.map(([v, text]) => (
+                <option key={v} value={v}>
+                  {text}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        {filtered && !cards.length && <p className="muted small">Nothing matches these filters.</p>}
       </div>
       <FoundKeysCard />
       {CATEGORIES.map((cat) => {
         const list = cards.filter((c) => c.category === cat.id);
+        if (filtered && !list.length) return null;
         return (
           <section key={cat.id} className="card pv-group" aria-label={cat.label}>
             <h4>
               <Icon name={CATEGORY_ICON[cat.id]} /> {cat.label}
             </h4>
             {list.map((c) => (
-              <CardRow key={c.key} c={c} onWho={setWho} />
+              <CardRow key={c.key} c={c} twins={all.filter((x) => x.provider === c.provider && x.key !== c.key && x.key.startsWith('connection:'))} onWho={setWho} onEdit={setEditing} />
             ))}
             {!list.length && <p className="muted small">{PROVIDERS.some((p) => p.category === cat.id) || cat.id === 'mcp' ? 'None yet: Add provider puts one here.' : `No ${cat.label.toLowerCase()} providers yet: tell the CEO which one you'd like.`}</p>}
           </section>
@@ -111,15 +154,39 @@ export function ProvidersPage() {
       </p>
       {adding && <AddSheet onClose={() => setAdding(false)} />}
       {who && <WhoSheet id={who} onClose={() => setWho(null)} />}
+      {editing && <EditSheet id={editing} onClose={() => setEditing(null)} />}
     </div>
   );
 }
 
-function CardRow({ c, onWho }: { c: ProviderCard; onWho: (id: string) => void }) {
+const CHECK_TONE: Record<KeyCheck, ChipTone> = { live: 'good', dead: 'bad', 'no-credit': 'warn', unknown: 'plain' };
+const CHECK_WORD: Record<KeyCheck, string> = { live: 'Live', dead: 'Dead', 'no-credit': 'No credit', unknown: 'Not tested' };
+const USE_WORD = Object.fromEntries(USES.map((u) => [u.id, u.label])) as Record<ProviderUse, string>;
+
+/** "Live, 2 h ago: Key works" — a tested key's word when its answer was unclear (unreachable, rate-limited) is "Unclear". */
+const checkWord = (c: ProviderCard) => (c.check === 'unknown' && c.testedAt ? 'Unclear' : CHECK_WORD[c.check]);
+
+/** The other saved keys for the same provider (#523): side by side, the dead one removable in one tap when another works. */
+function Twins({ c, twins, onRemove }: { c: ProviderCard; twins: ProviderCard[]; onRemove: () => void }) {
+  if (!twins.length) return null;
+  const spare = c.check === 'dead' && twins.some((t) => t.check === 'live');
+  return (
+    <div className="pv-twins">
+      <div className="ds-row-meta">Also saved for {c.name}: {twins.map((t) => `${t.label} (${checkWord(t)})`).join(', ')}</div>
+      {spare && (
+        <button className="btn btn-small" onClick={onRemove}>
+          <Icon name="trash-2" /> Remove this dead one
+        </button>
+      )}
+    </div>
+  );
+}
+
+function CardRow({ c, twins, onWho, onEdit }: { c: ProviderCard; twins: ProviderCard[]; onWho: (id: string) => void; onEdit: (id: string) => void }) {
   const source = useStore((s) => (c.usageId ? s.accounts.sources?.find((x) => x.id === c.usageId) : undefined));
   const [busy, setBusy] = useState(false);
-  const [word, tone] = STATUS[c.status];
   const [kind, id] = [c.key.slice(0, c.key.indexOf(':')), c.key.slice(c.key.indexOf(':') + 1)];
+  const [word, tone] = kind === 'connection' ? [checkWord(c), CHECK_TONE[c.check]] : STATUS[c.status];
   const now = Date.now();
   const test = async () => {
     setBusy(true);
@@ -138,13 +205,15 @@ function CardRow({ c, onWho }: { c: ProviderCard; onWho: (id: string) => void })
       <div className="ds-card-head">
         <div className="ds-row-main">
           <div className="ds-row-title">{c.label}</div>
-          <div className="ds-row-meta">{[c.label !== c.name ? c.name : '', c.note, c.plan, c.keyHint ? `••••${c.keyHint}` : ''].filter(Boolean).join(' · ')}</div>
+          {c.source && <div className="ds-row-meta pv-source">From {c.source}</div>}
+          <div className="ds-row-meta">{[c.label !== c.name ? c.name : '', kind === 'connection' ? '' : c.note, c.plan, c.keyHint ? `••••${c.keyHint}` : ''].filter(Boolean).join(' · ')}</div>
           <Chip tone={tone}>{busy ? 'Testing…' : word}</Chip>
         </div>
         <Menu
           label={`More for ${c.label}`}
           items={[
             own && { label: 'Test', hint: 'One cheap read-only call', onSelect: () => void test() },
+            kind === 'connection' && { label: 'Rename and tags', hint: 'Its name, tags and what it is for', onSelect: () => onEdit(id) },
             kind === 'mcp' && { label: on ? 'Turn off' : 'Turn on', onSelect: () => void api.setMcpServer(id, { on: !on }).catch(() => undefined) },
             kind === 'mcp' && { label: 'Who gets it', onSelect: () => onWho(id) },
             !!c.settings && { label: `Open ${SETTINGS_NAME[c.settings]}`, hint: 'Test, change or remove it there', onSelect: () => go(c.settings!) },
@@ -153,6 +222,15 @@ function CardRow({ c, onWho }: { c: ProviderCard; onWho: (id: string) => void })
           ]}
         />
       </div>
+      {c.tags && c.tags.length > 0 && (
+        <div className="acc-tags">
+          {c.tags.map((t) => (
+            <span key={t} className="chip">
+              {t}
+            </span>
+          ))}
+        </div>
+      )}
       {c.warning && (
         <div className="pv-warning" role="status">
           <Icon name="triangle-alert" /> {c.warning}
@@ -160,8 +238,67 @@ function CardRow({ c, onWho }: { c: ProviderCard; onWho: (id: string) => void })
       )}
       {source?.windows.map((w) => <WindowBar key={w.name} w={w} now={now} />)}
       {source?.note && source.windows.length > 0 && <div className="ds-row-meta">{source.note}</div>}
-      <div className="ds-row-meta">What uses it: {c.uses.length ? c.uses.join(', ') : 'nothing yet'}</div>
+      {own && <div className="ds-row-meta">Last test: {c.testedAt ? `${checkWord(c)}, ${ago(c.testedAt, now)} · ${c.note}` : 'not tested yet'}</div>}
+      {c.usedFor && <div className="ds-row-meta">Used for: {USE_WORD[c.usedFor]}</div>}
+      <div className="ds-row-meta">Used by: {c.uses.length ? c.uses.join(', ') : 'Nothing uses it yet'}</div>
+      {kind === 'connection' && <Twins c={c} twins={twins} onRemove={() => void remove()} />}
     </div>
+  );
+}
+
+/** Rename and tags (#523): a key's name, free tags and what it's for; saved on the server, kept through a re-scan. */
+function EditSheet({ id, onClose }: { id: string; onClose: () => void }) {
+  const c = useStore((s) => s.providers.connections.find((x) => x.id === id));
+  return c ? <EditForm c={c} onClose={onClose} /> : null;
+}
+
+function EditForm({ c, onClose }: { c: ProviderConnection; onClose: () => void }) {
+  const def = PROVIDERS.find((p) => p.id === c.provider);
+  const [label, setLabel] = useState(c.label);
+  const [tags, setTags] = useState(c.tags.join(', '));
+  const [usedFor, setUsedFor] = useState(c.usedFor);
+  const [note, setNote] = useState('');
+  const save = async (e: FormEvent) => {
+    e.preventDefault();
+    setNote('');
+    try {
+      await api.updateProvider(c.id, { label, tags, usedFor });
+      onClose();
+    } catch (err) {
+      setNote((err as Error).message);
+    }
+  };
+  return (
+    <Sheet title={`Edit ${c.label}`} onClose={onClose} className="pv-sheet">
+      <form className="acc-form" autoComplete="off" onSubmit={(e) => void save(e)}>
+        <label className="field">
+          <span>Name</span>
+          <input value={label} maxLength={60} placeholder={def?.name} onChange={(e) => setLabel(e.target.value)} />
+        </label>
+        <label className="field">
+          <span>Tags</span>
+          <input value={tags} placeholder="inference, paid" autoCapitalize="off" onChange={(e) => setTags(e.target.value)} />
+        </label>
+        <fieldset className="pv-uses">
+          <legend className="small">Used for</legend>
+          {USES.map((u) => (
+            <label key={u.id} className="pv-check">
+              <input type="radio" name="usedFor" checked={usedFor === u.id} onChange={() => setUsedFor(u.id)} />
+              <span>
+                {u.label} <span className="muted small">{u.blurb}</span>
+              </span>
+            </label>
+          ))}
+        </fieldset>
+        {c.source && <p className="muted small">From {c.source} · ••••{c.keyHint}</p>}
+        <button className="btn btn-primary">Save</button>
+        {note && (
+          <p className="small" role="status">
+            {note}
+          </p>
+        )}
+      </form>
+    </Sheet>
   );
 }
 

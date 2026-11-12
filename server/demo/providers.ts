@@ -1,7 +1,7 @@
 // The demo's Settings → Providers (#362): test calls that never leave the computer (a key with "bad" in it is turned
 // away, "offline" unreachable; OpenRouter, Runway, Luma and Kling tell a made-up credit, none for "nocredit"; Gemini and
-// OpenAI list their video and image models), a made-up key or server in every category for a fresh demo office, and the
-// keys found on this computer from a made-up archive (#367).
+// OpenAI list their video and image models), a made-up key or server in every category for a fresh demo office (a dead
+// duplicate Cloudflare key among them, #523), and the keys found on this computer from a made-up archive (#367).
 import type { ProbeRequest, ProbeResult } from '../../shared/providers.ts';
 import type { RawKey } from '../../shared/keyScan.ts';
 import { registerCeoReply, registerDemo } from './registry.ts';
@@ -52,6 +52,9 @@ registerDemo('providers', () => ({
       { provider: 'nano-banana', key: 'AIza-demo-banana-00001f2a', label: 'Nano Banana' },
       { provider: 'openai-images', key: 'sk-demo-images-00003b4c', label: 'OpenAI Images' },
       { provider: 'hetzner', key: 'demo-hcloud-token-00009c0d', label: 'Hetzner Cloud' },
+      { provider: 'cloudflare', key: 'demo-cf-token-00004d5e', label: 'Cloudflare' },
+      { provider: 'cloudflare', key: 'demo-cf-bad-old-token-00008a1c', label: 'Cloudflare (old)' }, // a dead duplicate (#523)
+      { provider: 'github', key: 'ghp_demo-token-00002b7f', label: 'GitHub token' },
       { provider: 'runway', key: 'key_demo-runway-00001e2f', label: 'Runway' },
       { provider: 'gemini-video', key: 'AIza-demo-video-00003a4b', label: 'Google video' },
       { provider: 'luma', key: 'luma-demo-00005c6d', label: 'Luma' },

@@ -136,3 +136,34 @@
   flex: 1;
   min-width: 0;
 }
+/* Used for and status filters (#523): side by side, each half the card, stacked below a narrow phone */
+.pv-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--ds-space-2);
+}
+.pv-filters .field {
+  min-width: 0;
+}
+.pv-twins {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--ds-space-1);
+}
+.pv-uses {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.pv-uses .pv-check {
+  align-items: flex-start;
+  padding-block: var(--ds-space-2);
+}
+.pv-uses input {
+  flex: none;
+  margin-top: 0.2em;
+}

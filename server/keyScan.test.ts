@@ -95,7 +95,8 @@ describe('keys found on this computer, in the office', () => {
     expect(res.imported).toBe(ids.length);
     const after = swarm.providers.view().connections;
     expect(after.length).toBe(before + ids.length);
-    expect(after.some((c) => c.provider === 'gemini' && c.label.includes('LiteLLM'))).toBe(true);
+    // Clean names (#523): the provider's, the variable's own word; the file and variable on a line of their own.
+    expect(after.find((c) => c.provider === 'gemini' && c.source)).toMatchObject({ label: 'Google Gemini API', source: 'GEMINI_API_KEY · LiteLLM litellm.env + NewsBites .env', usedFor: 'inference', tags: [] });
     expect(swarm.snapshot().keyScan?.keys.find((k) => k.id === gemini.id)?.savedAs).toBeTruthy();
 
     const json = JSON.stringify([swarm.snapshot(), events, ceo, res]);
@@ -103,5 +104,24 @@ describe('keys found on this computer, in the office', () => {
     // The journal's and logs' redaction knows them while they're in memory.
     const secrets = (swarm as unknown as { secrets(): string[] }).secrets();
     for (const k of DEMO_FOUND_KEYS.filter((k) => k.variable !== 'LITELLM_MASTER_KEY')) expect(secrets).toContain(k.value);
+  });
+
+  it('keeps a name, tags and Used for the manager set through a re-scan and its import (#523)', async () => {
+    const swarm = new Swarm(createDemoBackend());
+    const inside = swarm as unknown as { broadcast(ev: ServerEvent): void; initProviders(): Promise<void> };
+    inside.broadcast = () => undefined;
+    await inside.initProviders();
+    const first = await swarm.scanKeys();
+    const paid = first.keys.find((k) => k.variable === 'CEREBRAS_API_KEY_PAID')!;
+    await swarm.importKeys([paid.id]);
+    const c = swarm.providers.view().connections.find((x) => x.source?.startsWith('CEREBRAS_API_KEY_PAID'))!;
+    expect(c).toMatchObject({ label: 'Cerebras (paid)', usedFor: 'inference' });
+    await swarm.providers.update(c.id, { label: 'Cerebras paid', tags: 'inference, paid', usedFor: 'both' });
+
+    const again = await swarm.scanKeys();
+    expect(again.keys.find((k) => k.variable === 'CEREBRAS_API_KEY_PAID')).toMatchObject({ savedAs: 'Cerebras paid', importable: false });
+    await swarm.importKeys(again.keys.map((k) => k.id));
+    const now = swarm.providers.view().connections.filter((x) => x.source?.startsWith('CEREBRAS_API_KEY_PAID'));
+    expect(now).toEqual([expect.objectContaining({ id: c.id, label: 'Cerebras paid', tags: ['inference', 'paid'], usedFor: 'both', named: true })]);
   });
 });

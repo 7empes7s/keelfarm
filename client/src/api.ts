@@ -3,7 +3,7 @@ import type { PongResult } from '../../shared/pong';
 import type { Charter } from '../../shared/charter';
 import type { ObjectiveStatus } from '../../shared/charterStats';
 import type { AgentStyle } from '../../shared/looks';
-import type { AccountCli, AccountKind, AgentCli, SignInMode, AgentPromptView, AgentView, CloudView, DoctorFinding, DoctorFix, EffortLevel, GhRepoSummary, MergedPage, NotifyChannel, NotifyChannelsView, NotifyWebhook, OfficeUpdateView, PushTestView, PreviewView, TelegramView, ProjectFolderView, PrPreviewView, RefFileView, RepoView, SwarmSettings, UsageView, VoiceCacheView, VoiceOption, MachineHost, McpServerConfig, ProviderConnection, KeyScanView, UseCase } from '../../shared/types';
+import type { AccountCli, AccountKind, AgentCli, SignInMode, AgentPromptView, AgentView, CloudView, DoctorFinding, DoctorFix, EffortLevel, GhRepoSummary, MergedPage, NotifyChannel, NotifyChannelsView, NotifyWebhook, OfficeUpdateView, PushTestView, PreviewView, TelegramView, ProjectFolderView, PrPreviewView, RefFileView, RepoView, SwarmSettings, UsageView, VoiceCacheView, VoiceOption, MachineHost, McpServerConfig, ProviderConnection, ProviderUse, KeyScanView, UseCase } from '../../shared/types';
 import type { JournalChunk, JournalDayView } from '../../shared/journal';
 import type { CostsView, TaskKind } from '../../shared/costs';
 import type { ServerPoint } from '../../shared/serverLoad';
@@ -233,6 +233,7 @@ export const api = {
   /** Saves an Anthropic or OpenAI Admin key for the usage card's organisation spend (#361); '' removes it. */
   // Settings → Providers (#362): keys and MCP servers' secrets go in and never come back out.
   addProvider: (provider: string, key: string, label?: string) => call<ProviderConnection>('POST', '/api/providers', { provider, key, label }, false),
+  updateProvider: (id: string, patch: { label?: string; tags?: string; usedFor?: ProviderUse }) => call<ProviderConnection>('PATCH', `/api/providers/${encodeURIComponent(id)}`, patch),
   testProvider: (id: string) => call<ProviderConnection>('POST', `/api/providers/${encodeURIComponent(id)}/test`),
   removeProvider: (id: string) => call('DELETE', `/api/providers/${encodeURIComponent(id)}`),
   scanKeys: () => call<KeyScanView>('POST', '/api/providers/scan'),

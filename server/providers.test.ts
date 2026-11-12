@@ -69,9 +69,61 @@ describe('the providers store', () => {
 
   it('drops anything malformed in its file', () => {
     expect(readProvidersFile({ connections: [{ id: 'x', provider: 'nope' }, { id: 'y', provider: 'gemini' }], mcp: [{ id: 'z', name: 'n' }] })).toEqual({
-      connections: [{ id: 'y', provider: 'gemini', label: 'Google Gemini API', addedAt: 0, keyHint: '', test: null }],
+      connections: [{ id: 'y', provider: 'gemini', label: 'Google Gemini API', addedAt: 0, keyHint: '', test: null, tags: [], usedFor: 'inference' }],
       mcp: [],
     });
+  });
+});
+
+describe('rename and tags (#523)', () => {
+  it("saves a key's name, tags and Used for, which survive a restart, and never puts the key in the file or the view", async () => {
+    const dir = fs.mkdtempSync(path.join(home, 'edit-'));
+    const { p, changed } = store(dir);
+    await p.init();
+    const cf = await p.add('cloudflare', 'cf-secret-token-0000aa11');
+    const cerebras = await p.add('cerebras', 'csk-secret-paid-0000bb22', 'Cerebras (CEREBRAS_API_KEY_PAID, LiteLLM litellm.env)');
+    // The default comes from the catalogue's category: cloud runs things, text is a model.
+    expect([cf.usedFor, cerebras.usedFor]).toEqual(['operations', 'inference']);
+
+    changed.mockClear();
+    const done = await p.update(cerebras.id, { label: '  Cerebras paid ', tags: 'Inference, paid, inference, bad tag!', usedFor: 'both' });
+    expect(done).toMatchObject({ label: 'Cerebras paid', tags: ['inference', 'paid', 'bad'], usedFor: 'both', named: true });
+    expect(changed).toHaveBeenCalled();
+    await expect(p.update(cerebras.id, { usedFor: 'billing' as never })).rejects.toThrow(/AI inference, Operations or Both/);
+    await expect(p.update('gone', { label: 'x' })).rejects.toThrow(/No such connection/);
+    expect((await p.update(cf.id, { label: '   ' })).label).toBe('Cloudflare'); // an empty name: the provider's
+
+    const again = store(dir).p;
+    await again.init();
+    expect(again.view().connections.find((c) => c.id === cerebras.id)).toMatchObject({ label: 'Cerebras paid', tags: ['inference', 'paid', 'bad'], usedFor: 'both' });
+    const text = fs.readFileSync(path.join(dir, 'providers.json'), 'utf8') + JSON.stringify(again.view());
+    for (const k of ['cf-secret-token-0000aa11', 'csk-secret-paid-0000bb22']) expect(text).not.toContain(k);
+  });
+
+  it("cleans an import's old name into its provider's name and a source line, and leaves the manager's names alone", () => {
+    const view = readProvidersFile({
+      connections: [
+        { id: 'a', provider: 'cerebras', label: 'Cerebras (CEREBRAS_API_KEY_PAID, LiteLLM litellm.env)' },
+        { id: 'b', provider: 'openrouter', label: 'OpenRouter (LiteLLM litellm.env)' },
+        { id: 'c', provider: 'openrouter', label: 'OpenRouter (work)' },
+        { id: 'd', provider: 'cloudflare', label: 'Cloudflare (Control Surface .env)', named: true },
+        { id: 'e', provider: 'cloudflare', label: 'Cloudflare', usedFor: 'both', tags: ['dns'] },
+      ],
+    });
+    expect(view.connections.map((c) => [c.label, c.source ?? null, c.usedFor, c.tags])).toEqual([
+      ['Cerebras (paid)', 'CEREBRAS_API_KEY_PAID · LiteLLM litellm.env', 'inference', []],
+      ['OpenRouter', 'OPENROUTER_API_KEY · LiteLLM litellm.env', 'inference', []],
+      ['OpenRouter (work)', null, 'inference', []],
+      ['Cloudflare (Control Surface .env)', null, 'operations', []],
+      ['Cloudflare', null, 'both', ['dns']],
+    ]);
+  });
+
+  it('keeps a test that worked but found no credit as No credit', async () => {
+    const dir = fs.mkdtempSync(path.join(home, 'credit-'));
+    const { p } = store(dir, vi.fn(async () => ({ status: 402 })));
+    await p.init();
+    expect((await p.add('groq', 'gsk_nocredit_00001234')).test).toMatchObject({ ok: false, result: 'no-credit' });
   });
 });
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkRequest, checkResult, envPairs, foundView, jsonKeys, keyScanText, mergeFound, providerForVar, scanSummary, sourceLabel, type FoundKey } from './keyScan.ts';
+import { checkRequest, checkResult, envPairs, foundView, importName, importSource, jsonKeys, keyScanText, mergeFound, providerForVar, scanSummary, sourceLabel, type FoundKey } from './keyScan.ts';
 
 const GEMINI = 'AIzaSyFAKE-gemini-key-000000000wxyz';
 
@@ -139,5 +139,12 @@ describe('never the value', () => {
   it('the summary counts', () => {
     const keys = [foundView(row), foundView({ ...row, id: 'k2', check: { result: 'dead', note: 'x' } }), foundView({ ...row, id: 'k3', check: { result: 'unknown', note: 'x' } })];
     expect(scanSummary(keys)).toBe('Keys found: 1 live, 1 dead, 1 not tested.');
+  });
+});
+
+describe('imported names (#523)', () => {
+  it("names a key after its provider, keeping only the variable's own word, and puts the file in its source", () => {
+    expect([importName('openrouter', 'OPENROUTER_API_KEY'), importName('cerebras', 'CEREBRAS_API_KEY_PAID'), importName('gemini', 'GOOGLE_API_KEY'), importName('github', 'GH_TOKEN'), importName('nvidia', 'NVIDIA_NIM_API_KEY'), importName('cloudflare', 'CF_API_TOKEN')]).toEqual(['OpenRouter', 'Cerebras (paid)', 'Google Gemini API', 'GitHub token', 'NVIDIA NIM', 'Cloudflare']);
+    expect(importSource({ variable: 'CEREBRAS_API_KEY_PAID', sources: ['LiteLLM litellm.env', 'NewsBites .env'] })).toBe('CEREBRAS_API_KEY_PAID · LiteLLM litellm.env + NewsBites .env');
   });
 });

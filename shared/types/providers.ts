@@ -5,6 +5,8 @@ import type { UsageWindow } from './usage.ts';
 
 export type ProviderCategory = 'coding' | 'text' | 'audio' | 'video' | 'image' | 'cloud' | 'mcp';
 export type ProviderAuth = 'api-key' | 'login' | 'oauth' | 'none';
+/** What a key is for (#523): AI models (text, images, video, voice), operations (DNS, tunnels, hosting, GitHub…), or both. */
+export type ProviderUse = 'inference' | 'operations' | 'both';
 
 /** The last test of a connection or MCP server: a cheap read-only call. */
 export interface ProviderTest {
@@ -13,6 +15,7 @@ export interface ProviderTest {
   note: string; // "Key works", "Turned away (401)", never the key
   windows?: UsageWindow[]; // what the test call said about usage, where the provider tells (OpenRouter's credit)
   plan?: string;
+  result?: KeyCheck; // live, dead or no credit (#523); older tests have only ok
 }
 
 /** A key saved on the Providers page; the key itself is in secrets.json (`provider:<id>`). */
@@ -23,6 +26,10 @@ export interface ProviderConnection {
   addedAt: number;
   keyHint: string;
   test: ProviderTest | null;
+  tags: string[]; // the manager's own (#523)
+  usedFor: ProviderUse; // from its catalogue category until the manager picks
+  source?: string; // where an imported key came from: "CEREBRAS_API_KEY_PAID · LiteLLM litellm.env"
+  named?: boolean; // the manager named it: nothing renames it again
 }
 
 /** An MCP server the office adds to its agents' sessions (their own mcp.json, never ~/.claude). */
