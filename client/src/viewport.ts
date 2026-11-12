@@ -10,10 +10,14 @@ export interface Viewport {
   scale: number;
 }
 
-/** The CSS px the full-screen views get: the visible part of the page, and where it starts. */
-export function appViewport(innerHeight: number, vv: Viewport | null): { height: number; top: number } {
+/**
+ * The CSS px the full-screen views get: the visible part of the page, and where it starts. `field`: a text field has
+ * focus, so the keyboard may be up; without one the page gets its whole height, never a keyboard-open height iOS still
+ * reports after the keyboard closed or the app came back (#584).
+ */
+export function appViewport(innerHeight: number, vv: Viewport | null, field = true): { height: number; top: number } {
   // Pinch zoom (if a browser lets it through) shrinks the visual viewport without changing the room the layout has.
-  if (!vv || Math.abs(vv.scale - 1) > 0.01) return { height: Math.round(innerHeight), top: 0 };
+  if (!vv || !field || Math.abs(vv.scale - 1) > 0.01) return { height: Math.round(innerHeight), top: 0 };
   return { height: Math.round(vv.height), top: Math.max(0, Math.round(vv.offsetTop)) };
 }
 
@@ -135,7 +139,7 @@ export function watchViewport() {
   let measured = ''; // the visible part's height and top, last measured
   const update = () => {
     frame = 0;
-    const { height, top } = appViewport(window.innerHeight, vv);
+    const { height, top } = appViewport(window.innerHeight, vv, isTextField(document.activeElement));
     measured = `${height} ${top}`;
     root.style.setProperty('--app-height', `${height}px`);
     root.style.setProperty('--app-top', `${top}px`);
@@ -177,9 +181,14 @@ export function watchViewport() {
   document.addEventListener('focusin', settle);
   vv?.addEventListener('scroll', later);
   window.addEventListener('resize', later);
-  window.addEventListener('orientationchange', () => setTimeout(reset, 300)); // iOS reports the new size late
-  window.addEventListener('pageshow', reset);
-  document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && reset());
+  // iOS reports the new size late after a rotation or coming back, sometimes with no resize at all: measure again (#584)
+  const resume = () => {
+    reset();
+    SETTLE_MS.forEach((ms) => window.setTimeout(() => check(false), ms));
+  };
+  window.addEventListener('orientationchange', () => setTimeout(resume, 300));
+  window.addEventListener('pageshow', resume);
+  document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && resume());
   document.addEventListener('focusin', later); // data-typing
   // A field losing focus to something that isn't another field: the keyboard is going away.
   document.addEventListener('focusout', (e) => {
