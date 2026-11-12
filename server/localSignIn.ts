@@ -16,12 +16,12 @@ import type { AgentCli, SignInMode } from '../shared/types.ts';
 /**
  * Gemini CLI has no login command: started interactively with NO_BROWSER and the Google sign-in picked in its folder
  * (geminiHome.ts), it prints its link and "Enter the authorization code:". Never --prompt: a non-interactive Gemini
- * CLI refuses that sign-in and exits 41 (#540). It stays open once signed in, so the office quits it when its
- * oauth_creds.json appears. --skip-trust: the home folder it runs in needn't be trusted.
+ * CLI refuses that sign-in and exits 41 (#540). It stays open once signed in, so the office stops it once its
+ * login is on file, never typing into it. --skip-trust: the home folder it runs in needn't be trusted.
  */
 export const GEMINI_SIGN_IN = { args: ['--skip-trust'], env: { NO_BROWSER: 'true' } };
 
-/** How often a Gemini sign-in looks for its oauth_creds.json, and how long /quit gets before its CLI is stopped. */
+/** How often a Gemini sign-in looks for its oauth_creds.json, and the longest it then waits for google_accounts.json. */
 const CREDS_POLL_MS = 500;
 const QUIT_MS = 5_000;
 
@@ -32,6 +32,15 @@ const mtime = (file: string) => {
     return 0;
   }
 };
+
+/** Whether a Gemini login folder's google_accounts.json names its signed-in account. */
+function geminiAccountActive(dir: string): boolean {
+  try {
+    return !!(JSON.parse(fs.readFileSync(path.join(dir, 'google_accounts.json'), 'utf8')) as { active?: unknown }).active;
+  } catch {
+    return false; // not written yet
+  }
+}
 
 /**
  * `exited` hears its exit code (0 once a Gemini login is on file); stop() doesn't call it. `setup-token` runs `claude
@@ -66,15 +75,23 @@ export function startLocalSignIn(o: { cli: AgentCli; env: Record<string, string>
       end(signedIn ? 0 : code);
     });
     if (gemini) {
-      const creds = path.join(o.env.GEMINI_CLI_HOME ?? process.env.GEMINI_CLI_HOME ?? os.homedir(), '.gemini', 'oauth_creds.json');
+      const dir = path.join(o.env.GEMINI_CLI_HOME ?? process.env.GEMINI_CLI_HOME ?? os.homedir(), '.gemini');
+      const creds = path.join(dir, 'oauth_creds.json');
       const before = mtime(creds);
       const look = setInterval(() => {
         if (mtime(creds) <= before) return;
         clearInterval(look);
         signedIn = true;
-        p.write('/quit');
-        timers.push(setTimeout(() => !over && p.write('\r'), 200)); // Enter apart from the text, as typed
-        timers.push(setTimeout(() => end(0), QUIT_MS)); // it didn't quit: stopped by its pid
+        // Stopped, never typed into: after its sign-in Gemini CLI can show its auth menu, where an Enter picks
+        // "Login with Google" again and clears the login it just saved. It writes google_accounts.json right after
+        // its oauth_creds.json, so it's stopped once that names the account (or after QUIT_MS).
+        const deadline = Date.now() + QUIT_MS;
+        const settle = setInterval(() => {
+          if (Date.now() < deadline && !geminiAccountActive(dir)) return;
+          clearInterval(settle);
+          end(0);
+        }, CREDS_POLL_MS);
+        timers.push(settle);
       }, CREDS_POLL_MS);
       timers.push(look);
     }

@@ -49,8 +49,15 @@ if (args.includes('--prompt') || args.includes('-p')) {
       if (!signedIn) {
         signedIn = true;
         fs.writeFileSync(path.join(dir, 'oauth_creds.json'), '{"refresh_token":"fake"}');
-        process.stdout.write('\r\n> Type your message or @path/to/file\r\n');
-      } else if (line === '/quit') process.exit(0);
+        fs.writeFileSync(path.join(dir, 'google_accounts.json'), '{"active":"me@example.com","old":[]}');
+        // As the real CLI can after its sign-in: its auth menu on screen, "Login with Google" highlighted. Enter there
+        // picks it again, and picking it clears the login it just saved (clearCachedCredentialFile).
+        process.stdout.write('\r\nHow would you like to authenticate for this project?\r\n● 1. Login with Google\r\n');
+      } else {
+        fs.rmSync(path.join(dir, 'oauth_creds.json'), { force: true });
+        fs.writeFileSync(path.join(dir, 'google_accounts.json'), '{"active":null,"old":["me@example.com"]}');
+        process.exit(0);
+      }
     }
   });
 }
@@ -84,6 +91,10 @@ describe.skipIf(!terminalsAvailable)('signing a Gemini login in with its CLI', (
     accounts.signInCodeIn(id, '4/0AfakeCode');
     await vi.waitFor(() => expect(card().signIn).toMatchObject({ running: false, ok: true, note: 'Signed in.' }), { timeout: 10_000 });
     await vi.waitFor(() => expect(card().status).toBe('ready'), { timeout: 5_000 });
+    // Its login is still on file once the office has quit it: nothing typed into its screen undid it.
+    const gemini = path.join(home, 'accounts', id, 'gemini', '.gemini');
+    expect(await fs.readFile(path.join(gemini, 'oauth_creds.json'), 'utf8')).toContain('refresh_token');
+    expect(JSON.parse(await fs.readFile(path.join(gemini, 'google_accounts.json'), 'utf8')).active).toBe('me@example.com');
     await accounts.flushed();
     vi.restoreAllMocks();
   }, 30_000);
