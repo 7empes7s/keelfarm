@@ -41,7 +41,9 @@
   padding: 10px 14px;
   font-weight: 500;
   cursor: pointer;
-  animation: pop 0.25s ease-out;
+  /* swiped up (or sideways) away: nothing under it scrolls, so the swipe is all theirs */
+  touch-action: none;
+  animation: toast-drop var(--ds-dur-slow) var(--ds-ease);
 }
 .toast-success {
   background: #d8f9df;
@@ -53,5 +55,34 @@
   from {
     transform: translateY(12px) scale(0.95);
     opacity: 0;
+  }
+}
+/* they drop in from the top like a phone's banner (#521); with reduced motion they only fade in */
+@keyframes toast-drop {
+  from {
+    transform: translateY(calc(-1 * var(--ds-space-6)));
+    opacity: 0;
+  }
+}
+@keyframes toast-fade {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation: toast-fade 0.2s linear;
+  }
+}
+html[data-reduce-motion] .toast {
+  animation: toast-fade 0.2s linear !important;
+}
+/* a phone: full width inside the 12px gutters, in the 3D office as in pocket mode */
+@media (max-width: 600px) {
+  .toasts {
+    align-items: stretch;
+  }
+  .toast.notice-toast {
+    width: auto;
   }
 }
