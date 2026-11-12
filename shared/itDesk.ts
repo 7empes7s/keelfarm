@@ -14,6 +14,7 @@ export interface ItProposal {
   risk: ItRisk;
   at: number;
   by?: string; // who proposed it: the IT lead (#524); absent: the CEO, before the IT department
+  rec?: string; // a recommendation's option the manager picked (#525): the office measures before and after, IT isn't woken
 }
 
 /** One command the IT desk ran (or refused at Run). */

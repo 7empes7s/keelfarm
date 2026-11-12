@@ -7,16 +7,19 @@
 // With captions on, what's said is written out as it's read (captions.ts), in step with the clip or the browser's voice.
 // During a voice call (voiceCallEngine.ts) the CEO's replies report to the call, sentence by sentence, and can be
 // paused where they are, skipped a sentence at a time, or cut short when the manager talks over them.
+// The CEO's acks and progress lines while it works (#286) share the speech queue. Short acks finish before replies;
+// progress gives way to replies, and barge-in stops either kind.
 import { messageSpeech } from '../../../shared/speech';
-import type { PhoneMessage, VoiceProvider } from '../../../shared/types';
+import type { PhoneMessage, VoiceLine, VoiceProvider } from '../../../shared/types';
+import { lineMicOpen, sayNow, talkMode } from '../../../shared/voiceTalk';
 import { useStore } from '../store';
 import { sliderGain } from './audioPrefs';
 import { speechClip, speechEnded, speechStarted, speechWord } from './captions';
-import { replyEnded } from './mic';
+import { replyEnded, useMic } from './mic';
 import { holdMusicDuck } from './music';
 import { audio, chirp, duckOthers, getAudioPrefs, groupOutput, subscribeAudio } from './sfx';
 import { sentenceAt, sentenceFraction, sentenceStarts, splitSentences } from './voiceCall';
-import { callOn, dispatchCall, useCall } from './voiceCallStore';
+import { callOn, callVoice, dispatchCall, useCall } from './voiceCallStore';
 import { wonVoice } from './voiceClaim';
 import { enqueue, nextUp, type Queued, type ReplayKind } from './voiceQueue';
 
@@ -45,6 +48,7 @@ export function speakMessage(message: PhoneMessage, arrived: number, wait: numbe
   setTimeout(
     () => {
       if (!wonVoice(message.id)) return;
+      if (activeLine?.kind === 'progress') stopActiveLine(); // an ack waiting behind it still goes first
       queue = enqueue(queue, { message, arrived });
       if (replaying) stopCurrent?.(); // a new message cuts a replay short
       void pump();
@@ -58,9 +62,12 @@ export function speakMessage(message: PhoneMessage, arrived: number, wait: numbe
 let queue: Queued[] = [];
 let stopCurrent: (() => void) | null = null;
 let busy = false;
+let pendingLine: { line: VoiceLine; arrived: number; clip?: Promise<Response> } | null = null;
+let activeLine: VoiceLine | null = null;
 let replayNext: { message: PhoneMessage; kind: Replay } | null = null;
 let replaying = false;
 let cutShort = false; // the message being read was stopped, not finished
+let handoff = false; // a CEO reply ended by itself with an ack still to say: hands-free's mic opens once the queue is idle
 
 /** The phone's ▶: plays `message` again in this tab, stopping whatever is being read now. */
 export function replayMessage(message: PhoneMessage, kind: Replay) {
@@ -74,6 +81,7 @@ export function replayMessage(message: PhoneMessage, kind: Replay) {
 export function stopSpeaking() {
   cutShort = true;
   stopCurrent?.();
+  stopLine();
 }
 
 /** What a voice call steers in the message being read: Skip, Pause, and where it is (for __swarmCall). */
@@ -105,6 +113,22 @@ async function pump() {
   busy = true;
   try {
     for (;;) {
+      if (pendingLine) {
+        const { line, arrived, clip } = pendingLine;
+        pendingLine = null;
+        const { settings, voiceKeySet, voiceSpeaking } = useStore.getState();
+        const v = callVoice(settings.voice);
+        const quiet = { micOpen: lineMicOpen(callOn(), useMic.getState().state, useCall.getState().managerSpeaking), speaking: voiceSpeaking !== null };
+        if (Date.now() - arrived <= maxAge(line) && v.provider !== 'off' && (v.provider !== 'elevenlabs' || voiceKeySet) && sayNow(line, talkMode(v.talk, callOn()), quiet)) {
+          activeLine = line;
+          try {
+            await sayLine(line, v.provider, v.voiceName, v.speed, clip);
+          } finally {
+            activeLine = null;
+          }
+        }
+        continue;
+      }
       if (replayNext) {
         const r = replayNext;
         replayNext = null;
@@ -116,6 +140,10 @@ async function pump() {
       queue = rest;
       if (!next) break;
       await read(next.message);
+    }
+    if (handoff) {
+      handoff = false;
+      replyEnded();
     }
   } finally {
     busy = false;
@@ -135,6 +163,7 @@ async function read(m: PhoneMessage, replay?: Replay) {
   if (provider === 'off') return; // turned off while it waited
   const now: { rec: SpokenRecord | null; unduckMusic?: () => void } = { rec: null };
   cutShort = false;
+  handoff = false;
   const whole = replay === 'whole';
   const words = messageSpeech(m, { whole });
   /** `clipMs`: a recording's length (null for the browser's voice), and how many clips the message has. */
@@ -177,7 +206,10 @@ async function read(m: PhoneMessage, replay?: Replay) {
       duckOthers(false);
       now.unduckMusic?.();
       useStore.setState({ voiceSpeaking: null });
-      if (!replay && !cutShort && !call && m.from === 'ceo' && !queue.length && !replayNext) replyEnded();
+      if (!replay && !cutShort && !call && m.from === 'ceo' && !queue.length && !replayNext) {
+        if (pendingLine) handoff = true;
+        else replyEnded();
+      }
     }
   }
 }
@@ -299,12 +331,13 @@ async function browserVoices(synth: SpeechSynthesis): Promise<SpeechSynthesisVoi
 }
 
 /** Says `text` in the voice called `voiceName` (the browser's default when it's gone) at `rate`, telling `word` where it is. Rejects when it can't. */
-async function speak(text: string, voiceName: string, rate: number, began: () => void, word: (charIndex: number) => void, stopper: (stop: () => void) => void = (stop) => (stopCurrent = stop)) {
+async function speak(text: string, voiceName: string, rate: number, began: () => void, word: (charIndex: number) => void, stopper: (stop: () => void) => void = (stop) => (stopCurrent = stop), isStopped: () => boolean = () => false) {
   const synth = window.speechSynthesis;
   if (!synth || typeof SpeechSynthesisUtterance === 'undefined') throw new Error("this browser can't speak");
   if (!text) return;
   const u = new SpeechSynthesisUtterance(text);
   const v = (await browserVoices(synth)).find((x) => x.name === voiceName);
+  if (isStopped()) return;
   if (v) {
     u.voice = v;
     u.lang = v.lang;
@@ -385,4 +418,134 @@ async function speakSentences(id: number, text: string, voiceName: string, rate:
     if (stopped || paused) continue; // paused: that sentence again on resume
     if (++i < parts.length) sentence(i);
   }
+}
+
+// ---------- the CEO talking while it works (#286) ----------
+
+/** A line older than this when its turn comes isn't said. */
+const LINE_MAX_AGE_MS = 5000;
+/** Keep an ack briefly behind existing speech, ahead of the next reply. */
+const ACK_MAX_AGE_MS = 20_000;
+const maxAge = (line: VoiceLine) => (line.kind === 'ack' ? ACK_MAX_AGE_MS : LINE_MAX_AGE_MS);
+
+/** The acks and progress lines said in this tab, for QA and e2e (window.__swarmVoiceLines): what went to the voice. */
+export interface SaidLine {
+  id: number;
+  kind: VoiceLine['kind'];
+  text: string;
+  provider: Exclude<VoiceProvider, 'off'>;
+}
+const said: SaidLine[] = [];
+(window as unknown as Record<string, unknown>).__swarmVoiceLines = said;
+
+let lineStop: (() => void) | null = null;
+
+/** Stops the line being said and the one waiting: barge-in, the speaking indicator's stop. */
+export const stopLine = () => {
+  pendingLine = null;
+  handoff = false;
+  lineStop?.();
+};
+
+/** Stops only the line being said (a progress line giving way to a reply or an ack); a waiting ack stays. */
+const stopActiveLine = () => lineStop?.();
+
+/** An ack or progress line claimed at `arrived`: said once the claim wait is over, if this tab won and all is quiet. */
+export function speakLine(line: VoiceLine, arrived: number, wait: number) {
+  setTimeout(
+    () => {
+      if (!wonVoice(-line.id) || Date.now() - arrived > maxAge(line)) return; // a busy page can run this timer seconds late
+      const { settings, voiceKeySet, voiceSpeaking } = useStore.getState();
+      const v = callVoice(settings.voice);
+      const mic = useMic.getState().state;
+      const quiet = { micOpen: lineMicOpen(callOn(), mic, useCall.getState().managerSpeaking), speaking: line.kind === 'progress' && (busy || voiceSpeaking !== null || lineStop !== null) };
+      if (v.provider === 'off' || (v.provider === 'elevenlabs' && !voiceKeySet) || !sayNow(line, talkMode(v.talk, callOn()), quiet)) return;
+      pendingLine = { line, arrived, ...(v.provider === 'elevenlabs' ? { clip: lineFetch(line.id) } : {}) }; // downloads while it waits
+      if (line.kind === 'ack' && activeLine?.kind === 'progress') stopActiveLine();
+      void pump();
+    },
+    Math.max(0, arrived + wait - Date.now()),
+  );
+}
+
+async function sayLine(line: VoiceLine, provider: Exclude<VoiceProvider, 'off'>, voiceName: string, speed: number, clip?: Promise<Response>) {
+  let started = false;
+  let stopped = false;
+  let cut: () => void = () => undefined;
+  let release: () => void = () => undefined;
+  const cancelled = new Promise<void>((resolve) => (release = resolve));
+  const stopper = (stop: () => void) => {
+    cut = stop;
+    if (stopped) stop();
+  };
+  const began = () => {
+    if (started) return;
+    started = true;
+    said.push({ id: line.id, kind: line.kind, text: line.text, provider });
+    if (said.length > 50) said.splice(0, said.length - 50);
+    duckOthers(true);
+  };
+  lineStop = () => {
+    stopped = true;
+    cut();
+    release();
+  };
+  try {
+    const playing = provider === 'browser'
+      ? speak(line.text, voiceName, speed, began, () => undefined, stopper, () => stopped)
+      : lineClip(clip ?? lineFetch(line.id), began, stopper);
+    await Promise.race([playing, cancelled]);
+  } catch (err) {
+    console.warn(`[voice] couldn't say a line: ${(err as Error).message}`);
+  } finally {
+    lineStop = null;
+    if (started) duckOthers(false);
+  }
+}
+
+/** The line's ElevenLabs clip (GET /api/voice/talk/:id), started when the line is queued; a failure is reported when it's played. */
+function lineFetch(id: number) {
+  const res = fetch(`/api/voice/talk/${id}`);
+  res.catch(() => undefined);
+  return res;
+}
+
+/** Plays a line's clip through the 'voice' group. */
+async function lineClip(clip: Promise<Response>, began: () => void, stopper: (stop: () => void) => void) {
+  let stopped = false;
+  stopper(() => void (stopped = true));
+  const res = await clip;
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.arrayBuffer();
+  const a = audio();
+  const out = groupOutput('voice');
+  if (stopped) return;
+  if (!a || !out) throw new Error('audio is unavailable');
+  const buffer = await a.ctx.decodeAudioData(data);
+  if (stopped) return;
+  await new Promise<void>((resolve) => {
+    const gain = a.ctx.createGain();
+    gain.gain.value = speakerGain();
+    gain.connect(out);
+    const src = a.ctx.createBufferSource();
+    src.buffer = buffer;
+    src.connect(gain);
+    const end = () => {
+      clearTimeout(deadline);
+      src.onended = null;
+      try {
+        src.stop();
+      } catch {
+        // never started
+      }
+      src.disconnect();
+      gain.disconnect();
+      resolve();
+    };
+    const deadline = setTimeout(end, (buffer.duration + 2) * 1000); // a suspended context never ends it
+    src.onended = end;
+    stopper(end);
+    src.start();
+    began();
+  });
 }

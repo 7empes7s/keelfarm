@@ -40,12 +40,13 @@ export function itDeptSettings(prev: ItDeptSettings | undefined, raw: unknown): 
   };
 }
 
-/** What wakes IT: the manager's message, the CEO's ask_it, a change the manager ran (to check and report), or a ticket (#542). */
+/** What wakes IT: the manager's message, the CEO's ask_it, a change the manager ran (to check and report), a ticket (#542), or a check getting worse (#525). */
 export type ItJob =
   | { kind: 'chat'; text: string; messageIds: number[]; at: number }
   | { kind: 'ask'; from: string; text: string; messageId: number; at: number }
   | { kind: 'ran'; line: string; code: number | null; out: string; at: number }
-  | { kind: 'ticket'; id: number; text: string; at: number }; // text: the ticket's brief when it woke IT
+  | { kind: 'ticket'; id: number; text: string; at: number } // text: the ticket's brief when it woke IT
+  | { kind: 'watch'; facts: string; at: number }; // the office's checks got worse (#525)
 
 /** The saved IT department: its chat, its queue and the session it resumes. */
 export interface ItState {
