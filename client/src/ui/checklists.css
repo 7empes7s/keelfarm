@@ -63,6 +63,28 @@
   font-weight: var(--ds-weight-strong);
   overflow-wrap: anywhere;
 }
+.cl-tile-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--ds-space-2);
+  font-size: var(--ds-text-sm);
+}
+.cl-bar {
+  display: block;
+  height: 8px;
+  overflow: hidden;
+  border: 1px solid var(--ds-outline);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-sunken);
+}
+.cl-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--ds-series-1);
+}
+.cl-tile-done .cl-bar > span {
+  background: var(--ds-good-fill);
+}
 .cl-card {
   padding: var(--ds-space-1);
 }
@@ -147,7 +169,6 @@
 }
 .cl-step-done .cl-step-name,
 .cl-step-skipped .cl-step-name {
-  color: var(--ds-text-muted);
   text-decoration: line-through;
 }
 .cl-step-n {

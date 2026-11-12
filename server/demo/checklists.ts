@@ -6,14 +6,20 @@ import { registerCeoReply } from './registry.ts';
 
 const newest = (list: string) => list.match(/^(c\d+)/m)?.[1] ?? null;
 
-registerCeoReply('checklists', async ({ text, use }) => {
-  if (/worked on their checklists/i.test(text)) {
-    const id = text.match(/Checklist (c\d+)/)?.[1];
+// The wake-up goes first: its list of changes would otherwise read as a request to another reply.
+registerCeoReply(
+  'checklist-wake',
+  async ({ text, use }) => {
+    const id = /worked on their checklists/i.test(text) ? text.match(/Checklist (c\d+)/)?.[1] : undefined;
     if (!id) return null;
     const out = await use('checklist_read', { id });
     const head = out.split('\n')[0];
     return `Thanks, I see it: ${head.replace(/^c\d+ /, '')}. ${/\[ \]/.test(out) ? "I'll check back when you've done the rest." : "That's all of it, nice."}`;
-  }
+  },
+  { early: true },
+);
+
+registerCeoReply('checklists', async ({ text, use }) => {
   if (!/\bchecklists?\b/i.test(text)) return null;
   const step = text.match(/\badd (?:a )?step:?\s*(.+)/i)?.[1]?.trim();
   const id = newest(await use('checklist_read', {}));

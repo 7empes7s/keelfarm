@@ -14,6 +14,7 @@ import type { ItImproveArgs } from './swarm/itImprove.ts';
 import { IMPROVE_KINDS } from '../shared/itImprove.ts';
 import { problemTools, type ProblemHandlers } from './ceoProblemTools.ts';
 import { CF_OPS } from '../shared/cloudflare.ts';
+import { ACTION_PROVIDERS, PROVIDER_ACTIONS } from '../shared/providerActions.ts';
 
 /** The cloudflare action's arguments (#586). */
 export interface CloudflareArgs {
@@ -29,8 +30,17 @@ export interface CloudflareArgs {
   why?: string;
 }
 
+/** provider_action's arguments (#602): the op's own arguments are checked by its module. */
+export interface ProviderActionArgs {
+  provider: string;
+  op: string;
+  args?: Record<string, unknown>;
+  why?: string;
+}
+
 export interface CloudflareHandlers {
   cloudflare(a: CloudflareArgs): Promise<string>;
+  providerAction(a: ProviderActionArgs): Promise<string>;
 }
 
 export interface ItHandlers extends CloudflareHandlers {
@@ -155,9 +165,30 @@ function itTools(h: ItHandlers, run: Run) {
 /** The IT lead's office server: its tools and the problems register's (#544). */
 export const itOfficeTools = (h: ItHandlers & ProblemHandlers): OfficeTools => toolServer([...itTools(h, runTool), ...problemTools(h, runTool)]);
 
-/** cloudflare (#586): the IT lead's and the CEO's. */
+/** Each provider's ops, providers with the same ops on one line: "openai/openrouter: key_test, models, credit". */
+const OPS_LINE = (() => {
+  const byOps = new Map<string, string[]>();
+  for (const p of ACTION_PROVIDERS) {
+    const ops = PROVIDER_ACTIONS[p].map((o) => o.op).join(', ');
+    byOps.set(ops, [...(byOps.get(ops) ?? []), p]);
+  }
+  return [...byOps].map(([ops, ps]) => `${ps.join('/')}: ${ops}`).join('; ');
+})();
+
+/** cloudflare (#586) and provider_action (#602): the IT lead's and the CEO's. */
 export function cloudflareTools(h: CloudflareHandlers, run: Run) {
   return [
+    tool(
+      'provider_action',
+      `Use a key from Settings → Providers through the office (never shown to you). Reads answer now; a write puts a card with its diff to the manager (Approve / Not now), or applies at once when their IT auto-approve allows (destructive ones always ask), then reads back. A wrong op or args lists the right ones. ${OPS_LINE}.`,
+      {
+        provider: z.enum(ACTION_PROVIDERS as [string, ...string[]]),
+        op: z.string().min(1).max(40),
+        args: z.record(z.string(), z.unknown()).optional().describe('The op\'s own, e.g. {"repo":"owner/name","run_id":123}; GitHub\'s repo defaults to the first floor\'s'),
+        why: z.string().min(1).max(300).optional().describe('For the card: why, in a sentence'),
+      },
+      (a) => run(() => h.providerAction(a)),
+    ),
     tool(
       'cloudflare',
       "Cloudflare through the office's own key (never shown to you): tunnel_ingress_get and token_scopes read now (token_scopes names any missing permission); tunnel_ingress_add (hostname → service before the catch-all, every rule kept), dns_cname_ensure (proxied CNAME to the tunnel), access_app_ensure (an email allow-list, optional bypass paths) and access_service_token_ensure (a service token by name with a Service Auth policy on the hostname's app; its secret goes only into env_file as CF_ACCESS_CLIENT_ID/SECRET, mode 600) put a diff card to the manager with Approve / Not now, then apply and read back.",
@@ -194,7 +225,7 @@ export function reportTools(h: ReportHandlers, run: Run) {
   return [
     tool(
       'it_report',
-      "Report an office problem to the IT department: the test lab times out or loses a result, a port is taken, a sign-in screen, the disk is full, a preview won't start, CI is down. Returns a ticket number at once and what to do meanwhile. Report instead of sleep-looping or retrying blindly; a repeat joins the open ticket.",
+      "Report an office problem to the IT department: the test lab times out or loses a result, a port is taken, a sign-in screen, the disk is full, a preview won't start, CI is down. Returns a ticket number at once and what to do meanwhile. Report instead of sleep-looping or retrying blindly; a repeat joins the open ticket. Also for what needs a Providers key (rerun CI, a repo setting, a key's models): IT does it with the office's key; you never get the key.",
       {
         what: z.string().min(1).max(200).describe('The problem in a line, e.g. "Lab result lost"'),
         where: z.enum(TICKET_WHERE),

@@ -169,6 +169,8 @@ export function applyStep(c: Checklist, stepId: string, a: StepAction, now: numb
     case 'secret':
       if (!s.secret) return { error: 'That step has no secret field.' };
       s.secret = { ...s.secret, saved: { connectionId: a.connectionId, hint: a.hint.slice(-4), at: now } };
+      s.state = 'done'; // pasting it was the step
+      delete s.reason;
       what = `${s.secret.label} saved to Providers (ends …${a.hint.slice(-4)})`;
       break;
   }

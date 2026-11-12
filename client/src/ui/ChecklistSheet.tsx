@@ -44,7 +44,7 @@ export function ChecklistSheet({ id, onClose }: { id: string; onClose: () => voi
   useEffect(() => pushLayer(() => close.current()), []); // Back closes it
   useEffect(() => setShown(id), [id]);
   return (
-    <Sheet label={<><Icon name="check-check" /> {c?.title ?? 'Checklist'}</>} onClose={onClose} className="cl-sheet">
+    <Sheet label={<><Icon name="check-check" /> {c?.title ?? 'Checklist'}</>} onClose={onClose} className="cl-sheet ds-screen">
       <div className="artifact-body cl-body">
         {!c ? (
           <p className="muted">This checklist is no longer kept: finished ones go after a month.</p>
@@ -83,7 +83,13 @@ export function ChecklistTile({ c, onOpen }: { c: Checklist; onOpen: () => void 
         <span className="cl-tile-title">{c.title}</span>
         <Icon name="chevron-right" />
       </span>
-      <ProgressBar compact label={progressText(c)} value={floor !== undefined ? `Floor ${floor}` : undefined} pct={share(c)} tone={p.finished ? 'good' : 'neutral'} aria={`${c.title}: ${progressText(c)}`} />
+      <span className="cl-tile-meta">
+        <span>{progressText(c)}</span>
+        {floor !== undefined && <span>Floor {floor}</span>}
+      </span>
+      <span className="cl-bar" aria-hidden>
+        <span style={{ width: `${Math.round(share(c) * 100)}%` }} />
+      </span>
     </button>
   );
 }

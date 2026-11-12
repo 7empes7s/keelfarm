@@ -24,7 +24,7 @@ function CopyBox({ label, value }: { label: string; value: string }) {
       <button
         type="button"
         className="btn btn-small"
-        aria-label={`Copy ${label || 'the value'}`}
+        aria-label={`${copied ? 'Copied' : 'Copy'} ${label || 'the value'}`}
         onClick={() => void copyText(value).then((ok) => {
           setCopied(ok);
           if (ok) setTimeout(() => setCopied(false), 2000);

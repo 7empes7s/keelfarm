@@ -2,6 +2,7 @@
 // programs); changes come to the manager as cards (it_propose) and run only on their Run. The rules are in
 // server/itDesk.ts; this file has what both sides show: the cards, the log and the read-only list.
 import type { CfChange } from './cloudflare';
+import type { ProviderChange } from './providerActions';
 
 export type ItRisk = 'low' | 'medium' | 'high';
 
@@ -17,6 +18,7 @@ export interface ItProposal {
   by?: string; // who proposed it: the IT lead (#524); absent: the CEO, before the IT department
   rec?: string; // a recommendation's option the manager picked (#525): the office measures before and after, IT isn't woken
   cf?: CfChange; // a Cloudflare write (#586): applied through the API on Approve, not run as a command
+  pa?: ProviderChange; // another provider's write (#602), the same way
   diff?: string; // its before and after, "+ " on added lines
 }
 

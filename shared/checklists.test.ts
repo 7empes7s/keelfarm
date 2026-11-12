@@ -74,6 +74,7 @@ describe('secret fields', () => {
     const out = await fillSecret(c, 's3', `  ${value} `, async (provider, label, v) => (saved.push(`${provider}|${label}|${v}`), { id: 'k7', keyHint: v.slice(-4) }), () => 50);
     expect(saved).toEqual([`openai|Client secret · YouTube app|${value}`]);
     expect(c.steps[2].secret).toEqual({ label: 'Client secret', provider: 'openai', saved: { connectionId: 'k7', hint: 'ab12', at: 50 } });
+    expect(c.steps[2].state).toBe('done');
     const w = { pending: [], since: null };
     if ('change' in out) addChange(w, out.change, 50);
     const wake = takeWake(w, 50 + WAKE_MS)!;
