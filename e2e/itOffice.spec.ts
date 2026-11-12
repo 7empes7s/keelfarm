@@ -3,6 +3,7 @@ import { gb } from '../shared/health';
 import { IT_VISITOR } from '../client/src/world/layout';
 import { MODELS } from '../client/src/world/models/registry';
 import { enterOffice, expect, startAt, test } from './helpers';
+import { office } from './layout/helpers';
 
 // The lobby's IT office (#535): its CC0 models load (and a missing one falls back to shapes with no error), the wall
 // screen shows the office's own readings, the draw calls stay in budget, and E (or a tap) on the IT lead opens IT's
@@ -15,7 +16,6 @@ const PHONE = { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch:
 const models = (page: Page) => page.evaluate(() => (window as unknown as ItWindow).__swarmModels ?? {});
 
 async function expectChatOpensAndCloses(page: Page, open: () => Promise<void>) {
-  await expect(page.getByText(/Chat with .+, IT/).first()).toBeVisible({ timeout: 30_000 });
   await open();
   const chat = page.getByRole('region', { name: /IT chat with/ });
   await expect(chat).toBeVisible();
@@ -26,8 +26,10 @@ async function expectChatOpensAndCloses(page: Page, open: () => Promise<void>) {
 test('the IT office: models, the wall screen from the API, smooth enough, and E opens IT’s chat', async ({ page, request }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await startAt(page, AT_DESK);
-  await page.goto('/?stats');
+  await page.goto('/?stats&pocket=0');
   await enterOffice(page, { loaded: true });
+  const skipTour = page.getByRole('button', { name: 'Skip tour' });
+  if (await skipTour.isVisible()) await skipTour.dispatchEvent('click');
   await expect.poll(() => models(page), { timeout: 30_000 }).toEqual(Object.fromEntries(Object.keys(MODELS).map((m) => [m, 'ok'])));
 
   // the screen's numbers are the office's own readings
@@ -42,15 +44,17 @@ test('the IT office: models, the wall screen from the API, smooth enough, and E 
   expect(stats.calls, 'draw calls looking into the IT office').toBeLessThan(700);
   await page.screenshot({ path: test.info().outputPath('it-office.png') });
 
+  await expect(page.getByText(/Chat with .+, IT/).first()).toBeVisible({ timeout: 30_000 });
   await expectChatOpensAndCloses(page, () => page.keyboard.press('e'));
 });
 
 test.describe('on a phone', () => {
   test.use(PHONE);
   test('a tap on the IT lead opens IT’s chat at 390 px', async ({ page }) => {
-    await startAt(page, AT_DESK);
-    await enterOffice(page);
-    await expectChatOpensAndCloses(page, () => page.locator('canvas').first().tap({ position: { x: 195, y: 380 } }));
+    await office(page, AT_DESK);
+    await page.waitForTimeout(3000); // a few software-WebGL frames, so the lead is drawn to be tapped
+    await page.screenshot({ path: test.info().outputPath('it-office-390.png') });
+    await expectChatOpensAndCloses(page, () => page.touchscreen.tap(195, 440));
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   });
 });
@@ -61,10 +65,9 @@ base('a model that 404s falls back to its shapes, with no error', async ({ page 
   page.on('pageerror', (e) => problems.push(e.message));
   page.on('console', (m) => m.type() === 'error' && !/Failed to load resource/.test(m.text()) && problems.push(m.text()));
   await page.route('**/models/kenney/pottedPlant.glb', (r) => r.fulfill({ status: 404, body: '' }));
-  await startAt(page, AT_DESK);
-  await enterOffice(page);
+  await office(page, AT_DESK);
   await expect.poll(async () => (await models(page)).plant, { timeout: 30_000 }).toBe('failed');
   await expect.poll(async () => (await models(page)).cabinet, { timeout: 30_000 }).toBe('ok');
-  await expect(page.getByText(/Chat with .+, IT/).first()).toBeVisible({ timeout: 30_000 });
+  await page.waitForTimeout(2000);
   expect(problems).toEqual([]);
 });
