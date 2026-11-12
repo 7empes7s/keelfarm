@@ -91,6 +91,15 @@ export function withLab(opts: SessionOptions, cb: SessionCallbacks): SessionCall
     void lab
       .call('lab_screenshot', { preview: false, url: 'http://localhost:5173/', viewports: [390, 1280] })
       .then((r) => cb.log([{ kind: 'result', text: `  ⎿ ${r.split('\n')[0]}` }]))
+      .then(async () => {
+        // QA reads a finished job back the way a cut-off call would (#562): lab_status's ids, then lab_result.
+        if (opts.task !== 'qa') return;
+        const id = (await lab.call('lab_status', {})).match(/^ {2}([\w-]+): /m)?.[1];
+        if (!id) return;
+        cb.log([{ kind: 'tool', tool: 'mcp__office__lab_result', text: `⏺ 🧪 lab_result ${id}` }]);
+        const r = await lab.call('lab_result', { job_id: id });
+        cb.log([{ kind: 'result', text: `  ⎿ ${r.split('\n')[0]}` }]);
+      })
       .then(() => {
         // A PR that changes 3D code (qaPrompt.ts fullQualityLine): one full-quality pass after the lab checks.
         if (opts.task !== 'qa' || !opts.prompt.includes('graphics: "full"')) return;
