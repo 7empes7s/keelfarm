@@ -59,7 +59,7 @@ describe('IT monitoring', () => {
   it('wakes IT once on a crossing, never again at the same level; a pick runs, re-measures and posts before/after', async () => {
     const { swarm, o, ran, wakes, itSaid, idle } = await office();
     const view = await swarm.itWatchTick();
-    expect(view.checks.find((c) => c.id === 'disk')).toMatchObject({ level: 'bad', line: expect.stringMatching(/^7\.9 GB free on system disk .*\(\/\)$/) });
+    expect(view.checks.find((c) => c.id === 'disk')).toMatchObject({ level: 'bad', line: expect.stringMatching(/^7\.9 GB free on system disk/) }); // its root: / here, C:\ on Windows
     await until(() => wakes().length === 1);
     expect(wakes()[0].prompt).toMatch(/checks got worse:\n- Disk is BAD: 7\.9 GB free[\s\S]*it_recommend/);
     // IT's card: ranked options, in the view (chat and Health page).

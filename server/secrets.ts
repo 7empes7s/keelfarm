@@ -16,6 +16,22 @@ export async function readSecrets(file: string): Promise<Record<string, unknown>
   }
 }
 
+/** Windows refuses a rename onto a file another process is renaming or reading (EPERM/EBUSY/EACCES): try again shortly. */
+async function renameRetrying(from: string, to: string) {
+  for (let i = 0; ; i++) {
+    try {
+      return await fs.rename(from, to);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (i >= 10 || !['EPERM', 'EBUSY', 'EACCES'].includes(code ?? '')) {
+        await fs.rm(from, { force: true }).catch(() => undefined);
+        throw err;
+      }
+      await new Promise((r) => setTimeout(r, 20 * (i + 1)));
+    }
+  }
+}
+
 /** Merge `patch` into the file (other secrets stay; undefined removes a key), owner-only where the OS has file modes. */
 export function mergeSecrets(file: string, patch: Record<string, unknown>): Promise<void> {
   const write = (queues.get(file) ?? Promise.resolve()).then(async () => {
@@ -24,7 +40,7 @@ export function mergeSecrets(file: string, patch: Record<string, unknown>): Prom
     await fs.mkdir(path.dirname(file), { recursive: true });
     const tmp = `${file}.${process.pid}-${randomUUID().slice(0, 8)}.tmp`; // its own: another process's queue may write the same file
     await fs.writeFile(tmp, JSON.stringify(next, null, 2), { mode: 0o600 });
-    await fs.rename(tmp, file);
+    await renameRetrying(tmp, file);
     await fs.chmod(file, 0o600).catch(() => undefined);
   });
   queues.set(
