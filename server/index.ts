@@ -404,6 +404,10 @@ app.get(
   route(async (req, res) => sendAudio(res, await swarm.voice.sampleAudio(parse(z.object({ voiceId: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/, 'not a voice id').optional() }), req.query).voiceId))),
 );
 app.get(
+  '/api/voice/talk/:id',
+  route(async (req, res) => sendAudio(res, await swarm.voice.talkAudio(parse(z.object({ id: z.coerce.number().int().min(1) }), req.params).id))),
+);
+app.get(
   '/api/voice/standup',
   route(async (req, res) => {
     const q = parse(z.object({ n: z.coerce.number().int().min(1).max(99), part: z.enum(DAY_PARTS) }), req.query);

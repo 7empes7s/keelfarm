@@ -9,6 +9,7 @@ export interface CallView {
   call: Call;
   /** What the mic heard of your turn so far, for the captions. */
   heard: string;
+  managerSpeaking: boolean;
   /** The phone's call screen is folded to the pill at the top; the desktop orb is closed to its bubble. */
   minimised: boolean;
   captions: boolean;
@@ -20,7 +21,7 @@ export interface CallView {
   atTable: boolean;
 }
 
-export const useCall = create<CallView>(() => ({ call: NO_CALL, heard: '', minimised: false, captions: true, speaker: true, chatTucked: false, atTable: false }));
+export const useCall = create<CallView>(() => ({ call: NO_CALL, heard: '', managerSpeaking: false, minimised: false, captions: true, speaker: true, chatTucked: false, atTable: false }));
 
 /** Screens this narrow get the phone's call screen and its pill; wider ones the orb and its card. */
 export const CALL_NARROW = '(max-width: 640px)';

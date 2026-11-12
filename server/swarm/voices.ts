@@ -5,7 +5,10 @@ import { lineSituation, lineText, nextLine, shortTitle, type LastLine, type Line
 import { needsYou } from '../../shared/needsYou.ts';
 import { agentVoice } from '../../shared/voices.ts';
 import type { VoiceSettings } from '../../shared/types.ts';
+import { DEMO_TALK_PACE, TALK_PACE } from '../../shared/voiceTalk.ts';
+import { CeoTalk } from '../ceoTalk.ts';
 import { HttpError } from '../httpError.ts';
+import { inCall } from '../notify.ts';
 import type { VoiceKeyView } from '../voice.ts';
 import { SwarmCeoTools } from './ceoTools.ts';
 import type { PersistedAgent } from './model.ts';
@@ -13,6 +16,23 @@ import type { PersistedAgent } from './model.ts';
 export abstract class SwarmVoices extends SwarmCeoTools {
   private voicing: Promise<void> = Promise.resolve(); // one round at a time, so each pick sees the ones before
   private lines = new Map<string, LastLine>(); // each agent's last clicked line, for the 20 s cooldown
+  /** The CEO talking while it works (#286): acks and progress lines, while it has a voice. */
+  protected ceoTalk = new CeoTalk(
+    () => this.state.settings.voice.provider !== 'off' || inCall(this.notifier.attention.all()),
+    (line) => {
+      this.voice.rememberTalk(line.id, line.text);
+      this.broadcast({ type: 'voiceLine', line });
+    },
+    this.backend.demo ? DEMO_TALK_PACE : TALK_PACE,
+  );
+
+  /** The manager's message (ceoJobs.ts); one that finds the CEO mid-job gets a spoken ack at once (#286). */
+  override async messageCeo(...args: Parameters<SwarmCeoTools['messageCeo']>) {
+    const busy = this.state.ceo.job !== null;
+    const sent = await super.messageCeo(...args);
+    if (busy) this.ceoTalk.ack(Date.now());
+    return sent;
+  }
 
   protected voiceKeyChanged(view: VoiceKeyView) {
     this.broadcast({ type: 'voiceKey', ...view });
