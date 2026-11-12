@@ -94,9 +94,35 @@ describe('IT auto-approve: the danger list is always a card', () => {
     [['pkill', '-f', 'node']], // CLAUDE.md's hard rules: the never-list
     [['cat', '/etc/keel/gh.env']],
     [['git', '-C', '/root/Projects/keelfarm', 'pull', '--ff-only']],
+    // #591 QA: commands that run other commands, and data-deleting flags
+    [['systemd-run', 'ufw', 'disable']],
+    [['systemd-run', 'rm', '-rf', '/var/lib/postgresql']],
+    [['chroot', '/', 'ufw', 'disable']],
+    [['runuser', '-u', 'root', '--', 'rm', '-rf', '/srv/data']],
+    [['flock', '/var/lock/x', 'rm', '-rf', '/srv/data']],
+    [['stdbuf', '-o0', 'iptables', '-F']],
+    [['awk', 'BEGIN{system("ufw disable")}']],
+    [['setpriv', '--reuid=0', 'true']],
+    [['nsenter', '-t', '1', '-m', 'true']],
+    [['strace', '-f', 'true']],
+    [['frobnicate', '--run', '/usr/bin/rm']],
+    [['frobnicate', 'exec', 'bash']],
+    [['rsync', '-a', '--delete', '/srv/a/', '/srv/b/']],
+    [['rsync', '-a', '--remove-source-files', '/srv/a/', '/srv/b/']],
+    [['tar', '--remove-files', '-czf', '/srv/a.tgz', '/srv/a']],
+    [['mv', '/srv/data', '/srv/old']],
+    [['cp', '/dev/null', '/etc/hosts']],
+    [['cp', '/opt/x/hosts', '/etc/hosts']], // replaces a file that exists, outside the install shape
+    [['install', '-m', '0755', '/opt/x/run.sh', '/usr/local/bin/run.sh']],
+    [['tee', '/etc/hosts']],
+    [['service', 'nginx', 'stop']],
+    [['service', 'nginx', 'restart']],
+    [['apt', 'remove', '-y', 'postgresql']],
+    [['apt-get', 'autoremove', '-y']],
   ])('%j → card, even at Everything except dangerous', (argv) => {
-    expect(auto(argv)).toBe(false);
-    expect(auto(argv, { level: 'all' })).toBe(false);
+    const exists = (p: string) => ['/etc/hosts', '/usr/local/bin/run.sh'].includes(p);
+    expect(auto(argv, { exists })).toBe(false);
+    expect(auto(argv, { level: 'all', exists })).toBe(false);
   });
 });
 
@@ -124,6 +150,8 @@ describe('IT auto-approve: anything else', () => {
     expect(auto(['apt-get', 'install', '-y', 'ffmpeg'], { level: 'all' })).toBe(true);
     expect(auto(['systemctl', 'restart', 'caddy'], { level: 'all' })).toBe(true);
     expect(auto(['journalctl', '--vacuum-size=500M'], { level: 'all' })).toBe(true);
+    expect(auto(['cp', '/opt/x/new.conf', '/etc/new.conf'], { level: 'all' })).toBe(true); // a new file replaces nothing
+    expect(auto(['service', 'clipfarm', 'restart'], { level: 'all' })).toBe(true); // IT's own unit
   });
 
   it('Off runs nothing by itself', () => {

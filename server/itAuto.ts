@@ -53,29 +53,54 @@ const abs = (p: string) => p.startsWith('/') && !p.split('/').includes('..') && 
 
 // ---------- the danger list ----------
 
-const DATA = new Set(['rm', 'rmdir', 'unlink', 'shred', 'truncate', 'dd', 'srm', 'wipe']);
+const DATA = new Set(['rm', 'rmdir', 'unlink', 'shred', 'truncate', 'dd', 'srm', 'wipe', 'mv']);
 const DISK = /^(mkfs(\..+)?|mkswap|fdisk|sfdisk|cfdisk|gdisk|sgdisk|parted|partprobe|wipefs|mount|umount|swapon|swapoff|resize2fs|e2fsck|fsck(\..+)?|tune2fs|xfs_\w+|btrfs|zpool|zfs|cryptsetup|mdadm|losetup|(pv|vg|lv)\w+)$/;
 const FIREWALL = /^(ufw|iptables(-\w+)?|ip6tables(-\w+)?|nft|firewall-cmd|ebtables|arptables)$/;
 const USERS = /^(useradd|userdel|usermod|adduser|deluser|addgroup|delgroup|groupadd|groupdel|groupmod|passwd|chpasswd|chage|chsh|gpasswd|visudo|vipw|newusers|ssh-keygen|ssh-copy-id|ssh-add|sshd|loginctl)$/;
 const KILL = /^(kill|pkill|killall|skill|xkill)$/;
+/** Programs that run another command (beyond server/itDesk.ts' WRAPPERS, which the never-list refuses): what really runs
+ * would hide from this list, so they're always a card. */
+const RUNS_OTHERS = /^(systemd-run|chroot|runuser|setpriv|flock|stdbuf|unbuffer|nsenter|unshare|chrt|taskset|strace|ltrace|gdb|pkexec|sg|newgrp|machinectl|run-parts|start-stop-daemon|parallel|make|expect|[gmn]?awk|sed|ed|ex|vi|vim|nvim|less|more|lua\S*|tclsh|wish|ruby\S*|perl\S*|python\S*|php\S*|node|deno|bun|nohup|setsid|xargs|watch|script|env|nice|ionice|timeout|sudo|su|doas|sh|bash|zsh|dash|ksh|fish|csh|tcsh|busybox|toybox)$/;
+/** Copying or writing programs: onto a file that already exists, they replace it. */
+const WRITES = new Set(['cp', 'install', 'ln', 'tee', 'rsync', 'scp']);
 
-/** Why a change is never run automatically, whatever the level; null when it's not on the danger list. */
-function dangerOf(argv: readonly string[], ctx: Pick<AutoContext, 'itUnits' | 'officeUnits'>): string | null {
+/** Every word inside the command, split at anything but name characters: a danger program named anywhere (systemd-run's
+ * argument, awk's system("…"), /usr/bin/rm) counts as much as the program itself. */
+const words = (argv: readonly string[]) => argv.flatMap((a) => a.split(/[^\w.+-]+/)).filter(Boolean);
+
+/** Why a change is never run automatically, whatever the level; null when it's not on the danger list. `installs`: the
+ * routine install shape matched, which backs up what it replaces. */
+function dangerOf(argv: readonly string[], ctx: Pick<AutoContext, 'itUnits' | 'officeUnits' | 'exists'>, installs = false): string | null {
   const [program, ...args] = argv;
   const join = argv.join(' ');
-  if (DATA.has(program) || (program === 'find' && args.some((a) => /^-(delete|exec|execdir|ok|okdir)$/.test(a)))) return 'it deletes data';
+  const all = words(argv);
+  if (RUNS_OTHERS.test(program)) return `${program} runs other commands`;
+  if (all.some((w) => DATA.has(w)) || (program === 'find' && args.some((a) => /^-(delete|exec|execdir|ok|okdir|fprint\w*|fls)$/.test(a)))) return 'it deletes or moves data';
+  if (args.some((a) => /^--(delete|remove-source-files|remove-files|del)\b/.test(a))) return 'it deletes data (a --delete or --remove option)';
+  if (args.some((a) => /^\/dev\/(null|zero|u?random|sd\w*|nvme\w*|vd\w*)$/.test(a))) return 'it writes from or to a device';
   if (args.some((a) => /(^|\/)backups?(\/|$)|\.bak\b|backup/i.test(a))) return 'it touches backups';
-  if (DISK.test(program)) return 'it changes disks, partitions or mounts';
-  if (FIREWALL.test(program)) return 'it changes the firewall';
-  if (USERS.test(program) || /(^|\s|\/)\.ssh(\/|\s|$)|\/etc\/ssh\b|authorized_keys|\bsshd?(\.service|\.socket)?$/.test(join)) return 'it touches users, passwords or SSH';
-  if (KILL.test(program)) return 'it kills processes';
+  if (all.some((w) => DISK.test(w))) return 'it changes disks, partitions or mounts';
+  if (all.some((w) => FIREWALL.test(w))) return 'it changes the firewall';
+  if (all.some((w) => USERS.test(w)) || /(^|\s|\/)\.ssh(\/|\s|$)|\/etc\/ssh\b|authorized_keys|\bsshd?(\.service|\.socket)?$/.test(join)) return 'it touches users, passwords or SSH';
+  if (all.some((w) => KILL.test(w))) return 'it kills processes';
+  const runner = all.find((w) => RUNS_OTHERS.test(w) && !['sg', 'ed', 'ex', 'more'].includes(w)); // short ones too common as plain words
+  if (runner) return `it names ${runner}, which runs other commands`;
   if (/keel/i.test(join)) return "it touches KEEL (its live tenant, database or services)";
   if (/cubefarm/i.test(join) || args.some((a) => ctx.officeUnits.includes(unitName(a)))) return 'it touches the live office';
+  if (WRITES.has(program) && !installs) {
+    const files = args.filter((a) => !a.startsWith('-'));
+    const targets = program === 'tee' ? files : files.slice(-1);
+    const hit = targets.find((t) => ctx.exists(t));
+    if (hit) return `it replaces ${hit}, which already exists, with no backup`;
+  }
   if (program === 'chmod' || program === 'chown' || program === 'chgrp') return args.some((a) => /^-[a-zA-Z]*R|^--recursive/.test(a)) ? 'it changes owners or permissions recursively' : null;
-  if (program === 'systemctl') {
-    const verb = args.find((a) => !a.startsWith('-')) ?? '';
-    const units = args.filter((a) => !a.startsWith('-')).slice(1).map(unitName);
-    if (['stop', 'kill', 'disable', 'mask', 'isolate', 'set-default', 'edit', 'revert', 'set-property', 'link', 'preset', 'preset-all'].includes(verb) && !(units.length && units.every((u) => ctx.itUnits.includes(u)))) return `systemctl ${verb} of a unit IT didn't install`;
+  if (program === 'systemctl' || program === 'service') {
+    const plain = args.filter((a) => !a.startsWith('-'));
+    // systemctl <verb> <units…>; service <unit> <verb>
+    const [verb, units] = program === 'systemctl' ? [plain[0] ?? '', plain.slice(1).map(unitName)] : [plain[1] ?? '', plain.slice(0, 1).map(unitName)];
+    const stops = ['stop', 'kill', 'disable', 'mask', 'isolate', 'set-default', 'edit', 'revert', 'set-property', 'link', 'preset', 'preset-all'];
+    if (program === 'service') stops.push('restart', 'force-reload', 'try-restart', 'reload');
+    if (stops.includes(verb) && !(units.length && units.every((u) => ctx.itUnits.includes(u)))) return `${program} ${verb} of a unit IT didn't install`;
   }
   if (program === 'docker') {
     const verbs = args.filter((a) => !a.startsWith('-'));
@@ -86,7 +111,7 @@ function dangerOf(argv: readonly string[], ctx: Pick<AutoContext, 'itUnits' | 'o
     if (sub === 'push') return 'git push';
     if (sub === 'clean' || (sub === 'reset' && args.includes('--hard')) || (sub === 'branch' && args.some((a) => a === '-D' || a === '--delete' || a === '-d')) || (sub === 'stash' && args.some((a) => a === 'drop' || a === 'clear')) || (sub === 'checkout' && args.some((a) => a === '-f' || a === '--force' || a === '.'))) return 'it throws away work in a clone';
   }
-  if ((program === 'apt' || program === 'apt-get') && args.some((a) => a === 'purge' || a === '--purge')) return 'apt purge deletes configuration';
+  if (['apt', 'apt-get', 'aptitude', 'dpkg', 'snap', 'pip', 'pip3', 'npm'].includes(program) && args.some((a) => ['purge', '--purge', 'remove', 'autoremove', 'uninstall', '-r', '-P', '--remove'].includes(a))) return 'it removes packages';
   return null;
 }
 
@@ -198,9 +223,10 @@ export function autoVerdict(argv: readonly string[], ctx: AutoContext): AutoVerd
   if (ctx.steps >= AUTO_STEPS_MAX) return no(`${AUTO_STEPS_MAX} automatic steps in this change already: the rest wait for the manager`);
   const read = readOnlyPlan(argv, { linux: ctx.linux });
   if (!('refused' in read)) return { auto: true, shape: 'read-only', argv: read.argv, timeoutMs: read.timeoutMs, undo: none };
-  const danger = dangerOf(argv, ctx);
+  const install = installShape(argv, ctx);
+  const danger = dangerOf(argv, ctx, !!install?.auto);
   if (danger) return no(`never automatic: ${danger}`);
-  const shaped = gitShape(argv) ?? systemctlShape(argv, ctx) ?? installShape(argv, ctx) ?? caddyShape(argv, ctx);
+  const shaped = gitShape(argv) ?? systemctlShape(argv, ctx) ?? install ?? caddyShape(argv, ctx);
   if (shaped?.auto || (shaped && ctx.level === 'routine')) return shaped;
   if (ctx.level === 'all') return { auto: true, shape: 'not on the danger list', argv: [...argv], undo: none };
   return no("not one of the routine shapes (git fetch/pull --ff-only, IT's own units, installing a unit or Caddy file, caddy validate/reload)");
