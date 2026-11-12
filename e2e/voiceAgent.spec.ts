@@ -44,6 +44,11 @@ test('tap Call: the Jarvis voice acks in under a second, the orb follows, captio
   await expect.poll(() => mode(page)).toBe('live');
   const orb = page.locator('.vcall-screen .vcall-orb-canvas').first();
   await expect(orb).toBeVisible();
+  for (let i = 0; i < 14; i++) {
+    const p = await probe(page);
+    console.log('DIAG', i, await phase(page), JSON.stringify({ ...p, store: undefined }));
+    await page.waitForTimeout(1000);
+  }
   await expect.poll(() => phase(page), { timeout: 15_000 }).toBe('listening'); // the greeting said and done
 
   await say(page, "What's floor 1 doing?");

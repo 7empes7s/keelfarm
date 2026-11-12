@@ -350,4 +350,4 @@ if (typeof window !== 'undefined') {
 }
 
 /** For the probe. */
-export const agentProbe = () => ({ mode: mode(), saying: useAgentCall.getState().saying, ...probe, ackMs: probe.firstAudioAt && probe.sentAt ? Math.round(probe.firstAudioAt - probe.sentAt) : null, pending: markers.length, store: useStore.getState().voiceAgent });
+export const agentProbe = () => ({ mode: mode(), saying: useAgentCall.getState().saying, ...probe, ackMs: probe.firstAudioAt && probe.sentAt ? Math.round(probe.firstAudioAt - probe.sentAt) : null, pending: markers.length, playing: playing.length, audio: out ? { state: out.context.state, time: out.context.currentTime } : null, store: useStore.getState().voiceAgent });
