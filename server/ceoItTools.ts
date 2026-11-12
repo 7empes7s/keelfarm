@@ -1,6 +1,7 @@
 // The IT department's tools (#506, #524, #525): it_run (a read-only command now), it_propose (a change the manager runs
 // from a card), it_recommend (#525: a health check's ranked options, one picked by the manager), it_health (the office's
-// own readings) and it_ticket (#542: answer and close a ticket), served to the IT lead's session only (itOfficeTools);
+// own readings), it_ticket (#542: answer and close a ticket), it_review and it_improve (#543: what keeps going wrong,
+// and changes for the manager to approve), served to the IT lead's session only (itOfficeTools);
 // the CEO gets ask_it instead (createOfficeTools, ceo.ts). it_report (#542) is every agent's and the CEO's. The office's
 // side is server/swarm/itDesk.ts, itDept.ts, itTickets.ts and itWatch.ts.
 import { tool } from '@anthropic-ai/claude-agent-sdk';
@@ -9,6 +10,8 @@ import { runTool, toolServer, type OfficeTools } from './ceo.ts';
 import { TICKET_WHERE } from '../shared/itTickets.ts';
 import type { ItProposeArgs, ItRunArgs } from './swarm/itDesk.ts';
 import type { ItRecommendArgs } from './swarm/itWatch.ts';
+import type { ItImproveArgs } from './swarm/itImprove.ts';
+import { IMPROVE_KINDS } from '../shared/itImprove.ts';
 import { problemTools, type ProblemHandlers } from './ceoProblemTools.ts';
 
 export interface ItHandlers {
@@ -17,6 +20,8 @@ export interface ItHandlers {
   itRecommend(a: ItRecommendArgs): string;
   itHealth(): string;
   itTicket(a: ItTicketArgs): Promise<string>;
+  itReview(a: { days?: number }): string;
+  itImprove(a: ItImproveArgs): string;
 }
 
 /** it_ticket's arguments: at least one of tell, close and code_fix. */
@@ -25,6 +30,7 @@ export interface ItTicketArgs {
   tell?: string;
   close?: string;
   code_fix?: string;
+  cause?: string;
 }
 
 export interface ReportHandlers {
@@ -92,8 +98,36 @@ function itTools(h: ItHandlers, run: Run) {
         tell: z.string().min(1).max(1000).optional().describe('To the agents who reported it, e.g. "Port 5644 is free again: start your dev server and carry on."'),
         close: z.string().min(1).max(600).optional().describe('What was done, e.g. "Freed 4 GB; told Dennis to retry."'),
         code_fix: z.string().min(1).max(1000).optional().describe('For the CEO to file: what in the office needs fixing, e.g. "The lab drops results on runs over 15 minutes."'),
+        cause: z.string().min(1).max(120).optional().describe('With close: the root cause in a few words, the same words for the same cause, e.g. "Lab OOM: too many test workers". The weekly review groups by it.'),
       },
       (a) => run(() => h.itTicket(a)),
+    ),
+    tool(
+      'it_review',
+      "What keeps going wrong: the closed and open tickets of the last days grouped by cause, costliest first (agent minutes blocked, wasted session $, failed QA rounds), each new, recurring or fixed, with its cause key for it_improve, and the floors.",
+      { days: z.number().int().min(1).max(56).optional().describe('How far back; 7 by default') },
+      (a) => run(() => h.itReview(a)),
+    ),
+    tool(
+      'it_improve',
+      "Propose changes for the top causes of a review, each a card with Approve / Not now for the manager (chat and Telegram). Approve files the issue on its floor, or adds the line to the office playbook, a floor's playbook or its QA brief. Skip causes that are fixed. Nothing changes without the manager's tap.",
+      {
+        proposals: z
+          .array(
+            z.object({
+              cause: z.string().min(1).max(200).describe('The cause key from it_review, e.g. "lab:test lab oom"'),
+              kind: z.enum(IMPROVE_KINDS).describe('issue: a code fix on a floor; office_playbook / floor_playbook / qa_brief: a line to add'),
+              title: z.string().min(1).max(120).describe("The issue's title, or what the line is for"),
+              why: z.string().min(1).max(300).describe('The numbers, e.g. "5 tickets, 42 agent-minutes, $3.10 this week"'),
+              floor: z.number().int().optional().describe('For issue, floor_playbook and qa_brief'),
+              body: z.string().min(1).max(4000).optional().describe('issue: what, where in the code, and acceptance criteria'),
+              line: z.string().min(1).max(400).optional().describe('The playbook or QA brief line, e.g. "Run vitest with --maxWorkers=2."'),
+            }),
+          )
+          .min(1)
+          .max(5),
+      },
+      (a) => run(() => h.itImprove(a)),
     ),
   ];
 }

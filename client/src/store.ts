@@ -15,6 +15,7 @@ import { IT_DEPT_DEFAULTS, type ItView } from '../../shared/itDept';
 import type { ItWatchView } from '../../shared/itWatch';
 import type { SdkUpdateView } from '../../shared/agentSdk';
 import type { ItTicket } from '../../shared/itTickets';
+import type { ItImproveView } from '../../shared/itImprove';
 import type { VoiceAgentView } from '../../shared/voiceAgent';
 import type { Problem } from '../../shared/problems';
 import { DEFAULT_CEO_AWAKE } from '../../shared/ceoAwake';
@@ -168,6 +169,7 @@ export interface State {
   it: ItView | null; // the IT department's chat (#524); null: a server without it, or a replay
   itWatch: ItWatchView | null; // IT monitoring (#525): the health checks and recommendations; null until the first check
   itTickets: ItTicket[]; // office problems reported to IT (#542), newest first
+  itImprove: ItImproveView | null; // IT's improvements (#543): trends, the review's cards, the changes; null until the first record
   problems: Problem[]; // the problems register's own entries (#544), newest first; IT's tickets join them on the page
   claudeUsage: UsageReading[]; // Claude's latest reading per usage limit (empty until a session reports)
   claudeUsageCheck: UsageCheckError | null; // why the office's idle check couldn't read it (#89), null when it could
@@ -347,6 +349,7 @@ export const useStore = create<State>((set, get) => ({
   it: null,
   itWatch: null,
   itTickets: [],
+  itImprove: null,
   problems: [],
   claudeUsage: [],
   claudeUsageCheck: null,
