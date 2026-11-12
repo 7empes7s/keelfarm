@@ -165,6 +165,21 @@ describe('account rotation', { timeout: 30_000 }, () => {
     expect(runs.filter((r) => r.role === 'ceo')).toHaveLength(3); // no loop
   });
 
+  it("lifts the all-out pause as soon as one account has room again, not at the reset it first named", async () => {
+    const out = ['claude-login', 'claude-keelop', 'claude-apikey'];
+    const { swarm, i, runs } = await office(out);
+    swarm.requestReview();
+    await wait(3_000);
+    expect(i.usageNow().state).toBe('paused');
+    out.splice(out.indexOf('claude-keelop'), 1); // it really has room now
+    swarm.accounts.back('claude-keelop'); // its provider shows room again (a verified Ultra has no 5-hour window)
+    (swarm as unknown as { schedule(): void }).schedule(); // the office's scheduler tick (every 8 s)
+    await wait(1_000);
+    expect(i.usageNow().state).not.toBe('paused');
+    expect(i.state.messages.some((m) => /has room again: new work starts now/.test(m.text))).toBe(true);
+    expect(runs.filter((r) => r.role === 'ceo').at(-1)?.account).toBe('claude-keelop'); // the waiting job ran there
+  });
+
   it("offers a paused API key when every account is out, and Use API key carries on there", async () => {
     const { swarm, runs, i } = await office(['claude-login', 'claude-keelop']);
     swarm.accounts.update('claude-apikey', { enabled: false });

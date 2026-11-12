@@ -15,6 +15,7 @@ export interface AccountCheck {
   refresh?: boolean; // a Claude login whose access token expired: its next session refreshes it (#442)
   plan?: string | null; // the plan a Claude login really has, from its .credentials.json ("Max 20x")
   who?: string | null; // its owner (account id or email), only to spot logins on one subscription; never sent to tabs (#460)
+  noFiveHour?: boolean; // Anthropic says this login has no 5-hour window (a verified Ultra plan)
 }
 
 export interface CheckTarget {
@@ -42,7 +43,7 @@ const keyNote = (status: number, who: string): AccountCheck =>
  * the office never refreshes it (a running session may rotate the refresh token), its next session does (#442).
  */
 export function claudeLoginCheck(res: UsageCheck): AccountCheck {
-  if ('readings' in res) return { signedIn: true, readings: res.readings, note: '✓ Signed in; usage read.' };
+  if ('readings' in res) return { signedIn: true, readings: res.readings, ...(res.noFiveHour && { noFiveHour: true }), note: '✓ Signed in; usage read.' };
   if (res.error === 'failed') return { signedIn: true, readings: [], note: "Signed in, but its usage couldn't be read just now." };
   if (res.error === 'expired' && res.refresh) return { signedIn: true, readings: [], refresh: true, note: '✓ Signed in; its token refreshes on its next session.' };
   return { signedIn: false, readings: [], note: res.error === 'expired' ? 'Its sign-in expired: tap Sign in again.' : 'Not signed in yet: tap Sign in.' };

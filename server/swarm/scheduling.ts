@@ -305,6 +305,18 @@ export abstract class SwarmScheduling extends SwarmQa {
     return n ? `next on ${accountUsageLabel(n.label, n.usage, Date.now(), this.accounts.list().find((a) => a.id === n.id)?.builtIn ? this.usageCheck : null)}` : '';
   }
 
+  /**
+   * The pause for every account being out ends as soon as rotation has one with room again (its limit lifted by the
+   * provider's own usage, a new sign-in, or a reset), not at the reset time the first message named.
+   */
+  protected liftPauseWhenFree() {
+    if (!this.limited() || !this.accounts.hasFree('claude')) return;
+    this.pausedUntil = 0;
+    const n = this.accounts.upNext('claude');
+    this.postMessage('office', `▶ ${n?.label ?? 'A Claude account'} has room again: new work starts now.`);
+    this.emitUsage();
+  }
+
   /** Who a pause at the limit is for (#383): only the built-in login (or the only account) pauses the office, so it's named. */
   private limitWho(): string {
     return this.accounts.list().find((a) => a.builtIn && a.cli === 'claude')?.label ?? 'Claude';
@@ -378,7 +390,7 @@ export abstract class SwarmScheduling extends SwarmQa {
     const view = this.accounts.update(id, { enabled: true });
     if (this.limited() && this.accounts.rotation().on) {
       this.pausedUntil = 0;
-      this.postMessage('office', `▶ ${this.accounts.label(id)} is on: new work starts on it now, billed per token.`);
+      this.postMessage('office', `▶ ${this.accounts.label(id)} is on: new work starts on it now${this.accounts.list().find((a) => a.id === id)?.kind === 'api-key' ? ', billed per token' : ''}.`);
       this.emitUsage();
       setTimeout(() => this.schedule(), 200);
     }
@@ -472,6 +484,7 @@ export abstract class SwarmScheduling extends SwarmQa {
           this.broadcast(this.claudeUsageEvent(res.error));
           return;
         }
+        if (res.noFiveHour) this.state.claudeUsage = this.state.claudeUsage.filter((r) => r.type !== 'five_hour'); // no 5-hour window on this plan
         this.recordUsage(res.readings); // clears the failed check
         // A full 5-hour or weekly window on the built-in login pauses new work, as a session hitting the limit would,
         // unless rotation has another Claude account to start it on: then only that login is out (its status already
@@ -561,6 +574,7 @@ export abstract class SwarmScheduling extends SwarmQa {
    * so no repo can hog the slots.
    */
   protected schedule() {
+    this.liftPauseWhenFree();
     this.tickUsage();
     this.pollUsage();
     this.progressTick();
