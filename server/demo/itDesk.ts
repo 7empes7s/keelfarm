@@ -1,7 +1,8 @@
 // The demo's IT department (#506, #524): made-up output for the read-only commands, a pretend run for a change the
 // manager taps Run on (the disk's free space grows with it), and a scripted IT lead (itSession) that answers in IT's
 // chat through the real IT tools: "how much disk is free?" reads df; "free up space" reads du and journalctl, then puts
-// two changes on cards; after a Run it checks df again and reports. The demo CEO hands "check the machine" to IT.
+// two changes on cards; after a Run it checks df again and reports; a ticket (#542) gets an answer and a close. The demo
+// CEO hands "check the machine" to IT. Now and then a demo agent reports a lost lab result with it_report (withItReport).
 import { describeOfficeTool, type LogEntry, type SessionCallbacks, type SessionHandle, type SessionOptions } from '../agentRunner.ts';
 import { logStreamed, writeReply } from '../demoChat.ts';
 import { registerCeoReply, registerDemo } from './registry.ts';
@@ -67,6 +68,16 @@ export function itSession(opts: SessionOptions, cb: SessionCallbacks): SessionHa
   };
   const run = async (): Promise<string> => {
     const p = opts.prompt;
+    // A ticket (#542): look, answer the reporters, close it.
+    const ticket = p.match(/^Ticket #(\d+) \((\w[\w-]*)/m);
+    if (ticket) {
+      const id = Number(ticket[1]);
+      const job = p.match(/\bjob ([\w-]+)/)?.[1];
+      await use('it_health', {});
+      const tell = ticket[2] === 'lab' ? `Run ${job ? `job ${job}` : 'it'} again once: the lab restarted and lost its result. lab_status shows your place.` : ticket[2] === 'ports' ? 'The port is free again: start your dev server and carry on.' : 'Checked on my side: carry on, and report again if it comes back.';
+      await use('it_ticket', { id, tell, close: `Looked at the evidence; told the reporter: ${tell}`, ...(ticket[2] === 'lab' && { code_fix: 'The lab drops a run\'s result when the office restarts mid-run: keep finished results for the agent.' }) });
+      return `Ticket #${id}: answered the reporter and closed it.`;
+    }
     const ran = p.match(/The manager ran `([^`]+)`: (exit \d+|did not finish)/);
     const disk = rootDisk(await use('it_run', { command: 'df -h' }));
     const free = disk ? `${disk.avail} free of ${disk.size} (${disk.use} used)` : 'no reading from df';
@@ -118,3 +129,15 @@ registerCeoReply('it desk', async ({ text, use }) => {
   if (out.startsWith('Refused')) return `I can't hand that to IT right now: ${out.replace(/^Refused:\s*/, '')}`;
   return `That's the IT department's: I've asked them in the IT chat. They'll look, and any change comes to you on a card with Run / Not now.\n\`\`\`spoken\nI've passed that to IT. Their answer is in the IT chat.\n\`\`\``;
 }, { early: true });
+
+/** Now and then a demo build reports an office problem to IT (#542): every fifth issue's lab result goes missing. */
+export function withItReport(opts: SessionOptions, cb: SessionCallbacks): SessionCallbacks {
+  const issue = Number(opts.prompt.match(/#(\d+):/)?.[1] ?? 0);
+  if (!opts.office?.defs.some((d) => d.name === 'it_report') || opts.task !== 'issue' || issue % 5) return cb;
+  setTimeout(() => {
+    const args = { what: 'Lab result lost', where: 'lab', evidence: `lab_run (npm test) for #${issue} never answered: job lab-${issue}`, blocking: true };
+    cb.log([{ kind: 'tool', tool: 'mcp__office__it_report', text: `⏺ 🎫 it_report: ${args.what}` }]);
+    void opts.office!.call('it_report', args).then((r) => cb.log([{ kind: 'result', text: `  ⎿ ${r.split('\n')[0].slice(0, 170)}` }]), () => undefined);
+  }, 3000);
+  return cb;
+}

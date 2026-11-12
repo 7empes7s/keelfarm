@@ -247,6 +247,7 @@ export abstract class SwarmUpkeep extends SwarmCeoStuck {
       if (this.agentRt.get(a.id)?.session) this.spend.watchdogStopped(a.id);
       const repo = this.state.repos.find((r) => r.id === a.repoId);
       this.followup(followupEvents.stalled(a, what, mins, repo?.id, repo && this.floorName(repo)));
+      this.autoTicket({ kind: 'stalled', agent: a.name, work: what, minutes: mins });
       this.requeue(a, `the watchdog put ${what} back in line after ${mins} ${p.kind === 'quiet' ? 'quiet minutes and a nudge' : 'minutes setting up a desk'}`);
       return `put ${a.name}'s ${what} back in line (${p.kind === 'quiet' ? `quiet for ${mins} minutes, even after a nudge` : `stuck setting up a desk for ${mins} minutes`})`;
     }
@@ -619,6 +620,7 @@ export abstract class SwarmUpkeep extends SwarmCeoStuck {
     const n = stuckNotice(a.name, b, now, repo?.floor);
     this.notice({ kind: 'stuck', title: n.title, text: n.body, target: { kind: 'agent', agentId: a.id, terminal: true }, actions: n.actions }, { event: 'agentError', line: n.who });
     if (a.role === 'ceo') return;
+    this.autoTicket({ kind: 'blocked', agent: a.name, state: b.kind ?? 'prompt', reason: clip(scrub(b.reason, this.secrets()), 300) });
     const screen = scrub(rt.terminal?.tail(8).filter((l) => l.trim()).join(' / ') ?? '', this.secrets());
     this.followup(followupEvents.agentBlocked(a, b.kind ?? 'prompt', clip(scrub(b.reason, this.secrets()), 160), clip(screen, 400), repo?.id, repo && this.floorName(repo)));
   }

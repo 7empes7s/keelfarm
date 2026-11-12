@@ -305,6 +305,15 @@ describe('lab problems (#189)', () => {
     expect(views.at(-1)!.recent[0]).toMatchObject({ ok: false, summary: 'lab error: silent' });
   });
 
+  it("tells the office about the lab's own failures, for IT's tickets (#542), and not about the code's", async () => {
+    const troubles: unknown[] = [];
+    const { lab: l } = lab(fakeRunner([], 0, [{ code: 137, tail: ['Killed'] }, { code: 1, tail: ['1 failed'] }]));
+    (l as unknown as { host: TestLabHost }).host.trouble = (t) => troubles.push(t);
+    await l.submit(who('a'), { kind: 'run', command: 'npm test' });
+    await l.submit(who('a'), { kind: 'run', command: 'npm test' });
+    expect(troubles).toEqual([{ agent: 'A', job: expect.any(String), problem: 'oom', detail: 'npm test: exit code 137' }]);
+  });
+
   it('installs a missing browser once and runs again', async () => {
     const log: string[] = [];
     const { lab: l } = lab(fakeRunner(log, 0, [{ tail: ["Executable doesn't exist at /x/chrome"] }, { code: 0, tail: ['12 passed'] }]));

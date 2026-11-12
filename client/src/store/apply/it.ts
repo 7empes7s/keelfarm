@@ -1,4 +1,4 @@
-// The IT department (#524): its chat, a message at a time, and its view (on, name, working, its Telegram bot).
+// The IT department (#524): its chat, a message at a time, and its view (on, name, working, its Telegram bot); its tickets (#542).
 import type { ApplyHandlers, SnapshotPart } from './types';
 
 export const handlers = {
@@ -8,6 +8,7 @@ export const handlers = {
     const messages = !m ? was : was.some((x) => x.id === m.id) ? was.map((x) => (x.id === m.id ? m : x)) : [...was, m];
     set({ it: { ...ev.it, messages } });
   },
+  itTickets: (ev, { set }) => set({ itTickets: ev.tickets }),
 } satisfies ApplyHandlers;
 
-export const snapshot: SnapshotPart = (d) => ({ it: d.it ?? null });
+export const snapshot: SnapshotPart = (d) => ({ it: d.it ?? null, itTickets: d.itTickets ?? [] });

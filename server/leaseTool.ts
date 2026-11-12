@@ -22,6 +22,7 @@ export function leaseTools(declare: (files: string[]) => string): OfficeTools {
   ];
   return {
     server: createSdkMcpServer({ name: 'office', version: '1.0.0', tools: defs }),
+    defs,
     serve: () => createSdkMcpServer({ name: 'office', version: '1.0.0', tools: defs }).instance,
     async call(name, args) {
       if (name !== 'declare_files') throw new Error(`No office tool ${name}`);
