@@ -78,7 +78,7 @@ describe('a full-quality pass runs alone (#301)', () => {
 
   it("is a lab tool option, light by default", async () => {
     const asked: unknown[] = [];
-    const tools = createLabTools({ submit: async (i) => (asked.push(i), 'ok'), status: () => '' });
+    const tools = createLabTools({ submit: async (i) => (asked.push(i), 'ok'), status: () => '', result: () => '' });
     await tools.call('lab_screenshot', { url: 'http://localhost:1/', graphics: 'full' });
     await tools.call('lab_browser_check', { url: 'http://localhost:1/', steps: [{ do: 'no_console_errors' }] });
     expect(asked.map((a) => (a as { graphics?: string }).graphics)).toEqual(['full', undefined]);

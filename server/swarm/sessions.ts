@@ -385,7 +385,7 @@ export abstract class SwarmSessions extends SwarmRotation {
   /** The lab's tools for one session, bound to its agent, floor and worktree. */
   protected labTools(a: PersistedAgent, repo: PersistedRepo, cwd: string) {
     const who = (): Requester => ({ agentId: a.id, agent: a.name, repoId: repo.id, floor: repo.floor, fullName: repo.fullName, defaultBranch: repo.defaultBranch, worktree: cwd, pr: a.prNumber ?? null, labCommands: repo.labCommands ?? [] });
-    return createLabTools({ submit: (input, progress) => this.testLab.submit(who(), input, Date.now(), progress), status: () => this.testLab.status(a.id) });
+    return createLabTools({ submit: (input, progress, signal) => this.testLab.submit(who(), input, Date.now(), progress, signal), status: () => this.testLab.status(a.id, cwd), result: (id) => this.testLab.result(who(), id) });
   }
 
   /** The address of a floor's app for the lab: the PR's preview (the PR theatre's), else the floor's, started if need be. */
