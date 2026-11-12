@@ -397,6 +397,7 @@ app.post('/api/accounts/:id/signin/answer', route((req) => swarm.accounts.signIn
 app.delete('/api/accounts/:id', route(async (req) => ({ result: await swarm.accounts.remove(String(req.params.id)) })));
 app.post('/api/accounts/:id/use-now', route((req) => swarm.useAccountNow(String(req.params.id))));
 app.post('/api/accounts/:id/simulate-limit', route((req) => swarm.simulateAccountLimit(String(req.params.id))));
+app.post('/api/accounts/:id/simulate-back', route((req) => swarm.simulateAccountBack(String(req.params.id))));
 app.get('/api/voice/voices', route(() => swarm.voice.voices()));
 app.get(
   '/api/voice/messages/:id',

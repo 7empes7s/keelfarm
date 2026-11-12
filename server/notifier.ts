@@ -200,6 +200,15 @@ export class Notifier {
     this.step(queue(this.threads, note(event, title, body, line, changes, id), this.now(), this.present()));
   }
 
+  /**
+   * Something the manager asked to be told about ("Notify me when it's back", #538): sent at once on every channel
+   * that's on, whatever the event toggles say and even while they're in the app on another device.
+   */
+  asked(event: NotifyEvent, title: string, body: string, id?: string): Promise<(string | null)[]> {
+    this.counts().sent++;
+    return this.deliver(note(event, title, body, title, undefined, id));
+  }
+
   /** Sends the threads whose wait is up. The timer calls it. */
   flush() {
     this.step(due(this.threads, this.now(), this.present()));

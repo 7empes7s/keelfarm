@@ -21,6 +21,8 @@ export interface UsageContext {
   enabled?: boolean;
   isDefault?: boolean;
   watching?: boolean;
+  /** False when no channel reaches the manager's phone with the office closed (#538): the button says so. */
+  reach?: boolean;
 }
 
 type Source = Pick<UsageSource, 'id' | 'provider' | 'status' | 'accountId'>;
@@ -41,7 +43,7 @@ export function usageActions(s: Source, ctx: UsageContext = {}): UsageAction[] {
   const out: UsageAction[] = [];
   const add = (a: UsageAction) => void out.push(a);
   const limited = s.status === 'limited';
-  const back: UsageAction = ctx.watching ? { id: 'notify-back', label: "We'll tell you when it's back", icon: 'bell' } : { id: 'notify-back', label: "Notify me when it's back", icon: 'bell' };
+  const back: UsageAction = { id: 'notify-back', label: ctx.watching ? "We'll tell you when it's back" : ctx.reach === false ? 'Notify me (not on your phone yet)' : "Notify me when it's back", icon: 'bell' };
   if (s.accountId) {
     const login = ctx.kind === 'subscription-login';
     const signedOut = s.status === 'signed-out';

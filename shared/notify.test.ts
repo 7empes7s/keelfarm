@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_NOTIFY, noteTab, notifySettings, officeUrl } from './notify.ts';
+import { DEFAULT_NOTIFY, noteTab, notifySettings, officeUrl, phoneReach } from './notify.ts';
 
 describe('notification settings', () => {
   it('start with every event but merges on, on every channel', () => {
@@ -33,5 +33,15 @@ describe('notification settings', () => {
     expect(noteTab('ceoMessage')).toBe('chat');
     expect(noteTab('agentError')).toBe('team');
     expect(noteTab('merge')).toBe('company');
+  });
+});
+
+describe('what reaches the phone with the office closed (#538)', () => {
+  const none = { pushDevices: 0, telegram: { linked: false }, webhooks: { ntfy: { set: false } } } as Parameters<typeof phoneReach>[0];
+  it('counts push devices, a linked Telegram and ntfy, each only while it is on, and never desktop', () => {
+    expect(phoneReach(none, DEFAULT_NOTIFY)).toEqual([]);
+    const all = { pushDevices: 1, telegram: { linked: true }, webhooks: { ntfy: { set: true } } } as Parameters<typeof phoneReach>[0];
+    expect(phoneReach(all, DEFAULT_NOTIFY)).toEqual(['push', 'Telegram', 'ntfy']);
+    expect(phoneReach(all, notifySettings(DEFAULT_NOTIFY, { channels: { push: false, ntfy: false } }))).toEqual(['Telegram']);
   });
 });

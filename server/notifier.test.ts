@@ -353,7 +353,7 @@ describe('the notification centre (#107)', () => {
 
 describe('quiet while in the app (#210)', () => {
   /** A notifier with push devices, ntfy and a linked Telegram, and the open tabs' attention it reads. */
-  async function office(quietInApp = true) {
+  async function office(quietInApp = true, patch: Partial<NotifySettings> = {}) {
     fakeClock();
     const tg: string[] = [];
     const posts: NotifyRequest[] = [];
@@ -362,7 +362,7 @@ describe('quiet while in the app (#210)', () => {
     const cleared: string[][] = [];
     const dir = tmpDir();
     const telegram = { linked: () => true, mirrors: () => false, send: async (text: string) => (tg.push(text), null), view: () => ({ set: true, bot: 'b', linked: true, chat: 'Ana', linking: false, on: true, polling: 'off' as const, error: '', okAt: null, advice: '', last: null }) };
-    const settings = notifySettings(DEFAULT_NOTIFY, { quietInApp });
+    const settings = notifySettings(DEFAULT_NOTIFY, { quietInApp, ...patch });
     const n = new Notifier({ transport: { post: async (req) => (posts.push(req), 201) }, secretsFile: path.join(dir, 'secrets.json'), pushFile: path.join(dir, 'push.json'), settings: () => settings, broadcast: (x) => notes.push(x), channelsChanged: () => undefined, log: () => undefined, telegram, quiet: (ids) => quiet.push(...ids), cleared: (e) => cleared.push(e) });
     await n.setWebhook('ntfy', SECRETS.ntfy);
     await n.pushKey();
@@ -447,5 +447,19 @@ describe('quiet while in the app (#210)', () => {
     expect(sent.find((e) => e.type === 'ceoChat' && e.message?.id === m.id)?.message).toMatchObject({ quiet: true });
     swarm.markPhoneRead(Date.now());
     expect(readTab).toHaveBeenCalledWith('chat');
+  });
+
+  it("sends what the manager asked for (Notify me, #538) at once to every phone channel, even with a tab open and the event off", async () => {
+    const o = await office(true, { events: { ...DEFAULT_NOTIFY.events, usage: false } });
+    o.tab(true);
+    o.n.notify('usage', 'Claude Pro is at its limit', 'Paused.');
+    const out = await o.n.asked('usage', 'Claude Pro is back', 'Its limit has reset.', 'n9');
+    expect(out).toEqual([null, null, null, null]);
+    expect(o.posts.map((p) => p.channel)).toEqual(['ntfy', 'push', 'push']);
+    expect(o.tg).toEqual([expect.stringContaining('Claude Pro is back')]);
+    expect(o.notes.map((x) => [x.title, x.url])).toEqual([['⏸ Claude Pro is back', '/?tab=company&note=n9']]);
+    await pastGrace();
+    expect(o.posts).toHaveLength(3); // the ordinary note stays quiet, as before
+    expect(o.n.channelsView().today.sent).toBe(1);
   });
 });

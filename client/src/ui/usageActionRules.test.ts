@@ -93,6 +93,9 @@ describe('usage card actions (#404)', () => {
     expect(labels('subscription-login', 'claude', false)).toContain('Resume');
     expect(labels('subscription-login', 'claude', false)).not.toContain('Use for new work');
     expect(usageActions({ id: 'a', accountId: 'a', provider: 'claude', status: 'limited' }, { kind: 'subscription-login', watching: true })[0].label).toBe("We'll tell you when it's back");
+    // With nothing that reaches the phone, the button says so instead of pretending (#538).
+    expect(usageActions({ id: 'a', accountId: 'a', provider: 'claude', status: 'limited' }, { kind: 'subscription-login', reach: false })[0].label).toBe('Notify me (not on your phone yet)');
+    expect(usageActions({ id: 'a', accountId: 'a', provider: 'claude', status: 'limited' }, { kind: 'subscription-login', reach: true })[0].label).toBe("Notify me when it's back");
   });
 
   it('opens the provider pages in a new tab and Settings at the right card', () => {

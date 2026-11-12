@@ -147,10 +147,10 @@ describe('notifications', () => {
     expect(usageAlerts([src('codex-login', 40, { status: 'limited' })], limited.sent, NOW).alerts).toEqual([]);
   });
 
-  it("tells the manager once when a watched limited source is back (#404), and drops a watch whose row is gone", () => {
-    const still = backAlerts([src('claude-ultra', 100)], ['claude-ultra', 'gone']);
-    expect(still).toEqual({ alerts: [], watching: ['claude-ultra'] });
-    const back = backAlerts([src('claude-ultra', 20)], still.watching);
+  it("tells the manager once when a watched limited source is back (#404), and keeps a watch whose row is missing or in error (#538)", () => {
+    const still = backAlerts([src('claude-ultra', 100), src('codex', 0, { status: 'error' })], ['claude-ultra', 'gone', 'codex']);
+    expect(still).toEqual({ alerts: [], watching: ['claude-ultra', 'gone', 'codex'] });
+    const back = backAlerts([src('claude-ultra', 20)], ['claude-ultra']);
     expect(back.alerts.map((a) => a.title)).toEqual(['claude-ultra is back']);
     expect(back.watching).toEqual([]);
   });
