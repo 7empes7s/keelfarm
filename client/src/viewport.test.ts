@@ -27,6 +27,8 @@ describe('chatDock', () => {
     expect(chatDock(844, vv(508), 1, false)).toEqual({ top: 0, height: 508, band: false });
     // iOS scrolled the visual viewport down to the field: the box follows it
     expect(chatDock(844, vv(460, 40), 1, false)).toEqual({ top: 40, height: 460, band: false });
+    // ...all the way down, the keyboard's height (#507): still the keyboard, no band
+    expect(chatDock(844, vv(508, 336), 1, false)).toEqual({ top: 336, height: 508, band: false });
   });
   it('fills the visible screen in full screen', () => {
     expect(chatDock(844, vv(844), 1, true)).toEqual({ top: 0, height: 844, band: false });

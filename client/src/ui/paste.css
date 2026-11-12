@@ -15,6 +15,10 @@
 .paste-sheet-scrim {
   position: fixed;
   inset: 0;
+  /* the visible part of the page (viewport.ts): the sheet sits on the keyboard, not under it (#507) */
+  top: var(--app-top, 0px);
+  bottom: auto;
+  height: var(--app-height, 100dvh);
   z-index: var(--ds-z-modal);
   display: flex;
   align-items: flex-end;

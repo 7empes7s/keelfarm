@@ -24,7 +24,9 @@ export function appViewport(innerHeight: number, vv: Viewport | null): { height:
  */
 export function chatDock(innerHeight: number, vv: Viewport | null, uiScale: number, full: boolean): { top: number; height: number; band: boolean } {
   const { height, top } = appViewport(innerHeight, vv);
-  const keyboard = !!vv && Math.abs(vv.scale - 1) <= 0.01 && keyboardInset(innerHeight, vv) > 0;
+  // the visible part 80px or more short of the page, wherever iOS scrolled it to (#507: scrolled right down to the
+  // message box, nothing seemed to be under it)
+  const keyboard = !!vv && Math.abs(vv.scale - 1) <= 0.01 && keyboardInset(innerHeight, { height: vv.height, offsetTop: 0 }) > 0;
   return { top: top / uiScale, height: height / uiScale, band: !full && !keyboard };
 }
 
@@ -130,11 +132,11 @@ export function watchViewport() {
   let frame = 0;
   let keyboard = false;
   const touch = matchMedia('(pointer: coarse)').matches;
-  let measured = -1;
+  let measured = ''; // the visible part's height and top, last measured
   const update = () => {
     frame = 0;
     const { height, top } = appViewport(window.innerHeight, vv);
-    measured = height;
+    measured = `${height} ${top}`;
     root.style.setProperty('--app-height', `${height}px`);
     root.style.setProperty('--app-top', `${top}px`);
     const open = height < window.innerHeight - 80; // smaller differences are browser bars, not a keyboard
@@ -153,14 +155,19 @@ export function watchViewport() {
     resetViewport();
   };
   // A field with the keyboard up (#494): measure again until the keyboard has settled, then bring the field into view.
+  // `told`: the size the views last heard of here, apart from `measured`: a frame's update() can measure the settled
+  // keyboard before a check runs, and the check must still tell them (#507)
   let checks: number[] = [];
+  let told = '';
   const check = (first: boolean) => {
-    const before = measured;
     update();
-    if (measured !== before) window.dispatchEvent(new Event(VIEWPORT_EVENT));
-    if (first || measured !== before) revealFocused();
+    const changed = measured !== told;
+    told = measured;
+    if (changed) window.dispatchEvent(new Event(VIEWPORT_EVENT));
+    if (first || changed) revealFocused();
   };
   const settle = () => {
+    told = measured;
     checks.forEach(clearTimeout);
     checks = touch && focusedField() ? SETTLE_MS.map((ms, i) => window.setTimeout(() => check(i === 0), ms)) : [];
   };

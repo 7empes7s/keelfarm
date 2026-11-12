@@ -32,10 +32,11 @@ const visible = (page: Page) => page.evaluate(() => ({ top: visualViewport!.offs
 
 /** The message box is fully on screen, above the keyboard, the newest message in view, and nothing scrolls sideways. */
 async function aboveKeyboard(page: Page, chat: Locator) {
-  const box = (await chat.locator('.chat-input textarea').boundingBox())!;
+  // polled: software WebGL can hold the phone's next render past the keyboard helper's wait
   const v = await visible(page);
-  expect(box.y, 'the message box starts on screen').toBeGreaterThanOrEqual(v.top - 0.5);
-  expect(box.y + box.height, 'the message box ends above the keyboard').toBeLessThanOrEqual(v.bottom + 0.5);
+  const box = () => chat.locator('.chat-input textarea').boundingBox().then((b) => b!);
+  await expect.poll(() => box().then((b) => b.y), { message: 'the message box starts on screen' }).toBeGreaterThanOrEqual(v.top - 0.5);
+  await expect.poll(() => box().then((b) => b.y + b.height), { message: 'the message box ends above the keyboard' }).toBeLessThanOrEqual(v.bottom + 0.5);
   // the newest message in view (the demo's CEO may post one meanwhile: the log follows it)
   const below = () => chat.locator('.chat-log').evaluate((log) => log.lastElementChild!.getBoundingClientRect().bottom - log.getBoundingClientRect().bottom);
   await expect.poll(below, { message: 'the newest message in view' }).toBeLessThanOrEqual(1);
@@ -93,7 +94,9 @@ test("the 3D office's phone: the message box above the keyboard, full screen fil
   await keyboard(page, 0);
   await expect(phone.getByRole('tab', { name: 'Team' })).toBeVisible(); // the phone's tabs are back
 
-  await phone.getByRole('button', { name: 'Full screen chat', exact: true }).tap();
+  // through ⋯: the phone's narrow header may fold ⛶ into it (#514)
+  await phone.getByRole('button', { name: /^More for the chat/ }).tap();
+  await page.getByRole('menuitem', { name: /^Full screen chat/ }).tap();
   await expect(phone).toHaveClass(/phone-full/);
   await fillsScreen(page, phone);
   await phone.locator('.chat-input textarea').focus();
@@ -107,4 +110,60 @@ test("the 3D office's phone: the message box above the keyboard, full screen fil
   await page.keyboard.press('Escape'); // leaves full screen first
   await expect(phone).not.toHaveClass(/phone-full/);
   expect((await phone.boundingBox())!.y).toBeGreaterThan(40);
+});
+
+// iPhone Chrome (#507): its toolbars and the keyboard's autofill bar leave about 370px, and the keyboard settles 300ms
+// after its first, mid-slide resize without telling the page. The message box still ends right on the keyboard, the
+// newest message above it; once it closes the band of the office is back.
+test("the 3D office's phone: the message box on a late, tall keyboard", async ({ page }) => {
+  await page.goto('/?pocket=0');
+  await enterOffice(page, { loaded: true });
+  const skipTour = page.getByRole('button', { name: 'Skip tour' });
+  if (await skipTour.isVisible()) await skipTour.dispatchEvent('click');
+  await page.addStyleTag({ content: '.toasts { display: none !important; }' });
+  await phoneButton(page).tap();
+  const phone = page.getByRole('dialog', { name: 'Your phone' });
+  await expect(phone.locator('.chat-log')).toBeVisible();
+  const field = phone.locator('.chat-input textarea');
+
+  await page.evaluate(() => {
+    const w = window as { kb?: number };
+    Object.defineProperty(visualViewport!, 'height', { configurable: true, get: () => innerHeight - (w.kb ?? 0) });
+  });
+  const kb = (px: number, resize: boolean) =>
+    page.evaluate(
+      ([px, resize]) => {
+        (window as { kb?: number }).kb = px as number;
+        if (resize) visualViewport!.dispatchEvent(new Event('resize'));
+      },
+      [px, resize] as const,
+    );
+  // the conversation at its end (the demo CEO's unread messages may have opened it at the divider)
+  await phone.locator('.chat-log').evaluate((el) => el.scrollTo(0, el.scrollHeight));
+  await frames(page);
+  await field.focus();
+  await kb(200, true); // mid-slide
+  await page.waitForTimeout(350);
+  await kb(474, false); // where it settles, never reported
+  // a frame measuring the settled size before the 600ms check (focus moving between fields: it must still tell the phone)
+  await field.evaluate((el) => document.dispatchEvent(new FocusEvent('focusout', { relatedTarget: el })));
+  await frames(page);
+  await page.waitForTimeout(1500);
+
+  const [input, v] = await Promise.all([phone.locator('.chat-input').boundingBox(), visible(page)]);
+  expect(input!.y + input!.height, 'the composer ends above the keyboard').toBeLessThanOrEqual(v.bottom + 0.5);
+  expect(input!.y + input!.height, 'no gap under the composer').toBeGreaterThanOrEqual(v.bottom - 8);
+  const latest = await phone.locator('.chat-log').evaluate((log) => {
+    const l = log.getBoundingClientRect();
+    const m = log.lastElementChild!.getBoundingClientRect();
+    return { shows: m.bottom > l.top + 1 && m.bottom <= l.bottom + 1, logHeight: l.height };
+  });
+  expect(latest.logHeight, 'the thread has room above the composer').toBeGreaterThan(40);
+  expect(latest.shows, 'the newest message ends in view').toBe(true);
+
+  await field.blur();
+  await kb(0, true);
+  await page.waitForTimeout(600);
+  await expect(phone.getByRole('tab', { name: 'Team' })).toBeVisible();
+  expect((await phone.boundingBox())!.y, 'the band of the office is back').toBeGreaterThan(40);
 });
