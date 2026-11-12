@@ -6,6 +6,7 @@ import { ConfirmDialog } from './ui/Confirm';
 import { SetupChecklist } from './ui/FloorSetup';
 import { OfficeBoundary } from './ui/OfficeBoundary';
 import { installQuickKeys } from './ui/QuickToggles';
+import { useCamera } from './ui/agentCameraStore';
 import { useCall } from './ui/voiceCallStore';
 import './ui/voiceTap'; // a first tap unlocks the voice's <audio> element (#532)
 
@@ -14,6 +15,8 @@ const loadOffice = () => lazy(() => import('./Office'));
 const Pocket = lazy(() => import('./pocket/Pocket'));
 // The voice call's screens sit over both offices, so switching between them never touches the call.
 const CallScreens = lazy(() => import('./ui/CallScreens'));
+// An agent's camera (#539), over both offices too, only while one is on.
+const CameraTile = lazy(() => import('./ui/CameraTile'));
 
 export function App() {
   const mode = useMode((s) => s.mode);
@@ -21,6 +24,7 @@ export function App() {
   const [attempt, setAttempt] = useState(0);
   const Office = useMemo(loadOffice, [attempt]);
   const calling = useCall((s) => s.call.phase !== 'idle');
+  const onCamera = useCamera((s) => s.agent !== null);
   useEffect(installSwitchKey, []);
   useEffect(installQuickKeys, []);
   return (
@@ -37,6 +41,11 @@ export function App() {
       {calling && (
         <Suspense fallback={null}>
           <CallScreens />
+        </Suspense>
+      )}
+      {onCamera && (
+        <Suspense fallback={null}>
+          <CameraTile />
         </Suspense>
       )}
       <SetupChecklist />

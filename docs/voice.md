@@ -340,6 +340,21 @@ do, what E at a chair does and the view from it, the tile's frame throttle); the
 The demo office shows a call there with `?meeting=call` (a call on, the CEO at the table: the call card's live view)
 or `?meeting=seat` (you sat at the far head too); `e2e/meeting.spec.ts` walks it through.
 
+### Their camera (#539)
+
+Say or type "turn on your camera" (or "show yourself", "camera on") on a call or in the CEO's or an agent's chat, or
+tap the camera button (the call screen's header, the call card's, an agent chat's **Camera** chip): their character
+shows live in a picture-in-picture tile, head and shoulders at their desk with their task glowing on the monitor
+behind them, in their floor's theme colours. They wave as it comes on, breathe, blink, talk with the voice's level
+(the Jarvis voice's, or a speech-like rhythm for the other voices and their greeting) and look thoughtful while the CEO
+works on an answer. Drag the tile anywhere; × or "turn off your camera" hides it. The words never reach the agent and
+nothing is sent: it's off by default, uses no camera or mic of yours, and a busy agent (a merge conflict, a fix, a
+test) may refuse playfully once, from a template; ask again and they turn it on. The tile is its own small renderer
+(`world/AgentCamTile.tsx`, 360 px square, 15 frames a second at most, none while the tab is hidden or the tile off
+screen). The rules are pure and tested in `client/src/ui/agentCamera.ts`; `window.__swarmAgentCam` is its probe
+(`state`, `mouth`, `frames`, `on(id)`, `off()`, `level(v)` for fake audio). The demo opens with one on via
+`?camera=ceo` (or an agent's id); `e2e/agentCamera.spec.ts` walks it through.
+
 Nothing else changed: the 🎧 hands-free switch, hold/tap/V to talk, saved clips, ▶ replay and the dips work as
 before, and with no call on nothing opens the mic or starts reading by itself unless those settings say so.
 

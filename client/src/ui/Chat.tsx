@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { cameraWords } from './agentCameraStore';
 import { api } from '../api';
 import { useStore } from '../store';
 import { CEO_ID, type ChatArtifact, type PhoneMessage } from '../../../shared/types';
@@ -251,6 +252,7 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true, away
     setText('');
     setReplyTo(null);
     stick.current = true;
+    if (!files.length && cameraWords(t, CEO_ID)) return; // "turn on your camera" (#539): shown here, never sent
     sendToCeo(t, to ?? undefined, files);
     resetViewport();
   };

@@ -5,6 +5,8 @@
 // Space, →, M and Esc. The call screens (CallScreens.tsx) only draw useCall. window.__swarmCall is the probe.
 // With the Jarvis voice (#534, agentCallStore.ts) ElevenLabs Agents listens and talks instead (agentCallEngine.ts);
 // without a key, over the monthly cap or when it can't connect, the call is exactly as before.
+import { CEO_ID } from '../../../shared/types';
+import { cameraWords } from './agentCameraStore';
 import { report } from '../attention';
 import { agentCallWhy, agentOn, callAudio, useAgentCall } from './agentCallStore';
 import { sendWs } from '../net';
@@ -151,6 +153,7 @@ function turn(text: string) {
   const c = useCall.getState().call;
   if (!inCall(c) || (c.phase === 'speaking' && !tapping)) return;
   useCall.setState({ heard: text });
+  if (cameraWords(text, CEO_ID)) return; // "turn on your camera" (#539): the call goes on listening
   sendToCeo(text);
   dispatchCall({ type: 'sent' });
 }

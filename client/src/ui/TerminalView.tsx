@@ -1,6 +1,7 @@
 // An agent's window (#86, #117): one header row (their ring, name, task, time, ■ and ⋯), the terminal or their chat
 // (#120, AgentChat.tsx; the Chat | Terminal switch) in all the room there is with the message box under it, and the
 // details (Now, Profile, Setup) in a bottom sheet on phones or a side panel on computers.
+import { cameraWords } from './agentCameraStore';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import { api } from '../api';
 import { isBusy, kanbanFor, agentsOnRepo, useStore } from '../store';
@@ -210,6 +211,7 @@ export function TerminalView({ agentId, view, jump, details: requestedDetails, p
     const body = t.trim();
     if (!body) return;
     setText('');
+    if (cameraWords(body, agent.id)) return; // "turn on your camera" (#539): shown here, never sent
     void run(() => api.message(agent.id, body));
   };
 

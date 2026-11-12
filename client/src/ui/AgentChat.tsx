@@ -16,6 +16,7 @@ import { Markdown } from './Markdown';
 import { Reactable, ReactionChips } from './Reactions';
 import './agentChat.css';
 import { Icon } from './Icon';
+import { toggleCamera, useCamera } from './agentCameraStore';
 
 /** Rows drawn at first, and how many more each "Show earlier" adds. */
 const PAGE = 60;
@@ -55,6 +56,7 @@ export function AgentChat({ agent, repo, jump, onTerminal, onSend, onStop }: { a
   const rows = useMemo(() => chatRows(items), [items]);
   const visible = rows.slice(-shown);
   const last = items[items.length - 1];
+  const onCamera = useCamera((s) => s.agent === agent.id);
 
   useLayoutEffect(() => {
     const el = scroller.current;
@@ -217,6 +219,9 @@ export function AgentChat({ agent, repo, jump, onTerminal, onSend, onStop }: { a
         )}
         <button type="button" className="btn btn-small btn-ghost" onClick={onTerminal}>
           Open terminal
+        </button>
+        <button type="button" className="btn btn-small btn-ghost" aria-pressed={onCamera} title={onCamera ? `Turn off ${agent.name}'s camera` : `Ask ${agent.name} to turn on their camera`} onClick={() => toggleCamera(agent.id)}>
+          <Icon name="video" /> {onCamera ? 'Camera off' : 'Camera'}
         </button>
       </div>
     </div>
