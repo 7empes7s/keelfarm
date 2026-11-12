@@ -13,6 +13,7 @@ import { sendBackPatch } from '../sendBack.ts';
 import { qaShotsDir, saveQaShots } from '../qaShots.ts';
 import { failedLogLines, noPushNudge, ownPrLine, qaBranch, qaSystemPrompt } from '../prompts.ts';
 import { QA_RESUME_PROMPT, qaRetry } from '../qaRetry.ts';
+import { sessionEnd } from '../../shared/accountRotation.ts';
 import { recordQa } from '../metrics.ts';
 import { qaCause } from '../../shared/rounds.ts';
 import { clip } from '../notify.ts';
@@ -306,13 +307,22 @@ export abstract class SwarmQa extends SwarmSessions {
     const rt = this.agentRt.get(a.id)!;
     const report = result.ok ? parseReport(result) : null;
     const resume = rt.qaResume;
-    const next = qaRetry({ stopped: a.status === 'stopped', limited: this.limited(), ok: result.ok, report: !!report, canResume: !!resume && !!a.sessionId });
+    const signedOut = !result.ok && sessionEnd(result, [], Date.now())?.kind === 'signed-out'; // a login that expired mid-round (#617)
+    const next = qaRetry({ stopped: a.status === 'stopped', limited: this.limited(), ok: result.ok, report: !!report, canResume: !!resume && !!a.sessionId, signedOut });
     if (next === 'resume' && resume && a.sessionId) {
       // Same session, context and screenshots: they likely ended a turn to wait on something that never woke them.
       rt.qaResume = null;
       a.endedAt = null;
       this.appendLog(a, [{ kind: 'system', text: '↻ The session ended without a QA report. Resuming it once to finish.' }]);
       this.startAgentSession(a, repo, resume.cwd, QA_RESUME_PROMPT, resume.systemAppend, a.sessionId, QA_SCHEMA);
+      return;
+    }
+
+    if (next === 'requeue') {
+      // Its login is signed out, not the PR's fault: the round goes back in line, no session failure counted.
+      a.status = 'done';
+      this.appendLog(a, [{ kind: 'system', text: `↺ ${(result.errors[0] ?? 'Their login is signed out').replace(/\.$/, '')}: QA of PR #${a.prNumber} goes back in line (not a failed round).` }]);
+      if (rec) this.setQa(rec, { qaAgentId: null, status: 'queued' });
       return;
     }
 
