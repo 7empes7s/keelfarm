@@ -7,6 +7,7 @@ import type { CeoLive, StepLog } from '../ceoStream.ts';
 import type { ChatVisual } from '../chatVisuals.ts';
 import type { Conversation } from '../conversations.ts';
 import type { FileRef } from '../files.ts';
+import type { ProblemsDigest } from '../problems.ts';
 import type { AgentQuestion } from '../questions.ts';
 import type { UsedView } from '../used.ts';
 import type { KeyTrouble } from './agents.ts';
@@ -62,6 +63,7 @@ export interface PhoneMessage {
   ceoRuns?: { back: CeoRunsOn }; // the office's: the manager moved the CEO to another coding agent (#418), a pill with Undo to `back`
   ceoStuck?: ChatCeoStuck; // the office's: the CEO's session is stuck (#375), as a card with Open terminal, Sign in and Switch back
   pacing?: true; // the office's: pacing started on a usage warning, as a card with Resume full speed and Always keep full speed (#323)
+  problems?: ProblemsDigest; // the office's daily problems digest (#544), as a card with tappable items
   ceoJob?: CeoJobTag; // the CEO's reply to a job the office started (#332): its model, and Redo on Opus
 }
 

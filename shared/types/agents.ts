@@ -130,6 +130,8 @@ export interface CliView {
   label: string;
   installed: boolean;
   version: string | null;
+  /** Claude Code: the binary bundled with the office (the Agent SDK's), not the computer's own (#546). */
+  bundled?: boolean;
   /** Hooks report every tool call and enforce the guard rails; the others report only when a turn ends. */
   integrated: boolean;
   /** Its install from Settings → Providers (#493): running, or how the last one ended. */

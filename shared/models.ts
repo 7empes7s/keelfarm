@@ -1,4 +1,5 @@
 import type { AgentCli, ModelCatalogView, ModelEntry } from './types.ts';
+import { modelNeedsNewerClaude } from './claudeCode.ts';
 
 // Which model an agent's session asks for. The office's default model belongs to its default coding agent, and each
 // worker can name their own; a model only goes to an agent that understands it (no Claude model for Codex).
@@ -18,7 +19,7 @@ export function effectiveModel(own: string, cli: AgentCli, office: { defaultCli:
 }
 
 /** Claude Code's built-in models, newest first: the catalog's fallback when Anthropic's list can't be read. */
-export const CLAUDE_MODELS = ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5', 'claude-fable-5-1', 'claude-opus-5', 'claude-sonnet-5', 'claude-haiku-4-5-20251001'];
+export const CLAUDE_MODELS = ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5', 'claude-fable-5-2', 'claude-fable-5-1', 'claude-opus-5', 'claude-sonnet-5', 'claude-haiku-4-5-20251001'];
 
 // ---------- local models ----------
 
@@ -128,16 +129,21 @@ export const OTHER_MODEL = '\u0000other';
 
 /**
  * A model picker's options: "Default (Opus 5.5)", naming what the default resolves to, the agent's models with plain
- * labels (the newest of each family marked), and "Other…".
+ * labels (the newest of each family marked), and "Other…". A Claude model the bundled Claude Code (`claudeVersion`, as
+ * --version prints it) is too old for is greyed out, saying so (#546).
  */
-export function pickerOptions(cli: AgentCli, catalog: ModelCatalogView, resolvedDefault: string): { value: string; label: string }[] {
+export function pickerOptions(cli: AgentCli, catalog: ModelCatalogView, resolvedDefault: string, claudeVersion?: string | null): { value: string; label: string; disabled?: boolean }[] {
   const list = catalogFor(cli, catalog);
   const newest = new Set(list.filter((e) => e.alias).map((e) => resolveAlias(e.id, catalog)));
   const fallback = list.find((e) => e.isDefault)?.label;
   const def = resolvedDefault ? labelOf(resolvedDefault, cli, catalog) : fallback;
   return [
     { value: '', label: def ? `Default (${def})` : 'Default' },
-    ...list.map((e) => ({ value: e.id, label: newest.has(e.id) ? `${e.label} · newest` : e.label })),
+    ...list.map((e) => {
+      const label = newest.has(e.id) ? `${e.label} · newest` : e.label;
+      const why = cli === 'claude' ? modelNeedsNewerClaude(e.id, claudeVersion) : null;
+      return why ? { value: e.id, label: `${label} · ${why}`, disabled: true } : { value: e.id, label };
+    }),
     { value: OTHER_MODEL, label: 'Other…' },
   ];
 }

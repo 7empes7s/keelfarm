@@ -15,7 +15,7 @@ import { HOME_DIR } from '../config.ts';
 import { HttpError } from '../httpError.ts';
 import { DEFAULT_VOICE, localDay } from '../voice.ts';
 import { bearerOk, newLlmToken, sessionOf, type AgentIds } from '../voiceAgent.ts';
-import { SwarmLiveLeases } from './liveLeases.ts';
+import { SwarmProblems } from './problems.ts';
 
 /** A call nobody ended (a crashed tab) is counted up to its last turn plus this, once it's been quiet STALE_MS. */
 const STALE_MS = 15 * 60_000;
@@ -38,7 +38,7 @@ interface AgentSession {
 /** "issue #12" → "working on issue 12"; "testing PR #9" → "testing pull request 9". */
 const doingWords = (d: string | null) => (d ? d.replace(/^issue #(\d+)/, 'working on issue $1').replace(/\bPR #(\d+)/, 'pull request $1') : '');
 
-export abstract class SwarmVoiceAgent extends SwarmLiveLeases {
+export abstract class SwarmVoiceAgent extends SwarmProblems {
   private agentFile: AgentFile | null = null;
   private agentSessions = new Map<string, AgentSession>();
 

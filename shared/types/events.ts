@@ -10,6 +10,7 @@ import type { ItDeskView } from '../itDesk.ts';
 import type { ItView } from '../itDept.ts';
 import type { ItWatchView } from '../itWatch.ts';
 import type { ItTicket } from '../itTickets.ts';
+import type { Problem } from '../problems.ts';
 import type { HistoryEntry } from '../history.ts';
 import type { OpsView } from '../ops.ts';
 import type { WeatherView } from '../outside.ts';
@@ -60,6 +61,7 @@ export interface WorldSnapshot {
   it?: ItView; // the IT department's chat (#524); absent until it has a message or a bot, and in a replay
   itWatch?: ItWatchView; // IT monitoring (#525): the health checks and open recommendations; absent until the first check
   itTickets?: ItTicket[]; // IT tickets (#542): office problems reported to IT, newest first; absent while there are none, and in a replay
+  problems?: Problem[]; // the problems register (#544): work and process problems, newest first; absent while there are none
   claudeUsage: UsageReading[]; // the latest reading per limit, for the usage meter (none until a session reports)
   claudeUsageCheck?: UsageCheckError | null; // the office's last idle check failed (#89), null once one reads
   claudeUsageShares?: UsageShares[]; // each bar's floor shares of the office's spend in its window (#334)
@@ -139,6 +141,7 @@ export type ServerEvent =
   | { type: 'it'; it: Omit<ItView, 'messages'>; message?: PhoneMessage }
   | { type: 'itWatch'; itWatch: ItWatchView }
   | { type: 'itTickets'; tickets: ItTicket[] }
+  | { type: 'problems'; problems: Problem[] }
   | { type: 'testLab'; testLab: TestLabView }
   | { type: 'claudeUsage'; readings: UsageReading[]; check?: UsageCheckError | null; shares?: UsageShares[] }
   | { type: 'ops'; ops: OpsView }

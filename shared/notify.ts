@@ -1,6 +1,7 @@
 // Notification settings shared by the server (validation, defaults) and the settings UI (labels): which events the
 // office tells the manager about, on which channels, and the office URL messages link back to (docs/pocket.md).
 import type { NotifyChannel, NotifyChannelsView, NotifyEvent, NotifySettings, NotifyWebhook } from './types.ts';
+import { digestHour } from './problems.ts';
 
 /** In the order the settings list them. */
 export const NOTIFY_EVENTS: { id: NotifyEvent; label: string }[] = [
@@ -45,7 +46,7 @@ export function officeUrl(raw: unknown): string | null {
 
 /** Notification settings from a saved state or a PATCH /api/settings, field by field; anything invalid keeps `base`. */
 export function notifySettings(base: NotifySettings, patch: unknown): NotifySettings {
-  const p = (patch && typeof patch === 'object' ? patch : {}) as { events?: unknown; channels?: unknown; officeUrl?: unknown; telegramMirror?: unknown; quietInApp?: unknown };
+  const p = (patch && typeof patch === 'object' ? patch : {}) as { events?: unknown; channels?: unknown; officeUrl?: unknown; telegramMirror?: unknown; quietInApp?: unknown; problemsDigestHour?: unknown };
   const pick = <K extends string>(keys: readonly K[], from: Record<K, boolean>, raw: unknown): Record<K, boolean> => {
     const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
     return Object.fromEntries(keys.map((k) => [k, typeof r[k] === 'boolean' ? r[k] : from[k] ?? false])) as Record<K, boolean>;
@@ -61,6 +62,7 @@ export function notifySettings(base: NotifySettings, patch: unknown): NotifySett
     officeUrl: url ?? base.officeUrl ?? '',
     telegramMirror: typeof p.telegramMirror === 'boolean' ? p.telegramMirror : (base.telegramMirror ?? false),
     quietInApp: typeof p.quietInApp === 'boolean' ? p.quietInApp : (base.quietInApp ?? true),
+    ...((p.problemsDigestHour ?? base.problemsDigestHour) !== undefined && { problemsDigestHour: digestHour(p.problemsDigestHour ?? base.problemsDigestHour) }),
   };
 }
 
