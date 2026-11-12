@@ -267,6 +267,9 @@ export function codexHookCommand(node: string, script: string, win = WIN): strin
  */
 export { CROSS_TURN_TOOLS };
 
+/** Claude Code's session settings with commit and PR attribution off (#599), in both spellings: 2.1 reads `attribution`. */
+export const CLAUDE_NO_ATTRIBUTION = { attribution: { commit: '', pr: '', sessionUrl: false }, includeCoAuthoredBy: false } as const;
+
 export function launchArgs(id: AgentCli, ctx: LaunchContext): Launch {
   switch (id) {
     case 'claude': {
@@ -306,6 +309,8 @@ export function launchArgs(id: AgentCli, ctx: LaunchContext): Launch {
         ...(ctx.effort ? ['-c', `model_reasoning_effort=${toml(EFFORT_CODEX[ctx.effort])}`] : []),
         ...(ctx.browser ? ['-c', `mcp_servers.playwright={command=${toml(ctx.browser.command)},args=[${ctx.browser.args.map(toml).join(',')}]}`] : []),
         ...(ctx.office ? ['-c', `mcp_servers.office={url=${toml(ctx.office)}}`] : []),
+        '-c',
+        'commit_attribution=""', // no "Co-authored-by: Codex" in its commits (#599)
         ...CODEX_HOOK_EVENTS.flatMap((e) => ['-c', `hooks.${e}=[{hooks=[{type="command",command=${toml(codexHookCommand(ctx.node ?? process.execPath, ctx.codexHook, ctx.posix ? false : WIN))},timeout=10}]}]`]),
         // Like the manager's own Codex, but it can't stop to ask: no approvals and no sandbox (its sandbox can't reach
         // the credential store, so git and gh fail in it).

@@ -31,9 +31,31 @@ export function officeUpdateText(u: OfficeUpdateView, now = Date.now()): string 
   }
 }
 
-/** The HUD chip while an update is on its way; null when there's nothing to show. */
+/** The header's few words for why a ready update waits (#600); null when it says nothing beyond the state. */
+function waitChip(u: OfficeUpdateView): string | null {
+  switch (u.wait?.kind) {
+    case 'manual':
+      return 'Update ready · automatic updates off';
+    case 'postponed':
+      return 'Update ready · postponed';
+    case 'preflight':
+      return 'Update held back · preflight failed';
+    case 'failed':
+      return 'Update held back · the last one failed';
+    case 'probation':
+      return 'Update waits for the last one’s probation';
+    case 'lock':
+      return 'Update stuck in the launcher';
+    default:
+      return null;
+  }
+}
+
+/** The HUD chip while an update is ready or on its way, saying why it waits; null when there's nothing to show. */
 export function officeUpdateChip(u: OfficeUpdateView | undefined, now = Date.now()): string | null {
   if (!u) return null;
+  const why = waitChip(u);
+  if (why) return why;
   if (u.state === 'settling') return settlingText(u, now);
   if (u.state === 'updating') return 'Updating the office…';
   if (u.state !== 'waiting' && u.state !== 'draining') return null;

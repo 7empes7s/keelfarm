@@ -14,6 +14,7 @@ import { WorkersPanel } from './WorkersPanel';
 import { PresenceHud } from './PresenceHud';
 import { officeUpdateChip } from '../officeUpdate';
 import { UpdatePill } from './UpdatePill';
+import { OfficeUpdateButton } from './OfficeUpdateButton';
 import { useA11y } from './a11y';
 import { useCameraView } from '../world/camera/rig';
 import { CameraHud, OverviewButton } from './CameraHud';
@@ -25,6 +26,7 @@ import { RoofHud } from './RoofHud';
 import { SearchButton } from './SearchPalette';
 import { GuideButton } from './GuideCard';
 import { NoticeBell, NoticeToasts } from './Notices';
+import { WakeLight } from './wake/WakeRunner';
 import { QuickToggles } from './QuickToggles';
 import { usageChip } from '../ops';
 import { heldNote } from '../../../shared/health';
@@ -49,7 +51,7 @@ function OfficeUpdateChip() {
   const openOverlay = useStore((s) => s.openOverlay);
   if (!text || overlay?.kind === 'manager') return null;
   return (
-    <button className="office-chip" onClick={() => openOverlay({ kind: 'manager', tab: 'floors' })} title="The office is updating itself. Open the manager's console">
+    <button className="office-chip" onClick={() => openOverlay({ kind: 'manager', tab: 'floors' })} title="The office's own update: why it waits, Update now and Later. Open the manager's console">
       {text}
     </button>
   );
@@ -244,6 +246,7 @@ export function HUD() {
   const chips = (
     <>
       <OfficeUpdateChip />
+      <OfficeUpdateButton className="office-chip update-pill" />
       <UpdatePill className="office-chip update-pill" />
       <UsageChip />
       <MemoryChip />
@@ -271,6 +274,7 @@ export function HUD() {
           {/* the bell and Settings first: when the row wraps, its last pills go under the workers list, never these */}
           <div className="hud-status">
             <NoticeBell className="pill" />
+            <WakeLight className="pill" />
             <SettingsButton />
             <QuickToggles className="pill" />
             {demo && <span className="pill pill-demo">{publicDemo ? `Demo office · resets every ${publicDemo.resetHours} h` : 'DEMO'}</span>}
