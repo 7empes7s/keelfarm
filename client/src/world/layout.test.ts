@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FLOOR_SEATS } from '../../../shared/types';
 import { BALCONY, BALCONY_LIGHTS, BALCONY_OUT, BALCONY_TOP, BENCH, FLOOR_HEIGHT, HALF_W, PLANTER, SIDE_DOOR, SIDE_OPENINGS, SIDES, WALL_H, WALL_T, WINDOW, balconyFloor, balconyFurniture, balconyRailing, floorElevation, inBuilding, outsideAt, outsideColliders, sideDoorway, sideSign, toyOnlyAt } from './layout.ts';
-import { APP_SCREEN, BOARD, CEO_DESK, CEO_ROOM, COFFEE_CORNER, coffeeCorner, collide, DESK_RUGS, ELEVATOR, GONG, GONG_SPOT, gongRect, HALF_D, LOBBY_RUG, lobbyColliders, MANAGER_DESK, MANAGER_ROOM, MANAGER_SCREEN, MANAGER_WORKSTATION, MISSION, missionColumn, missionRects, officeColliders, PLAYER_RADIUS, RECEPTION, rect, shellColliders, SPAWN, surfaceAt, WAITING, WAITING_TABLE, type Rect } from './layout.ts';
+import { APP_SCREEN, BOARD, CEO_DESK, CEO_ROOM, IT_DESK, IT_LEAD, IT_ROOM, IT_VISITOR, itColliders, COFFEE_CORNER, coffeeCorner, collide, DESK_RUGS, ELEVATOR, GONG, GONG_SPOT, gongRect, HALF_D, LOBBY_RUG, lobbyColliders, MANAGER_DESK, MANAGER_ROOM, MANAGER_SCREEN, MANAGER_WORKSTATION, MISSION, missionColumn, missionRects, officeColliders, PLAYER_RADIUS, RECEPTION, rect, shellColliders, SPAWN, surfaceAt, WAITING, WAITING_TABLE, type Rect } from './layout.ts';
 import { DESK, DESK_ROWS, EAST_DESKS, EAST_ROTATION, MAX_DESKS, SEATS, deskPosition, deskRotation, isEastDesk } from './layout.ts';
 
 const R = 0.3;
@@ -475,5 +475,49 @@ describe('mission control in the lobby', () => {
     expect(e.minX - w.maxX).toBeGreaterThan(1.4);
     const p = collide(MISSION.x, -HALF_D + 1.2, rects);
     expect(p).toEqual({ x: MISSION.x, z: -HALF_D + 1.2 });
+  });
+});
+
+describe('the IT office in the lobby (#535)', () => {
+  const touches = (b: Rect, c: Rect) => b.minX < c.maxX && b.maxX > c.minX && b.minZ < c.maxZ && b.maxZ > c.minZ;
+  const same = (b: Rect, c: Rect) => b.minX === c.minX && b.maxX === c.maxX && b.minZ === c.minZ && b.maxZ === c.maxZ;
+  const inside = (b: Rect, r: Rect) => b.minX >= r.minX - 0.13 && b.maxX <= r.maxX + 0.13 && b.minZ >= r.minZ - 0.13 && b.maxZ <= r.maxZ + 0.13;
+
+  it("sits next to the CEO's corner office, keeping the CEO's door and the east door clear", () => {
+    const r = IT_ROOM;
+    expect(r.minZ).toBe(CEO_ROOM.maxZ);
+    expect(r.maxX).toBe(HALF_W);
+    expect(r.minX).toBeGreaterThan(CEO_ROOM.doorMaxX + 0.5); // room to walk up to the CEO's door
+    expect(r.maxZ + 0.12).toBeLessThan(sideDoorway('lobby', 'east').minZ - 0.3);
+    expect(r.doorMinZ).toBeGreaterThan(r.minZ + 0.3);
+    expect(r.doorMaxZ - r.doorMinZ).toBeGreaterThanOrEqual(1.8);
+  });
+
+  it('holds its furniture inside its walls, clear of everything else in the lobby', () => {
+    const it = itColliders();
+    const lobby = lobbyColliders();
+    for (const b of it) expect(lobby).toContainEqual(b);
+    for (const b of it) expect(inside(b, IT_ROOM), JSON.stringify(b)).toBe(true);
+    const shell = shellColliders('lobby');
+    const ceoWalls = lobby.filter((b) => b.h === 2.8 && touches(b, { minX: CEO_ROOM.minX, maxX: CEO_ROOM.maxX, minZ: CEO_ROOM.maxZ - 0.2, maxZ: CEO_ROOM.maxZ + 0.2 }));
+    const others = lobby.filter((b) => !it.some((m) => same(m, b)) && !shell.some((w) => same(w, b)) && !ceoWalls.some((w) => same(w, b)));
+    for (const b of it) expect(others.filter((o) => touches(o, b)), JSON.stringify(b)).toEqual([]);
+    // nothing in the lobby stood where the room now is
+    expect(others.filter((o) => touches(o, IT_ROOM))).toEqual([]);
+  });
+
+  it('lets you walk through its door to the help desk, with the IT lead across the counter', () => {
+    const lobby = lobbyColliders();
+    const door = { x: IT_ROOM.minX, z: (IT_ROOM.doorMinZ + IT_ROOM.doorMaxZ) / 2 };
+    expect(collide(door.x, door.z, lobby)).toEqual(door);
+    expect(collide(IT_VISITOR.x, IT_VISITOR.z, lobby)).toEqual(IT_VISITOR);
+    expect(IT_VISITOR.x).toBeLessThan(IT_DESK.x - IT_DESK.w / 2);
+    expect(IT_LEAD.x).toBeGreaterThan(IT_DESK.x + IT_DESK.w / 2);
+    expect(Math.abs(IT_LEAD.z - IT_VISITOR.z)).toBeLessThan(0.3);
+    expect(Math.hypot(IT_LEAD.x - IT_VISITOR.x, IT_LEAD.z - IT_VISITOR.z)).toBeLessThan(3); // in E's reach
+  });
+
+  it('is carpeted', () => {
+    expect(surfaceAt('lobby', IT_VISITOR.x, IT_VISITOR.z)).toBe('rug');
   });
 });

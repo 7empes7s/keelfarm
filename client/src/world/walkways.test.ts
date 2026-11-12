@@ -50,7 +50,7 @@ describe('named spots', () => {
   it('the lobby has the CEO, the couch, the toys and the elevator', () => {
     const w = walkways('lobby');
     expect(w.homes.map((s) => s.id)).toEqual(['ceo']);
-    for (const id of ['manager', 'reception', 'couch', 'coffee', 'mugs', 'hoop', 'balls', 'jukebox', 'elevator']) expect(spot(w, id), id).toBeDefined();
+    for (const id of ['manager', 'reception', 'it', 'couch', 'coffee', 'mugs', 'hoop', 'balls', 'jukebox', 'elevator']) expect(spot(w, id), id).toBeDefined();
   });
 
   it("the lobby's coffee spots stand in front of the coffee corner, facing it, and you can walk there", () => {

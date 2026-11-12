@@ -16,7 +16,7 @@ export type Mode = 'pocket' | 'office';
 type PocketTab = (typeof POCKET_TABS)[number];
 type AgentTab = 'chat' | 'terminal' | 'now' | 'profile' | 'setup';
 type Sheet = 'usage' | 'notices' | 'elevator' | 'catalogue' | 'floor-list' | 'sound';
-type Place = 'manager' | 'ceo' | 'maproom' | 'lobby' | 'screens';
+type Place = 'manager' | 'ceo' | 'maproom' | 'lobby' | 'screens' | 'it';
 
 export type Route =
   | { to: 'tab'; tab: PocketTab }
@@ -37,7 +37,7 @@ const AGENT_TABS: readonly AgentTab[] = ['chat', 'terminal', 'now', 'profile', '
 const SHEETS: readonly Sheet[] = ['usage', 'notices', 'elevator', 'catalogue', 'floor-list', 'sound'];
 const PHONE_TABS: readonly PhoneTab[] = ['chat', 'hires', 'company', 'games'];
 const HELP_TABS: readonly HelpTab[] = ['office', 'controls'];
-const PLACES: readonly Place[] = ['manager', 'ceo', 'maproom', 'lobby', 'screens'];
+const PLACES: readonly Place[] = ['manager', 'ceo', 'maproom', 'lobby', 'screens', 'it'];
 const FLOOR_VIEWS = ['kanban', 'app', 'decor'] as const;
 
 /** Every route: its pattern, what it opens, and the offices it opens in (docs/deep-links.md lists them for QA). */
@@ -159,7 +159,7 @@ export interface World {
 }
 
 /** A spot to stand at in the 3D office (world/routeStand.ts places it): a desk's, the whiteboard's, or a named one. */
-export type Spot = { desk: number } | 'board' | 'elevator' | 'manager' | 'ceo' | 'reception' | 'screens';
+export type Spot = { desk: number } | 'board' | 'elevator' | 'manager' | 'ceo' | 'reception' | 'screens' | 'it';
 
 /** Where the 3D camera goes: a floor (0: the lobby) and a spot on it. */
 export interface Stand {

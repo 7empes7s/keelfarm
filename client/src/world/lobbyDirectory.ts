@@ -1,6 +1,7 @@
 // The lobby's building directory by the elevator (#371), pure: a row per floor (top floor first, the lobby last) with
 // its floor theme's glyph, name and colour, laid out on the board's canvas so every floor fits however many there
-// are, and which row a tap on the board lands on (Lobby.tsx's Directory takes you to that floor).
+// are, and which row a tap on the board lands on (Lobby.tsx's Directory takes you to that floor). The lobby's IT office
+// (#535) has the last row: a tap there opens IT's chat.
 
 import { FLOOR_THEME_INFO, floorThemeOf } from '../../../shared/floorThemes';
 
@@ -14,6 +15,8 @@ export interface DirectoryRow {
   theme: string; // its theme's name
   accent: string; // its theme's colour
   stats: string;
+  /** The lobby's IT office, not a floor. */
+  it?: true;
   /** Its band on the canvas, in pixels from the top. */
   y: number;
   h: number;
@@ -30,17 +33,19 @@ export interface DirectoryFloor {
 }
 
 const LOBBY = { glyph: '🛎️', accent: '#ff8a5b' };
+const IT = { glyph: '🖥️', accent: '#2a9d8f' };
 
-/** The board's rows: every floor, top first, then the lobby, each as tall as fits (at most maxRow pixels). */
+/** The board's rows: every floor, top first, then the lobby and its IT office, each as tall as fits (at most maxRow pixels). */
 export function directoryRows(floors: readonly DirectoryFloor[]): DirectoryRow[] {
   const P = DIRECTORY_PX;
   const sorted = [...floors].sort((a, b) => b.floor - a.floor);
-  const h = Math.min(P.maxRow, (P.bottom - P.top) / (sorted.length + 1));
+  const h = Math.min(P.maxRow, (P.bottom - P.top) / (sorted.length + 2));
   const rows: DirectoryRow[] = sorted.map((f, i) => {
     const info = FLOOR_THEME_INFO[floorThemeOf(f.theme)];
     return { floor: f.floor, name: f.name, color: f.color, glyph: info.glyph, theme: info.name, accent: info.swatch[2], stats: `${f.working}/${f.team} busy · ${f.prs} PR`, y: P.top + i * h, h };
   });
   rows.push({ floor: 0, name: "Lobby & manager's office", color: LOBBY.accent, glyph: LOBBY.glyph, theme: 'Lobby', accent: LOBBY.accent, stats: '', y: P.top + sorted.length * h, h });
+  rows.push({ floor: 0, name: 'IT office', color: IT.accent, glyph: IT.glyph, theme: "Lobby, by the CEO's", accent: IT.accent, stats: '', it: true, y: P.top + (sorted.length + 1) * h, h });
   return rows;
 }
 

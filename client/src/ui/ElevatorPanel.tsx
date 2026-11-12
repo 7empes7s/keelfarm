@@ -53,7 +53,7 @@ export function ElevatorPanel() {
         <button className={`floor-btn ${floor === 0 ? 'floor-btn-here' : ''}`} style={{ ['--accent' as string]: '#ff8a5b' }} onClick={() => goToFloor(0)}>
           <span className="floor-btn-num">G</span>
           <span className="floor-btn-name">Lobby &amp; manager's office</span>
-          <span className="floor-btn-meta">connect repos · hire · file issues</span>
+          <span className="floor-btn-meta">connect repos · hire · file issues · IT office</span>
         </button>
         {repos.length === 0 && <p className="muted">No floors yet. Head to the manager's office to connect a GitHub repo or start a new project.</p>}
         <p className="muted small">Tip: press a floor number (or G, or R for the roof) while this panel is open.</p>
