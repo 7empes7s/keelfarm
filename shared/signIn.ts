@@ -86,8 +86,9 @@ export function signInScreen(text: string): SignInScreen {
   const deviceCode = /one-time code[^\n]*\n\s*([A-Z0-9]{4,}-[A-Z0-9]{4,})\s*$/m.exec(body)?.[1] ?? null;
   const ok = /Login successful|Successfully logged in|Logged in (?:as|using)|Authentication succeeded/i;
   const bad = /Login failed|OAuth error|Error logging in|Invalid (?:code|authorization)|Authentication failed|Failed to authenticate/i;
-  // Gemini CLI's "Failed to authenticate with user code. Retrying..." asks again with a new link: not the end.
-  const last = [...mine].reverse().find((l) => ok.test(l) || (bad.test(l) && !/Retrying/i.test(l)));
+  // Gemini CLI's "Failed to authenticate with user code. Retrying..." asks again with a new link: only what follows counts.
+  const tries = mine.slice(mine.findLastIndex((l) => /Retrying/i.test(l)) + 1);
+  const last = [...tries].reverse().find((l) => ok.test(l) || bad.test(l));
   const result = last ? (ok.test(last) ? 'ok' : 'failed') : null;
   const found = result ? null : menuOf(mine);
   // A menu with the link or the prompt under it was answered already (the CLI left it on screen).

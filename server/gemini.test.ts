@@ -143,8 +143,8 @@ describe("Gemini CLI's sign-in", () => {
     const asked = [start, 'Please visit the following URL to authorize the application:', '', 'https://accounts.google.com/o/oauth2/v2/auth?x=1', '', 'Enter the authorization code: '].join('\n');
     expect(signInScreen(asked)).toMatchObject({ url: 'https://accounts.google.com/o/oauth2/v2/auth?x=1', waiting: true, result: null });
     expect(signInScreen(`${asked}\nFailed to authenticate with user code.`).result).toBe('failed');
-    // A wrong code (Gemini CLI 0.68): it says it retries and asks again with a new link (#540).
-    const again = signInScreen(`${asked}\nFailed to authenticate with user code. Retrying...\nPlease visit the following URL to authorize the application:\n\nhttps://accounts.google.com/o/oauth2/v2/auth?x=2\n\nEnter the authorization code: `);
+    // A wrong code (real Gemini CLI 0.68 output): it says why, retries and asks again with a new link (#540).
+    const again = signInScreen(`${asked}4/0Abogus\nFailed to authenticate with authorization code:invalid_grant\n\nFailed to authenticate with user code. Retrying...\nPlease visit the following URL to authorize the application:\n\nhttps://accounts.google.com/o/oauth2/v2/auth?x=2\n\nEnter the authorization code: `);
     expect(again).toMatchObject({ url: 'https://accounts.google.com/o/oauth2/v2/auth?x=2', waiting: true, result: null });
   });
 });
