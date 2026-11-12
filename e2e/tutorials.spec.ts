@@ -144,11 +144,16 @@ test('the first launch offers Get started, and Not now puts it away', async ({ p
   await expect(page.getByRole('region', { name: 'Get started' })).toHaveCount(0);
 });
 
-test('the 3D office runs a tutorial end to end', async ({ page }, info) => {
+test('the 3D office runs a tutorial end to end, started from Help', async ({ page }, info) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   const t = TUTORIALS.find((x) => x.id === 'needs-you')!;
   await page.request.patch('/api/settings', { data: { tutorialStep: -1 } }); // the first-run tour is over
-  await progress(page, { at: { [t.id]: { step: 0, done: false } }, running: t.id });
+  await progress(page, null);
   await enterOffice(page);
+  await page.keyboard.press('h');
+  const help = page.locator('.panel', { hasText: 'How the office works' });
+  await help.getByRole('button', { name: `Start ${t.title}` }).click();
+  await expect(help).toHaveCount(0); // Help makes way for the ringed bell
+  await expect.poll(() => page.evaluate(() => !!document.pointerLockElement)).toBe(false); // the mouse is free to tap it
   await runThrough(page, t, info, '3d');
 });

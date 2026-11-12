@@ -71,7 +71,9 @@ function openStep(id: string, at: number, mode: Mode) {
   // what the last step opened makes way: nothing covers this one's control
   useFinder.setState({ guide: false, search: false });
   useNoticePop.setState({ open: false });
+  useStore.setState({ back: null }); // closing must not bring back the panel under it (Help, a chat chip's)
   s.openOverlay(null);
+  if (document.pointerLockElement) document.exitPointerLock();
   if (step.open === 'plan') return goTo({ kind: 'ceo', text: matchCommands('plan')[0].template(s.repos[0]?.floor ?? 1) });
   const link = stepLink(step, worldOf(s), mode);
   if (link) openLink(link);
@@ -125,6 +127,12 @@ export function TaskTutorial({ track }: { track: Track }) {
   useEffect(() => {
     setDone(false);
     if (id && step && !aside) openStep(id, at, mode);
+    // the Enter click's mouse grab can land after the step opened: give the mouse back once it does
+    if (!aside && track === 'office') {
+      const free = () => void (document.pointerLockElement && document.exitPointerLock());
+      document.addEventListener('pointerlockchange', free);
+      return () => document.removeEventListener('pointerlockchange', free);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, aside]);
 

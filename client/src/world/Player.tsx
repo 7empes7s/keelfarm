@@ -44,6 +44,7 @@ import { recordHitch } from '../hitches';
 import { newStuck, STUCK_MS, stuckStep } from '../hitchLog';
 import { joinPong, pongCamera, pongMouse, tickPaddle } from './toys/pongState';
 import { openSettings } from '../ui/HudSettings';
+import { useTour } from '../ui/tour';
 
 /** How fast the right stick moves the ping-pong paddle, full over (in mouse pixels a second). */
 const PAD_PADDLE = 600;
@@ -68,7 +69,8 @@ const hushMouse = () => {
 export function requestLook() {
   const s = useStore.getState();
   // A touch screen has no mouse to grab: its fingers look around (touch/TouchControls.tsx).
-  if (isTouch || !canvasEl || s.overlay || !s.started || isConfirmOpen() || !lookAllowed() || photoActive()) return;
+  // a task tutorial (#517) keeps the mouse free for the controls it rings
+  if (isTouch || !canvasEl || s.overlay || !s.started || isConfirmOpen() || !lookAllowed() || photoActive() || useTour.getState().task) return;
   const el = canvasEl;
   // Raw (unadjusted) input skips the OS mouse path that produces bogus spikes on Windows.
   // Browsers that can't do it reject with NotSupportedError (Firefox ignores the option).

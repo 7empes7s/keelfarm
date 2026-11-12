@@ -135,11 +135,11 @@ export const TUTORIALS: Tutorial[] = [
     icon: 'activity',
     blurb: 'Usage and accounts, pacing, team size, disk and memory, Telegram alerts.',
     steps: [
-      { id: 'usage', title: 'Usage and accounts', text: "Claude's usage for every account: tap a row for its limits.", open: '#usage', targets: ['#ops-card-usage'], done: 'tap' },
+      { id: 'usage', title: 'Usage and accounts', text: "Claude's usage for every account, and Change sets what the office does when it runs high.", open: '#usage', targets: ['[data-tour="usage-warn"]'], done: 'tap' },
       { id: 'pacing', title: 'Pacing', text: 'Pick what the office does when usage runs high.', open: '#settings/agents', targets: ['[data-tour="pacing"]'], done: 'tap' },
       { id: 'team-size', title: 'Team size', text: 'Set the most agents a floor may have.', open: '#settings/agents', targets: ['[data-tour="team-size"]'], done: 'tap' },
       { id: 'health', title: 'Disk and memory', text: 'Free space and memory at a glance: tap the disk card for what takes room.', open: '#company/ops', targets: ['#ops-card-disk', '#ops-card-server'], done: 'tap' },
-      { id: 'telegram', title: 'Alerts on Telegram', text: 'Add your Telegram bot to get alerts on your phone.', open: '#settings/notifications', targets: ['.telegram'], done: 'tap' },
+      { id: 'telegram', title: 'Alerts on Telegram', text: 'Paste your bot token here (or turn Telegram on) to get alerts on your phone.', open: '#settings/notifications', targets: ['[data-tour="telegram-token"]', '[data-tour="telegram-start"]', '[data-tour="telegram-on"]', '.telegram-off'], done: 'tap' },
     ],
   },
 ];
