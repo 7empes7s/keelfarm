@@ -496,6 +496,8 @@ const itIds = (body: unknown) => {
 app.post('/api/it/run', route((req) => swarm.itRunProposals(itIds(req.body))));
 app.post('/api/it/dismiss', route((req) => swarm.itDismiss(itIds(req.body))));
 app.post('/api/it/undo/:id', route((req) => swarm.itUndo(String(req.params.id))));
+app.post('/api/it/runbook/:id', route((req) => swarm.itRunbookDecide(String(req.params.id), req.body?.run === true)));
+app.post('/api/it/runbook/:id/undo', route((req) => swarm.itRunbookUndo(String(req.params.id))));
 // The IT department (#524): the manager's message to IT, and IT's own Telegram bot (as the CEO's, under "telegramIt").
 app.post('/api/it/message', route((req) => swarm.messageIt(str(req.body?.text), undefined, undefined, typeof req.body?.replyTo === 'number' ? req.body.replyTo : undefined)));
 app.post('/api/it/messages/:id/react', route((req) => swarm.reactToItMessage(Number(req.params.id), str(req.body?.emoji))));
@@ -503,6 +505,10 @@ app.put('/api/it/telegram', route((req) => swarm.itBot.setToken(req.body?.token)
 app.post('/api/it/telegram/link', route(() => swarm.itBot.link()));
 app.delete('/api/it/telegram', route(() => swarm.itBot.remove()));
 app.post('/api/it/telegram/demo', route((req) => swarm.itTelegramDemo(req.body ?? {})));
+// Checklists (#612): the manager's tick, untick, not needed or comment on a step, a secret field (to Providers only), a copy.
+app.post('/api/checklists/:id/steps/:step', route((req) => swarm.checklistStep(String(req.params.id), String(req.params.step), req.body ?? {})));
+app.post('/api/checklists/:id/steps/:step/secret', route((req) => swarm.checklistSecret(String(req.params.id), String(req.params.step), req.body?.value)));
+app.post('/api/checklists/:id/duplicate', route((req) => swarm.checklistDuplicate(String(req.params.id), req.body?.title)));
 // IT monitoring (#525): the checks now, a recommendation's option picked, Not now.
 app.post('/api/it/watch/check', route(() => swarm.itWatchTick()));
 app.post('/api/agent-sdk/check', route(() => swarm.checkAgentSdk()));

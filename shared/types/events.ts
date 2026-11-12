@@ -13,6 +13,7 @@ import type { SdkUpdateView } from '../agentSdk.ts';
 import type { ItTicket } from '../itTickets.ts';
 import type { ItImproveView } from '../itImprove.ts';
 import type { Problem } from '../problems.ts';
+import type { Checklist } from '../checklists.ts';
 import type { HistoryEntry } from '../history.ts';
 import type { OpsView } from '../ops.ts';
 import type { WeatherView } from '../outside.ts';
@@ -66,6 +67,7 @@ export interface WorldSnapshot {
   itTickets?: ItTicket[]; // IT tickets (#542): office problems reported to IT, newest first; absent while there are none, and in a replay
   itImprove?: ItImproveView; // IT's improvements (#543): trends from closed tickets, the review's cards, the changes; absent until the first record
   problems?: Problem[]; // the problems register (#544): work and process problems, newest first; absent while there are none
+  checklists?: Checklist[]; // the CEO's checklists for the manager (#612), newest first; absent while there are none
   claudeUsage: UsageReading[]; // the latest reading per limit, for the usage meter (none until a session reports)
   claudeUsageCheck?: UsageCheckError | null; // the office's last idle check failed (#89), null once one reads
   claudeUsageShares?: UsageShares[]; // each bar's floor shares of the office's spend in its window (#334)
@@ -148,6 +150,8 @@ export type ServerEvent =
   | { type: 'itTickets'; tickets: ItTicket[] }
   | { type: 'itImprove'; itImprove: ItImproveView }
   | { type: 'problems'; problems: Problem[] }
+  /** A checklist created or changed (#612): it replaces the tab's copy by id. */
+  | { type: 'checklist'; checklist: Checklist }
   | { type: 'testLab'; testLab: TestLabView }
   | { type: 'claudeUsage'; readings: UsageReading[]; check?: UsageCheckError | null; shares?: UsageShares[] }
   | { type: 'ops'; ops: OpsView }

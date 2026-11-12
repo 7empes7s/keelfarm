@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addSpan, allOutText, detectLimit, endedText, fallbackText, hasRoom, LIMIT_TAIL_LINES, pickAccount, pinnedWaits, pinOut, resetTime, rotationSettings, rotationStats, sessionEnd, spanBars, switchesForCeo, switchHandover, switchText, waitText, type Candidate } from './accountRotation';
+import { addSpan, allOutText, detectLimit, endedText, fallbackText, hasRoom, LIMIT_TAIL_LINES, noneSignedIn, noSignInText, pickAccount, pinnedWaits, pinOut, resetTime, rotationSettings, rotationStats, sessionEnd, spanBars, switchesForCeo, switchHandover, switchText, waitText, type Candidate } from './accountRotation';
 import type { AccountSwitch, ProviderAccount } from './types';
 
 const NOW = new Date(2026, 10, 7, 13, 0, 0).getTime(); // 13:00 local
@@ -231,5 +231,22 @@ describe('signed out is not limited (#579)', () => {
     const s = { at: now, agentId: 'a1', agentName: 'Fable', fromId: 'claude-pro', from: 'Claude Pro', toId: 'claude-ultra', to: 'Claude Ultra', why: 'signed-out' as const, until: null, api: false, usd: 0 };
     expect(switchesForCeo([s], clock)).toEqual(['Fable is running on Claude Ultra because Claude Pro is signed out.']);
     expect(switchesForCeo([{ ...s, why: 'limited', until: Date.UTC(2026, 10, 12, 16) }], clock)).toEqual(['Fable is running on Claude Ultra because Claude Pro is limited until 16:00.']);
+  });
+});
+
+describe('no account signed in (#617)', () => {
+  const acc = (cli: 'claude' | 'codex', status: string) => ({ cli, status });
+  it('is every enabled account of that coding agent signed out, never a limited one or none at all', () => {
+    expect(noneSignedIn([acc('claude', 'signed-out'), acc('claude', 'paused'), acc('codex', 'ready')], 'claude')).toBe(true);
+    expect(noneSignedIn([acc('claude', 'signed-out'), acc('claude', 'limited')], 'claude')).toBe(false);
+    expect(noneSignedIn([acc('claude', 'signed-out'), acc('claude', 'ready')], 'claude')).toBe(false);
+    expect(noneSignedIn([acc('codex', 'signed-out')], 'claude')).toBe(false);
+    expect(noneSignedIn([acc('claude', 'paused')], 'claude')).toBe(false);
+  });
+  it('names the accounts, the fix and who waits', () => {
+    expect(noSignInText('claude', 'Claude Code', ['Claude login on this computer', 'Max · keelops'], "Ada's issue #3")).toBe(
+      "🔑 No Claude Code account is signed in (Claude login on this computer, Max · keelops), so Ada's issue #3 went back in line. To fix it, run claude in a terminal on this computer and type /login, or tap Sign in.",
+    );
+    expect(noSignInText('codex', 'Codex', ['Codex login'], "Bo's QA of PR #9")).toContain('run codex login in a terminal on this computer');
   });
 });

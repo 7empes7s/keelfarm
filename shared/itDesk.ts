@@ -4,6 +4,7 @@
 import type { CfChange } from './cloudflare';
 import type { ProviderChange } from './providerActions';
 import type { KeyInstall } from './keyInstall';
+import { loadRunbooks, type ItRunbookJob, type ItRunbookView } from './itRunbook';
 
 export type ItRisk = 'low' | 'medium' | 'high';
 
@@ -45,11 +46,13 @@ export interface ItDeskState {
   waiting: ItProposal[];
   log: ItLogEntry[]; // newest first, IT_LOG_KEPT at most
   units?: string[]; // systemd units IT installed itself (#585): routine auto-approve may start and restart them
+  runbooks?: ItRunbookJob[]; // runbook jobs (#611), newest first, RUNBOOKS_KEPT at most
 }
 
 /** What a tab sees: whether it's on, the waiting cards, and the latest IT_LOG_SHOWN log lines. */
-export interface ItDeskView extends ItDeskState {
+export interface ItDeskView extends Omit<ItDeskState, 'runbooks'> {
   on: boolean;
+  runbooks?: ItRunbookView[];
 }
 
 export const IT_LOG_KEPT = 200;
@@ -83,5 +86,6 @@ export function loadItDesk(v: unknown): ItDeskState {
   const d = (v && typeof v === 'object' ? v : {}) as Partial<Record<keyof ItDeskState, unknown>>;
   const list = (x: unknown) => (Array.isArray(x) ? x.filter((e) => e && typeof e === 'object' && typeof e.id === 'string' && strings(e.argv) && Number.isFinite(e.at)) : []);
   const units = Array.isArray(d.units) ? d.units.filter((u): u is string => typeof u === 'string').slice(0, 100) : [];
-  return { waiting: list(d.waiting) as ItProposal[], log: (list(d.log) as ItLogEntry[]).slice(0, IT_LOG_KEPT), ...(units.length && { units }) };
+  const runbooks = loadRunbooks(d.runbooks);
+  return { waiting: list(d.waiting) as ItProposal[], log: (list(d.log) as ItLogEntry[]).slice(0, IT_LOG_KEPT), ...(units.length && { units }), ...(runbooks.length && { runbooks }) };
 }

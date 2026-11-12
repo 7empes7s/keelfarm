@@ -151,6 +151,7 @@ export abstract class SwarmContract {
   protected abstract itAutoPosted(...a: Parameters<Swarm['itAutoPosted']>): ReturnType<Swarm['itAutoPosted']>;
   protected abstract itAutoUndone(...a: Parameters<Swarm['itAutoUndone']>): ReturnType<Swarm['itAutoUndone']>;
   protected abstract itMaskPasted(...a: Parameters<Swarm['itMaskPasted']>): ReturnType<Swarm['itMaskPasted']>;
+  protected abstract itRunbookPosted(...a: Parameters<Swarm['itRunbookPosted']>): ReturnType<Swarm['itRunbookPosted']>;
 
   // itTickets.ts
   protected abstract autoTicket(...a: Parameters<Swarm['autoTicket']>): ReturnType<Swarm['autoTicket']>;
@@ -165,6 +166,11 @@ export abstract class SwarmContract {
   protected abstract noteProblem(...a: Parameters<Swarm['noteProblem']>): ReturnType<Swarm['noteProblem']>;
   protected abstract problemSession(...a: Parameters<Swarm['problemSession']>): ReturnType<Swarm['problemSession']>;
   protected abstract problemsList(...a: Parameters<Swarm['problemsList']>): ReturnType<Swarm['problemsList']>;
+
+  // checklists.ts
+  protected abstract checklistCreate(...a: Parameters<Swarm['checklistCreate']>): ReturnType<Swarm['checklistCreate']>;
+  protected abstract checklistUpdate(...a: Parameters<Swarm['checklistUpdate']>): ReturnType<Swarm['checklistUpdate']>;
+  protected abstract checklistRead(...a: Parameters<Swarm['checklistRead']>): ReturnType<Swarm['checklistRead']>;
 
   // itWatch.ts
   protected abstract itRecommend(...a: Parameters<Swarm['itRecommend']>): ReturnType<Swarm['itRecommend']>;

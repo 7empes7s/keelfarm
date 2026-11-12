@@ -9,7 +9,7 @@ import { HttpError } from '../httpError.ts';
 import { builtInPrefs, prepareLogin } from '../cliSetup.ts';
 import { cliLabel } from '../clis.ts';
 import { backText, defaultAccount, defaultsBack, defaultText, pruneTaskAccounts, switchNow, taskKey, tasksLeft } from '../../shared/accountDefault.ts';
-import { allOutText, detectLimit, fallbackText, LIMIT_TAIL_LINES, pinnedWaits, pinOut, sessionEnd, switchesForCeo, switchHandover, switchText, waitText, type LimitHit, type PinOut } from '../../shared/accountRotation.ts';
+import { allOutText, detectLimit, fallbackText, LIMIT_TAIL_LINES, noneSignedIn, noSignInText, pinnedWaits, pinOut, sessionEnd, switchesForCeo, switchHandover, switchText, waitText, type LimitHit, type PinOut } from '../../shared/accountRotation.ts';
 import { ACCOUNT_CLIS, LOGIN_ENV } from '../../shared/accounts.ts';
 import { sessionRun } from '../../shared/sessionRun.ts';
 import { readingOf, usedPercent } from '../../shared/usage.ts';
@@ -93,6 +93,8 @@ export abstract class SwarmRotation extends SwarmUsage {
       return this.backend.startSession(this.resumable(a, opts, cli, undefined), { ...cb, finished: (r) => (done(), cb.finished(r)) });
     }
     const others = this.fallbackClis(a, opts);
+    // No account it could run on is signed in (#617): no session that can only show a sign-in; the task goes back at once.
+    if (a.role !== 'ceo' && this.noneIn([cli, ...others])) return this.noSignIn(a, cli, cb);
     if (!this.accounts.canRotate(cli, others)) {
       const use = this.accounts.use(a.account, cli);
       return this.onUse(a, this.resumable(a, opts, cli, use?.id), cb, use, null); // one account: as before rotation
@@ -133,6 +135,8 @@ export abstract class SwarmRotation extends SwarmUsage {
         if (stays && use.id === a.account) return cb.finished({ ...result, ok: false, ...(why.kind === 'signed-out' && { signedOut: true }) });
         const until = why.kind === 'limited' ? why.until : null;
         const next = this.nextUse(a, oc, others, tried);
+        // Every account signed out is a sign-in, not a limit (#617): no pause, the task back in line, signInLost's card.
+        if (!next && why.kind === 'signed-out' && a.role !== 'ceo' && this.noneIn([oc, ...others])) return cb.finished({ ...result, ok: false, signedOut: true });
         if (!next) return this.allOut(cli, use.id, cb, result);
         // Claude logins share their conversations (#377), so the next one resumes this one's; else a fresh session with a
         // handover, and on another coding agent its model and tools.
@@ -240,6 +244,7 @@ export abstract class SwarmRotation extends SwarmUsage {
     const { back, out } = defaultsBack(this.defaultsOut, this.accounts.view().accounts, ACCOUNT_CLIS);
     this.defaultsOut = out;
     for (const a of back) this.postMessage('office', backText(a.label));
+    for (const c of this.noSignInTold) if (!this.noneIn([c])) this.noSignInTold.delete(c); // signed in again: the next time is a new card
     for (const a of this.state.agents) if (a.account && a.role !== 'ceo') this.emitAgent(a); // "Waiting for … sign-in" comes and goes (#579)
   }
 
@@ -299,7 +304,7 @@ export abstract class SwarmRotation extends SwarmUsage {
           live.delete(simulate);
           use.release();
           done();
-          if (result.signedOut) this.signInLost(a, use, cli);
+          if (result.signedOut) this.signInLost(a, use, cli, this.fallbackClis(a, opts));
           if (ended) ended(result, hit);
           else cb.finished(result);
         },
@@ -394,14 +399,56 @@ export abstract class SwarmRotation extends SwarmUsage {
   private signInTold = new Map<string, number>();
 
   /** A session showed its CLI's sign-in (cliRunner.ts): the account reads signed out, and the manager hears once. */
-  private signInLost(a: PersistedAgent, use: AccountUse, cli: AgentCli) {
+  private signInLost(a: PersistedAgent, use: AccountUse, cli: AgentCli, others: AccountCli[]) {
     this.accounts.signedOut(use.id);
+    if (a.role !== 'ceo' && cli !== 'opencode' && this.noneIn([cli, ...others])) return this.tellNoSignIn(a, cli); // the last one: one card for all
     const now = Date.now();
     if (now - (this.signInTold.get(use.id) ?? 0) < SIGN_IN_NOTICE_MS) return;
     this.signInTold.set(use.id, now);
     const label = this.accounts.label(use.id);
     this.accountOut(use.id, label);
     this.notice({ kind: 'stuck', title: `${label} is signed out`, text: `${a.name}'s session opened on ${cliLabel(cli)}'s sign-in, so it ended: the task carries on on another account, or waits in line. Tap Sign in on its card in the chat.`, target: { kind: 'agent', agentId: a.id, terminal: true }, actions: ['terminal', 'reply'] }, { event: 'agentError', line: a.name });
+  }
+
+  /** Coding agents whose "no account is signed in" card is up, until one is signed in again (#617). */
+  private noSignInTold = new Set<AccountCli>();
+
+  /** Whether no account of any of `clis` is signed in. */
+  private noneIn(clis: readonly AccountCli[]): boolean {
+    const accounts = this.accounts.view().accounts;
+    return clis.every((c) => noneSignedIn(accounts, c));
+  }
+
+  /**
+   * An agent's session with no signed-in account to run on (#617): none starts, the task goes back in line at once with
+   * no strike (sessions.ts' signedOut), and one card names the accounts, the fix and who waits.
+   */
+  private noSignIn(a: PersistedAgent, cli: AccountCli, cb: SessionCallbacks): SessionHandle {
+    const error = `No ${cliLabel(cli)} account is signed in, so no session started: the task goes back in line.`;
+    this.appendLog(a, [{ kind: 'error', text: `⚠ ${error}` }]);
+    this.tellNoSignIn(a, cli);
+    const end = (errors: string[], signedOut: boolean) => cb.finished({ ok: false, text: '', costUsd: 0, turns: 0, errors, ...(signedOut && { signedOut }) });
+    const t = setTimeout(() => end([error], true), 0); // after the caller holds the handle, as a real session's end
+    return {
+      send: () => undefined,
+      stop: () => {
+        clearTimeout(t);
+        end(['Stopped by manager'], false);
+      },
+    };
+  }
+
+  /** The card, once per coding agent while none of its accounts is signed in, plus a notice and the problems register's entry. */
+  private tellNoSignIn(a: PersistedAgent, cli: AccountCli) {
+    if (this.noSignInTold.has(cli)) return;
+    this.noSignInTold.add(cli);
+    const out = this.accounts.view().accounts.filter((x) => x.cli === cli && x.status === 'signed-out');
+    if (!out.length) return;
+    const task = a.task === 'qa' ? `QA of PR #${a.prNumber}` : a.task === 'fix' ? `fix of PR #${a.prNumber}` : a.issueNumber ? `issue #${a.issueNumber}` : 'task';
+    const text = noSignInText(cli, cliLabel(cli), out.map((x) => x.label), `${a.name}'s ${task}`);
+    this.postMessage('office', text, undefined, { accountOut: { account: out[0].id } });
+    for (const x of out) this.accountSignedOut(x.id, x.label);
+    this.notice({ kind: 'stuck', title: `No ${cliLabel(cli)} account is signed in`, text: text.replace(/^🔑 /, ''), target: { kind: 'agent', agentId: a.id, terminal: true }, actions: ['terminal', 'reply'] }, { event: 'agentError', line: a.name });
   }
 
   /** A login read signed out (#579): one card in the chat with Sign in, and an entry in the problems register. */

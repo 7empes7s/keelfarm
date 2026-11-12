@@ -28,12 +28,20 @@ import { ActionError, applyAction, MODULES, runAction, type ActionCtx } from '..
 import { actionOp, autoApplies, type ActionRisk, type ProviderChange } from '../../shared/providerActions.ts';
 import type { CfChange } from '../../shared/cloudflare.ts';
 import { SwarmManagerAsks } from './managerAsks.ts';
+import { parseRunbook, projectForeign, projectProblem, runbookSummary, runbookVerdict, runRunbook, stepLabel, stepNever, undoRunbook, type RunbookHost } from '../itRunbook.ts';
+import { RUNBOOKS_KEPT, runbookView, type ItRunbookJob } from '../../shared/itRunbook.ts';
 
 /** it_run's and it_propose's arguments (server/ceoItTools.ts). */
 export interface ItRunArgs {
   command: string;
   sort?: 'size';
   lines?: number;
+}
+/** it_runbook's arguments: the floor whose repo has it, its path there, and the project it installs (its scope). */
+export interface ItRunbookArgs {
+  floor: number;
+  path: string;
+  project: string;
 }
 export interface ItProposeArgs {
   argv: string[];
@@ -77,13 +85,14 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
   }
 
   itDeskView(): ItDeskView {
-    return { on: this.itOn, waiting: this.state.itDesk.waiting, log: this.state.itDesk.log.slice(0, IT_LOG_SHOWN) };
+    const { runbooks, ...d } = this.state.itDesk;
+    return { on: this.itOn, waiting: d.waiting, log: d.log.slice(0, IT_LOG_SHOWN), ...(runbooks?.length && { runbooks: runbooks.map(runbookView) }) };
   }
 
   /** Left out while empty: every tab's snapshot pays for it (scale.test.ts), and the switch is in the settings. */
   override snapshot(): WorldSnapshot {
     const d = this.state.itDesk;
-    return d.waiting.length || d.log.length ? { ...super.snapshot(), itDesk: this.itDeskView() } : super.snapshot();
+    return d.waiting.length || d.log.length || d.runbooks?.length ? { ...super.snapshot(), itDesk: this.itDeskView() } : super.snapshot();
   }
 
   private itDeskChanged() {
@@ -482,6 +491,130 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
       this.itDeskChanged();
       this.itAutoPosted(`🔑 ${r.ok ? 'Renewed' : "Couldn't renew"} "${c.label}"`, out);
       if (!r.ok) this.notifier.notify('decisions', `Couldn't renew "${c.label}"`, out.split('\n').at(-1) ?? out);
+    }
+  }
+
+  // ---------- runbook jobs (#611) ----------
+
+  /** it_runbook: a floor's runbook as one job. Inside the auto-approve policy it starts now; else one card with Approve / Not now. */
+  protected async itRunbook(a: ItRunbookArgs): Promise<string> {
+    if (!this.itOn) throw new HttpError(403, OFF);
+    if (!this.state.settings.itDept.on) throw new HttpError(403, DEPT_OFF);
+    const repo = this.state.repos.find((r) => r.floor === a.floor);
+    if (!repo) throw new HttpError(404, `There's no floor ${a.floor}: give the floor whose repo has the runbook.`);
+    const project = String(a.project ?? '').trim().toLowerCase();
+    const bad = projectProblem(project);
+    if (bad) throw new HttpError(400, bad);
+    const jobs = (this.state.itDesk.runbooks ??= []);
+    const busy = jobs.find((j) => j.state === 'running' || (j.state === 'waiting' && j.project === project));
+    if (busy) throw new HttpError(409, `"${busy.title}" is ${busy.state === 'running' ? 'running: wait for its result' : "already on the manager's card"}.`);
+    const rel = String(a.path ?? '').replace(/^\/+/, '');
+    const md = await this.backend.readRepoFile(repo.fullName, repo.defaultBranch, rel).catch((e: Error) => Promise.reject(new HttpError(404, `${rel}: ${e.message}`)));
+    const parsed = parseRunbook(md);
+    if ('refused' in parsed) throw new HttpError(400, `${rel}: ${parsed.refused}`);
+    const scope = { project, repoName: repo.fullName.split('/')[1].toLowerCase(), repoUrls: [repo.url, `https://github.com/${repo.fullName}`] };
+    for (const [i, step] of parsed.steps.entries()) {
+      const never = stepNever(step, scope, this.itProtected);
+      if (never) throw new HttpError(403, `Step ${i + 1} (${stepLabel(step)}): ${never}`);
+      const missing = step.kind === 'env' && step.vars.find((v) => 'provider' in v.value && !this.providers.keysFor(v.value.provider).length);
+      if (missing && 'provider' in missing.value) throw new HttpError(400, `Step ${i + 1}: ${missing.name} needs a ${missing.value.provider} key, and Settings → Providers has none. Ask the manager to add it there.`);
+    }
+    const exists = (p: string) => !this.backend.demo && existsSync(p);
+    const itUnits = this.state.itDesk.units ?? [];
+    const policy = runbookVerdict(parsed.steps, { ...scope, level: this.state.settings.itDept.autoApprove, protectedDirs: this.itProtected, itUnits, officeUnits: OFFICE_UNITS, exists, linux: process.platform === 'linux' });
+    const foreign = policy.auto && projectForeign(project, { exists, itUnits, ranBefore: jobs.some((j) => j.project === project && (j.state === 'done' || j.state === 'failed')) });
+    const verdict = foreign ? { auto: false as const, why: foreign } : policy;
+    const at = Date.now();
+    const job: ItRunbookJob = {
+      id: `rb-${at.toString(36)}-${++this.itSeq}`,
+      title: parsed.title || `Run ${rel}`,
+      project,
+      source: `floor ${repo.floor}: ${rel}`,
+      by: this.itName,
+      at,
+      summary: runbookSummary(parsed.steps, scope),
+      auto: verdict.auto,
+      ...(!verdict.auto && { held: verdict.why }),
+      state: 'waiting',
+      steps: parsed.steps.map((s) => ({ label: stepLabel(s), state: 'waiting', ...(s.kind === 'run' && s.check && { check: true as const }) })),
+      undoable: false,
+      plan: parsed.steps,
+      changes: [],
+    };
+    this.state.itDesk.runbooks = [job, ...jobs].slice(0, RUNBOOKS_KEPT);
+    this.itDeskChanged();
+    const head = `${job.title}: ${job.summary}.`;
+    if (!verdict.auto) {
+      this.itRunbookPosted(job, `📋 ${head} One Approve runs it all.`, `Needs your Approve: ${verdict.why}.`);
+      this.notifier.notify('decisions', `${this.itName} asks to run "${job.title}"`, `${job.summary}\n${verdict.why}`);
+      return `On the manager's card as one job (auto-approve: ${verdict.why}). Nothing has run: one Approve runs all ${job.steps.length} steps, and the result comes to you.`;
+    }
+    this.itRunbookPosted(job, `📋 ${head} Running it without a tap (auto-approve).`, job.steps.map((s, i) => `${i + 1}. ${s.label}`).join('\n'));
+    void this.runbookGo(job);
+    return `Started "${job.title}" (${job.id}): ${job.summary}, inside auto-approve, so no tap. Progress is on its card; the result (and the health check) comes to you, the CEO and the manager when it ends.`;
+  }
+
+  /** POST /api/it/runbook/:id: the manager's Approve (starts it; the result comes as a card) or Not now on a runbook's card. */
+  itRunbookDecide(id: string, run: boolean) {
+    const job = this.state.itDesk.runbooks?.find((j) => j.id === id);
+    if (!job || job.state !== 'waiting') throw new HttpError(404, 'That runbook has run or gone already.');
+    const other = run && this.state.itDesk.runbooks?.find((j) => j.state === 'running');
+    if (other) throw new HttpError(409, `"${other.title}" is running: Approve this one once it ends.`);
+    if (!run) {
+      job.state = 'dismissed';
+      this.itLog({ kind: 'change', by: `${this.managerLabel()} (Not now)`, argv: ['runbook', job.title], code: null, out: 'Not run: the manager said Not now.' });
+      this.itDeskChanged();
+      return { ok: true };
+    }
+    void this.runbookGo(job, this.managerLabel()); // it's running from here on, so a second tap finds nothing to approve
+    return { ok: true };
+  }
+
+  /** The job's steps on this machine, each logged, progress to the tabs; the result to IT's chat, the CEO's and Telegram. */
+  private async runbookGo(job: ItRunbookJob, approvedBy?: string) {
+    const host: RunbookHost = { ...this.backend.itFiles, exec: (argv, ms, cwd) => this.backend.itExec(argv, ms, cwd) };
+    const by = approvedBy ? `${approvedBy}, proposed by ${job.by}` : `${job.by} (auto-approve)`;
+    const run = runRunbook(job, host, {
+      mask: this.itMask,
+      key: (p) => this.providers.keysFor(p)[0]?.key ?? null,
+      changed: (v, i) => {
+        if (v.state !== 'running') this.itLog({ kind: 'change', ...(!approvedBy && { auto: true as const }), by, argv: ['runbook', job.title, `step ${i + 1}`], code: v.code ?? null, out: `${v.label}\n${v.out ?? ''}`.trim(), why: job.source });
+        this.itDeskChanged();
+      },
+    });
+    await run.catch((err: Error) => {
+      job.state = 'failed';
+      job.ended = Date.now();
+      job.undoable = job.changes.length > 0;
+      this.itLog({ kind: 'change', by, argv: ['runbook', job.title], code: null, out: this.itMask(err.message) });
+    });
+    this.itDeskChanged();
+    const failed = job.steps.findIndex((s) => s.state === 'failed');
+    const check = job.check ? (job.check.ok ? 'health check green' : 'health check failed') : 'no health check';
+    const text = job.state === 'done' ? `✅ ${job.title}: all ${job.steps.length} steps done, ${check}.` : `⚠️ ${job.title} stopped at step ${failed + 1} of ${job.steps.length}${job.check && !job.check.ok ? ' (the health check)' : ''}.`;
+    const details = failed >= 0 ? `${job.steps[failed].label}\n${job.steps[failed].out ?? ''}`.trim() : (job.check?.out ?? '');
+    this.itRunbookPosted(job, `${text}${job.undoable ? ' Undo puts it all back.' : ''}`, details || '(no output)');
+    this.postMessage('office', `🖥️ IT: ${text}`, undefined, { notice: { details: details || '(no output)' } });
+    if (job.state !== 'done') this.notifier.notify('decisions', text, details.slice(0, 300));
+  }
+
+  /** POST /api/it/runbook/:id/undo: the whole job undone, newest change first. */
+  async itRunbookUndo(id: string) {
+    const job = this.state.itDesk.runbooks?.find((j) => j.id === id);
+    if (!job?.undoable || job.state === 'undone' || job.state === 'running') throw new HttpError(404, 'That runbook has no Undo, or was undone already.');
+    if (this.itRunning.has(id)) throw new HttpError(409, 'Undoing it already.');
+    this.itRunning.add(id);
+    try {
+      const host: RunbookHost = { ...this.backend.itFiles, exec: (argv, ms, cwd) => this.backend.itExec(argv, ms, cwd) };
+      const r = await undoRunbook(job, host, this.itMask);
+      job.state = 'undone';
+      job.undoable = false;
+      this.itLog({ kind: 'change', by: `${this.managerLabel()} (Undo)`, argv: ['runbook', job.title, 'undo'], code: r.ok ? 0 : 1, out: r.out });
+      this.itDeskChanged();
+      this.itRunbookPosted(job, `${r.ok ? '↩️ Undone' : '⚠️ Undo stopped'}: ${job.title}`, r.out);
+      return { ok: r.ok };
+    } finally {
+      this.itRunning.delete(id);
     }
   }
 }
