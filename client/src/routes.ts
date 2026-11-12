@@ -294,6 +294,12 @@ const WRITES: Record<Mode, readonly Route['to'][]> = {
   pocket: ['agent', 'pr', 'issue', 'notices', 'app'],
 };
 
+/**
+ * Whether a hashchange to `hash` is the one a Back brings (its popstate saw `popped` and was a Back: `back`), never a
+ * link to open. A hash link fires popstate too, but isn't a Back.
+ */
+export const followsBack = (popped: string | null, hash: string, back: boolean) => back && popped !== null && popped === hash;
+
 /** The route of what's open, for the address; null when it has no link of its own here (console and Previews write theirs). */
 export function overlayRoute(o: Overlay | null, w: World, mode: Mode): Route | null {
   const r = overlayToRoute(o, w);

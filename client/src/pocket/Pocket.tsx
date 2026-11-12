@@ -44,6 +44,7 @@ import { leaveFullFor, useChatFull, useChatFullBack } from '../ui/chatFull';
 import { FullButton } from '../ui/ChatActionsSheet';
 import { XLabel } from '../ui/HoverCard';
 import { TourInvite, Tutorial } from '../ui/Tutorial';
+import { TaskTutorial, TutorialInvite } from '../ui/TaskTutorial';
 import { trackFor, type Track } from '../ui/tourSteps';
 import { useTour } from '../ui/tour';
 import { showTab, useRouteLink } from '../routeLink';
@@ -217,6 +218,7 @@ function Company({ go, settings, track }: { go: (tab: PocketTab, repoId?: string
         </button>
       )}
       <TourInvite track={track} />
+      <TutorialInvite track={track} />
       <GuideCard />
       </CompanySummary>
       <div className="pk-company-floors" ref={measureFloors} style={{ '--pk-cols': floorColumns(floorsWidth, floors.length) } as CSSProperties}>
@@ -783,6 +785,7 @@ export default function Pocket() {
       </div>
       <SearchPalette where="pocket" />
       <Tutorial track={track} />
+      <TaskTutorial track={track} />
     </div>
   );
 }

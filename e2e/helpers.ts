@@ -10,6 +10,7 @@ export { expect };
 
 export const VIEW_KEY = 'cubefarm:view'; // where the client remembers the player's spot (store.ts saveView)
 export const TOUR_SEEN_KEY = 'cubefarm:tour-seen'; // the tour steps this device has seen (ui/tour.ts)
+export const TUTORIALS_INVITE_KEY = 'cubefarm:tutorials-invite'; // "Not now" on Get started (ui/TaskTutorial.tsx)
 
 export interface SavedView {
   floor: number;
@@ -31,6 +32,8 @@ export const test = base.extend<{ page: Page }>({
     );
     // Every tour step counts as seen, so no "What's new" card sits over what a test looks at (tour.spec.ts clears it).
     await page.addInitScript(([key, ids]) => localStorage.getItem(key) === null && localStorage.setItem(key, ids), [TOUR_SEEN_KEY, JSON.stringify(TOUR.map((e) => e.id))] as const);
+    // and Get started was put off, so its card doesn't either (tutorials.spec.ts clears it)
+    await page.addInitScript((key) => localStorage.getItem(key) === null && localStorage.setItem(key, '1'), TUTORIALS_INVITE_KEY);
     page.on('console', (m) => {
       if (m.type() === 'error') problems.push(`console error: ${m.text()}`);
     });

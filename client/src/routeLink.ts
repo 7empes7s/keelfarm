@@ -6,7 +6,8 @@ import { useEffect } from 'react';
 import { useStore, type State } from './store';
 import { useTour } from './ui/tour';
 import { useTourGate } from './ui/tourGate';
-import { ownsHash, overlayRoute, parseRoute, routeHash, routeTarget, ROUTES, sampleLinks, type Mode, type Stand, type World } from './routes';
+import { lastPopWasBack } from './ui/backStack';
+import { followsBack, ownsHash, overlayRoute, parseRoute, routeHash, routeTarget, ROUTES, sampleLinks, type Mode, type Stand, type World } from './routes';
 
 const READY_MS = 15_000;
 
@@ -85,16 +86,34 @@ export function showTab(tab: string) {
   history.replaceState(history.state, '', `${location.pathname}?${q}${stale ? '' : location.hash}`);
 }
 
+let here: { mode: Mode; stand?: (s: Stand) => boolean } | null = null; // the office running, for openLink
+
+/**
+ * Opens a link from inside the office (the task tutorials, #517), as if followed, without a new history entry. Before
+ * the office is in, it waits in the address, which useRouteLink opens once it is.
+ */
+export function openLink(hash: string) {
+  history.replaceState(history.state, '', location.pathname + location.search + hash);
+  if (here) void open(here.mode, hash, false, here.stand);
+}
+
 /** Opens the address's link once loaded, follows hash changes, and keeps the address on what's open. */
 export function useRouteLink(mode: Mode, stand?: (s: Stand) => boolean) {
   const ready = useStore((s) => s.loaded && (mode === 'pocket' || s.settings.setupDone));
   useEffect(() => {
     if (!ready) return;
+    here = { mode, stand };
     void open(mode, location.hash, true, stand);
-    let popped = 0;
-    const onPop = () => void (popped = performance.now());
-    // Back to an entry with another hash fires hashchange after popstate: that's Back closing a panel, not a link.
-    const onHash = () => void (performance.now() - popped > 50 && open(mode, location.hash, false, stand));
+    let popped: string | null = null;
+    const onPop = () => void (popped = location.hash);
+    // Back to an entry with another hash fires hashchange after popstate: that's Back closing a panel, not a link, however
+    // late a busy 3D frame lets it arrive (#517: closing Help went back to its #help/office entry and opened it again).
+    const onHash = () => {
+      const back = followsBack(popped, location.hash, lastPopWasBack());
+      popped = null;
+      if (back) write(mode); // the address says what's open now
+      else void open(mode, location.hash, false, stand);
+    };
     window.addEventListener('popstate', onPop);
     window.addEventListener('hashchange', onHash);
     const unsubscribe = useStore.subscribe((s, prev) => {
@@ -104,6 +123,7 @@ export function useRouteLink(mode: Mode, stand?: (s: Stand) => boolean) {
     });
     (window as unknown as Record<string, unknown>).__swarmRoutes = { table: ROUTES, links: () => sampleLinks(worldOf(useStore.getState()), mode) };
     return () => {
+      here = null;
       window.removeEventListener('popstate', onPop);
       window.removeEventListener('hashchange', onHash);
       unsubscribe();

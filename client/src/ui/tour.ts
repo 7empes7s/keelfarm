@@ -25,11 +25,13 @@ interface TourState {
   pocketTour: boolean;
   /** The tour or What's new is on screen: toasts wait behind it (#408). */
   on: boolean;
+  /** A task tutorial is on screen (#517): toasts wait behind it too. */
+  task: boolean;
   /** Pocket mode's way back from a page the tour opened (#408): remembers what's on screen, returns its restore. */
   keepPage: (() => () => void) | null;
 }
 
-export const useTour = create<TourState>(() => ({ raw: typeof window === 'undefined' ? null : readSeen(), track: 'office', replay: null, pocketTour: false, on: false, keepPage: null }));
+export const useTour = create<TourState>(() => ({ raw: typeof window === 'undefined' ? null : readSeen(), track: 'office', replay: null, pocketTour: false, on: false, task: false, keepPage: null }));
 
 /** The steps this device has seen. */
 export const seenNow = (raw: string | null) => seenIds(raw, useStore.getState().settings.tutorialStep === -1);
