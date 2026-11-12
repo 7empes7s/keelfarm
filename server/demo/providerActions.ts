@@ -112,4 +112,4 @@ registerCeoReply('provider actions', async ({ text, use }) => {
   const card = await use('provider_action', { provider: 'github', op: 'repo_settings', args: { repo: DEMO_REPO, delete_branch_on_merge: true }, why: 'Merged branches pile up: GitHub can delete them after each merge.' });
   const first = (s: string) => s.split('\n')[0].replace(/^Refused:\s*/, '');
   return `With the office's own keys (never shown to me):\n- OpenRouter: ${first(credit)}\n- GitHub: ${first(repo)}\n\n${card.startsWith('Refused') ? `I couldn't plan the change: ${first(card)}` : 'One change is on a card with its before and after: delete merged branches automatically. Tap Approve and it is applied and read back.'}`;
-});
+}, { early: true }); // before the demo's files, which answer about the chat's last attachment
