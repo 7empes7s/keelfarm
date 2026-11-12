@@ -27,15 +27,35 @@ interface Queued {
   agentId?: string;
 }
 
+/** A job waiting longer than this goes first, whatever its lane or floor (#618). */
+export const LAB_AGE_MS = 5 * 60_000;
+
+type Limits = Record<LabLane, number> & { total?: number };
+
+/** Room in a lane beside `now` (#618): each lane up to its limit; `total` shared by both plus one slot kept for a browser job. */
+function room(lane: LabLane, now: readonly Queued[], limits: Limits): boolean {
+  const browser = now.filter((j) => laneOf(j.kind) === 'browser').length;
+  const heavy = now.length - browser;
+  if ((lane === 'browser' ? browser : heavy) >= limits[lane]) return false;
+  if (limits.total === undefined) return true;
+  return lane === 'heavy' ? heavy + Math.max(0, browser - 1) < limits.total : now.length < limits.total + 1;
+}
+
+/** A lane's waiting jobs in the order they start: any waiting over LAB_AGE_MS first (oldest first), then the floor with the fewest running jobs, the floor served longest ago, the oldest request. */
+export function laneOrder<J extends Queued>(waiting: readonly J[], now: readonly Queued[], servedAt: ReadonlyMap<string, number>, at: number): J[] {
+  const aged = (j: J) => (at - j.queuedAt > LAB_AGE_MS ? j.queuedAt : Infinity);
+  const busy = (repoId: string) => now.filter((j) => j.repoId === repoId).length;
+  return [...waiting].sort((a, b) => aged(a) - aged(b) || busy(a.repoId) - busy(b.repoId) || (servedAt.get(a.repoId) ?? 0) - (servedAt.get(b.repoId) ?? 0) || a.queuedAt - b.queuedAt);
+}
+
 /**
- * The jobs to start now. Each lane runs up to its limit; among the waiting jobs the floor with the fewest running jobs
- * goes first, then the floor served longest ago, then the oldest request. Two heavy jobs of one floor never run at once:
- * they share the floor's lab checkout. A job that runs alone goes first once the lab is empty, and nothing new starts
- * while it waits for that or runs. `total` caps both lanes together (#560); when it does, the lane whose oldest request
- * waited longest goes first, so a stream of heavy runs can't keep a browser check waiting (#578). An agent runs one job
- * at a time.
+ * The jobs to start now, within the lanes' room (see `room`), each lane in `laneOrder`. Two heavy jobs of one floor
+ * never run at once: they share the floor's lab checkout. A job that runs alone goes first once the lab is empty, and
+ * nothing new starts while it waits for that or runs. Under the `total` cap a browser job's lane goes first (#578,
+ * #618): a check waits for at most the heavy run already running, unless the oldest job waiting over LAB_AGE_MS is
+ * a heavy one. An agent runs one job at a time.
  */
-export function pickNext<J extends Queued>(queue: readonly J[], running: readonly J[], limits: Record<LabLane, number> & { total?: number }, servedAt: ReadonlyMap<string, number>): J[] {
+export function pickNext<J extends Queued>(queue: readonly J[], running: readonly J[], limits: Limits, servedAt: ReadonlyMap<string, number>, at = Date.now()): J[] {
   if (running.some((j) => j.alone)) return [];
   const solo = queue.filter((j) => j.alone).sort((a, b) => a.queuedAt - b.queuedAt)[0];
   if (solo) return running.length ? [] : [solo];
@@ -43,15 +63,13 @@ export function pickNext<J extends Queued>(queue: readonly J[], running: readonl
   const served = new Map(servedAt);
   const picked: J[] = [];
   const mine = (j: J) => j.agentId !== undefined && now.some((r) => r.agentId === j.agentId);
-  const oldest = (lane: LabLane) => Math.min(...queue.filter((j) => laneOf(j.kind) === lane && !mine(j)).map((j) => j.queuedAt));
-  const lanes: LabLane[] = limits.total !== undefined && oldest('browser') < oldest('heavy') ? ['browser', 'heavy'] : ['heavy', 'browser'];
+  const firstAged = queue.filter((j) => !mine(j) && at - j.queuedAt > LAB_AGE_MS).sort((a, b) => a.queuedAt - b.queuedAt)[0];
+  const lanes: LabLane[] = limits.total === undefined || (firstAged && laneOf(firstAged.kind) === 'heavy') ? ['heavy', 'browser'] : ['browser', 'heavy'];
   for (const lane of lanes) {
     for (;;) {
-      if (now.length >= (limits.total ?? Infinity) || now.filter((j) => laneOf(j.kind) === lane).length >= limits[lane]) break;
-      const busy = (repoId: string) => now.filter((j) => j.repoId === repoId).length;
-      const next = queue
-        .filter((j) => laneOf(j.kind) === lane && !picked.includes(j) && !mine(j) && !(lane === 'heavy' && now.some((r) => r.kind === 'run' && r.repoId === j.repoId)))
-        .sort((a, b) => busy(a.repoId) - busy(b.repoId) || (served.get(a.repoId) ?? 0) - (served.get(b.repoId) ?? 0) || a.queuedAt - b.queuedAt)[0];
+      if (!room(lane, now, limits)) break;
+      const waiting = queue.filter((j) => laneOf(j.kind) === lane && !picked.includes(j) && !mine(j) && !(lane === 'heavy' && now.some((r) => r.kind === 'run' && r.repoId === j.repoId)));
+      const next = laneOrder(waiting, now, served, at)[0];
       if (!next) break;
       picked.push(next);
       now.push(next);
@@ -525,25 +543,34 @@ export class TestLab {
     this.pump();
   }
 
-  /** A waiting job's place in its lane, why it waits and roughly how long. */
+  /** A waiting job's real place in its lane (the order it starts in, #618), why it waits and roughly how long. */
   private place(j: Job): { id: string; position: number; lane: LabLane; reason: string; waitMs: number } {
     const lane = laneOf(j.kind);
-    const ahead = this.queue.filter((q) => laneOf(q.kind) === lane).indexOf(j);
     const s = this.host.settings();
-    const reason = this.held ?? (this.running.length ? `the lab is busy with ${this.running.map((r) => r.title).join(', ')}` : 'the lab is busy');
-    return { id: j.id, position: ahead + 1, lane, reason, waitMs: estimateWaitMs(ahead, Math.min(lane === 'browser' ? s.browserJobs : s.heavyJobs, s.totalJobs), this.avg(lane)) };
+    const order = laneOrder(this.queue.filter((q) => laneOf(q.kind) === lane), this.running, this.served, Date.now());
+    const ahead = Math.max(0, order.indexOf(j));
+    return { id: j.id, position: ahead + 1, lane, reason: this.waitReason(j, lane, ahead), waitMs: estimateWaitMs(ahead, lane === 'browser' ? s.browserJobs : Math.min(s.heavyJobs, s.totalJobs), this.avg(lane)) };
+  }
+
+  /** Why a queued job hasn't started (#618): the first rule that holds it. */
+  private waitReason(j: Job, lane: LabLane, ahead: number): string {
+    const s = this.host.settings();
+    const solo = this.running.find((r) => r.alone);
+    const own = this.running.find((r) => r.who.agentId === j.who.agentId);
+    const checkout = lane === 'heavy' ? this.running.find((r) => r.kind === 'run' && r.repoId === j.repoId) : undefined;
+    if (this.held || solo || own || checkout) return this.held ?? (solo ? `a full-quality pass runs alone: ${solo.title}` : own ? `your other lab job runs first: ${own.title}` : `your floor's lab checkout is busy with ${checkout?.title}`);
+    if (!room(lane, this.running, { browser: s.browserJobs, heavy: s.heavyJobs, total: s.totalJobs })) return `the ${lane} slots are full: ${this.running.map((r) => r.title).join(', ')} running`;
+    return j.alone ? 'a full-quality pass waits for the lab to empty' : ahead ? `${ahead} job${ahead === 1 ? '' : 's'} ahead of it` : 'starting next';
   }
 
   /** lab_status: where the requester's jobs stand, what runs, the wait, and their finished jobs kept in `worktree` (#562). */
   status(agentId: string | null, worktree?: string): string {
     const s = this.host.settings();
-    const lines = [`Lab: ${this.running.length} running, ${this.queue.length} waiting (at most ${s.browserJobs} browser job${s.browserJobs === 1 ? '' : 's'} and ${s.heavyJobs} heavy command${s.heavyJobs === 1 ? '' : 's'} at a time, ${s.totalJobs} in all).`];
+    const lines = [`Lab: ${this.running.length} running, ${this.queue.length} waiting (at most ${s.browserJobs} browser job${s.browserJobs === 1 ? '' : 's'} and ${s.heavyJobs} heavy command${s.heavyJobs === 1 ? '' : 's'} at a time, ${s.totalJobs} in all plus one kept for a browser job).`];
     for (const j of this.running) lines.push(`Running: ${j.title} for ${j.who.agent} (floor ${j.who.floor}), ${Math.round((Date.now() - (j.startedAt ?? Date.now())) / 1000)} s so far.`);
-    for (const lane of ['browser', 'heavy'] as const) {
-      const waiting = this.queue.filter((j) => laneOf(j.kind) === lane);
-      waiting.forEach((j, i) => {
-        if (j.who.agentId === agentId) lines.push(`Yours: ${j.title}, position ${i + 1} in the ${lane} queue, about ${Math.ceil(estimateWaitMs(i, lane === 'browser' ? s.browserJobs : s.heavyJobs, this.avg(lane)) / 60_000)} min.`);
-      });
+    for (const j of this.queue.filter((q) => q.who.agentId === agentId)) {
+      const p = this.place(j);
+      lines.push(`Yours: ${j.title}, position ${p.position} in the ${p.lane} queue, waiting because ${p.reason}, about ${Math.max(1, Math.ceil(p.waitMs / 60_000))} min.`);
     }
     if (this.held) lines.push(this.held);
     const done = worktree ? listResults(worktree, this.host.forbidden()).slice(0, 8) : [];

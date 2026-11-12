@@ -20,7 +20,7 @@ export interface TestLabSettings {
   enabled: boolean; // agents use the lab's tools instead of a browser of their own
   browserJobs: number; // browser jobs at a time
   heavyJobs: number; // heavy commands at a time
-  totalJobs: number; // jobs at a time across both lanes (#560): an e2e run starts a browser too
+  totalJobs: number; // jobs at a time across both lanes (#560): an e2e run starts a browser too; one more is kept for a browser job (#618)
 }
 
 export const DEFAULT_TEST_LAB: TestLabSettings = { enabled: true, browserJobs: 1, heavyJobs: 1, totalJobs: 1 };

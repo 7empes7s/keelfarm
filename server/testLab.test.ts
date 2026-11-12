@@ -4,7 +4,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_TEST_LAB, testLabSettings, type TestLabView } from '../shared/testLab.ts';
 import type { SessionKind } from '../shared/health.ts';
-import { browsersPath, estimateWaitMs, LAB_BROWSER_KILL_MB, labArgv, labCommand, labFile, labOutDir, labPattern, labProblem, pickNext, silenceMs, TestLab, type LabRunner, type Requester, type RunResult, type TestLabHost } from './testLab.ts';
+import { browsersPath, estimateWaitMs, LAB_BROWSER_KILL_MB, labArgv, labCommand, labFile, labOutDir, LAB_AGE_MS, labPattern, labProblem, laneOrder, pickNext, silenceMs, TestLab, type LabRunner, type Requester, type RunResult, type TestLabHost } from './testLab.ts';
 import { expiredResults, requestKey, saveResult } from './testLabResults.ts';
 import { createLabTools, labProgress, progressStream } from './testLabTools.ts';
 import { demoLabRunner, fakeShot } from './demoTestLab.ts';
@@ -19,44 +19,66 @@ const LIMITS = { browser: 1, heavy: 1 };
 describe('pickNext', () => {
   it('starts at most the lane limits: one browser job and one heavy command', () => {
     const q = [job('a', 'screenshot', 'r1', 1), job('b', 'check', 'r1', 2), job('c', 'run', 'r1', 3), job('d', 'run', 'r2', 4)];
-    expect(pickNext(q, [], LIMITS, new Map()).map((j) => j.id)).toEqual(['c', 'a']);
-    expect(pickNext(q.slice(1), [q[0]], LIMITS, new Map()).map((j) => j.id)).toEqual(['d']); // r1 already runs one
-    expect(pickNext(q, [], { browser: 2, heavy: 1 }, new Map()).map((j) => j.id)).toEqual(['c', 'a', 'b']);
+    expect(pickNext(q, [], LIMITS, new Map(), 10).map((j) => j.id)).toEqual(['c', 'a']);
+    expect(pickNext(q.slice(1), [q[0]], LIMITS, new Map(), 10).map((j) => j.id)).toEqual(['d']); // r1 already runs one
+    expect(pickNext(q, [], { browser: 2, heavy: 1 }, new Map(), 10).map((j) => j.id)).toEqual(['c', 'a', 'b']);
   });
 
   it('is fair across floors: a floor with many requests does not starve another', () => {
     const q = [job('a1', 'screenshot', 'A', 1), job('a2', 'screenshot', 'A', 2), job('a3', 'screenshot', 'A', 3), job('b1', 'screenshot', 'B', 4)];
     // A was just served: B goes first even though its request is the newest.
-    expect(pickNext(q, [], LIMITS, new Map([['A', 100]])).map((j) => j.id)).toEqual(['b1']);
+    expect(pickNext(q, [], LIMITS, new Map([['A', 100]]), 10).map((j) => j.id)).toEqual(['b1']);
     // Two slots: one per floor before a floor's second job.
-    expect(pickNext(q, [], { browser: 2, heavy: 1 }, new Map()).map((j) => j.id)).toEqual(['a1', 'b1']);
+    expect(pickNext(q, [], { browser: 2, heavy: 1 }, new Map(), 10).map((j) => j.id)).toEqual(['a1', 'b1']);
     // A floor already running something waits behind one that isn't.
-    expect(pickNext(q, [job('x', 'run', 'A', 0)], LIMITS, new Map()).map((j) => j.id)).toEqual(['b1']);
+    expect(pickNext(q, [job('x', 'run', 'A', 0)], LIMITS, new Map(), 10).map((j) => j.id)).toEqual(['b1']);
   });
 
   it("never runs two heavy commands of one floor at once (they share the floor's checkout)", () => {
     const q = [job('a', 'run', 'A', 1), job('b', 'run', 'B', 2)];
-    expect(pickNext(q, [job('r', 'run', 'A', 0)], { browser: 1, heavy: 2 }, new Map()).map((j) => j.id)).toEqual(['b']);
-    expect(pickNext([q[0]], [job('r', 'run', 'A', 0)], { browser: 1, heavy: 2 }, new Map())).toEqual([]);
+    expect(pickNext(q, [job('r', 'run', 'A', 0)], { browser: 1, heavy: 2 }, new Map(), 10).map((j) => j.id)).toEqual(['b']);
+    expect(pickNext([q[0]], [job('r', 'run', 'A', 0)], { browser: 1, heavy: 2 }, new Map(), 10)).toEqual([]);
   });
 
-  it('caps the whole lab: with a total of one, a browser job waits while a heavy run runs (#560)', () => {
-    const q = [job('a', 'run', 'A', 1), job('b', 'screenshot', 'B', 2), job('c', 'check', 'C', 3)];
-    expect(pickNext(q, [], { ...LIMITS, total: 1 }, new Map()).map((j) => j.id)).toEqual(['a']);
-    expect(pickNext(q.slice(1), [q[0]], { ...LIMITS, total: 1 }, new Map())).toEqual([]);
-    expect(pickNext(q, [], { browser: 2, heavy: 1, total: 2 }, new Map()).map((j) => j.id)).toEqual(['a', 'b']);
+  it('caps the whole lab, with one slot kept for a browser job: a heavy run never blocks a check (#560, #618)', () => {
+    const q = [job('a', 'run', 'A', 1), job('b', 'screenshot', 'B', 2), job('c', 'check', 'C', 3), job('d', 'run', 'D', 4)];
+    expect(pickNext(q, [], { ...LIMITS, total: 1 }, new Map(), 10).map((j) => j.id)).toEqual(['b', 'a']);
+    expect(pickNext(q.slice(1), [q[0]], { ...LIMITS, total: 1 }, new Map(), 10).map((j) => j.id)).toEqual(['b']); // beside the heavy run
+    expect(pickNext([q[3]], [q[0], q[1]], { ...LIMITS, total: 1 }, new Map(), 10)).toEqual([]); // heavy runs wait for each other
+    expect(pickNext(q, [], { browser: 2, heavy: 1, total: 1 }, new Map(), 10).map((j) => j.id)).toEqual(['b', 'c']); // two checks fill both slots
+    expect(pickNext(q, [], { browser: 2, heavy: 2, total: 2 }, new Map(), 10).map((j) => j.id)).toEqual(['b', 'c', 'a']);
   });
 
-  it("lets the lane that waited longest go first under the total cap, so heavy runs can't keep a browser check waiting (#578)", () => {
-    const q = [job('e2', 'run', 'B', 5), job('check', 'check', 'C', 2)];
-    expect(pickNext(q, [], { ...LIMITS, total: 1 }, new Map()).map((j) => j.id)).toEqual(['check']);
-    expect(pickNext([job('e3', 'run', 'B', 1), q[1]], [], { ...LIMITS, total: 1 }, new Map()).map((j) => j.id)).toEqual(['e3']);
+  it('starts a check queued behind 5 heavy runs after at most the one already running (#618)', () => {
+    const heavy = [1, 2, 3, 4, 5].map((i) => job(`e${i}`, 'run', `R${i}`, i));
+    const check = job('check', 'check', 'C', 6);
+    const limits = { ...LIMITS, total: 1 };
+    expect(pickNext([...heavy, check], [], limits, new Map(), 10).map((j) => j.id)).toEqual(['check', 'e1']);
+    expect(pickNext([...heavy.slice(1), check], [heavy[0]], limits, new Map(), 10).map((j) => j.id)).toEqual(['check']);
+    // Every heavy run aged over 5 minutes: the check still takes the slot kept for it.
+    expect(pickNext([...heavy.slice(1), check], [heavy[0]], { browser: 1, heavy: 1, total: 1 }, new Map(), 10 + LAB_AGE_MS).map((j) => j.id)).toEqual(['check']);
+  });
+
+  it('lets a job that waited over 5 minutes go first, whatever its floor or lane (#618)', () => {
+    const q = [job('a1', 'screenshot', 'A', 0), job('b1', 'screenshot', 'B', LAB_AGE_MS)];
+    expect(pickNext(q, [], LIMITS, new Map([['A', 100]]), LAB_AGE_MS + 10).map((j) => j.id)).toEqual(['a1']); // A was just served, but a1 is aged
+    expect(pickNext(q, [], LIMITS, new Map([['A', 100]]), LAB_AGE_MS - 10).map((j) => j.id)).toEqual(['b1']);
+    // Under a shared cap two browser jobs fill it; an aged heavy run's lane goes first.
+    const shared = [job('e', 'run', 'E', 0), job('c1', 'check', 'C', 1), job('c2', 'check', 'D', 2)];
+    expect(pickNext(shared, [], { browser: 2, heavy: 1, total: 1 }, new Map(), 10).map((j) => j.id)).toEqual(['c1', 'c2']);
+    expect(pickNext(shared, [], { browser: 2, heavy: 1, total: 1 }, new Map(), LAB_AGE_MS + 10).map((j) => j.id)).toEqual(['e', 'c1']);
+  });
+
+  it('orders a lane the way it starts, for the real queue position (#618)', () => {
+    const q = [job('a1', 'screenshot', 'A', 1), job('a2', 'screenshot', 'A', 2), job('b1', 'screenshot', 'B', 3)];
+    expect(laneOrder(q, [job('x', 'run', 'A', 0)], new Map(), 10).map((j) => j.id)).toEqual(['b1', 'a1', 'a2']);
+    expect(laneOrder(q, [job('x', 'run', 'A', 0)], new Map(), LAB_AGE_MS + 2).map((j) => j.id)).toEqual(['a1', 'b1', 'a2']);
   });
 
   it('runs one job per agent at a time (#578)', () => {
     const mine = (id: string, kind: 'screenshot' | 'run', agentId: string, at: number) => ({ ...job(id, kind, `R${id}`, at), agentId });
-    expect(pickNext([mine('a2', 'screenshot', 'a', 1), mine('b1', 'screenshot', 'b', 2)], [mine('a1', 'run', 'a', 0)], { browser: 2, heavy: 1 }, new Map()).map((j) => j.id)).toEqual(['b1']);
-    expect(pickNext([mine('a1', 'run', 'a', 1), mine('a2', 'screenshot', 'a', 2)], [], { browser: 1, heavy: 1 }, new Map()).map((j) => j.id)).toEqual(['a1']);
+    expect(pickNext([mine('a2', 'screenshot', 'a', 1), mine('b1', 'screenshot', 'b', 2)], [mine('a1', 'run', 'a', 0)], { browser: 2, heavy: 1 }, new Map(), 10).map((j) => j.id)).toEqual(['b1']);
+    expect(pickNext([mine('a1', 'run', 'a', 1), mine('a2', 'screenshot', 'a', 2)], [], { browser: 1, heavy: 1 }, new Map(), 10).map((j) => j.id)).toEqual(['a1']);
   });
 
   it('estimates the wait from the place in the lane', () => {
@@ -297,6 +319,40 @@ describe('TestLab', () => {
   });
 });
 
+describe('a browser check behind heavy runs (#618)', () => {
+  it('starts beside 5 queued heavy runs, and lab_status gives the real position and why a job waits', async () => {
+    const gates: (() => void)[] = [];
+    const runner = { ...fakeRunner([], -1), run: () => new Promise<RunResult>((r) => gates.push(() => r({ code: 0, ms: 1, timedOut: false, tail: [], artifacts: [] }))) };
+    const { lab: l } = lab(runner, () => null, undefined, { ...DEFAULT_TEST_LAB, totalJobs: 1 });
+    const runs = [0, 1, 2, 3, 4].map((i) => l.submit(who(`h${i}`, `r${i}`, i), { kind: 'run', command: 'npm test' }));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(l.view().running.map((j) => j.agentId)).toEqual(['h0']);
+    expect(l.status('h1')).toMatch(/Yours: npm test, position 1 in the heavy queue, waiting because the heavy slots are full: npm test running/);
+    expect(l.status('h4')).toMatch(/position 4 in the heavy queue, waiting because the heavy slots are full/);
+    const check = l.submit(who('c', 'r9', 9), shot('http://localhost:1/'));
+    expect(l.view().running.map((j) => j.agentId)).toEqual(['h0', 'c']); // the kept slot: no heavy run blocks it
+    // The browser lane is busy now: a second floor's check is ahead of one from a floor that already runs a job.
+    const busyFloor = l.submit(who('d', 'r0', 0), shot('http://localhost:2/'));
+    const freeFloor = l.submit(who('e', 'r8', 8), shot('http://localhost:3/'));
+    expect(l.view().queue.filter((j) => j.kind === 'screenshot').map((j) => j.agentId)).toEqual(['d', 'e']);
+    expect(l.status('e')).toMatch(/Yours: screenshot localhost:3\/ × 3, position 1 in the browser queue, waiting because the browser slots are full/);
+    expect(l.status('d')).toMatch(/position 2 in the browser queue/);
+    for (let i = 0; i < 4; i++) {
+      runner.release();
+      gates.splice(0).forEach((g) => g());
+      await new Promise((r) => setTimeout(r, 0));
+    }
+    gates.splice(0).forEach((g) => g());
+    expect(await check).toMatch(/^3 screenshots/);
+    await Promise.all([busyFloor, freeFloor]);
+    for (let i = 0; i < 6 && gates.length + l.view().queue.length + l.view().running.length; i++) {
+      gates.splice(0).forEach((g) => g());
+      await new Promise((r) => setTimeout(r, 0));
+    }
+    await Promise.all(runs);
+  });
+});
+
 describe('never silent while queued (#560)', () => {
   afterEach(() => vi.useRealTimers());
   const busy = () => {
@@ -310,19 +366,21 @@ describe('never silent while queued (#560)', () => {
     vi.useFakeTimers();
     const { runner, l } = busy();
     const beats: { position: number; message: string }[] = [];
-    const ask = l.submit(who('b', 'r2', 2), { kind: 'run', command: 'npm test' }, Date.now(), (b) => beats.push(b));
+    const ask = l.submit(who('b', 'r2', 2), shot('http://localhost:8/'), Date.now(), (b) => beats.push(b));
     await vi.advanceTimersByTimeAsync(19_000);
     expect(beats).toEqual([]);
     await vi.advanceTimersByTimeAsync(1_000);
-    expect(beats).toEqual([{ position: 1, message: expect.stringMatching(/^Lab job \w+ queued: position 1 in the lab's heavy queue \(the lab is busy with screenshot localhost:9\/ × 3\)/) }]);
+    expect(beats).toEqual([{ position: 1, message: expect.stringMatching(/^Lab job \w+ queued: position 1 in the lab's browser queue \(the browser slots are full: screenshot localhost:9\/ × 3 running\)/) }]);
     await vi.advanceTimersByTimeAsync(20_000);
     expect(beats).toHaveLength(2);
+    runner.release();
+    await vi.advanceTimersByTimeAsync(0);
     runner.release();
     await vi.advanceTimersByTimeAsync(0);
     expect(l.view().recent.map((j) => j.agentId)).toEqual(['b', 'a']); // started, and done
     await vi.advanceTimersByTimeAsync(60_000);
     expect(beats).toHaveLength(2);
-    expect(await ask).toMatch(/^npm test: exit code 1/);
+    expect(await ask).toMatch(/^3 screenshots/);
   });
 
   it('keeps a call that waits 10 minutes behind 3 jobs hearing from the lab at least every 60 s, then answers it (#578)', async () => {
@@ -357,7 +415,7 @@ describe('never silent while queued (#560)', () => {
   it("drops a queued job whose caller has gone, so it holds no one's place (#578)", async () => {
     const { runner, l } = busy();
     const call = new AbortController();
-    const ask = l.submit(who('b', 'r2', 2), { kind: 'run', command: 'npm test' }, Date.now(), () => undefined, call.signal);
+    const ask = l.submit(who('b', 'r2', 2), shot('http://localhost:8/'), Date.now(), () => undefined, call.signal);
     expect(l.view().queue).toHaveLength(1);
     call.abort();
     expect(l.view().queue).toEqual([]);
@@ -367,7 +425,7 @@ describe('never silent while queued (#560)', () => {
 
   it('answers at once with the place and when to retry when the caller cannot take progress, and queues nothing', () => {
     const { runner, l } = busy();
-    expect(() => l.submit(who('b', 'r2', 2), { kind: 'run', command: 'npm test' }, Date.now(), null)).toThrow(/^Queued, position 1 in the lab's heavy queue \(the lab is busy with screenshot localhost:9\/ × 3\): nothing ran\. Retry in \d+ s\.$/);
+    expect(() => l.submit(who('b', 'r2', 2), shot('http://localhost:8/'), Date.now(), null)).toThrow(/^Queued, position 1 in the lab's browser queue \(the browser slots are full: screenshot localhost:9\/ × 3 running\): nothing ran\. Retry in \d+ s\.$/);
     expect(l.view().queue).toEqual([]);
     runner.release();
   });
