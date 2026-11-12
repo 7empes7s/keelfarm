@@ -230,7 +230,7 @@ describe('account rotation', { timeout: 30_000 }, () => {
     const { swarm, repo, runs, i } = await office(['claude-login', 'claude-keelop', 'claude-apikey']);
     swarm.updateSettings({ rotation: { on: true, apiLast: true, ceoClis: [], agentsSwitchCli: true } });
     (swarm as unknown as { clis: unknown[] }).clis = ['claude', 'codex'].map((id) => ({ id, label: id, installed: true, version: 'demo', integrated: id === 'claude' }));
-    for (const a of i.state.agents) a.cli = ''; // nobody runs Codex, and no Codex account was added: only its built-in login is left
+    for (const a of i.state.agents as { cli?: string }[]) a.cli = ''; // nobody runs Codex, and no Codex account was added: only its built-in login is left
     for (const id of ['codex-apikey', 'codex-pro']) await swarm.accounts.remove(id);
     const ada = swarm.hireAgent(repo.id, { name: 'Ada', strict: true });
     await wait(10_000);
