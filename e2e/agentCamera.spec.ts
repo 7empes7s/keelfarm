@@ -8,7 +8,6 @@ type CamWindow = {
   __swarmAgentCam: { state: { agent: string | null }; mouth: number; frames: number; on(id: string): void; level(v: number | null): void };
   __swarmCall: { phase: string };
   __swarmMic: { fake(): void; say(text: string, final?: boolean): boolean };
-  __swarmStats: { fps: number };
 };
 const cam = (page: Page) => page.evaluate(() => (window as unknown as CamWindow).__swarmAgentCam.state.agent);
 const mouth = (page: Page) => page.evaluate(() => (window as unknown as CamWindow).__swarmAgentCam.mouth);
@@ -82,7 +81,7 @@ for (const width of [390, 1280]) {
     if (await details.isVisible()) await details.click();
     await ask.click();
     // busy with a fix or a test, they're camera shy once; the second ask turns it on
-    if (!(await page.locator('.cam-tile').isVisible())) await ask.click();
+    if (!(await cam(page))) await ask.click();
     await expect.poll(() => cam(page)).not.toBeNull();
     await expect(page.getByRole('button', { name: /^Camera off$/ })).toBeVisible();
     await tileWorks(page, width);
@@ -91,16 +90,20 @@ for (const width of [390, 1280]) {
 
 test('the 3D office keeps its frame rate with the camera tile open', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
-  await page.goto('/?stats');
-  await enterOffice(page, { loaded: true });
-  const fps = () => page.evaluate(() => (window as unknown as CamWindow).__swarmStats.fps);
-  await expect.poll(fps, { timeout: 60_000 }).toBeGreaterThan(0);
+  await enterOffice(page);
+  // the main view's frames over 3 s (software WebGL in the lab is slow, so it's a ratio, not a number)
+  const frames = () => page.evaluate(() => new Promise<number>((done) => {
+    let n = 0;
+    const end = performance.now() + 3000;
+    const tick = () => (performance.now() < end ? (n++, requestAnimationFrame(tick)) : done(n));
+    requestAnimationFrame(tick);
+  }));
   await page.waitForTimeout(3000);
-  const without = await fps();
+  const without = await frames();
   await page.evaluate(() => (window as unknown as CamWindow).__swarmAgentCam.on('ceo'));
   await expect(page.locator('.cam-tile canvas')).toBeVisible({ timeout: 30_000 });
-  await page.waitForTimeout(4000);
-  const frames = await page.evaluate(() => (window as unknown as CamWindow).__swarmAgentCam.frames);
-  expect(frames, 'the tile draws').toBeGreaterThan(5);
-  expect(await fps(), `office fps with the tile vs ${without} without`).toBeGreaterThanOrEqual(without * 0.75);
+  await page.waitForTimeout(2000);
+  const withTile = await frames();
+  expect(await page.evaluate(() => (window as unknown as CamWindow).__swarmAgentCam.frames), 'the tile draws').toBeGreaterThan(5);
+  expect(withTile, `main view frames in 3 s with the tile vs ${without} without`).toBeGreaterThanOrEqual(without * 0.75);
 });
