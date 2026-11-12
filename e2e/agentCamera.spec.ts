@@ -90,7 +90,8 @@ for (const width of [390, 1280]) {
 
 test('the 3D office keeps its frame rate with the camera tile open', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
-  await enterOffice(page);
+  await page.goto('/?camera=ceo');
+  await enterOffice(page, { loaded: true });
   // the main view's frames over 3 s (software WebGL in the lab is slow, so it's a ratio, not a number)
   const frames = () => page.evaluate(() => new Promise<number>((done) => {
     let n = 0;
@@ -98,12 +99,13 @@ test('the 3D office keeps its frame rate with the camera tile open', async ({ pa
     const tick = () => (performance.now() < end ? (n++, requestAnimationFrame(tick)) : done(n));
     requestAnimationFrame(tick);
   }));
-  await page.waitForTimeout(3000);
-  const without = await frames();
-  await page.evaluate(() => (window as unknown as CamWindow).__swarmAgentCam.on('ceo'));
   await expect(page.locator('.cam-tile canvas')).toBeVisible({ timeout: 30_000 });
-  await page.waitForTimeout(2000);
+  await page.waitForTimeout(3000);
   const withTile = await frames();
   expect(await page.evaluate(() => (window as unknown as CamWindow).__swarmAgentCam.frames), 'the tile draws').toBeGreaterThan(5);
+  await page.getByRole('button', { name: /^Turn off .+'s camera$/ }).click();
+  await expect(page.locator('.cam-tile')).toHaveCount(0);
+  await page.waitForTimeout(2000);
+  const without = await frames();
   expect(withTile, `main view frames in 3 s with the tile vs ${without} without`).toBeGreaterThanOrEqual(without * 0.75);
 });
