@@ -67,6 +67,7 @@ describe('the route table (#413)', () => {
     expect(office('#floor/2/kanban')).toMatchObject({ overlay: { kind: 'kanban', repoId: 'r2' }, stand: { floor: 2, at: 'board' } });
     expect(office('#3d/maproom')).toMatchObject({ overlay: { kind: 'mapRoom' }, stand: { floor: 0, at: 'ceo' } });
     expect(office('#3d/desk/mimoun')?.stand).toEqual({ floor: 0, at: 'ceo' });
+    expect(office('#3d/it')).toMatchObject({ overlay: null, stand: { floor: 0, at: 'it' } }); // the IT office (#535)
     expect(office('#settings/providers')?.overlay).toEqual({ kind: 'manager', tab: 'providers' });
     expect(pocket('#settings/providers')).toMatchObject({ native: true, ready: '.pk-settings' });
   });
