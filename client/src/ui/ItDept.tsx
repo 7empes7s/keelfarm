@@ -13,6 +13,7 @@ import type { EffortLevel } from '../../../shared/types';
 import { Bubble } from './ChatBubble';
 import { DaySeparator } from './ChatCards';
 import { ItDeskCards } from './ItDeskCards';
+import { ItAutoApprove, ItAutoUndo } from './ItAutoApprove';
 import { ItHealth, ItRecCards } from './ItHealth';
 import { ItTickets } from './ItTickets';
 import { ItImprove, ItImproveCards } from './ItImprove';
@@ -102,6 +103,7 @@ function ItChat() {
           <Fragment key={m.id}>
             <DaySeparator prev={messages[i - 1]?.at} at={m.at} />
             <Bubble item={itemOf({ m })} ceoName={s.name} quoted={itQuoted(byId, m.replyTo)} highlight={flash === m.id} linked={plain} onFloor={noop} onQuote={on.onQuote} onReply={on.onReply} onActions={on.onActions} onArtifact={noop} onFile={noop} />
+            <ItAutoUndo m={m} />
             {m.id === offer?.id && (
               <div className="suggestions" role="group" aria-label={`Suggested replies to ${s.name}`}>
                 {offer.suggestions!.map((x) => (
@@ -226,6 +228,7 @@ function ItSetup() {
           ))}
         </select>
       </label>
+      <ItAutoApprove />
       <ItTelegram />
     </section>
   );
