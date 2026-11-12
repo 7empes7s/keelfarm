@@ -3,19 +3,23 @@
 // tablet a CEO orb that follows across every page, drags to a corner, and opens into a small call card. Unmounting
 // any of them (a page change, the 3D/pocket switch) never touches the call. App.tsx loads this once a call starts.
 // Open, both show a live view of the meeting room the call happens in (world/MeetingTile.tsx, #369), the CEO at its
-// table; folded, or while you sit at that table yourself, it isn't drawn.
+// table; folded, or while you sit at that table yourself, it isn't drawn. The orb is ElevenLabs UI's (AgentOrb.tsx);
+// with the Jarvis voice (#534) it leads the phone's call screen, and after "that's all" a tap on it talks again.
 import { lazy, Suspense, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { CEO_ID } from '../../../shared/types';
 import { useStore } from '../store';
 import { Icon } from './Icon';
 import type { IconName } from './icons';
-import { useCallCaptions } from './callCaptions';
+import { orbState } from './agentCall';
+import { useAgentCall } from './agentCallStore';
+import { agentStatus, useCallCaptions } from './callCaptions';
 import { callClock, callStatus, inCall, type Call } from './voiceCall';
-import { endCall, setMinimised, skipSentence, talkOnce, toggleCaptions, toggleMute, togglePause, toggleSpeaker } from './voiceCallEngine';
+import { endCall, setMinimised, skipSentence, talkOnce, tapOrb, toggleCaptions, toggleMute, togglePause, toggleSpeaker } from './voiceCallEngine';
 import { CALL_NARROW, useCall } from './voiceCallStore';
 import './voiceCall.css';
 
 const MeetingTile = lazy(() => import('../world/MeetingTile'));
+const AgentOrb = lazy(() => import('./AgentOrb'));
 
 function useNarrow() {
   const [narrow, setNarrow] = useState(() => window.matchMedia(CALL_NARROW).matches);
@@ -127,13 +131,35 @@ function RoomView({ ceo, fallback }: { ceo: string; fallback: ReactNode }) {
   );
 }
 
-function Orb({ call, initial, size }: { call: Call; initial: string; size: 'big' | 'small' }) {
+/** The orb: ElevenLabs UI's over the CSS one (which shows while it loads, or without WebGL2). A button after "that's all". */
+function Orb({ call, initial, size, tap = true }: { call: Call; initial: string; size: 'big' | 'small'; tap?: boolean }) {
+  const mode = useAgentCall((s) => s.mode);
   const state = call.paused ? 'paused' : call.phase;
-  return (
-    <div className={`vcall-orb vcall-orb-${size}`} data-state={state} aria-hidden>
+  const face = (
+    <>
       <span>{initial}</span>
+      <Suspense fallback={null}>
+        <AgentOrb state={orbState(call.phase, call.paused, mode)} />
+      </Suspense>
+    </>
+  );
+  if (mode === 'idle' && tap)
+    return (
+      <button type="button" className={`vcall-orb vcall-orb-${size} vcall-orb-tap`} data-state="idle" aria-label="Talk again" title="Tap to talk" onClick={tapOrb}>
+        {face}
+      </button>
+    );
+  return (
+    <div className={`vcall-orb vcall-orb-${size}`} data-state={state} data-agent={mode === 'off' ? undefined : mode} aria-hidden>
+      {face}
     </div>
   );
+}
+
+/** The status under the name: the Jarvis voice's own, else the call's. */
+function useStatus(call: Call, ceo: string) {
+  const mode = useAgentCall((s) => s.mode);
+  return agentStatus(mode) ?? callStatus(call, ceo);
 }
 
 function openChat() {
@@ -148,12 +174,14 @@ function PhoneCall() {
   const { call, minimised } = useCall();
   const ceo = useStore((s) => s.agents[CEO_ID]?.name ?? 'CEO');
   const clock = useClock(call.startedAt);
+  const status = useStatus(call, ceo);
+  const jarvis = useAgentCall((s) => s.mode !== 'off');
   if (minimised)
     return (
       <button type="button" className="vcall-pill" onClick={() => setMinimised(false)} aria-label={`Back to the call with ${ceo}, ${clock}`}>
         <Icon name="phone" />
         <span className="vcall-pill-name">{ceo}</span>
-        <span className="vcall-pill-status">{callStatus(call, ceo)}</span>
+        <span className="vcall-pill-status">{status}</span>
         <span className="vcall-clock">{clock}</span>
       </button>
     );
@@ -168,10 +196,11 @@ function PhoneCall() {
           <Icon name="message-circle" />
         </button>
       </header>
-      <div className="vcall-middle">
-        <RoomView ceo={ceo} fallback={<Orb call={call} initial={ceo.charAt(0)} size="big" />} />
+      <div className={`vcall-middle ${jarvis ? 'vcall-middle-agent' : ''}`}>
+        {jarvis && <Orb call={call} initial={ceo.charAt(0)} size="big" />}
+        <RoomView ceo={ceo} fallback={jarvis ? null : <Orb call={call} initial={ceo.charAt(0)} size="big" />} />
         <h2 className="vcall-name">{ceo}</h2>
-        <p className="vcall-status">{callStatus(call, ceo)}</p>
+        <p className="vcall-status">{status}</p>
         <TapToTalk />
         <CaptionsLine />
       </div>
@@ -198,6 +227,7 @@ function CallOrb() {
   const { call, minimised } = useCall();
   const ceo = useStore((s) => s.agents[CEO_ID]?.name ?? 'CEO');
   const clock = useClock(call.startedAt);
+  const status = useStatus(call, ceo);
   const [corner, setCorner] = useState<Corner>(savedCorner);
   const [drag, setDrag] = useState<{ x: number; y: number } | null>(null);
   const press = useRef<{ x: number; y: number; moved: boolean } | null>(null);
@@ -239,8 +269,8 @@ function CallOrb() {
   return (
     <div className={`vcall-float vcall-${corner}`} style={style} data-dragging={drag ? '' : undefined}>
       {minimised ? (
-        <button type="button" className="vcall-bubble" aria-label={`Call with ${ceo}, ${callStatus(call, ceo)}: open the call card`} title="Drag to a corner" onPointerDown={down} onPointerMove={move} onPointerUp={up} onClick={open}>
-          <Orb call={call} initial={ceo.charAt(0)} size="small" />
+        <button type="button" className="vcall-bubble" aria-label={`Call with ${ceo}, ${status}: open the call card`} title="Drag to a corner" onPointerDown={down} onPointerMove={move} onPointerUp={up} onClick={open}>
+          <Orb call={call} initial={ceo.charAt(0)} size="small" tap={false} />
           <span className="vcall-clock">{clock}</span>
         </button>
       ) : (
@@ -250,7 +280,7 @@ function CallOrb() {
             <div className="vcall-card-who">
               <strong className="vcall-name">{ceo}</strong>
               <span className="vcall-status">
-                {callStatus(call, ceo)} · <span className="vcall-clock">{clock}</span>
+                {status} · <span className="vcall-clock">{clock}</span>
               </span>
             </div>
             <button type="button" className="ds-btn ds-btn-ghost ds-btn-icon" aria-label="Fold the call card" title="Fold to the orb; the call goes on" onClick={() => setMinimised(true)}>

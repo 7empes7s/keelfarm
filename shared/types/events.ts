@@ -18,6 +18,7 @@ import type { WeatherView } from '../outside.ts';
 import type { ProgressView, RewardView } from '../progress.ts';
 import type { TestLabView } from '../testLab.ts';
 import type { ViewPatch } from '../viewPatch.ts';
+import type { VoiceAgentView } from '../voiceAgent.ts';
 import type { ToolInventory } from '../tooling.ts';
 import type { AgentView, CliView, CloudView, HireRequestView, LogLine, ModelCatalogView } from './agents.ts';
 import type { CeoChatView, CeoInfo, PhoneMessage, ServerDelivery, StatusReaction } from './chat.ts';
@@ -73,6 +74,7 @@ export interface WorldSnapshot {
   voiceKeySet: boolean; // an ElevenLabs key is saved (the key itself never leaves the server)
   voiceKeyHint: string; // its last 4 characters, '' when none
   voiceCache: VoiceCacheView;
+  voiceAgent?: VoiceAgentView; // the Jarvis voice's minutes (#534, shared/voiceAgent.ts); absent in a replay
   weather: WeatherView; // the real local weather's place and latest reading (Settings → Weather)
   ticker?: TickerItem[]; // the floors' recent ticker lines, oldest first
   notifyChannels: NotifyChannelsView;
@@ -151,6 +153,7 @@ export type ServerEvent =
   | { type: 'models'; models: ModelCatalogView }
   | { type: 'voiceKey'; voiceKeySet: boolean; voiceKeyHint: string }
   | { type: 'voiceCache'; voiceCache: VoiceCacheView }
+  | { type: 'voiceAgent'; voiceAgent: VoiceAgentView }
   /** The CEO says something while it works (#286): never saved, nor in the snapshot. */
   | { type: 'voiceLine'; line: VoiceLine }
   | { type: 'weather'; weather: WeatherView }

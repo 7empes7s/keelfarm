@@ -398,16 +398,16 @@ export abstract class SwarmCeo extends SwarmCeoLog {
   }
 
   /** The manager's phone (or Telegram) → the CEO, with a quote of the message it replies to and any files. Injected into a running session, otherwise the CEO picks it up next; "Research: <topic>" and replies to research are jobs of their own. */
-  async messageCeo(text: string, replyTo?: number, via?: 'telegram', fileIds: readonly string[] = [], tg?: number, clientId?: string) {
+  async messageCeo(text: string, replyTo?: number, via?: 'telegram' | 'voice', fileIds: readonly string[] = [], tg?: number, clientId?: string) {
     const t = text.trim().slice(0, 4000);
     const attachments = this.ceoFiles.managerFiles(fileIds);
     if (!t && !attachments.length) throw new HttpError(400, 'Empty message');
     if (isHarnessText(t)) throw new HttpError(400, "That's the CEO session's own output, not a message: it stays out of the chat.");
     const a = this.ceo();
     const agentAsked = replyTo === undefined ? undefined : this.state.questions.find((q) => q.messageId === replyTo);
-    if (agentAsked && t) return this.managerAnswer(agentAsked, t, replyTo!, via);
+    if (agentAsked && t) return this.managerAnswer(agentAsked, t, replyTo!, via === 'telegram' ? via : undefined);
     const quoted = replyTo === undefined ? undefined : this.state.messages.find((m) => m.id === replyTo);
-    const m = this.postMessage('manager', t, undefined, { ...(replyTo !== undefined && { replyTo }), ...(clientId && { clientId }), delivery: 'sent', ...(via && { telegram: 'in' as const, ...(tg !== undefined && { tg }) }), ...(attachments.length && { attachments }) });
+    const m = this.postMessage('manager', t, undefined, { ...(replyTo !== undefined && { replyTo }), ...(clientId && { clientId }), delivery: 'sent', ...(via === 'voice' && { voiceCall: true as const }), ...(via === 'telegram' && { telegram: 'in' as const, ...(tg !== undefined && { tg }) }), ...(attachments.length && { attachments }) });
     const forward = [projectLine(this.state.ceo.chats, this.state.messages, m, this.state.repos), forwardText(t, quoted), refsLine(m.text, m.refs), this.ceoFiles.forwardLines(attachments)].filter(Boolean).join('\n');
     const asked = this.holds.answer(replyTo, [t, this.ceoFiles.forwardLines(attachments)].filter(Boolean).join('\n')); // no quote: it answers the question asked
     if (asked && !asked.resume) {
@@ -595,7 +595,7 @@ export abstract class SwarmCeo extends SwarmCeoLog {
   // ---------- the phone ----------
 
   /** `changes`: the team changes a CEO message proposes (Telegram gets their buttons); `telegram: 'in'`: sent from there; `closing`: a CEO turn's closing text (ceoSpoken). */
-  protected postMessage(from: PhoneMessage['from'], text: string, requestId?: string, opts: Pick<PhoneMessage, 'replyTo' | 'clientId' | 'delivery' | 'telegram' | 'tg' | 'attachments' | 'used' | 'research' | 'log' | 'actions' | 'question' | 'notice' | 'signIn' | 'switch' | 'ceoStuck' | 'ceoRuns' | 'pacing' | 'ceoJob' | 'problems'> & { changes?: TeamChange[]; closing?: boolean } = {}) {
+  protected postMessage(from: PhoneMessage['from'], text: string, requestId?: string, opts: Pick<PhoneMessage, 'replyTo' | 'clientId' | 'delivery' | 'telegram' | 'voiceCall' | 'tg' | 'attachments' | 'used' | 'research' | 'log' | 'actions' | 'question' | 'notice' | 'signIn' | 'switch' | 'ceoStuck' | 'ceoRuns' | 'pacing' | 'ceoJob' | 'problems'> & { changes?: TeamChange[]; closing?: boolean } = {}) {
     const { changes, closing = false, ...extra } = opts;
     // The CEO's suggestion boxes and artifacts come out of the text; the office's notes are cleaned (shared/chatParts.ts).
     const parts = parseMessage(from, text);
@@ -606,6 +606,7 @@ export abstract class SwarmCeo extends SwarmCeoLog {
     const home = extra.question ? this.state.questions.find((q) => q.id === extra.question)?.repoId : undefined;
     const refs = from === 'office' ? [] : parseRefs(body, { ...this.refContext(), ...(home && { home }) });
     const m: PhoneMessage = { id, from, text: body, at: Date.now(), ...(requestId ? { requestId } : {}), ...extra, ...(parts.suggestions && { suggestions: parts.suggestions }), ...(parts.ask && { ask: parts.ask }), ...(from === 'ceo' && this.ceoSpoken(parts, closing)), ...(parts.idea && { idea: parts.idea }), ...(artifacts && { artifacts }), ...(parts.visuals && { visuals: parts.visuals }), ...(refs.length && { refs }) };
+    if (m.voiceCall) m.silent = true; // heard on the call already (#534)
     const v = this.state.settings.voice;
     if (v.provider !== 'off' && speaks(m, v)) m.voice = v.provider; // what the phone's ▶ replays it with
     if (from === 'ceo' && this.mirrorsToTelegram()) {
@@ -620,7 +621,7 @@ export abstract class SwarmCeo extends SwarmCeoLog {
     if (touchConversation(this.state.ceo.chats, m)) this.broadcast({ type: 'ceoChat', conversations: conversationsView(this.state.ceo.chats) });
     this.save();
     // Proposals and agents' questions are notified as such (proposeHire, proposeLetGo, notifyQuestion).
-    if (from === 'ceo' && !requestId && !m.question) {
+    if (from === 'ceo' && !requestId && !m.question && !m.voiceCall) {
       const said = m.text || (m.visuals ? withVisualsText('', m.visuals) : `📎 ${[...(m.artifacts ?? []).map((a) => a.title), ...(m.attachments ?? []).map((f) => f.name)].join(', ')}`);
       this.notice({ kind: 'ceo', title: this.ceo().name, text: plainText(said), actions: ['reply'] }, { event: 'ceoMessage', line: `${this.ceo().name}: ${plainText(said, 100)}`, message: m.id });
     }

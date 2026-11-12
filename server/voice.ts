@@ -12,6 +12,8 @@ import { clipProblem, clipType } from '../shared/clipLimits.ts';
 import { clampSpeed, cleanFavourites, pickVoice, SPEED_DEFAULT, VOICE_ID, voicePool } from '../shared/voices.ts';
 import type { ListenSettings, PhoneMessage, VoiceCacheView, VoiceOption, VoiceSettings } from '../shared/types.ts';
 import { secretMismatch } from '../shared/secretFormats.ts';
+import { DEFAULT_VOICE_AGENT, voiceAgentSettings } from '../shared/voiceAgent.ts';
+import type { AgentConfig, AgentIds } from './voiceAgent.ts';
 import { HttpError } from './httpError.ts';
 import { mergeSecrets, readSecrets } from './secrets.ts';
 
@@ -72,6 +74,7 @@ export const DEFAULT_VOICE: VoiceSettings = {
   favourites: [],
   talk: 'off',
   agentsSpeak: true,
+  agent: DEFAULT_VOICE_AGENT,
 };
 
 const MODEL_ID = /^[a-z0-9_.-]{1,64}$/;
@@ -91,6 +94,7 @@ export function voiceSettings(base: VoiceSettings, patch: unknown): VoiceSetting
   out.keepDays = clampKeepDays(p.keepDays ?? out.keepDays);
   out.speed = clampSpeed(p.speed ?? out.speed);
   out.favourites = cleanFavourites(p.favourites ?? out.favourites);
+  out.agent = voiceAgentSettings(out.agent ?? DEFAULT_VOICE_AGENT, p.agent);
   return out;
 }
 
@@ -257,6 +261,10 @@ export interface VoiceApi {
   synthesize(key: string, req: SynthRequest, signal: AbortSignal): Promise<Buffer>;
   /** Speech to Text: the words in `audio` (a clipType() type). */
   transcribe(key: string, req: { audio: Buffer; type: string }, signal: AbortSignal): Promise<string>;
+  /** ElevenLabs Agents (#534): the office's agent and its LLM secret, made or brought up to date with `config`. */
+  ensureAgent(key: string, config: AgentConfig, have: AgentIds | null, llmToken: string): Promise<AgentIds>;
+  /** A short-lived signed URL for one conversation with the agent (the key never reaches the browser). */
+  agentUrl(key: string, agentId: string): Promise<string>;
 }
 
 export interface VoiceKeyView {
@@ -505,6 +513,11 @@ export class Voice {
   rememberTalk(id: number, text: string) {
     this.talkLines.set(id, text);
     if (this.talkLines.size > LINES_KEPT) this.talkLines.delete(this.talkLines.keys().next().value!);
+  }
+
+  /** A line the CEO said while working, for the Jarvis voice to say on a call (#534). */
+  talkLine(id: number): string | undefined {
+    return this.talkLines.get(id);
   }
 
   /** GET /api/voice/talk/:id: an ack or progress line as mp3, cached by its words (so each fixed ack is made once). */
