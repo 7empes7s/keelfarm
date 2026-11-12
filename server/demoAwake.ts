@@ -86,6 +86,8 @@ export async function demoRound(text: string, floors: (Floor & { pullRequests: {
   await step('Grep', 'Grep "joystick"', 'Found 6 matches in 4 files');
   await step('WebSearch', 'Search "mobile joystick UX"', 'Did 1 search');
   await step('WebFetch', 'Fetch https://example.com/joystick-study', '403 Forbidden', true);
+  // "… thoroughly": a dozen more reads, so the open live log outgrows the chat on a phone (#526)
+  if (/\bthoroughly\b/i.test(text)) for (let i = 1; i <= 12; i++) await step('Read', `Read client/src/pocket/touch/part${i}.ts`, `Read ${20 * i} lines`);
   const withPr = floors.find((x) => x.pullRequests[0]?.number); // floor 1 may have none
   if (withPr) await use('pr_diff', { floor: withPr.floor, pr: withPr.pullRequests[0].number });
   await use('wait_for', { conditions: [{ kind: 'usage', usage: 'normal' }], timeout_min: 1 });
