@@ -176,6 +176,16 @@ export function AccountSelect({ agent, id, style }: FieldProps) {
   );
 }
 
+/** Pinned to one account (#579): run on another while it's signed out or limited (the default), or wait for it. */
+function FallbackSelect({ agent, id }: FieldProps) {
+  return (
+    <select id={id} value={agent.accountFallback === false ? 'wait' : 'move'} title="What they do while their account is signed out or limited" onChange={(e) => void save(agent.id, { accountFallback: e.target.value !== 'wait' })}>
+      <option value="move">Run on another account</option>
+      <option value="wait">Wait for it</option>
+    </select>
+  );
+}
+
 export function LookSelect({ agent, id }: FieldProps) {
   return (
     <select id={id} value={agent.look} title="Character look" aria-label={id ? undefined : 'Drawn as'} style={{ width: 'auto' }} onChange={(e) => void save(agent.id, { look: e.target.value as 'feminine' | 'masculine' })}>
@@ -347,6 +357,7 @@ export function PromptPreview({ agent }: { agent: Agent }) {
 /** The ⚙️ Setup section of an agent's panel. The CEO gets its coding agent (#418), account, model and effort. */
 export function AgentSetup({ agent }: { agent: Agent }) {
   const settings = useStore((s) => s.settings);
+  const accounts = useStore((s) => s.accounts.accounts);
   const terminal = settings.runtime === 'terminal';
   const id = useId();
   const ceo = agent.role === 'ceo';
@@ -395,6 +406,12 @@ export function AgentSetup({ agent }: { agent: Agent }) {
           <label className="field" htmlFor={`${id}-account`}>
             <span>Account</span>
             <AccountSelect agent={agent} id={`${id}-account`} />
+          </label>
+        )}
+        {!ceo && agent.host !== 'box' && agent.accountFallback !== undefined && accounts.some((a) => a.id === agent.account) && (
+          <label className="field" htmlFor={`${id}-fallback`}>
+            <span>When it's out</span>
+            <FallbackSelect agent={agent} id={`${id}-fallback`} />
           </label>
         )}
         <label className="field" htmlFor={`${id}-model`}>

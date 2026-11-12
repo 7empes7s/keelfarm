@@ -20,7 +20,7 @@ import { checkUsage, type UsageCheck } from './usagePoll.ts';
 import { realUsageApi } from './usageApi.ts';
 import type { UsageApi } from './usageSources.ts';
 import { readCatalog } from './modelCatalog.ts';
-import { checkAccount, readClaudeLogin } from './accountCheck.ts';
+import { checkAccount, readClaudeLogin, readLoginFile } from './accountCheck.ts';
 import { startLocalSignIn } from './localSignIn.ts';
 import type { AccountsDeps } from './accounts.ts';
 import { installDesk, type DepsCallbacks, type DepsOutcome } from './deps.ts';
@@ -213,7 +213,7 @@ export interface Backend {
   /** The demo only: made-up keys and MCP servers for Settings → Providers, so a fresh demo office shows every category. */
   demoProviders?(): { keys: { provider: string; key: string; label: string }[]; mcp: (McpInput & { secrets?: Record<string, string> })[] };
   /** The demo only (#366): the company's main use cases, repos listed but not moved in (a three.js game), and a floor's agent left signed out. */
-  demoSetup?(): { company: UseCase[]; spare: string[]; signedOut: { floor: number; model: string } };
+  demoSetup?(): { company: UseCase[]; spare: string[]; signedOut: { floor: number; model: string }; accountOut?: string };
   /** The demo only: a made-up past week for mission control, so a fresh demo office has numbers from the start. */
   seedOps?(repos: string[], now: number): OpsHistory;
   /** The demo only: a made-up week of sessions and merges for the cost ledger (#18), when it's empty. */
@@ -389,7 +389,7 @@ export const realBackend: Backend = {
   toolInventory: (projects) => scanTooling(projects),
   modelCatalog: () => readCatalog(),
   usageCheck: () => checkUsage(),
-  accounts: { check: checkAccount, login: (_a, dir) => readClaudeLogin(dir), signIn: startLocalSignIn },
+  accounts: { check: checkAccount, login: async (_a, dir) => ({ ...(await readClaudeLogin(dir)), file: await readLoginFile(dir) }), signIn: startLocalSignIn },
   usage: realUsageApi,
   providerProbe: realProbe,
   scanForKeys: realKeyScan,

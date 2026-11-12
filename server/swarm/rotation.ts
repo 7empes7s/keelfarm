@@ -9,13 +9,13 @@ import { HttpError } from '../httpError.ts';
 import { builtInPrefs, prepareLogin } from '../cliSetup.ts';
 import { cliLabel } from '../clis.ts';
 import { backText, defaultAccount, defaultsBack, defaultText, pruneTaskAccounts, switchNow, taskKey, tasksLeft } from '../../shared/accountDefault.ts';
-import { allOutText, detectLimit, endedText, LIMIT_TAIL_LINES, switchesForCeo, switchHandover, switchText, type LimitHit } from '../../shared/accountRotation.ts';
+import { allOutText, detectLimit, fallbackText, LIMIT_TAIL_LINES, pinnedWaits, pinOut, sessionEnd, switchesForCeo, switchHandover, switchText, waitText, type LimitHit, type PinOut } from '../../shared/accountRotation.ts';
 import { ACCOUNT_CLIS, LOGIN_ENV } from '../../shared/accounts.ts';
 import { sessionRun } from '../../shared/sessionRun.ts';
 import { readingOf, usedPercent } from '../../shared/usage.ts';
-import type { AccountCli, AccountSwitch, AccountsView, AgentCli, SessionRun } from '../../shared/types.ts';
+import type { AccountCli, AccountSwitch, AccountsView, AgentCli, AgentView, SessionRun } from '../../shared/types.ts';
 import { canResume, heldElsewhere } from '../sessionResume.ts';
-import { BUSY, CEO_DIR, LIMIT_PAUSE_MS, type PersistedAgent } from './model.ts';
+import { BUSY, CEO_DIR, type PersistedAgent } from './model.ts';
 import { SwarmUsage } from './usage.ts';
 
 const clock = (t: number) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -104,6 +104,10 @@ export abstract class SwarmRotation extends SwarmUsage {
     // Else a session to resume goes back to the account holding it while it's usable (#401).
     const first = this.accounts.use(a.account, cli, rec && !rec.move ? rec.account : opts.resumeSessionId ? a.sessionAccount : undefined);
     opts = this.resumable(a, opts, cli, first?.id);
+    // Pinned to one account that's out and allowed to fall back (#579): it runs elsewhere, and says why.
+    const out = a.role === 'ceo' ? null : pinOut(a.account, this.accounts.view().accounts);
+    if (!out) this.fallbackTold.delete(a.id);
+    const stays = a.role !== 'ceo' && a.accountFallback === false && this.accounts.list().some((x) => x.id === a.account);
     const tried: string[] = [];
     let current: SessionHandle;
     let stopped = false;
@@ -119,13 +123,14 @@ export abstract class SwarmRotation extends SwarmUsage {
         },
       };
       current = this.onUse(a, o, tracked, use, (result, hit) => {
-        const why = result.ok || stopped || result.interrupted ? null : (hit ?? detectLimit(endedText(result.errors, o.terminal?.tail(LIMIT_TAIL_LINES, true) ?? []), Date.now()));
+        const why = result.ok || stopped || result.interrupted ? null : (hit ?? sessionEnd(result, o.terminal?.tail(LIMIT_TAIL_LINES, true) ?? [], Date.now()));
         if (sw?.api) sw.usd += result.costUsd;
         if (!use || !why) return cb.finished(result);
-        // The built-in login isn't polled, so a sign-out read from its output only rests it a while.
-        if (why.kind === 'signed-out' && !use.builtIn) this.accounts.signedOut(use.id);
-        else if (why.kind === 'signed-out') this.accounts.limited(use.id, Date.now() + LIMIT_PAUSE_MS);
+        // A sign-in screen is signed out, the built-in login's too (#579): polled, it's back once its login file changes.
+        if (why.kind === 'signed-out') this.accounts.signedOut(use.id);
         else if (!hit) this.accounts.limited(use.id, why.until);
+        // Told not to fall back: the task goes back in line and they wait for their account (#579).
+        if (stays && use.id === a.account) return cb.finished({ ...result, ok: false, ...(why.kind === 'signed-out' && { signedOut: true }) });
         const until = why.kind === 'limited' ? why.until : null;
         const next = this.nextUse(a, oc, others, tried);
         if (!next) return this.allOut(cli, use.id, cb, result);
@@ -155,10 +160,12 @@ export abstract class SwarmRotation extends SwarmUsage {
     const instead = first && !a.account && !this.accounts.hasFree(cli) ? this.nextUse(a, cli, others, [first.id]) : null;
     if (first && instead && instead.cli !== cli) {
       first.release();
-      this.appendLog(a, [{ kind: 'system', text: `🔀 ${this.accounts.label(first.id)} is out: starting on ${this.accounts.label(instead.use.id)}.` }]);
+      if (out) this.tellFallback(a, instead.use.id, out);
+      else this.appendLog(a, [{ kind: 'system', text: `🔀 ${this.accounts.label(first.id)} is out: starting on ${this.accounts.label(instead.use.id)}.` }]);
       cross(opts.resumeSessionId ? this.fresh(a, opts, SWITCHED_NOTE) : opts, cb, instead, null);
     } else {
       instead?.use.release();
+      if (out && first && first.id !== out.id) this.tellFallback(a, first.id, out);
       attempt(opts, cli, cb, first, null);
     }
     return {
@@ -233,6 +240,7 @@ export abstract class SwarmRotation extends SwarmUsage {
     const { back, out } = defaultsBack(this.defaultsOut, this.accounts.view().accounts, ACCOUNT_CLIS);
     this.defaultsOut = out;
     for (const a of back) this.postMessage('office', backText(a.label));
+    for (const a of this.state.agents) if (a.account && a.role !== 'ceo') this.emitAgent(a); // "Waiting for … sign-in" comes and goes (#579)
   }
 
   /** A fresh session's prompt after a switch: an agent hears its worktree is as it was, a CEO that was mid-conversation gets a handover. */
@@ -337,10 +345,49 @@ export abstract class SwarmRotation extends SwarmUsage {
     }
   }
 
-  /** Pinned to a login that's signed out, with rotation off: no work for them until it's signed in again (#360), rather than a sign-in screen per task. */
-  protected pinnedSignedOut(a: PersistedAgent): boolean {
-    if (!a.account || a.host === 'box' || this.accounts.rotation().on) return false;
-    return this.accounts.view().accounts.some((x) => x.id === a.account && x.status === 'signed-out');
+  /**
+   * The account a pinned agent waits for, taking no work (#360, #579): theirs is signed out with rotation off (else a
+   * sign-in screen per task), or out while they're set not to fall back. null: they can work.
+   */
+  protected pinWait(a: PersistedAgent): PinOut | null {
+    if (!a.account || a.host === 'box' || a.role === 'ceo') return null;
+    const out = pinOut(a.account, this.accounts.view().accounts);
+    return pinnedWaits(out, a.accountFallback, this.accounts.rotation().on) ? out : null;
+  }
+
+  /** Pinned (#579): `accountFallback` false waits while their account is out; true, the default, runs on another. */
+  override updateAgent(id: string, patch: Parameters<SwarmUsage['updateAgent']>[1] & { accountFallback?: unknown }) {
+    const a = this.agent(id);
+    if (patch.accountFallback === true) delete a.accountFallback;
+    else if (patch.accountFallback === false) a.accountFallback = false;
+    super.updateAgent(id, patch);
+  }
+
+  /** One set to wait for their account isn't given work by hand either while it's out (#579). */
+  override async assign(...args: Parameters<SwarmUsage['assign']>) {
+    const a = this.agent(args[0]);
+    const out = a.accountFallback === false ? this.pinWait(a) : null;
+    if (out) throw new HttpError(409, `${a.name} waits for ${out.label} (${out.why === 'signed-out' ? 'signed out' : 'limited'}): sign it in, or set their Setup → When it's out to Run on another account.`);
+    return super.assign(...args);
+  }
+
+  /** Their card says what they wait for (null clears it), and whether a pinned one falls back. */
+  protected override agentView(a: PersistedAgent, withLog: boolean): AgentView {
+    const wait = this.pinWait(a);
+    return { ...super.agentView(a, withLog), ...(a.account && a.role !== 'ceo' && { accountFallback: a.accountFallback !== false }), accountWait: wait ? waitText(wait) : null };
+  }
+
+  /** Agents told about a pinned account being out, by agent: one line to the CEO per account and reason. */
+  private fallbackTold = new Map<string, string>();
+
+  /** A pinned agent starting elsewhere because theirs is out (#579): their log says why, and the CEO hears once. */
+  private tellFallback(a: PersistedAgent, toId: string, out: PinOut) {
+    const text = fallbackText(a.name, this.accounts.label(toId), out);
+    this.appendLog(a, [{ kind: 'system', text: `🔀 ${text}` }]);
+    const key = `${out.id}:${out.why}`;
+    if (this.fallbackTold.get(a.id) === key) return;
+    this.fallbackTold.set(a.id, key);
+    this.ceoTold.push(text);
   }
 
   /** Accounts whose sign-in the manager was told about, and when: one notice per account an hour, however many sessions hit it. */
@@ -348,14 +395,23 @@ export abstract class SwarmRotation extends SwarmUsage {
 
   /** A session showed its CLI's sign-in (cliRunner.ts): the account reads signed out, and the manager hears once. */
   private signInLost(a: PersistedAgent, use: AccountUse, cli: AgentCli) {
-    if (!use.builtIn) this.accounts.signedOut(use.id);
+    this.accounts.signedOut(use.id);
     const now = Date.now();
     if (now - (this.signInTold.get(use.id) ?? 0) < SIGN_IN_NOTICE_MS) return;
     this.signInTold.set(use.id, now);
     const label = this.accounts.label(use.id);
-    const where = use.builtIn ? `run "${cli}" in a terminal on this computer and sign in` : 'sign it in from Settings → Providers';
-    this.notice({ kind: 'stuck', title: `${label} needs signing in`, text: `${a.name}'s session opened on ${cliLabel(cli)}'s sign-in, so it ended: the task carries on on another account, or waits in line. To use this account again, ${where}.`, target: { kind: 'agent', agentId: a.id, terminal: true }, actions: ['terminal'] }, { event: 'agentError', line: a.name });
+    this.accountOut(use.id, label);
+    this.notice({ kind: 'stuck', title: `${label} is signed out`, text: `${a.name}'s session opened on ${cliLabel(cli)}'s sign-in, so it ended: the task carries on on another account, or waits in line. Tap Sign in on its card in the chat.`, target: { kind: 'agent', agentId: a.id, terminal: true }, actions: ['terminal', 'reply'] }, { event: 'agentError', line: a.name });
   }
+
+  /** A login read signed out (#579): one card in the chat with Sign in, and an entry in the problems register. */
+  protected accountOut(id: string, label: string) {
+    this.postMessage('office', `🔑 ${label} is signed out`, undefined, { accountOut: { account: id } });
+    this.accountSignedOut(id, label);
+  }
+
+  /** The problems register's entry (problems.ts). */
+  protected accountSignedOut(_id: string, _label: string) {}
 
   /**
    * Other coding agents a session may fall back to (terminal runtime only, installed here): the CEO's the manager
@@ -384,7 +440,10 @@ export abstract class SwarmRotation extends SwarmUsage {
     const text = switchText(s, clock);
     this.appendLog(a, [{ kind: 'system', text }]);
     if (a.role === 'ceo') this.postMessage('office', text, undefined, { switch: { from: s.from, to: s.to, until: s.until } });
-    else this.ceoTold.push(...switchesForCeo([s], clock));
+    else {
+      this.ceoTold.push(...switchesForCeo([s], clock));
+      if (a.account === s.fromId) this.fallbackTold.set(a.id, `${s.fromId}:${s.why}`); // the CEO heard why already (#579)
+    }
   }
 
   /**

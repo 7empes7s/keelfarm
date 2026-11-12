@@ -167,7 +167,7 @@ export interface OfficeHandlers extends WaitHandlers, ReactHandlers, SetupHandle
   setFloorProfile(a: { floor: number; summary?: string; qa_brief?: string; playbook?: string; preview_command?: string; preview_env?: Record<string, string>; lab_commands?: string[] }): string;
   setOfficePlaybook(a: { playbook: string }): string;
   scaleTeam(a: { floor: number; size: number; reason: string; cli?: AgentCli; model?: string; effort?: string; where?: 'local' | 'cloud' | 'auto' }): string;
-  configureAgent(a: { agent_id: string; account?: string; cli?: AgentCli | ''; model?: string; effort?: string; tools_off?: string[]; tools_on?: string[]; tools_reset?: string[] }): string;
+  configureAgent(a: { agent_id: string; account?: string; account_fallback?: boolean; cli?: AgentCli | ''; model?: string; effort?: string; tools_off?: string[]; tools_on?: string[]; tools_reset?: string[] }): string;
   fileIssue(a: { floor: number; title: string; body: string }): Promise<string>;
   setDependencies(a: { floor: number; number: number; depends_on: number[] }): Promise<string>;
   closeIssue(a: { floor: number; number: number; reason: string }): Promise<string>;
@@ -354,6 +354,7 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
       {
         agent_id: z.string(),
         account: z.string().max(40).optional().describe('An account id or tag (company_status lists them) to run on, or "rotation"'),
+        account_fallback: z.boolean().optional().describe('Pinned to one account: false waits while it is signed out or limited; true (the default) runs on another'),
         cli: z.union([CLI, z.literal('')]).optional().describe('"" for the office default. gemini: QA second opinions, docs, research, small fixes; not a builder'),
         model: z.string().optional().describe('A model id of their coding agent, "" for the default'),
         effort: z.union([EFFORT, z.literal('')]).optional().describe('"" for the office default'),

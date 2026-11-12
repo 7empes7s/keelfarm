@@ -327,7 +327,7 @@ describe('account rotation', { timeout: 30_000 }, () => {
 // #360: a session starts ready to work on any account, and one that opens on a sign-in never sits.
 describe('sessions on a fresh login', { timeout: 30_000 }, () => {
   /** Ada, pinned to the second Max, on the floor's first issue; sessions on `signedOut` accounts open on their sign-in. */
-  async function pinned(signedOut: string[], rotation = true) {
+  async function pinned(signedOut: string[], rotation = true, pin = 'claude-keelop', fallback?: boolean) {
     const o = await office([]);
     const notify = vi.spyOn(o.i.notifier, 'notify');
     if (!rotation) o.swarm.updateSettings({ rotation: { on: false, apiLast: true, ceoClis: [], agentsSwitchCli: false } });
@@ -341,13 +341,13 @@ describe('sessions on a fresh login', { timeout: 30_000 }, () => {
       return { send: () => undefined, stop: () => clearTimeout(t) };
     };
     const ada = o.swarm.hireAgent(o.repo.id, { name: 'Ada', strict: true });
-    o.swarm.updateAgent(ada.id, { account: 'claude-keelop' });
+    o.swarm.updateAgent(ada.id, { account: pin, ...(fallback !== undefined && { accountFallback: fallback }) });
     await wait(10_000);
     const [issue] = o.swarm.snapshot().repos.find((r) => r.id === o.repo.id)!.issues;
     void o.swarm.assign(ada.id, issue.number);
     await wait(5_000);
     const agent = () => o.swarm.snapshot().agents.find((a) => a.id === ada.id)!;
-    const signInNotices = () => notify.mock.calls.filter(([, title]) => /needs signing in/.test(title));
+    const signInNotices = () => notify.mock.calls.filter(([, title]) => /is signed out/.test(title));
     return { ...o, ada, issue, agent, seen: () => seen.filter((s) => s.agentId === ada.id), signInNotices };
   }
 
@@ -371,6 +371,43 @@ describe('sessions on a fresh login', { timeout: 30_000 }, () => {
     expect(swarm.accounts.view().accounts.find((a) => a.id === 'claude-keelop')?.status).toBe('signed-out');
     expect(signInNotices()).toHaveLength(1);
     expect(i.issueFailures.size).toBe(0);
+  });
+
+  it("the built-in login's sign-in screen reads signed out, never limited, with one Sign in card and a problem for the manager (#579)", async () => {
+    const { swarm, seen, i } = await pinned(['claude-login'], true, 'claude-login');
+    expect(seen().map(accountOf)).toEqual(['claude-login', 'claude-keelop']);
+    const login = swarm.accounts.view().accounts.find((a) => a.id === 'claude-login')!;
+    expect(login.status).toBe('signed-out');
+    expect(login.limitedUntil ?? null).toBeNull();
+    expect(i.state.messages.filter((m) => m.accountOut)).toMatchObject([{ text: '🔑 Claude login on this computer is signed out', accountOut: { account: 'claude-login' } }]);
+    expect(swarm.snapshot().problems?.find((p) => p.title === 'Claude login on this computer is signed out')).toMatchObject({ cause: 'sign-in', owner: 'manager', state: 'open' });
+  });
+
+  it('a pinned agent set not to fall back waits for its account, and their card says so (#579)', async () => {
+    const { swarm, agent, i, ada, issue, seen } = await pinned(['claude-keelop'], true, 'claude-keelop', false);
+    expect(seen().map(accountOf)).toEqual(['claude-keelop']); // never moved to another account
+    expect(agent()).toMatchObject({ issueNumber: null, lastError: null, accountFallback: false, accountWait: 'Waiting for Max · keelops sign-in' });
+    expect(i.issueFailures.size).toBe(0);
+    const free = () => (swarm as unknown as { isFree(a: unknown): boolean }).isFree(i.state.agents.find((a) => a.id === ada.id));
+    expect(free()).toBe(false);
+    await expect(swarm.assign(ada.id, issue.number)).rejects.toThrow(/Ada waits for Max · keelops \(signed out\)/);
+    expect(seen()).toHaveLength(1);
+  });
+
+  it('a pinned agent that falls back says why, on their chip and to the CEO, once (#579)', async () => {
+    const { swarm, repo, i, runs } = await office([]);
+    swarm.accounts.signedOut('claude-keelop');
+    const ada = swarm.hireAgent(repo.id, { name: 'Ada', strict: true });
+    swarm.updateAgent(ada.id, { account: 'claude-keelop' });
+    await wait(10_000);
+    const [issue] = swarm.snapshot().repos.find((r) => r.id === repo.id)!.issues;
+    void swarm.assign(ada.id, issue.number);
+    await wait(5_000);
+    expect(runs.filter((r) => r.role !== 'ceo').at(-1)?.account).toBe('claude-login');
+    const agent = swarm.snapshot().agents.find((a) => a.id === ada.id)!;
+    expect(agent).toMatchObject({ accountFallback: true, accountWait: null, run: { pinned: 'Max · keelops', why: 'signed out' } });
+    const told = (i as unknown as { ceoTold: string[] }).ceoTold.filter((t) => t.startsWith('Ada '));
+    expect(told).toEqual(['Ada is running on Claude login on this computer because Max · keelops is signed out.']);
   });
 
   it('with rotation off, the task goes back in line without a strike, and a second sign-in on the account adds no notice', async () => {
@@ -399,7 +436,7 @@ describe('sessions on a fresh login', { timeout: 30_000 }, () => {
     const [issue] = o.swarm.snapshot().repos.find((r) => r.id === o.repo.id)!.issues;
     void o.swarm.assign(ada.id, issue.number);
     await wait(30_000);
-    expect(notify.mock.calls.filter(([, title]) => /needs signing in/.test(title))).toHaveLength(1);
+    expect(notify.mock.calls.filter(([, title]) => /is signed out/.test(title))).toHaveLength(1);
     expect(o.swarm.accounts.view().accounts.find((a) => a.id === 'claude-keelop')?.status).toBe('signed-out');
   });
 });

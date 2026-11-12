@@ -210,6 +210,30 @@ export function CeoStuckCard({ text, stuck }: { text: string; stuck: ChatCeoStuc
   );
 }
 
+/** A login read signed out (#579): its line and Sign in, the guided sign-in in one tap; "Signed in" once it's back. */
+export function AccountOutCard({ text, account: id }: { text: string; account: string }) {
+  const [busy, setBusy] = useState(false);
+  const [signing, setSigning] = useState(false);
+  const account = useStore((s) => s.accounts.accounts.find((a) => a.id === id));
+  const out = account?.status === 'signed-out';
+  return (
+    <div className="notice-card" role="note">
+      <p className="notice-card-title">{text}</p>
+      {account?.kind === 'subscription-login' && (
+        <div className="notice-card-links">
+          <button type="button" className="btn" disabled={busy || !out} onClick={() => {
+              setBusy(true);
+              void api.signInAccount(account.id).then(() => setSigning(true), () => undefined).finally(() => setBusy(false));
+            }}>
+            <Icon name="key-round" /> {out ? 'Sign in' : 'Signed in'}
+          </button>
+        </div>
+      )}
+      {signing && account && <SignInSheet a={account} close={() => setSigning(false)} />}
+    </div>
+  );
+}
+
 /** While the CEO is on a job: the step it's on in plain words, for how long, which step, Stop, and the job waiting next. A tap opens the round's live log. */
 export function WorkingStrip({ onStop, open, onToggle, linked, onFloor }: { onStop: () => void; open: boolean; onToggle: () => void; linked: (t: string) => string; onFloor: (n: number) => void }) {
   const info = useStore((s) => s.ceo);

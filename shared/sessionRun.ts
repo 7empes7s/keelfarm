@@ -30,8 +30,8 @@ export const runModel = (r: SessionRun) => (r.model ? modelLabel(r.model) : CLI_
 /** "Max · keelops · Opus 5.5": the account and the model. */
 export const runLabel = (r: SessionRun) => `${r.label} · ${runModel(r)}`;
 
-/** "pinned: Claude Ultra, limited" when the session isn't on its pin, else ''. */
-export const runPinNote = (r: SessionRun) => (r.pinned ? `pinned: ${r.pinned}${r.why ? `, ${r.why}` : ''}` : '');
+/** "because Claude Ultra is limited" (#579) or "pinned: ultra" when the session isn't on its pin, else ''. */
+export const runPinNote = (r: SessionRun) => (!r.pinned ? '' : r.why ? `because ${r.pinned} is ${r.why}` : `pinned: ${r.pinned}`);
 
 /** The chip's whole line, for its title and screen readers. */
 export const runText = (r: SessionRun) => [runLabel(r), r.effort && `${r.effort} effort`, runPinNote(r) && `(${runPinNote(r)})`].filter(Boolean).join(' ');
