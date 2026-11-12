@@ -120,4 +120,13 @@ describe('pickerOptions', () => {
     expect(o.at(-1)).toEqual({ value: OTHER_MODEL, label: 'Other…' });
     expect(pickerOptions('codex', LIVE, '')[0].label).toBe('Default (GPT-6.1-Sol)');
   });
+
+  it("greys out a model the bundled Claude Code is too old for (#546)", () => {
+    const catalog = mergeCatalog([{ cli: 'claude', models: [{ id: 'claude-fable-5-2' }, { id: 'claude-opus-5-5' }] }], 0);
+    const old = pickerOptions('claude', catalog, '', '2.1.283 (Claude Code)');
+    expect(old.find((x) => x.value === 'claude-fable-5-2')).toEqual({ value: 'claude-fable-5-2', label: 'Fable 5.2 · Needs Claude Code 2.1.290+: update the office', disabled: true });
+    expect(old.find((x) => x.value === 'claude-opus-5-5')?.disabled).toBeUndefined();
+    expect(pickerOptions('claude', catalog, '', '2.1.322 (Claude Code)').some((x) => x.disabled)).toBe(false);
+    expect(pickerOptions('claude', catalog, '', null).some((x) => x.disabled)).toBe(false);
+  });
 });
