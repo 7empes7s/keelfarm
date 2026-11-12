@@ -55,7 +55,7 @@ export function parseRunbook(md: string): { title: string; steps: RunbookStep[] 
       const site = info.toLowerCase();
       if (!HOST_RE.test(site)) return { refused: `The caddy block on ${at} names no hostname: \`\`\`caddy app.example.com` };
       const text = body.join('\n').trim();
-      if (!text || text.includes('cubefarm-it:') || text.split('\n')[0].trim().toLowerCase().startsWith(site)) return { refused: `The caddy block on ${at}: give the site's directives only (e.g. reverse_proxy localhost:5000); the office writes the site around them.` };
+      if (!text || text.includes('cubefarm-it:') || text.split('\n')[0].trim().toLowerCase().startsWith(site) || !balanced(text)) return { refused: `The caddy block on ${at}: give the site's directives only (e.g. reverse_proxy localhost:5000); the office writes the site around them.` };
       steps.push({ kind: 'caddy', site, body: text });
     } else if (['bash', 'sh', 'shell', 'console'].includes(lang)) {
       const check = /\bcheck\b/i.test(info) || /\b(health ?)?check\b/i.test(heading);
@@ -68,6 +68,13 @@ export function parseRunbook(md: string): { title: string; steps: RunbookStep[] 
   if (!all.length) return { refused: 'No steps: put them in ```bash, ```env or ```caddy blocks.' };
   if (all.length > RUNBOOK_STEPS_MAX) return { refused: `${all.length} steps: a runbook job runs ${RUNBOOK_STEPS_MAX} at most. Split it.` };
   return { title, steps: all };
+}
+
+/** Whether the braces close in order: a stray } would end the site early (and open another), an open { swallow the rest of the Caddyfile. */
+function balanced(t: string): boolean {
+  let depth = 0;
+  for (const c of t) if ((depth += c === '{' ? 1 : c === '}' ? -1 : 0) < 0) return false;
+  return depth === 0;
 }
 
 /** A bash block's lines as commands: comments and blanks skipped, \ continuations joined, a leading sudo dropped (IT is root), cd sets the folder for the next ones. */
@@ -134,7 +141,7 @@ function inProject(p: string, s: RunbookScope, o: { clone?: boolean; units?: boo
   return !!o.units && path.posix.dirname(p) === UNIT_DIR && projectUnit(path.posix.basename(p), s);
 }
 const unitName = (u: string) => (/\.(service|timer)$/.test(u) ? u : `${u}.service`);
-const projectUnit = (u: string, s: RunbookScope) => new RegExp(`^${s.project}([-.@][\\w.@-]*)?\\.(service|timer)$`).test(unitName(u));
+const projectUnit = (u: string, s: RunbookScope) => !/^caddy\b/.test(u) && new RegExp(`^${s.project}([-.@][\\w.@-]*)?\\.(service|timer)$`).test(unitName(u));
 const sameRepo = (url: string, s: RunbookScope) => {
   const norm = (u: string) => u.trim().toLowerCase().replace(/\.git$/, '').replace(/^git@github\.com:/, 'https://github.com/').replace(/\/+$/, '');
   return s.repoUrls.some((r) => norm(r) === norm(url));
@@ -295,11 +302,25 @@ export function runbookSummary(steps: readonly RunbookStep[], s: RunbookScope): 
   return parts.join(', ');
 }
 
-/** The scope's project name, or why not (never the office's own or KEEL). */
+/** The machine's own components: a project named after one would make its folders and units "the project's own". */
+const SYSTEM = ['ssh', 'sshd', 'openssh', 'ufw', 'firewalld', 'nftables', 'iptables', 'ip6tables', 'caddy', 'nginx', 'apache2', 'httpd', 'systemd', 'docker', 'containerd', 'podman', 'apt', 'dpkg', 'snap', 'snapd', 'sudo', 'sudoers', 'pam', 'cron', 'anacron', 'network', 'networkd', 'networking', 'netplan', 'resolv', 'resolved', 'hosts', 'cloudflared', 'postgresql', 'postgres', 'mysql', 'mariadb', 'redis', 'letsencrypt', 'certbot', 'tailscale', 'wireguard', 'wg', 'fail2ban', 'ssl', 'security', 'default', 'init', 'kernel', 'modprobe', 'sysctl', 'udev', 'polkit', 'dbus', 'logrotate', 'rsyslog', 'journald', 'audit', 'apparmor', 'selinux', 'grub', 'fstab', 'mimule', 'claude', 'it', 'backups'];
+
+/** The scope's project name, or why not: never the office's own, KEEL or a part of the machine (ssh, ufw, caddy, systemd…). */
 export function projectProblem(project: string): string | null {
   if (!PROJECT_RE.test(project)) return 'Give the project as a short lower-case name, e.g. "postiz": its folders are /opt/<project> and /etc/<project>.';
   if (/keel|cubefarm/.test(project)) return `"${project}" is the live office's or KEEL's: runbooks never touch those.`;
+  const sys = SYSTEM.find((n) => project === n || project.startsWith(`${n}-`));
+  if (sys) return `"${project}" is part of the machine (${sys}): a runbook's scope is a project of its own, e.g. "postiz". Changes to ${sys} go through it_propose's cards.`;
   return null;
+}
+
+/** Why the first job of a project needs the manager's Approve: its /etc folder or unit is already on the machine and IT didn't make it. Null: it's new, or IT's. */
+export function projectForeign(project: string, o: { exists: (p: string) => boolean; itUnits: readonly string[]; ranBefore: boolean }): string | null {
+  if (o.ranBefore) return null;
+  const unit = `${project}.service`;
+  const there = [`/etc/${project}`, ...['/etc/systemd/system', '/lib/systemd/system', '/usr/lib/systemd/system'].map((d) => `${d}/${unit}`)].find(o.exists);
+  if (!there || (there.endsWith(unit) && o.itUnits.includes(unit))) return null;
+  return `${there} is already on this machine and no runbook job made it: the first run needs your Approve`;
 }
 
 // ---------- the runner ----------

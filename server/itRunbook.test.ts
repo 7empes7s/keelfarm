@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ItRunbookJob } from '../shared/itRunbook.ts';
 import { memoryExec, memoryFiles } from './itFiles.ts';
-import { CADDYFILE, parseRunbook, runbookSummary, runbookVerdict, runRunbook, setCaddyBlock, setEnv, stepLabel, stepNever, undoRunbook, type RunbookHost, type RunbookPolicy } from './itRunbook.ts';
+import { CADDYFILE, parseRunbook, projectForeign, projectProblem, runbookSummary, runbookVerdict, runRunbook, setCaddyBlock, setEnv, stepLabel, stepNever, undoRunbook, type RunbookHost, type RunbookPolicy } from './itRunbook.ts';
 
 // #611: a runbook from a floor's repo runs as one job: parsed from markdown, auto-approved when every step is the
 // project's own, progress per step, stop on the first failure, a health check last, and an Undo that restores it all.
@@ -145,6 +145,37 @@ describe('the policy', () => {
     expect(stepNever(one('cat /opt/postiz/.env')[0], scope, [])).toMatch(/holds secrets/); // reading a credential file: never
     expect(stepNever(one('cp /etc/keel/keel.env /opt/postiz/keel.env')[0], scope, [])).toMatch(/holds secrets/);
     expect(stepNever({ kind: 'env', file: '/etc/keel/keel.env', vars: [] }, scope, [])).toMatch(/only under \/opt\/postiz/);
+  });
+});
+
+describe("the scope can't be pointed at the machine itself", () => {
+  const bash = (lines: string[]) => steps(`\`\`\`bash\n${lines.join('\n')}\n\`\`\``).steps;
+  it.each([
+    ['ufw', ['install -m 0644 /opt/clipfarm/x.rules /etc/ufw/user.rules', 'systemctl restart ufw']],
+    ['ssh', ['install -m 0644 /opt/clipfarm/sshd_config /etc/ssh/sshd_config', 'systemctl restart ssh']],
+    ['caddy', ['install -m 0644 /opt/clipfarm/Caddyfile /etc/caddy/Caddyfile', 'systemctl restart caddy']],
+  ])('project %s is refused', (project, lines) => {
+    expect(projectProblem(project)).toMatch(/part of the machine/);
+    if (project === 'caddy') expect(runbookVerdict(bash(lines), { ...policy(), project }).auto).toBe(false); // and Caddy is never a project unit: only the validated block touches it
+  });
+
+  it('refuses the other parts of the machine and the office, and takes a project of its own', () => {
+    for (const p of ['systemd', 'docker', 'cloudflared', 'apt', 'sudoers', 'nftables', 'iptables', 'postgresql', 'nginx', 'fail2ban', 'keel-portal', 'cubefarm', 'ssh-tunnel']) expect(projectProblem(p)).not.toBeNull();
+    for (const p of ['postiz', 'clipfarm', 'goblin-miner']) expect(projectProblem(p)).toBeNull();
+  });
+
+  it("a project already on the machine that IT didn't make needs one Approve the first time", () => {
+    const on = (paths: string[]) => (p: string) => paths.includes(p);
+    expect(projectForeign('postiz', { exists: on([]), itUnits: [], ranBefore: false })).toBeNull();
+    expect(projectForeign('postiz', { exists: on(['/etc/postiz']), itUnits: [], ranBefore: false })).toMatch(/^\/etc\/postiz is already on this machine/);
+    expect(projectForeign('postiz', { exists: on(['/lib/systemd/system/postiz.service']), itUnits: [], ranBefore: false })).toMatch(/postiz\.service is already/);
+    expect(projectForeign('postiz', { exists: on(['/etc/systemd/system/postiz.service']), itUnits: ['postiz.service'], ranBefore: false })).toBeNull(); // IT installed it
+    expect(projectForeign('postiz', { exists: on(['/etc/postiz']), itUnits: [], ranBefore: true })).toBeNull(); // an earlier job made it
+  });
+
+  it("refuses a caddy block whose braces don't close in order", () => {
+    expect(parseRunbook('```caddy p.example.com\nreverse_proxy :1\n}\nevil.example.com {\n```')).toMatchObject({ refused: expect.stringMatching(/directives only/) });
+    expect(parseRunbook('```caddy p.example.com\nhandle {\n```')).toMatchObject({ refused: expect.stringMatching(/directives only/) });
   });
 });
 

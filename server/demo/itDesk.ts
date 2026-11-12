@@ -80,6 +80,7 @@ registerDemo('itDesk', () => ({
     if (program === 'df') return { code: 0, out: df(), err: '' };
     if (argv.includes('rev-parse')) return { code: 0, out: '3f9c2a1b7d4e5f60718293a4b5c6d7e8f9012345\n', err: '' };
     if (argv[0] === 'docker' && argv[1] === 'compose') return { code: 0, out: argv.includes('pull') ? 'postiz Pulled' : argv.includes('down') ? 'Container postiz-1  Removed' : 'Container postiz-1  Started', err: '' };
+    if (argv[0] === 'systemctl' && argv[1] === 'enable') return { code: 0, out: `Created symlink /etc/systemd/system/multi-user.target.wants/${argv.at(-1)}.service → /etc/systemd/system/${argv.at(-1)}.service.`.replace('.service.service', '.service'), err: '' };
     if (argv[0] === 'curl') return { code: 0, out: '<!doctype html><title>Postiz</title>', err: '' };
     if (RUNBOOK_OUT[program]) return { code: 0, out: RUNBOOK_OUT[program], err: '' };
     const watch = watchOut(argv);

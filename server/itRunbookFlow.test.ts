@@ -117,6 +117,7 @@ describe('runbook jobs in the office', () => {
   it('refuses a project that is the office or KEEL, and a missing Providers key, before anything runs', async () => {
     const { o, ran } = await office('routine', DEMO_RUNBOOK.replace('provider:openai', 'provider:twitch'));
     expect(await o.itTools().call('it_runbook', { floor: 1, path: DEMO_RUNBOOK_PATH, project: 'keel' })).toMatch(/never touch those/);
+    expect(await o.itTools().call('it_runbook', { floor: 1, path: DEMO_RUNBOOK_PATH, project: 'ufw' })).toMatch(/part of the machine/);
     expect(await o.itTools().call('it_runbook', { floor: 1, path: DEMO_RUNBOOK_PATH, project: 'postiz' })).toMatch(/needs a twitch key/);
     expect(ran).toEqual([]);
   });

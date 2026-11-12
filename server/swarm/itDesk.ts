@@ -20,7 +20,7 @@ import { applyWrite, CfError, ingressGet, planWrite, tokenScopes } from '../clou
 import { envPathRefusal, envSecretFile } from '../cfSecretFile.ts';
 import type { CloudflareArgs } from '../ceoItTools.ts';
 import { SwarmManagerAsks } from './managerAsks.ts';
-import { parseRunbook, projectProblem, runbookSummary, runbookVerdict, runRunbook, stepLabel, stepNever, undoRunbook, type RunbookHost } from '../itRunbook.ts';
+import { parseRunbook, projectForeign, projectProblem, runbookSummary, runbookVerdict, runRunbook, stepLabel, stepNever, undoRunbook, type RunbookHost } from '../itRunbook.ts';
 import { RUNBOOKS_KEPT, runbookView, type ItRunbookJob } from '../../shared/itRunbook.ts';
 
 /** it_run's and it_propose's arguments (server/ceoItTools.ts). */
@@ -315,7 +315,11 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
       const missing = step.kind === 'env' && step.vars.find((v) => 'provider' in v.value && !this.providers.keysFor(v.value.provider).length);
       if (missing && 'provider' in missing.value) throw new HttpError(400, `Step ${i + 1}: ${missing.name} needs a ${missing.value.provider} key, and Settings → Providers has none. Ask the manager to add it there.`);
     }
-    const verdict = runbookVerdict(parsed.steps, { ...scope, level: this.state.settings.itDept.autoApprove, protectedDirs: this.itProtected, itUnits: this.state.itDesk.units ?? [], officeUnits: OFFICE_UNITS, exists: (p) => !this.backend.demo && existsSync(p), linux: process.platform === 'linux' });
+    const exists = (p: string) => !this.backend.demo && existsSync(p);
+    const itUnits = this.state.itDesk.units ?? [];
+    const policy = runbookVerdict(parsed.steps, { ...scope, level: this.state.settings.itDept.autoApprove, protectedDirs: this.itProtected, itUnits, officeUnits: OFFICE_UNITS, exists, linux: process.platform === 'linux' });
+    const foreign = policy.auto && projectForeign(project, { exists, itUnits, ranBefore: jobs.some((j) => j.project === project && (j.state === 'done' || j.state === 'failed')) });
+    const verdict = foreign ? { auto: false as const, why: foreign } : policy;
     const at = Date.now();
     const job: ItRunbookJob = {
       id: `rb-${at.toString(36)}-${++this.itSeq}`,
@@ -350,6 +354,8 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
   itRunbookDecide(id: string, run: boolean) {
     const job = this.state.itDesk.runbooks?.find((j) => j.id === id);
     if (!job || job.state !== 'waiting') throw new HttpError(404, 'That runbook has run or gone already.');
+    const other = run && this.state.itDesk.runbooks?.find((j) => j.state === 'running');
+    if (other) throw new HttpError(409, `"${other.title}" is running: Approve this one once it ends.`);
     if (!run) {
       job.state = 'dismissed';
       this.itLog({ kind: 'change', by: `${this.managerLabel()} (Not now)`, argv: ['runbook', job.title], code: null, out: 'Not run: the manager said Not now.' });
