@@ -2,6 +2,7 @@
 // that the office lifts out of a CEO message (shared/chatParts.ts), checked and trimmed here. Values are either written
 // inline or named by a live `source` ("costs:7d:byFloor") that the phone resolves from the office's own numbers
 // (client/src/ui/chatVisualSources.ts). A block that can't be read stays in the text as written. Percentages are 0-100.
+import type { TimeAxis } from './timeScale.ts';
 
 export type VisualUnit = 'usd' | 'pct' | 'ms' | 'count' | 'mb' | '';
 type ChartType = 'bar' | 'stacked-bar' | 'line' | 'area' | 'donut' | 'progress';
@@ -23,6 +24,7 @@ export interface VisualChart {
   series: VisualSeries[];
   refs?: (string | null)[]; // per label: what tapping it opens, written as chat refs ("floor 3 #116", "qa: floor 3 #116")
   max?: number; // progress: the full bar (default 100 for pct)
+  time?: TimeAxis; // a time series (#587): each label's time, drawn on a proportional time axis
   source?: string;
 }
 

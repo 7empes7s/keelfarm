@@ -32,11 +32,15 @@ export function demoServerLoad(memory: () => Promise<{ totalMb: number; availabl
       if (pid !== 41_000 || stopped.has(pid)) throw new HttpError(409, `Process ${pid} is gone or no longer left over from an ended session.`);
       stopped.add(pid);
     },
-    /** A made-up day: memory climbing through the working hours, swap behind it, load with the sessions. */
+    /** Nothing is kept: the demo makes its day up again at each start. */
+    serverSave: () => undefined,
+    /** A made-up day: memory climbing through the working hours, swap behind it, load with the sessions, and two
+     * hours with no readings (the office was off) for the chart's gap (#587). */
     serverSeed: (): ServerPoint[] => {
       const now = Date.now();
       const out: ServerPoint[] = [];
       for (let at = now - TREND_MS + POINT_MS; at < now; at += POINT_MS) {
+        if (at > now - 9 * 3_600_000 && at < now - 7 * 3_600_000) continue;
         const h = ((at / 3_600_000) % 24) / 24;
         const day = Math.max(0, Math.sin((h - 0.25) * Math.PI * 2));
         const noise = Math.sin(at / 420_000) * 3;

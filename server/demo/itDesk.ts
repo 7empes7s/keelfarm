@@ -121,6 +121,18 @@ export function itSession(opts: SessionOptions, cb: SessionCallbacks): SessionHa
       return out.startsWith('Refused') ? `I couldn't put it on a card: ${out}` : `The costliest problem is "${top[2]}" (${top[3]} tickets, ${top[4]} min, ${top[5]}). A fix is on the card: approve it and I'll file it.`;
     }
     const ran = p.match(/The manager ran `([^`]+)`: (exit \d+|did not finish)/);
+    // Cloudflare (#586): "add clip.example.com → http://localhost:80" checks the key, then puts the diff on a card.
+    if (ran?.[1].startsWith('cloudflare ')) {
+      const rules = await use('cloudflare', { op: 'tunnel_ingress_get' });
+      return `Checked after Approve (${ran[2]}): the tunnel's rules now read\n\`\`\`\n${rules.split('\n').slice(1).join('\n')}\n\`\`\``;
+    }
+    const route = p.match(/\b([a-z0-9-]+(?:\.[a-z0-9-]+)+)\s*(?:→|->|to)\s*((?:https?|tcp|ssh):\/\/[^\s,;]+?)[.,;]?(?:\s|$)/i);
+    if (route && /cloudflare|tunnel|hostname/i.test(p)) {
+      const scopes = await use('cloudflare', { op: 'token_scopes', hostname: route[1] });
+      const out = await use('cloudflare', { op: 'tunnel_ingress_add', hostname: route[1], service: route[2], why: `Publish ${route[1]} through the main tunnel.` });
+      const lacks = scopes.match(/missing ([^\n]+)/)?.[1];
+      return out.startsWith('Refused') ? `I couldn't plan it: ${out.replace(/^Refused:\s*/, '')}` : `The key that passes can edit the tunnel${lacks ? ` (the other one lacks ${lacks})` : ''}. The change is on a card with its before and after: tap Approve and I'll check the tunnel after.`;
+    }
     const disk = rootDisk(await use('it_run', { command: 'df -h' }));
     const free = disk ? `${disk.avail} free of ${disk.size} (${disk.use} used)` : 'no reading from df';
     if (/The office's checks got worse/.test(p) && !/- Disk is/.test(p)) {
@@ -197,7 +209,7 @@ export function itSession(opts: SessionOptions, cb: SessionCallbacks): SessionHa
 }
 
 registerCeoReply('it desk', async ({ text, use }) => {
-  if (!/\b(gain|free up|free)\b.*\bspace\b|\bcheck (the|this) machine\b|\bit desk\b/i.test(text)) return null;
+  if (!/\b(gain|free up|free)\b.*\bspace\b|\bcheck (the|this) machine\b|\bit desk\b|\bcloudflare\b|\btunnel\b/i.test(text)) return null;
   const out = await use('ask_it', { question: text });
   if (out.startsWith('Refused')) return `I can't hand that to IT right now: ${out.replace(/^Refused:\s*/, '')}`;
   return `That's the IT department's: I've asked them in the IT chat. They'll look, and any change comes to you on a card with Run / Not now.\n\`\`\`spoken\nI've passed that to IT. Their answer is in the IT chat.\n\`\`\``;

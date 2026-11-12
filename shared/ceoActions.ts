@@ -74,6 +74,7 @@ const ACTS: Record<string, string> = {
   merge_pull: '🔀',
   it_propose: '🖥️',
   ask_it: '🖥️',
+  cloudflare: '☁️',
   it_report: '🖥️',
   note_problem: '📋',
 };
@@ -97,6 +98,7 @@ const SECTIONS: Partial<Record<string, ActionSection>> = {
   scan_keys: 'providers',
   it_propose: 'ops',
   ask_it: 'it-dept',
+  cloudflare: 'ops',
   it_report: 'it-dept',
   note_problem: 'problems',
   make_default_account: 'accounts',

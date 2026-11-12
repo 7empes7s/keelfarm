@@ -11,6 +11,7 @@ import { localMachines, type MachineProvider } from './machines.ts';
 import { detectClis } from './clis.ts';
 import { npmInstall } from './cliInstall.ts';
 import { itExec, type ItExecResult } from './itExec.ts';
+import { realCloudflareApi, type CfApi } from './cloudflare.ts';
 import { certExpiry } from './itChecks.ts';
 import { readPicks } from './picks.ts';
 import type { QuickPicks } from '../shared/used.ts';
@@ -208,6 +209,8 @@ export interface Backend {
   usage: UsageApi;
   /** Settings → Providers (#362): one cheap read-only call testing a key or an MCP server; never throws. */
   providerProbe(req: ProbeRequest): Promise<ProbeResult>;
+  /** The Cloudflare office action (#586): one API call with a Providers key, server-side only; never throws. */
+  cloudflareApi: CfApi;
   /** Keys found on this computer (#367): the retired projects' env and JSON files, read server-side (the demo's archive is fake). */
   scanForKeys(): Promise<RawKey[]>;
   /** The demo only: made-up keys and MCP servers for Settings → Providers, so a fresh demo office shows every category. */
@@ -392,6 +395,7 @@ export const realBackend: Backend = {
   accounts: { check: checkAccount, login: async (_a, dir) => ({ ...(await readClaudeLogin(dir)), file: await readLoginFile(dir) }), signIn: startLocalSignIn },
   usage: realUsageApi,
   providerProbe: realProbe,
+  cloudflareApi: realCloudflareApi,
   scanForKeys: realKeyScan,
   survivalSignals: github.survivalSignals,
   previews: realPreviews,

@@ -1,6 +1,7 @@
 // The IT desk (#506): the CEO's commands on this machine. Reads run at once through it_run (an allowlist of read-only
 // programs); changes come to the manager as cards (it_propose) and run only on their Run. The rules are in
 // server/itDesk.ts; this file has what both sides show: the cards, the log and the read-only list.
+import type { CfChange } from './cloudflare';
 
 export type ItRisk = 'low' | 'medium' | 'high';
 
@@ -15,6 +16,8 @@ export interface ItProposal {
   at: number;
   by?: string; // who proposed it: the IT lead (#524); absent: the CEO, before the IT department
   rec?: string; // a recommendation's option the manager picked (#525): the office measures before and after, IT isn't woken
+  cf?: CfChange; // a Cloudflare write (#586): applied through the API on Approve, not run as a command
+  diff?: string; // its before and after, "+ " on added lines
 }
 
 /** One command the IT desk ran (or refused at Run). */

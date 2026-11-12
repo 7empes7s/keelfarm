@@ -16,6 +16,8 @@ import { CHANGE_TIMEOUT_MS, LOG_OUT_MAX, neverRefusal, parseCommand, readOnlyPla
 import { AUTO_STEPS_MAX, autoVerdict, type AutoPlan } from '../itAuto.ts';
 import type { ItJob } from '../../shared/itDept.ts';
 import { OFFICE_DIR } from '../officeUpdate.ts';
+import { applyWrite, CfError, ingressGet, planWrite, tokenScopes } from '../cloudflare.ts';
+import type { CloudflareArgs } from '../ceoItTools.ts';
 import { SwarmManagerAsks } from './managerAsks.ts';
 
 /** it_run's and it_propose's arguments (server/ceoItTools.ts). */
@@ -106,9 +108,7 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
     const argv = (Array.isArray(a.argv) ? a.argv : []).map(String);
     const never = neverRefusal(argv, { protectedDirs: this.itProtected });
     if (never) throw new HttpError(403, never);
-    if (this.state.itDesk.waiting.length >= WAITING_MAX) throw new HttpError(409, `${WAITING_MAX} changes already wait for the manager: let them decide on those first.`);
-    const line = argvLine(argv);
-    if (this.state.itDesk.waiting.some((p) => argvLine(p.argv) === line)) throw new HttpError(409, `\`${line}\` already waits for the manager's Run.`);
+    if (this.state.itDesk.waiting.some((p) => argvLine(p.argv) === argvLine(argv))) throw new HttpError(409, `\`${argvLine(argv)}\` already waits for the manager's Run.`);
     const level = this.state.settings.itDept.autoApprove;
     let held = '';
     if (level !== 'off') {
@@ -122,13 +122,22 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
         held = ' (auto-approve held it: its backup step failed)';
       } else held = ` (auto-approve: ${v.why})`;
     }
+    const line = this.itQueue({ argv, why: String(a.why ?? ''), affects: String(a.affects ?? ''), undo: String(a.undo ?? ''), risk: a.risk ?? 'medium', by: this.itName });
+    return `On the manager's card${held}: \`${line}\`. Nothing has run: it runs only when they tap Run, and you get its output to check.`;
+  }
+
+  /** A card for the manager's Run / Approve: in IT's chat, on Telegram and as a notification. Returns its line. */
+  private itQueue(c: Omit<ItProposal, 'id' | 'at'>): string {
+    if (this.state.itDesk.waiting.length >= WAITING_MAX) throw new HttpError(409, `${WAITING_MAX} changes already wait for the manager: let them decide on those first.`);
+    const line = argvLine(c.argv);
+    if (this.state.itDesk.waiting.some((p) => argvLine(p.argv) === line)) throw new HttpError(409, `\`${line}\` already waits for the manager's ${c.cf ? 'Approve' : 'Run'}.`);
     const at = Date.now();
-    const p: ItProposal = { id: `it-${at.toString(36)}-${++this.itSeq}`, argv, why: this.itMask(String(a.why ?? '').trim()), affects: this.itMask(String(a.affects ?? '').trim()), undo: this.itMask(String(a.undo ?? '').trim()), risk: a.risk ?? 'medium', at, by: this.itName };
+    const p: ItProposal = { ...c, id: `it-${at.toString(36)}-${++this.itSeq}`, why: this.itMask(c.why.trim()), affects: this.itMask(c.affects.trim()), undo: this.itMask(c.undo.trim()), ...(c.diff && { diff: this.itMask(c.diff) }), at };
     this.state.itDesk.waiting.push(p);
     this.itDeskChanged();
     this.itProposed(p); // its card in IT's chat and on Telegram, with Run / Not now
-    this.notifier.notify('decisions', `${this.itName} asks to run a command`, `${line}\n${p.why}`);
-    return `On the manager's card${held}: \`${line}\`. Nothing has run: it runs only when they tap Run, and you get its output to check.`;
+    this.notifier.notify('decisions', `${p.by} asks to ${c.cf ? 'change Cloudflare' : 'run a command'}`, `${line}\n${p.why}`);
+    return line;
   }
 
   /** An auto-approved step: its backup or HEAD first (for the undo), then the change, logged and posted as done automatically. Null: the step before failed, so it goes on a card. */
@@ -185,6 +194,31 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
     }
   }
 
+  // ---------- the Cloudflare action (#586) ----------
+
+  private cfKeys = () => this.providers.keysFor('cloudflare');
+
+  /** cloudflare: a read now, or a write on a diff card for the manager's Approve. The key stays on the server. */
+  protected async cloudflareAct(a: CloudflareArgs, by: string): Promise<string> {
+    if (!this.itOn) throw new HttpError(403, OFF);
+    const api = this.backend.cloudflareApi;
+    try {
+      if (a.op === 'token_scopes') return this.itMask(await tokenScopes(this.cfKeys(), api, a));
+      if (a.op === 'tunnel_ingress_get') return this.itMask(await ingressGet(this.cfKeys(), api, a.tunnel));
+      if (!a.hostname) throw new CfError('Give the hostname, e.g. clip.example.com.');
+      const plan = await planWrite(this.cfKeys(), api, { ...a, op: a.op, hostname: a.hostname });
+      if (plan.already) return `${plan.already} Nothing to approve.`;
+      const c = plan.change;
+      const argv = ['cloudflare', c.op, c.hostname, ...(c.op === 'tunnel_ingress_add' ? [c.service] : [])];
+      const undo = c.op === 'tunnel_ingress_add' ? 'remove the rule in Zero Trust → Networks → Tunnels' : c.op === 'dns_cname_ensure' ? 'delete the record in DNS' : 'delete the app in Zero Trust → Access → Applications';
+      const line = this.itQueue({ argv, why: a.why ?? `Cloudflare: ${plan.summary}.`, affects: plan.summary, undo, risk: c.op === 'access_app_ensure' ? 'medium' : 'low', by, cf: c, diff: plan.diff });
+      return `On the manager's card with its diff: \`${line}\`. Nothing is written until they tap Approve; then it's applied and read back.\n${this.itMask(plan.diff)}`;
+    } catch (err) {
+      if (err instanceof CfError) throw new HttpError(400, this.itMask(err.message));
+      throw err;
+    }
+  }
+
   /** POST /api/it/run: the manager's Run on these cards, one after another; the never-list is checked again first. */
   async itRunProposals(ids: string[]) {
     if (!this.itOn) throw new HttpError(403, 'The IT desk is off: turn it on in Settings → CEO settings.');
@@ -203,11 +237,12 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
           results.push({ id: p.id, code: null });
           continue;
         }
-        const ran = await this.backend.itExec(p.argv, CHANGE_TIMEOUT_MS);
+        const ran = p.cf ? await this.cfApply(p) : await this.backend.itExec(p.argv, CHANGE_TIMEOUT_MS);
         const out = shapeOutput({ ...ran, mask: this.itMask, max: 8_000 });
         this.itLog({ kind: 'change', by, argv: p.argv, code: ran.code, out, why: p.why });
-        const how = ran.code === 0 ? 'Ran' : ran.code === null ? "Couldn't finish" : `Exit ${ran.code} for`;
+        const how = ran.code === 0 ? (p.cf ? 'Applied' : 'Ran') : ran.code === null ? "Couldn't finish" : `Exit ${ran.code} for`;
         this.itRan(p, `🖥️ ${how} \`${line}\` for ${p.by ?? this.ceo().name}`, out, { code: ran.code });
+        if (p.cf) this.postMessage('office', `☁️ ${ran.code === 0 ? 'Applied' : "Couldn't apply"} \`${line}\``, undefined, { notice: { details: out } }); // the CEO's chat too
         results.push({ id: p.id, code: ran.code });
       } finally {
         this.itRunning.delete(p.id);
@@ -216,6 +251,12 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
       }
     }
     return { results };
+  }
+
+  /** Approve on a Cloudflare card: written and read back, as a command's result (code 0 when the read-back matches). */
+  private async cfApply(p: ItProposal) {
+    const r = await applyWrite(this.cfKeys(), this.backend.cloudflareApi, p.cf!);
+    return { code: r.ok ? 0 : 1, out: r.text, err: '' };
   }
 
   /** POST /api/it/dismiss: Not now on these cards; nothing runs, and the CEO's log says so. */

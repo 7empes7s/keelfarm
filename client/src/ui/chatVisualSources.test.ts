@@ -220,6 +220,10 @@ describe("the server's sources (#271)", () => {
     expect(c.labels.length).toBeLessThanOrEqual(20);
     expect(c.labels[c.labels.length - 1]).toBe('14:30');
     expect(c.series[0].values[c.series[0].values.length - 1]).toBe(75);
+    // a real time axis over the last day (#587): each point's time, the window ending now
+    const now = new Date(2026, 10, 7, 14, 30).getTime();
+    expect([c.time?.at.length, c.time?.from, c.time?.to]).toEqual([c.labels.length, now - 24 * 3_600_000, now]);
+    expect(c.time!.at.every((t, i, a) => i === 0 || t > a[i - 1])).toBe(true);
     expect((resolveVisual(v('chart', { source: 'server:24h' }), d({ serverTrend: undefined })) as VisualChart & { missing?: string }).missing).toBe('Loading…');
   });
 

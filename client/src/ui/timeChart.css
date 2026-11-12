@@ -1,0 +1,67 @@
+/* The time-series chart (#587, TimeChart.tsx): a subtle grid, a dashed line at midnight, a thin crosshair and its
+   readout just above it. */
+.tc {
+  position: relative;
+  min-width: 0;
+  padding-top: calc(var(--ds-text-xs) * 1.5 + var(--ds-space-1)); /* room for the readout */
+}
+.tc-svg {
+  touch-action: pan-y;
+}
+.tc-grid line {
+  stroke: var(--ds-line);
+  stroke-width: 1;
+  opacity: 0.6;
+}
+.tc-grid text {
+  fill: var(--ds-text-muted);
+  font-size: var(--ds-text-xs);
+}
+.tc-day line {
+  stroke: var(--ds-line-strong);
+  stroke-dasharray: 3 3;
+  opacity: 1;
+}
+.tc-day text {
+  fill: var(--ds-text);
+  font-weight: var(--ds-weight-strong);
+}
+.tc-hit {
+  fill: transparent;
+  cursor: crosshair;
+}
+.tc-cursor line {
+  stroke: var(--ds-text-muted);
+  stroke-width: 1;
+}
+.tc-cursor circle {
+  stroke: var(--ds-surface-raised);
+  stroke-width: 1.5;
+}
+.tc-tip {
+  position: absolute;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  max-width: 100%;
+  color: var(--ds-text);
+  font-size: var(--ds-text-xs);
+  line-height: 1.5;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.tc-tip-row {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-1);
+}
+.tc-key {
+  flex: none;
+  width: 10px;
+  height: 3px;
+  border-radius: 2px;
+}
+.tc-note {
+  margin: var(--ds-space-1) 0 0;
+}

@@ -6,7 +6,7 @@
 import { KIND_GROUP_LABELS, kindShares, perMergeTrend, wasteGroups, type CostsView, type KindGroup } from '../../../shared/costs';
 import { capSlices, parseSource, type ChatVisual, type VisualChart, type VisualSource, type VisualTable, type VisualTile, type VisualUnit } from '../../../shared/chatVisuals';
 import type { OpsNumbers, OpsView } from '../../../shared/ops';
-import { bucketTrend, byAgent, byKind, KIND_LABELS, loadPct, memPct, memUsedMb, pointOf, swapPct, swapUsedMb, type ServerNow, type ServerPoint } from '../../../shared/serverLoad';
+import { bucketTrend, byAgent, byKind, KIND_LABELS, loadPct, memPct, memUsedMb, pointOf, swapPct, swapUsedMb, TREND_MS, type ServerNow, type ServerPoint } from '../../../shared/serverLoad';
 import type { UsageReading } from '../../../shared/types';
 import { barName, usedPercent } from '../../../shared/usage';
 
@@ -109,6 +109,8 @@ function costsData(view: CostsView, s: Extract<VisualSource, { kind: 'costs' }>,
 
 /** A day of the server in 10-minute points, oldest first, the latest reading last. */
 const TREND_BUCKET_MS = 10 * 60_000;
+/** Readings further apart than this (the office was off) leave a gap in the line. */
+const TREND_GAP_MS = 25 * 60_000;
 const hhmm = (at: number) => new Date(at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 const diskPct = (n: ServerNow) => (n.disks[0]?.totalMb ? Math.round(((n.disks[0].totalMb - n.disks[0].freeMb) / n.disks[0].totalMb) * 1000) / 10 : null);
 
@@ -163,6 +165,7 @@ function serverData(s: Extract<VisualSource, { kind: 'server' }>, d: SourceData)
           type: 'line',
           unit: 'pct',
           labels: trend.map((p) => hhmm(p.at)),
+          time: { at: trend.map((p) => p.at), from: d.now - TREND_MS, to: d.now, gapMs: TREND_GAP_MS },
           series: [
             { name: 'Memory', color: 'accent', values: trend.map((p) => p.memPct) },
             { name: 'Swap', color: 'warn', values: trend.map((p) => p.swapPct) },
