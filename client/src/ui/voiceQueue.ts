@@ -15,16 +15,27 @@ export function speakable(m: PhoneMessage, v: VoiceSettings, now: number): boole
 }
 
 /**
- * The phone's ▶ on a message: its saved clip, the browser's voice again (free), 'gone' when its ElevenLabs clip is no
- * longer saved (a disabled button), or null (no button: the CEO's messages only, and only ones that had a voice).
+ * The phone's ▶ on a CEO message (#532): its saved clip; 'make' one on the tap (ElevenLabs, when a key is saved and
+ * the voice isn't the browser's); the browser's voice (free: a message it read before, or no key); null for anyone
+ * else's message or with nothing to speak with.
  */
-export type ReplayKind = 'clip' | 'browser' | 'gone';
-export function replayKind(m: PhoneMessage, saved: boolean, canSpeak: boolean): ReplayKind | null {
+export type ReplayKind = 'clip' | 'make' | 'browser';
+export function replayKind(m: PhoneMessage, saved: boolean, v: TapVoice, canSpeak: boolean): ReplayKind | null {
   if (m.from !== 'ceo') return null;
   if (saved) return 'clip';
-  if (m.voice === 'browser') return canSpeak ? 'browser' : null;
-  return m.voice === 'elevenlabs' ? 'gone' : null;
+  if (m.voice === 'browser' && canSpeak) return 'browser';
+  if (elevenOnTap(v)) return 'make';
+  return canSpeak ? 'browser' : null;
 }
+
+/** The voice settings and key a tap goes by. */
+export interface TapVoice {
+  provider: VoiceSettings['provider'];
+  keySet: boolean;
+}
+
+/** A tapped message is made by ElevenLabs: a key is saved and the browser's voice wasn't picked (Off still uses it). */
+export const elevenOnTap = (v: TapVoice) => v.keySet && v.provider !== 'browser';
 
 /** A message waiting its turn, with when this tab received it (the server's clock may differ). */
 export interface Queued {

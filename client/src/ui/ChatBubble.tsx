@@ -19,6 +19,7 @@ import { CeoRunsPill } from './CeoRunsOn';
 import { FileCard, UsedLine } from './ChatFiles';
 import type { FileRef } from '../../../shared/files';
 import { replayKind } from './voiceQueue';
+import { tapReplay, tapStop, useReplay } from './voiceTap';
 import { struckText } from '../../../shared/messageEdits';
 import { Resume } from './TeamChanges';
 import { clock } from './phoneParts';
@@ -35,24 +36,64 @@ import { CeoJobLine } from './CeoJobRedo';
 // The CEO's charts, tables and dashboards (#146): their own chunk, loaded with the first message that has one.
 const ChatVisuals = lazy(() => import('./ChatVisuals'));
 
-/** Replays a CEO message from its saved clip (or the browser's voice); stops it while it plays. */
+const canSpeak = () => typeof speechSynthesis !== 'undefined';
+
+/**
+ * Plays a CEO message (#532): its saved clip, else one made on the tap (a spinner meanwhile; tap it to cancel), or the
+ * browser's voice; stops it while it plays.
+ */
 function ReplayButton({ m }: { m: PhoneMessage }) {
   const saved = useStore((s) => s.voiceCache.saved.includes(m.id));
   const playing = useStore((s) => s.voiceSpeaking === m.id);
-  const kind = replayKind(m, saved, typeof speechSynthesis !== 'undefined');
+  const provider = useStore((s) => s.settings.voice.provider);
+  const keySet = useStore((s) => s.voiceKeySet);
+  const loading = useReplay((s) => s.loading === m.id);
+  const kind = replayKind(m, saved, { provider, keySet }, canSpeak());
   if (!kind) return null;
-  const gone = kind === 'gone';
+  const label = loading ? 'Getting the audio ready… Tap to cancel' : playing ? 'Stop this message' : 'Play this message';
   return (
-    <button
-      type="button"
-      className={`bubble-play ${playing ? 'bubble-play-on' : ''}`}
-      disabled={gone && !playing}
-      title={gone ? 'Audio no longer saved' : undefined}
-      aria-label={playing ? 'Stop this message' : 'Play this message'}
-      onClick={() => void import('./voiceMessages').then((v) => (playing ? v.stopSpeaking() : kind !== 'gone' && v.replayMessage(m, kind)))}
-    >
-      <Icon name={playing ? 'square' : 'play'} />
-    </button>
+    <>
+      <button
+        type="button"
+        className={`bubble-play ${playing || loading ? 'bubble-play-on' : ''}`}
+        aria-label={label}
+        title={label}
+        onClick={() => (playing || loading ? tapStop() : tapReplay(m, kind, kind === 'browser'))}
+      >
+        <Icon name={loading ? 'loader-circle' : playing ? 'square' : 'play'} className={loading ? 'bubble-play-spin' : undefined} />
+      </button>
+      {loading && <span className="bubble-play-note">Getting the audio ready…</span>}
+    </>
+  );
+}
+
+/** Why the ▶ couldn't play, in plain words, with Retry and the phone's own voice. */
+function ReplayError({ m }: { m: PhoneMessage }) {
+  const text = useReplay((s) => (s.error?.id === m.id ? s.error.text : null));
+  const saved = useStore((s) => s.voiceCache.saved.includes(m.id));
+  const provider = useStore((s) => s.settings.voice.provider);
+  const keySet = useStore((s) => s.voiceKeySet);
+  if (!text) return null;
+  const kind = replayKind(m, saved, { provider, keySet }, canSpeak());
+  return (
+    <div className="bubble-play-error" role="alert">
+      <span>{text}</span>
+      <span className="bubble-play-error-actions">
+        {kind && (
+          <button type="button" className="btn ds-btn" onClick={() => tapReplay(m, kind, kind === 'browser')}>
+            Retry
+          </button>
+        )}
+        {kind !== 'browser' && canSpeak() && (
+          <button type="button" className="btn ds-btn" onClick={() => tapReplay(m, 'browser', true)}>
+            Use the phone's voice
+          </button>
+        )}
+        <button type="button" className="btn ds-btn" aria-label="Dismiss" onClick={() => useReplay.setState({ error: null })}>
+          <Icon name="x" />
+        </button>
+      </span>
+    </div>
   );
 }
 
@@ -290,6 +331,7 @@ export const Bubble = memo(function Bubble({ item, ceoName, quoted, highlight, l
             {mine && delivery && delivery !== 'failed' && <DeliveryTick d={delivery} />}
           </div>
         </div>
+        {m && !mine && <ReplayError m={m} />}
         {m && <Reactions m={m} ceoName={ceoName} />}
         {delivery === 'failed' && (
           <button type="button" className="bubble-retry" onClick={() => retrySend(item.out!.key)}>
