@@ -1,7 +1,7 @@
 // The wake word's detection (#537): openWakeWord's streaming pipeline over 80 ms chunks of 16 kHz audio
 // (melspectrogram → speech embedding → the wake word's classifier), with Silero VAD in front so the models only run
 // around speech. A quiet room costs a level check per chunk; a sound wakes the VAD; speech replays the last 2 s
-// through the models and scores every chunk until 2 s after it ends. The models are behind WakeModels, so the
+// through the models (enough for a whole window of real audio) and scores every chunk until 2 s after it ends. The models are behind WakeModels, so the
 // browser (wakeModels.ts on onnxruntime-web) and the tests run the same code.
 import { WakeGate } from './wakeWord';
 
@@ -150,9 +150,9 @@ export class WakePipeline {
   }
 
   private restartFeatures() {
+    // Empty, not openWakeWord's ones: a score only ever sees real audio, as in training. The 2 s replay fills it.
     this.tail = new Float32Array(MEL_CONTEXT);
-    // openWakeWord starts its mel buffer at ones, so the first chunk already has an embedding
-    this.mel = Array.from({ length: MEL_WINDOW }, () => new Float32Array(MEL_BINS).fill(1));
+    this.mel = [];
     this.emb = [];
   }
 
@@ -169,6 +169,7 @@ export class WakePipeline {
       this.mel.push(row);
     }
     if (this.mel.length > MEL_WINDOW) this.mel.splice(0, this.mel.length - MEL_WINDOW);
+    if (this.mel.length < MEL_WINDOW) return null;
     const window = new Float32Array(MEL_WINDOW * MEL_BINS);
     this.mel.forEach((row, i) => window.set(row, i * MEL_BINS));
     this.emb.push(await this.models.embed(window));

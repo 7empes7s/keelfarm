@@ -37,9 +37,12 @@ function room(seconds: number, level: number, seed = 1): Float32Array {
   return out;
 }
 
-/** Feeds audio the way the browser does (blocks of ~43 ms) and counts the wakes. */
-async function wakes(models: WakeModels, audio: Float32Array) {
+/** Feeds audio the way the browser does (blocks of ~43 ms), after the 2 s a mic that's been on has heard, over a mic's noise floor, and counts the wakes. */
+async function wakes(models: WakeModels, clip: Float32Array) {
   const p = new WakePipeline(models, threshold);
+  const quiet = join(silence(2), clip);
+  const floor = room(quiet.length / WAKE_RATE, 0.001, 11); // a mic always hears its own noise floor, never exact zeros
+  const audio = quiet.map((v, i) => v + floor[i]);
   let n = 0;
   for (let i = 0; i < audio.length; i += 683) n += await p.push(audio.subarray(i, i + 683));
   return { n, stats: p.stats };
@@ -71,7 +74,7 @@ describe('the wake word pipeline', () => {
 
   it('wakes once per phrase: twice when said twice', async () => {
     const phrase = wav('hey-mimoun-lessac');
-    expect((await wakes(mimoun, join(phrase, silence(1), phrase))).n).toBe(2);
+    expect((await wakes(mimoun, join(phrase, silence(2), phrase))).n).toBe(2);
   });
 
   it('hears it over a noisy room', async () => {

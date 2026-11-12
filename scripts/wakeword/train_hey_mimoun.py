@@ -249,6 +249,7 @@ def main():
     ap.add_argument('--repo', default='.')
     ap.add_argument('--speakers', type=int, default=420)
     ap.add_argument('--jobs', type=int, default=2)
+    ap.add_argument('--neg-weight', type=float, default=30, help='how much a false wake costs against a miss (higher: fewer false wakes, more misses)')
     ap.add_argument('--cache', help='an .npz to keep the features in, to retrain without synthesising again')
     args = ap.parse_args()
     if args.cache and os.path.exists(args.cache):
@@ -262,7 +263,7 @@ def main():
     print('windows', xp.shape, xn.shape, flush=True)
     x = np.concatenate([xp, xn]).astype(np.float32)
     y = np.concatenate([np.ones(len(xp)), np.zeros(len(xn))]).astype(np.float32)
-    w = np.concatenate([np.full(len(xp), len(xn) / len(xp)), np.full(len(xn), 3.0)]).astype(np.float32)  # false wakes cost more
+    w = np.concatenate([np.full(len(xp), len(xn) / len(xp)), np.full(len(xn), args.neg_weight)]).astype(np.float32)  # false wakes cost more
     params = train(x, y, w)
 
     # held-out voices: recall on the phrase, false wakes on near-misses

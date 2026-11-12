@@ -335,7 +335,7 @@ if you'd tapped Call. During a call after "that's all", the word talks again lik
 - **Cheap when nobody talks:** an 80 ms chunk too quiet to be speech costs a level check; anything louder asks
   [Silero VAD](https://github.com/snakers4/silero-vad); only speech runs the wake word's models, replaying the 2 s
   before it so the start of the phrase isn't lost, until 2 s after it ends. `wakePipeline.test.ts` logs the CPU of an
-  idle room (quiet, and with a fan) and fails over 5% of a core: about 0.1% and 1-2% here.
+  idle room (quiet, and with a fan) and fails over 5% of a core: about 0.1% and 1% here.
 - **One wake per phrase:** a score over the threshold (0.8 Strict … 0.5 Balanced … 0.2 Easy) wakes once, then not again
   for 2 s and until the score has dropped (`WakeGate`, `client/src/ui/wake/wakeWord.ts`).
 - **The mic light:** whenever it listens, a mic with an orange dot sits in the header (the 3D office's HUD, the phone
@@ -348,29 +348,39 @@ if you'd tapped Call. During a call after "that's all", the word talks again lik
 
 **The models** are in `client/public/wake/` with their licences (`LICENSES.md`): openWakeWord's melspectrogram and
 speech embedding (Apache-2.0), Silero VAD (MIT), the stock "hey jarvis" classifier (**CC BY-NC-SA 4.0**:
-non-commercial, fine for this private office tool) and "Hey Mimoun", trained here (this repo's MIT).
+non-commercial, fine for this private office tool) and "Hey Mimoun", trained here, under the same licence (some of
+its training voices come from non-commercial datasets).
 
 **Training "Hey Mimoun"** (`scripts/wakeword/train_hey_mimoun.py`, openWakeWord's synthetic-voice recipe made small
-enough for a CPU, about 40 minutes): Piper TTS says the phrase (spelt and phonetic variants of "mee-MOON") in 420
-LibriTTS-R voices at random speeds, the same voices say near-misses ("hey Simon", "hey moon", "hey Ramon", "hey
-Jarvis"…) and random sentences, everything is mixed with noise at random levels, turned into openWakeWord's frozen
-features and a small network (1536 → 64 → 1) learns the phrase, weighted against false wakes. It's written as an ONNX
-model with openWakeWord's input, so the browser runs it like a stock one, and the test clips
-(`client/src/ui/wake/fixtures/`, other voices than training's) are written next to the tests. To retrain (a new
-spelling, more voices):
+enough for a CPU: about an hour on this server's spare cores): Piper TTS says the phrase (spelt and phonetic variants
+of "mee-MOON") at random speeds in 500 LibriTTS-R voices, every speaker of VCTK, L2-ARCTIC (accented English), ARCTIC
+and ARU, and seven single-speaker voices; the same voices say near-misses ("hey Simon", "hey moon", "hey" and a
+sound-alike name or any word) and random sentences; 30% stay clean (a mic with noise suppression), the rest are mixed
+with noise at random levels; all of it goes through openWakeWord's frozen features and a small network
+(1536 → 64 → 1, dropout and weight decay) learns the phrase, a false wake counting 30 times a miss (`--neg-weight`).
+It's written as an ONNX model with openWakeWord's input, so the browser runs it like a stock one, and the test clips
+(`client/src/ui/wake/fixtures/`, two voices it never heard) are written next to the tests.
+
+On 40 LibriTTS-R voices it never trained on, the shipped model wakes on 38 of 40 "Hey Mimoun"s, and 7 of 200
+near-miss clips ("hey Simone", "hey Mona"…) woke it; ordinary sentences, noise and silence never did. It's trained on
+synthetic voices only, so a real voice may need Easy (or Strict, if it wakes by mistake); "Hey Jarvis", the stock
+model trained on far more data, is the steadier choice until it's retrained with recordings. To retrain (a new spelling,
+more voices, a different `--neg-weight`; `--cache` keeps the features so a retrain takes minutes):
 
 ```bash
 python3 -m venv venv && venv/bin/pip install piper-tts numpy onnx
-venv/bin/python -m piper.download_voices en_US-libritts_r-medium en_US-lessac-medium en_GB-alan-medium
+venv/bin/python -m piper.download_voices en_US-libritts_r-medium en_US-lessac-medium en_GB-alan-medium \
+  en_GB-vctk-medium en_US-l2arctic-medium en_US-arctic-medium en_GB-aru-medium en_US-amy-medium en_US-ryan-medium \
+  en_US-joe-medium en_GB-jenny_dioco-medium en_GB-northern_english_male-medium en_US-hfc_female-medium en_US-kristin-medium
 gh release download v0.5.1 -R dscripka/openWakeWord -p melspectrogram.onnx -p embedding_model.onnx -D oww
-venv/bin/python -I scripts/wakeword/train_hey_mimoun.py --voices . --oww oww --repo .
+venv/bin/python -I scripts/wakeword/train_hey_mimoun.py --voices . --oww oww --repo . --cache features.npz
 ```
 
 It prints the held-out voices' recall and how many near-miss clips woke it. openWakeWord's full notebook
 (`notebooks/automatic_model_training.ipynb`: thousands of voices, room impulse responses and ~2,000 hours of
 precomputed negative speech, on a GPU) makes a sturdier model; its output drops into the same file.
 
-`window.__swarmWake` is the probe (`status`: `''` listening, `off`, `call`, `hidden`, `battery`, `no-mic`, `starting`,
+`window.__swarmWake` is the probe (`status`: `''` listening, `off`, `call`, `dictating`, `hidden`, `battery`, `no-mic`, `starting`,
 `tap`, `error`; `wakes`; `stats()`). `e2e/wakeWord.spec.ts` plays the clips into a fake mic stream at 390 px
 (Chromium, and WebKit where installed): on shows the light, a near-miss is ignored, the phrase starts the demo's call,
 a hidden tab lets go of the mic.
