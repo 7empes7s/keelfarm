@@ -1,0 +1,58 @@
+
+[2m── Claude Code · Iris ──
+
+[0m [38;5;209m▐▛███▜▌[0m   [1mClaude Code[0m (demo)
+[38;5;209m▝▜█████▛▘[0m  claude-sonnet-5-5 · medium effort
+[38;5;209m  ▘▘ ▝▝[0m    [2m/root/.cubefarm/machines/0744760e/work/7empes7s__keelfarm/.swarm-home/it
+
+[36;22m❯[0m The office's checks got worse:
+[2m✻ Claude Code (demo) · claude-sonnet-5-5 · medium effort · IT
+
+[32;22m●[0m [1m🏢 it_run({"command":"df -h"})
+[22;2m  ⎿ $ df -h
+
+[32;22m●[0m [1m🏢 it_recommend({"check":"logs","title":"System logs: 3.9 GB, over the 2 GB line","evidence":"journalctl --disk-usage: 3.9 GB of archiv…)
+[22;2m  ⎿ On the manager's card with 1 option. Nothing runs until they pick one; the office then measures again and posts the before/after.
+
+[97;22m●[0m The system logs have grown to 3.9 GB: one clean-up is on the card.
+
+[2m── Claude Code session ended ──
+
+── Claude Code · Iris · Looking at a health check ──
+
+[0m [38;5;209m▐▛███▜▌[0m   [1mClaude Code[0m (demo)
+[38;5;209m▝▜█████▛▘[0m  claude-sonnet-5-5 · medium effort
+[38;5;209m  ▘▘ ▝▝[0m    [2m/root/.cubefarm/machines/0744760e/work/7empes7s__keelfarm/.swarm-home/it
+
+[36;22m❯[0m Ticket #6 (lab, blocking, 1 report from Dennis): Lab result lost
+[2m✻ Claude Code (demo) · claude-sonnet-5-5 · medium effort · IT
+
+[32;22m●[0m [1m🏢 it_health({})
+[22;2m  ⎿ {"health":{"memory":{"availableMb":9800,"totalMb":16384,"swapFreeMb":0,"swapTotalMb":0,"load":1.4,"cpus":8,"at":1794497695538},"running":10,"waiting":0,"held":null,"heldW
+
+[32;22m●[0m [1m🏢 it_ticket({"id":6,"tell":"Run job lab-5 again once: the lab restarted and lost its result. lab_status shows your place.","close":…)
+[22;2m  ⎿ Ticket #6: told Dennis, asked the CEO for a code fix, closed it.
+
+[97;22m●[0m Ticket #6: answered the reporter and closed it.
+
+[2m── Claude Code session ended ──
+
+── Claude Code · Iris · Ticket #6 ──
+
+[0m [38;5;209m▐▛███▜▌[0m   [1mClaude Code[0m (demo)
+[38;5;209m▝▜█████▛▘[0m  claude-sonnet-5-5 · medium effort
+[38;5;209m  ▘▘ ▝▝[0m    [2m/root/.cubefarm/machines/0744760e/work/7empes7s__keelfarm/.swarm-home/it
+
+[36;22m❯[0m Ticket #7 (lab, blocking, 1 report from Radia): Lab result lost
+[2m✻ Claude Code (demo) · claude-sonnet-5-5 · medium effort · IT
+
+[32;22m●[0m [1m🏢 it_health({})
+[22;2m  ⎿ {"health":{"memory":{"availableMb":9800,"totalMb":16384,"swapFreeMb":0,"swapTotalMb":0,"load":1.4,"cpus":8,"at":1794497815553},"running":8,"waiting":0,"held":null,"heldWo
+
+[32;22m●[0m [1m🏢 it_ticket({"id":7,"tell":"Run job lab-15 again once: the lab restarted and lost its result. lab_status shows your place.","close"…)
+[22;2m  ⎿ Ticket #7: told Radia, asked the CEO for a code fix, closed it.
+
+[97;22m●[0m Ticket #7: answered the reporter and closed it.
+
+[2m── Claude Code session ended ──
+[0m
