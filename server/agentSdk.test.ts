@@ -32,7 +32,7 @@ afterEach(async () => {
   vi.restoreAllMocks();
 });
 
-async function office(registry: () => Promise<SdkRelease>, installed: SdkRelease = OLD) {
+async function office(registry: () => Promise<SdkRelease>, installed: SdkRelease = OLD, floor = OWN) {
   const backend = createDemoBackend();
   const filed: string[] = [];
   const fake: Backend = {
@@ -46,7 +46,7 @@ async function office(registry: () => Promise<SdkRelease>, installed: SdkRelease
     },
   };
   const swarm = new Swarm(fake);
-  const repo = await swarm.connectRepo(OWN);
+  const repo = await swarm.connectRepo(floor);
   const i = swarm as unknown as Internals;
   for (let n = 0; n < 100 && !i.repoRt.get(repo.id)?.issues.length; n++) await new Promise((r) => setTimeout(r, 100)); // the first sync
   return { swarm, i, repo, filed };
@@ -95,5 +95,16 @@ describe('the daily Agent SDK check (#569)', () => {
     await i.sdkRun;
     expect(filed).toHaveLength(1);
     expect(r(i)).toHaveLength(1);
+  });
+
+  it("a week and more behind with nothing in flight: the alarm card, and its chat line once", async () => {
+    fs.mkdirSync(HOME_DIR, { recursive: true });
+    fs.writeFileSync(path.join(HOME_DIR, 'agent-sdk.json'), JSON.stringify({ checkedAt: 1, latest: NEW, behindSince: Date.now() - 9 * 86_400_000 }));
+    const { swarm, i, filed } = await office(async () => NEW, OLD, 'demo-co/weather-api'); // not the office's own floor: it can't file the bump
+    const alarms = () => i.state.messages.filter((m) => m.from === 'office' && m.text.startsWith('⚠️ The agents\' built-in Claude is 9 days behind'));
+    expect((await swarm.checkAgentSdk()).alarm).toContain("9 days behind Claude Code 2.1.330, and this office can't file its own update");
+    await swarm.checkAgentSdk();
+    expect(alarms()).toHaveLength(1);
+    expect(filed).toEqual([]);
   });
 });

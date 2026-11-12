@@ -16,11 +16,14 @@ import { SwarmLiveLeases } from './liveLeases.ts';
 
 /** Picked models are looked at this often (no network unless one can't run). */
 const PICKED_EVERY_MS = 60_000;
+/** A model that needs a newer Claude Code asks the registry at most this often (the latest may not run it either). */
+const URGENT_EVERY_MS = 3600_000;
 
 export abstract class SwarmAgentSdk extends SwarmLiveLeases {
   private sdk: SdkUpdateState | null = null;
   private sdkChecking = false;
   private sdkRun: Promise<unknown> = Promise.resolve();
+  private sdkUrgentAt = new Map<string, number>(); // model -> when it last started a check
 
   private get sdkFile() {
     return path.join(HOME_DIR, 'agent-sdk.json');
@@ -108,9 +111,20 @@ export abstract class SwarmAgentSdk extends SwarmLiveLeases {
   }
 
   private async sdkCheck(model?: string): Promise<SdkUpdateView> {
-    const s = this.sdkState;
     this.sdkChecking = true;
     this.sdkChanged();
+    try {
+      await this.sdkCheckStep(model);
+    } finally {
+      this.sdkChecking = false;
+      this.saveSdk();
+      this.sdkChanged();
+    }
+    return this.sdkUpdateView();
+  }
+
+  private async sdkCheckStep(model?: string) {
+    const s = this.sdkState;
     let ok = true;
     try {
       s.latest = await this.backend.agentSdk.latest();
@@ -125,7 +139,6 @@ export abstract class SwarmAgentSdk extends SwarmLiveLeases {
     const input = this.sdkInput(own);
     const step = sdkStep(input);
     if (ok) s.behindSince = step.behindSince;
-    const alarmBefore = !!sdkAlarm(input);
     if (ok && step.bump && own && s.latest) {
       const why = model ? `${modelLabel(model)} needs a newer one.` : null;
       const { title, body } = bumpIssue(input.installed, s.latest, why);
@@ -144,17 +157,20 @@ export abstract class SwarmAgentSdk extends SwarmLiveLeases {
       s.told = [...s.told, model].slice(-20);
       this.postMessage('office', modelLine(modelLabel(model)));
     }
+    // The alarm's chat line, once per stretch behind.
     const alarm = sdkAlarm(after);
-    if (alarm && !alarmBefore) this.postMessage('office', `⚠️ ${alarm}`);
-    this.sdkChecking = false;
-    this.saveSdk();
-    this.sdkChanged();
-    return this.sdkUpdateView();
+    const key = `alarm:${after.behindSince}`;
+    if (alarm && !s.told.includes(key)) {
+      s.told = [...s.told, key].slice(-20);
+      this.postMessage('office', `⚠️ ${alarm}`);
+    }
   }
 
   /** A model the bundled Claude Code can't run: the bump starts now, once per model (told). */
   protected sdkUrgent(model: string) {
-    if (!model || this.sdkState.told.includes(model)) return;
+    const at = this.sdkUrgentAt.get(model) ?? 0;
+    if (!model || this.sdkState.told.includes(model) || Date.now() - at < URGENT_EVERY_MS) return;
+    this.sdkUrgentAt.set(model, Date.now());
     void this.checkAgentSdk(model);
   }
 
