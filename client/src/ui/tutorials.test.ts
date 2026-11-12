@@ -35,8 +35,8 @@ function rendered(sel: string, src: string): boolean {
 
 const world: World = {
   repos: [
-    { id: 'b', floor: 2, pulls: [{ number: 7, state: 'OPEN' } as never] },
-    { id: 'a', floor: 1, pulls: [{ number: 3, state: 'OPEN' } as never, { number: 4, state: 'OPEN' } as never, { number: 5, state: 'MERGED' } as never] },
+    { id: 'b', floor: 2, autoMerge: true, pulls: [{ number: 7, state: 'OPEN' } as never] },
+    { id: 'a', floor: 1, autoMerge: true, pulls: [{ number: 3, state: 'OPEN' } as never, { number: 4, state: 'OPEN' } as never, { number: 5, state: 'MERGED' } as never] },
   ],
   agents: {
     ceo: { id: 'ceo', name: 'Mimoun', repoId: null, status: 'working' },
@@ -77,16 +77,27 @@ describe('the task tutorials', () => {
   });
 
   it('picks the PR, floor and agent to show from the office', () => {
-    expect(pickPr(world)).toEqual({ floor: 2, number: 7 }); // QA passed: ready to merge
-    expect(pickPr(world, true)).toEqual({ floor: 1, number: 4 }); // needs you first
-    expect(pickPr({ ...world, repos: [] })).toBeNull();
+    expect(pickPr(world, 'preview')).toEqual({ floor: 1, number: 4 }); // one QA has looked at
+    expect(pickPr(world, 'decide')).toEqual({ floor: 1, number: 4 }); // needs you: it has the buttons
+    expect(pickPr({ ...world, repos: [] }, 'preview')).toBeNull();
     expect(pickAgent(world)).toBe('Bo Li'); // busy, never the CEO
     const feature = TUTORIALS.find((t) => t.id === 'feature')!;
-    expect(feature.steps.map((s) => stepLink(s, world, 'pocket'))).toEqual([null, '#floor/1/kanban', '#agent/Bo%20Li/terminal', '#pr/2/7', '#pr/2/7', '#floor/1/kanban']);
+    expect(feature.steps.map((s) => stepLink(s, world, 'pocket'))).toEqual([null, '#floor/1/kanban', '#agent/Bo%20Li/terminal', '#pr/1/4', '#pr/1/4', '#floor/1/kanban']);
     const needs = TUTORIALS.find((t) => t.id === 'needs-you')!;
     expect(stepLink(needs.steps[2], world, 'office')).toBe('#pr/1/4'); // the PR waiting on you
     expect(stepBlocked(feature.steps[3], { ...world, repos: [] }, 'pocket')).toBe(true);
     expect(stepBlocked(feature.steps[0], { ...world, repos: [] }, 'pocket')).toBe(false);
+  });
+
+  it('opens the merge step only on a PR with buttons to press', () => {
+    const merge = TUTORIALS.find((t) => t.id === 'feature')!.steps.find((s) => s.id === 'merge')!;
+    // QA passed on an auto-merge floor: it merges by itself, its page has no Merge
+    const passedOnly: World = { ...world, repos: [world.repos[0]], qa: { 'b#7': { repoId: 'b', prNumber: 7, status: 'passed' } } };
+    expect(stepLink(merge, passedOnly, 'pocket')).toBeNull();
+    expect(stepBlocked(merge, passedOnly, 'pocket')).toBe(true);
+    // on a floor that waits for you, Merge is there
+    const manual: World = { ...passedOnly, repos: [{ ...world.repos[0], autoMerge: false }] };
+    expect(stepLink(merge, manual, 'pocket')).toBe('#pr/2/7');
   });
 
   it("finishes a tap step only on a control inside its ring, never the tour's own card", () => {

@@ -4,6 +4,7 @@
 // tutorials.test.ts checks every target is a control the client renders.
 import type { AgentView, QaView, RepoView } from '../../../shared/types';
 import { CEO_ID } from '../../../shared/types';
+import { prActions } from '../../../shared/approvals';
 import type { IconName } from './icons';
 
 export type Mode = 'pocket' | 'office';
@@ -13,7 +14,7 @@ type Done = 'tap' | 'sent';
 
 /** The office a step's link is picked from. */
 export interface World {
-  repos: readonly Pick<RepoView, 'id' | 'floor' | 'pulls'>[];
+  repos: readonly Pick<RepoView, 'id' | 'floor' | 'pulls' | 'autoMerge'>[];
   agents: Readonly<Record<string, Pick<AgentView, 'id' | 'name' | 'repoId' | 'status'>>>;
   qa: Readonly<Record<string, Pick<QaView, 'repoId' | 'prNumber' | 'status'>>>;
 }
@@ -44,11 +45,16 @@ export interface Tutorial {
 
 const floors = (w: World) => [...w.repos].sort((a, b) => a.floor - b.floor);
 
-/** The open PR to show: one QA has a say on (needing you first), else any open one from the team. */
-export function pickPr(w: World, needsYou = false): { floor: number; number: number } | null {
+/**
+ * The open PR to show. 'preview': any from the team, one QA has looked at first. 'decide': only one whose page has
+ * decision buttons (prActions: failed or needing you first, or passed on a floor that doesn't auto-merge), so the step
+ * rings real controls; none, and the step says there's nothing to show yet.
+ */
+export function pickPr(w: World, kind: 'preview' | 'decide'): { floor: number; number: number } | null {
   const open = floors(w).flatMap((r) => r.pulls.filter((p) => p.state === 'OPEN' && !p.untrusted).map((p) => ({ r, p, q: w.qa[`${r.id}#${p.number}`] })));
-  const rank = (q: (typeof open)[number]['q']) => (!q ? 3 : needsYou && (q.status === 'needs-human' || q.status === 'failed') ? 0 : q.status === 'passed' ? 1 : 2);
-  const best = open.sort((a, b) => rank(a.q) - rank(b.q))[0];
+  const shown = kind === 'preview' ? open : open.filter(({ r, q }) => q && prActions(q.status, r.autoMerge).length > 0);
+  const rank = ({ q }: (typeof open)[number]) => (!q ? 3 : q.status === 'needs-human' || q.status === 'failed' ? 0 : q.status === 'passed' ? 1 : 2);
+  const best = shown.sort((a, b) => rank(a) - rank(b))[0];
   return best ? { floor: best.r.floor, number: best.p.number } : null;
 }
 
@@ -61,8 +67,8 @@ export function pickAgent(w: World): string | null {
 
 const firstFloor = (w: World) => floors(w)[0]?.floor ?? null;
 const kanban = (w: World) => (firstFloor(w) == null ? null : `#floor/${firstFloor(w)}/kanban`);
-const prLink = (needsYou: boolean) => (w: World) => {
-  const pr = pickPr(w, needsYou);
+const prLink = (kind: 'preview' | 'decide') => (w: World) => {
+  const pr = pickPr(w, kind);
   return pr ? `#pr/${pr.floor}/${pr.number}` : null;
 };
 const agentLink = (w: World) => {
@@ -106,8 +112,8 @@ export const TUTORIALS: Tutorial[] = [
       { id: 'plan', title: 'Ask the CEO to plan it', text: 'Finish the message with what you want built and send it: {ceo} files the issues.', open: 'plan', targets: ['.chat-input'], done: 'sent' },
       { id: 'issues', title: 'The issues it filed', text: "New issues wait in Backlog: tap one to read what's planned.", open: kanban, targets: ['[data-tour="kanban-backlog"]'], done: 'tap' },
       { id: 'agent', title: 'An agent picks one up', text: 'This is their window, live: switch between their chat and their terminal.', open: agentLink, targets: AGENT_PANES, done: 'tap' },
-      { id: 'qa', title: 'QA tests it', text: 'Each pull request gets a QA pass: open the preview to try it yourself.', open: prLink(false), targets: ['[data-tour="pr-preview"]'], done: 'tap' },
-      { id: 'merge', title: 'Merge it', text: 'Merge (or Merge anyway) once you like it; Send back if it needs work.', open: prLink(false), targets: PR_ACTIONS, done: 'tap' },
+      { id: 'qa', title: 'QA tests it', text: 'Each pull request gets a QA pass: open the preview to try it yourself.', open: prLink('preview'), targets: ['[data-tour="pr-preview"]'], done: 'tap' },
+      { id: 'merge', title: 'Merge it', text: 'Merge (or Merge anyway) once you like it; Send back if it needs work.', open: prLink('decide'), targets: PR_ACTIONS, done: 'tap' },
       { id: 'live', title: 'It goes live', text: 'Merged work lands in Merged and its issue closes: tap it to see.', open: kanban, targets: ['[data-tour="kanban-merged"]'], done: 'tap' },
     ],
   },
@@ -119,7 +125,7 @@ export const TUTORIALS: Tutorial[] = [
     steps: [
       { id: 'bell', title: 'The bell', text: 'Every notification waits here with its buttons: tap the bell.', targets: ['[data-tour="bell"]'], done: 'tap' },
       { id: 'approvals', title: 'What waits on you', text: 'Approvals lists every decision that waits on you (on the 3D phone, its Team tab): tap one.', open: '#tab/approvals', targets: ['.apr-rows', '.phone-tabs', '.pk-main'], done: 'tap' },
-      { id: 'answer', title: 'Answer it', text: 'Retry QA, Send back with a note or Merge anyway: the agent takes it from there.', open: prLink(true), targets: PR_ACTIONS, done: 'tap' },
+      { id: 'answer', title: 'Answer it', text: 'Retry QA, Send back with a note or Merge anyway: the agent takes it from there.', open: prLink('decide'), targets: PR_ACTIONS, done: 'tap' },
       { id: 'carry-on', title: 'They carry on', text: "Open their chat to watch them pick up your answer.", open: agentLink, targets: AGENT_PANES, done: 'tap' },
     ],
   },
