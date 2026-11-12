@@ -391,7 +391,7 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
       if (this.itAuto.job !== this.state.it.job) this.itAuto = { job: this.state.it.job, steps: 0 };
       if (this.itAuto.steps < AUTO_STEPS_MAX) return this.keyAutoInstall(c.id, ki, line, why, by);
     }
-    const queued = this.itQueue({ argv: ['install_key', varName, file], why: why || `Install ${c.label} into ${t.name}.`, affects: `${line}${t.unit ? `, then restart ${t.unit}` : ''}`, undo: 'the file before is kept next to it as a backup', risk: 'low', by, ki: { keyId: c.id, ...ki } });
+    const queued = this.itQueue({ argv: ['install_key', varName, file], why: why || `Install ${c.label} into ${t.name}.`, affects: `${line}${t.unit ? `, then restart ${t.unit}` : ''}`, undo: app ? 'install the key it had before the same way' : 'the file before is kept next to it as a backup', risk: 'low', by, ki: { keyId: c.id, ...ki } });
     return `On the manager's card${level === 'off' ? '' : ` (auto-approve: ${AUTO_STEPS_MAX} automatic steps in this change already)`}: \`${queued}\`, ${line}. Nothing is written until they tap Approve; then ${app ? `it's set in ${appWhere(app, varName)} and its Test pressed` : `the file is written (mode 600, its old copy kept)${t.unit ? ` and ${t.unit} restarted` : ''}`}.`;
   }
 

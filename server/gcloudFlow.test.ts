@@ -93,6 +93,7 @@ describe('Google Cloud end to end', () => {
     const yt = await swarm.providers.add('youtube', 'AIzaSyDEMOhandmade000000000000000abcd', 'YouTube (clipfarm)');
     const outs = [await it.call('install_key', { key: yt.id, target: 'clipfarm app', var_name: 'YOUTUBE_API_KEY' })];
     expect(outs[0]).toMatch(/^On the manager's card: `install_key YOUTUBE_API_KEY 'clipfarm app'`, YOUTUBE_API_KEY → clipfarm app \(ends …abcd\)/);
+    expect(o.state.itDesk.waiting[0].undo).toBe('install the key it had before the same way');
     expect((await swarm.itRunProposals([o.state.itDesk.waiting[0].id])).results[0].code).toBe(0);
     expect(o.state.it.messages.at(-1)!.notice?.details).toMatch(/clipfarm's Test: Working/);
     outs.push(await it.call('install_key', { key: yt.id, target: 'clipfarm app', var_name: 'GEMINI_API_KEY' }));
