@@ -127,6 +127,8 @@ function archiveOver(program: string, args: readonly string[], exists: (p: strin
   if (/^(g?unzip|gzip|xz|unxz|bzip2|bunzip2|zstd|unzstd|lz4)$/.test(program) && args.some((a) => a === '--force' || /^-[a-zA-Z]*f/.test(a))) return true;
   return /^(7z[ar]?|cpio|bsdtar|unrar|unar)$/.test(program);
 }
+/** Words that delete, as a whole word or a word's part after . _ or - (DROP, db.dropDatabase, --remove-orphans). */
+const ERASES = /(^|[._-])(delete|del|drop|destroy|flush(all|db)?|truncate|wipe|erase|purge|prune|uninstall|remove|forget|expunge|obliterate|nuke|reset|overwrite|clear)/i;
 /** Copying or writing programs: onto a file that already exists, they replace it. */
 const WRITES = new Set(['cp', 'install', 'ln', 'tee', 'rsync', 'scp']);
 
@@ -151,6 +153,10 @@ function dangerOf(argv: readonly string[], ctx: Pick<AutoContext, 'itUnits' | 'o
   if (all.some((w) => KILL.test(w))) return 'it kills processes';
   const db = all.find((w) => DATABASES.test(w));
   if (db) return `it runs ${db}, a database client whose commands can drop data`;
+  // A net under the lists above: a tool they don't know (kubectl delete, helm uninstall, curl -X DELETE, an SQL string) still names what it does.
+  const fetch = program === 'git' && args.includes('fetch'); // git fetch --prune only drops gone remote branches' refs
+  const verb = all.find((w) => ERASES.test(w) && !(fetch && w === '--prune'));
+  if (verb) return `it says "${verb}": that can delete data`;
   const runner = all.find((w) => RUNS_OTHERS.test(w) && !['sg', 'ed', 'ex', 'more'].includes(w)); // short ones too common as plain words
   if (runner) return `it names ${runner}, which runs other commands`;
   if (/keel/i.test(join)) return "it touches KEEL (its live tenant, database or services)";

@@ -118,6 +118,13 @@ describe('IT auto-approve: the danger list is always a card', () => {
     [['service', 'nginx', 'stop']],
     [['service', 'nginx', 'restart']],
     [['apt', 'remove', '-y', 'postgresql']],
+    // #591 QA round 2's net: tools the lists don't know still name what they delete
+    [['kubectl', 'delete', 'pod', 'web']],
+    [['helm', 'uninstall', 'web']],
+    [['curl', '-X', 'DELETE', 'https://api.example.com/v1/zones/1']],
+    [['frobnicate', '--query', 'DROP TABLE users']],
+    [['docker', 'compose', 'up', '-d', '--remove-orphans']],
+    [['acme-tool', 'reset', '--all']],
     [['apt-get', 'autoremove', '-y']],
     // #591 QA round 2: database clients, git that throws work away, downloads and archives over existing files
     [['psql', '-c', 'DROP DATABASE app']],
