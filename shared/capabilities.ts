@@ -2,9 +2,9 @@
 // operations, publishing), which catalogue entries cover each (one provider under every capability it covers), each
 // capability's default and fallback from the page's cards, the route a request takes (the default, else the fallback
 // when the default is limited or down), and the CEO's line. Floors and the CEO ask for a capability, never a provider.
-import { PROVIDERS, type ProviderCard } from './providers.ts';
+import { PROVIDERS, providerDef, type ProviderCard } from './providers.ts';
 import { grantedCaps, oauthDef } from './oauth.ts';
-import type { Capability, CapabilityChoice } from './types.ts';
+import type { Capability, CapabilityChoice, ProviderCategory, ProviderConnection } from './types.ts';
 
 export const CAPABILITIES: { id: Capability; label: string; blurb: string }[] = [
   { id: 'text', label: 'Text', blurb: 'Language models for writing, summaries and research' },
@@ -108,4 +108,14 @@ export function capabilitiesLine(routes: readonly CapabilityRoute[]): string {
   return `Capabilities: ${routes
     .map((r) => `${r.label} → ${r.route ? `${r.route.label}${r.route !== r.primary ? ` (default ${r.primary!.label} limited)` : r.fallback ? ` (fallback ${r.fallback.label})` : ''}` : r.primary ? 'none working' : 'none'}`)
     .join(' · ')}`;
+}
+
+const MEDIA: Capability[] = ['text', 'image', 'video', 'audio'];
+
+/** The setup advisor's provider kinds a saved connection gives a floor: its category, and a sign-in's unlocked media. */
+export function connectionCategories(c: Pick<ProviderConnection, 'provider' | 'scopes'>): ProviderCategory[] {
+  const def = providerDef(c.provider);
+  if (!def) return [];
+  const media = oauthDef(c.provider) ? grantedCaps(c.provider, c.scopes).filter((x) => MEDIA.includes(x)) : [];
+  return [def.category, ...(media as ProviderCategory[])];
 }

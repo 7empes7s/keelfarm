@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CAPABILITIES, PROVIDER_CAPS, capabilitiesLine, capabilityRoutes, cardCaps, routeCapability } from './capabilities.ts';
+import { CAPABILITIES, PROVIDER_CAPS, capabilitiesLine, connectionCategories, capabilityRoutes, cardCaps, routeCapability } from './capabilities.ts';
 import { PROVIDERS, providerCards, type ProviderCard } from './providers.ts';
 import { EMPTY_CLOUD } from './cloud.ts';
 import type { ProviderConnection } from './types.ts';
@@ -39,6 +39,13 @@ describe('capabilities per catalogue entry (#533)', () => {
     expect(cardCaps(card('g', 'google', 'ready', { scopes: ['openid', 'email', 'https://www.googleapis.com/auth/youtube.upload'] }))).toEqual(['publishing']);
     expect(cardCaps(card('g', 'google'))).toEqual(['text', 'image', 'video', 'publishing']); // the answer named no scopes
     expect(cardCaps(card('m', 'mcp', 'ready', { category: 'mcp' }))).toEqual([]);
+  });
+
+  it("gives the setup advisor a sign-in's media, so a Google sign-in meets a floor's video need", () => {
+    expect(connectionCategories({ provider: 'google' })).toEqual(['signin', 'text', 'image', 'video']);
+    expect(connectionCategories({ provider: 'meta' })).toEqual(['signin']);
+    expect(connectionCategories({ provider: 'runway' })).toEqual(['video']);
+    expect(connectionCategories({ provider: 'gone' })).toEqual([]);
   });
 });
 
