@@ -3,10 +3,10 @@
 // outages, a full disk) through autoTicket. No model call per report: IT is woken only for a blocking ticket or a
 // burst, at most once per ticket per 15 minutes, and answers with it_ticket (tell the reporters, ask the CEO for a code
 // fix, close with what was done). An agent blocked on a ticket shows "Waiting on IT #N". Rules in shared/itTickets.ts.
-import { autoReport, checkReport, closeTicket, fileTicket, loadTickets, pruneTickets, ticketBrief, waitingOn, wakeFor, type ItTicket, type OfficeTrouble } from '../../shared/itTickets.ts';
+import { autoReport, checkReport, closeTicket, fileTicket, loadTickets, pruneTickets, ticketBrief, ticketsView, waitingOn, wakeFor, type ItTicket, type OfficeTrouble } from '../../shared/itTickets.ts';
 import type { AgentView, WorldSnapshot } from '../../shared/types.ts';
 import type { ItTicketArgs } from '../ceoItTools.ts';
-import { ticketSample } from '../itTicketSample.ts';
+import { ticketSample, wantsTicketSample } from '../itTicketSample.ts';
 import type { PersistedAgent, PersistedRepo } from './model.ts';
 import { SwarmItDept } from './itDept.ts';
 
@@ -25,8 +25,10 @@ export abstract class SwarmItTickets extends SwarmItDept {
 
   /** A fresh demo office gets a few sample tickets once its team is hired (init hires it after the usage readings start). */
   protected override async startUsage() {
-    if (this.backend.demo && !this.state.itTickets.list.length) {
+    const tickets = this.state.itTickets.list.length; // before the demo's own troubles file theirs
+    if (this.backend.demo && !tickets) {
       setTimeout(() => {
+        if (!wantsTicketSample(this.backend.demo, this.state.repos.length, tickets)) return; // floors connect after this
         ticketSample(this.state.itTickets, this.state.agents, Date.now());
         this.ticketsChanged();
       }, 3000).unref();
@@ -54,13 +56,13 @@ export abstract class SwarmItTickets extends SwarmItDept {
   /** Left out while there are none: every tab's snapshot pays for it (scale.test.ts). */
   override snapshot(): WorldSnapshot {
     const list = this.state.itTickets.list;
-    return list.length ? { ...super.snapshot(), itTickets: list } : super.snapshot();
+    return list.length ? { ...super.snapshot(), itTickets: ticketsView(list) } : super.snapshot();
   }
 
   /** The tickets changed: saved, every tab hears, and the cards of the agents waiting (or no longer waiting) update. */
   private ticketsChanged(agentIds: string[] = []) {
     this.save();
-    this.broadcast({ type: 'itTickets', tickets: this.state.itTickets.list });
+    this.broadcast({ type: 'itTickets', tickets: ticketsView(this.state.itTickets.list) });
     for (const id of new Set(agentIds)) {
       const a = this.state.agents.find((x) => x.id === id);
       if (a) this.emitAgent(a);

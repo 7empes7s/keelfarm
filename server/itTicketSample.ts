@@ -4,6 +4,12 @@ import { autoReport, closeTicket, fileTicket, type TicketsState } from '../share
 
 const MIN = 60_000;
 
+/** Only a fresh demo office of the usual size gets the sample: the big company (--floors) would carry it in every
+ *  snapshot, over server/scale.test.ts' budget. */
+export function wantsTicketSample(demo: boolean, floors: number, tickets: number) {
+  return demo && floors <= 3 && tickets === 0;
+}
+
 /** Files the sample into `s`, beside any ticket the demo's own troubles filed already (its CI outage). */
 export function ticketSample(s: TicketsState, agents: { id: string; name: string; role: string }[], now: number) {
   const [a, b] = agents.filter((x) => x.role !== 'ceo');

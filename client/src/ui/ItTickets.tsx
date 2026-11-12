@@ -17,7 +17,7 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: 'all', label: 'All' },
 ];
 
-const who = (t: ItTicket) => t.by.map((b) => b.name).join(', ');
+const who = (t: ItTicket) => t.by.map((b) => b.name).join(', ') + (t.byMore ? ` and ${t.byMore} more` : '');
 const fixedIn = (t: ItTicket) => (t.closedAt ? fmtDuration(t.closedAt - t.at) : null);
 
 function TicketSheet({ t, onClose }: { t: ItTicket; onClose: () => void }) {

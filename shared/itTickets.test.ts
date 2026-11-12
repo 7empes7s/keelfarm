@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { autoReport, checkReport, closeTicket, emptyTickets, fileTicket, loadTickets, pruneTickets, TICKET_DUP_MS, TICKET_IDLE_MS, TICKET_WAKE_MS, waitingOn, wakeFor, type TicketsState } from './itTickets.ts';
+import { autoReport, checkReport, closeTicket, emptyTickets, fileTicket, loadTickets, pruneTickets, TICKET_DUP_MS, TICKET_IDLE_MS, TICKET_WAKE_MS, ticketsView, waitingOn, wakeFor, type TicketsState } from './itTickets.ts';
 
 const dennis = { id: 'a1', name: 'Dennis' };
 const ada = { id: 'a2', name: 'Ada' };
@@ -130,5 +130,21 @@ describe('the saved tickets', () => {
     expect(loadTickets(JSON.parse(JSON.stringify(s)))).toEqual(s);
     expect(loadTickets({ seq: 'x', list: [{ id: 'bad' }, null] })).toEqual(emptyTickets());
     expect(loadTickets(undefined)).toEqual(emptyTickets());
+  });
+});
+
+describe('the tabs\' copy', () => {
+  it('names the first reporters and counts the rest, so a big company\'s outage stays small in every snapshot', () => {
+    const s = emptyTickets();
+    for (let i = 0; i < 30; i++) fileTicket(s, lost, { id: `a${i}`, name: `Agent ${i}` }, 1000 + i);
+    const [t] = ticketsView(s.list);
+    expect(t.by.map((b) => b.name)).toEqual(['Agent 0', 'Agent 1', 'Agent 2', 'Agent 3', 'Agent 4']);
+    expect(t.byMore).toBe(25);
+    expect(s.list[0].by).toHaveLength(30); // IT still tells every reporter
+  });
+  it('leaves a small ticket as it is', () => {
+    const s = emptyTickets();
+    fileTicket(s, lost, dennis, 1000);
+    expect(ticketsView(s.list)).toEqual(s.list);
   });
 });

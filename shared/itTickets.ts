@@ -28,7 +28,8 @@ export interface ItTicket {
   evidence: string[]; // oldest first, the latest EVIDENCE_KEPT
   blocking: boolean;
   count: number; // reports joined into it
-  by: TicketReporter[]; // each reporter once, first first
+  by: TicketReporter[]; // each reporter once, first first (a tab's copy: the first BY_SHOWN)
+  byMore?: number; // a tab's copy: reporters left out of by
   waiting: string[]; // agents blocked on it (their card says "Waiting on IT #id")
   at: number;
   lastAt: number;
@@ -50,6 +51,7 @@ export const TICKET_IDLE_MS = 24 * 60 * 60_000;
 /** Reports of one non-blocking ticket that wake IT. */
 const TICKET_BURST = 3;
 const EVIDENCE_KEPT = 5;
+const BY_SHOWN = 5;
 const KEPT = 50;
 const WHAT_MAX = 200;
 const EVIDENCE_MAX = 2000;
@@ -87,6 +89,12 @@ export function fileTicket(s: TicketsState, r: ItReport, who: { id: string; name
   const ticket: ItTicket = { id: ++s.seq, what: r.what, where: r.where, evidence: [r.evidence], blocking: r.blocking, count: 1, by: [{ ...who, at: now }], waiting: blocks ? [who.id] : [], at: now, lastAt: now, status: 'open', ...(auto && { auto: true }) };
   s.list.unshift(ticket);
   return { ticket, joined: false };
+}
+
+/** What tabs get: the first BY_SHOWN reporters and a count of the rest, as an outage's reporters grow with the company
+ *  (scale.test.ts). The office keeps them all, to tell each one. */
+export function ticketsView(list: ItTicket[]): ItTicket[] {
+  return list.map((t) => (t.by.length > BY_SHOWN ? { ...t, by: t.by.slice(0, BY_SHOWN), byMore: t.by.length - BY_SHOWN } : t));
 }
 
 /** Does this ticket wake IT now? A blocking one or a burst, at most once per TICKET_WAKE_MS. */
