@@ -13,6 +13,7 @@ import type { EffortLevel } from '../../../shared/types';
 import { Bubble } from './ChatBubble';
 import { DaySeparator } from './ChatCards';
 import { ItDeskCards } from './ItDeskCards';
+import { ItAutoApprove, ItAutoUndo } from './ItAutoApprove';
 import { ItHealth, ItRecCards } from './ItHealth';
 import { ItTickets } from './ItTickets';
 import { ItImprove, ItImproveCards } from './ItImprove';
@@ -22,7 +23,14 @@ import { ModelPicker } from './ModelPicker';
 import { SecretInput } from './SecretInput';
 import { confirmDialog } from './Confirm';
 import { Menu } from './Menu';
-import { Icon } from './Icon';
+import { CloseButton, Icon } from './Icon';
+import { itemOf, MessageActions, who, type Item } from './ChatActions';
+import { ReactToContext, type ReactTo } from './ChatReactions';
+import { itChatActions, itMoreActions, itQuoted } from './itChat';
+import { messageCommands } from './codeBlock';
+import { copyText } from './clipboard';
+import { reduceMotion } from './a11y';
+import { excerpt } from '../../../shared/chat';
 import { attempt, Avatar } from './phoneParts';
 import './itDept.css';
 
@@ -32,22 +40,49 @@ const noop = () => undefined;
 const plain = (t: string) => t;
 const errorText = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
+// Reactions on IT's messages go to IT's chat; there is no "what was wrong" for IT (#589).
+const itReact: ReactTo = { react: (id, emoji) => void api.reactToItMessage(id, emoji).catch(() => undefined), askWhy: false }; // api already toasted
+const copyAll = (t: string) => void copyText(t).then((ok) => useStore.getState().pushToast(ok ? 'success' : 'error', ok ? 'Copied all commands' : "Couldn't reach the clipboard"));
+
 function ItChat() {
   const s = useStore((x) => x.settings.itDept);
   const messages = useStore((x) => x.it?.messages ?? NONE);
   const busy = useStore((x) => x.it?.busy ?? false);
   const [text, setText] = useState('');
+  const [replyTo, setReplyTo] = useState<number | null>(null);
+  const [menu, setMenu] = useState<Item | null>(null);
+  const [flash, setFlash] = useState<number | null>(null);
   const log = useRef<HTMLDivElement>(null);
+  const form = useRef<HTMLFormElement>(null);
   useLayoutEffect(() => {
     const el = log.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages.length, busy]);
-  const send = (t: string, replyTo?: number) => {
-    const body = t.trim();
-    if (!body) return;
-    setText('');
-    void attempt(() => api.messageIt(body, replyTo));
+  useEffect(() => {
+    if (flash === null) return;
+    const t = setTimeout(() => setFlash(null), 1600);
+    return () => clearTimeout(t);
+  }, [flash]);
+  const jump = (id: number) => {
+    const el = log.current?.querySelector<HTMLElement>(`[data-msg="${id}"]`);
+    if (!el) return;
+    el.scrollIntoView({ block: 'center', behavior: reduceMotion() ? 'auto' : 'smooth' });
+    el.focus({ preventScroll: true });
+    setFlash(id);
   };
+  const on = itChatActions({
+    replyTo: () => replyTo,
+    setReplyTo: (id) => {
+      setReplyTo(id);
+      if (id !== null) form.current?.querySelector('textarea')?.focus();
+    },
+    setMenu,
+    jump,
+    post: (body, to) => void attempt(() => api.messageIt(body, to)),
+  });
+  const send = (t: string, to?: number) => on.send(t, to) && setText('');
+  const byId = new Map(messages.map((m) => [m.id, m]));
+  const quotedNow = replyTo === null ? undefined : byId.get(replyTo);
   const offer = suggestionsFor(messages);
   return (
     <section className="card it-chat" aria-label={`IT chat with ${s.name}`}>
@@ -57,6 +92,7 @@ function ItChat() {
           <b>{s.name}</b> <span className="muted small">IT · {!s.on ? 'off' : busy ? 'working…' : 'available'}</span>
         </div>
       </div>
+      <ReactToContext.Provider value={itReact}>
       <div className="chat-log it-chat-log" ref={log} tabIndex={0} aria-label={`Messages with ${s.name}`}>
         {messages.length === 0 && (
           <p className="muted small phone-empty">
@@ -66,7 +102,8 @@ function ItChat() {
         {messages.map((m, i) => (
           <Fragment key={m.id}>
             <DaySeparator prev={messages[i - 1]?.at} at={m.at} />
-            <Bubble item={{ m }} ceoName={s.name} quoted={undefined} highlight={false} linked={plain} onFloor={noop} onQuote={noop} onReply={noop} onActions={noop} onArtifact={noop} onFile={noop} />
+            <Bubble item={itemOf({ m })} ceoName={s.name} quoted={itQuoted(byId, m.replyTo)} highlight={flash === m.id} linked={plain} onFloor={noop} onQuote={on.onQuote} onReply={on.onReply} onActions={on.onActions} onArtifact={noop} onFile={noop} />
+            <ItAutoUndo m={m} />
             {m.id === offer?.id && (
               <div className="suggestions" role="group" aria-label={`Suggested replies to ${s.name}`}>
                 {offer.suggestions!.map((x) => (
@@ -82,14 +119,41 @@ function ItChat() {
         <ItRecCards />
         <ItImproveCards />
       </div>
+      {menu && <MessageActions item={menu} ceoName={s.name} more={menu.m ? itMoreActions(messageCommands(menu.m.text), copyAll) : []} onReply={on.onReply} onClose={() => setMenu(null)} />}
+      </ReactToContext.Provider>
+      {replyTo !== null && (
+        <div className="chat-reply">
+          <div className="grow chat-reply-body">
+            <b className="small">
+              <Icon name="reply" /> Replying to {quotedNow ? (quotedNow.from === 'manager' ? 'yourself' : who(quotedNow, s.name)) : 'a message'}
+            </b>
+            <div className="chat-reply-text small">{quotedNow ? excerpt(quotedNow.text, 140) : 'The original message is no longer saved'}</div>
+          </div>
+          <CloseButton className="chat-reply-x" label="Cancel the reply" title="Cancel the reply (Esc)" onClick={() => setReplyTo(null)} />
+        </div>
+      )}
       <form
+        ref={form}
         className="chat-input"
         onSubmit={(e) => {
           e.preventDefault();
           send(text);
         }}
       >
-        <MessageBox value={text} onChange={setText} placeholder={s.on ? `Message ${s.name}…` : 'The IT department is off'} aria-label={`Message ${s.name}`} disabled={!s.on} title="Enter sends · Shift+Enter adds a new line" />
+        <MessageBox
+          value={text}
+          onChange={setText}
+          placeholder={!s.on ? 'The IT department is off' : replyTo !== null ? 'Write your reply…' : `Message ${s.name}…`}
+          aria-label={replyTo !== null ? `Reply to ${quotedNow ? who(quotedNow, s.name) : 'a message'}` : `Message ${s.name}`}
+          disabled={!s.on}
+          title="Enter sends · Shift+Enter adds a new line · Esc cancels a reply"
+          onKeyDown={(e) => {
+            if (e.key !== 'Escape' || replyTo === null) return;
+            e.preventDefault();
+            e.stopPropagation();
+            setReplyTo(null);
+          }}
+        />
         <MicButton kind="phone" value={text} onChange={setText} onSend={(t) => send(t)} disabled={!s.on} />
         <button className="btn btn-small btn-good" disabled={!s.on || !text.trim()}>
           Send
@@ -164,6 +228,7 @@ function ItSetup() {
           ))}
         </select>
       </label>
+      <ItAutoApprove />
       <ItTelegram />
     </section>
   );

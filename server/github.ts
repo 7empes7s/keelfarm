@@ -6,6 +6,7 @@ import type { SurvivalSignals } from '../shared/experiments.ts';
 import { TRUST_LABEL } from '../shared/trust.ts';
 import { prSummary } from '../shared/prSummary.ts';
 import { tryItField } from '../shared/tryIt.ts';
+import { hasAttribution, squashBody, stripAttribution, type PrCommit } from './attribution.ts';
 
 // All GitHub access goes through the gh CLI so it reuses the user's existing `gh auth login`.
 
@@ -312,8 +313,11 @@ export async function editIssue(fullName: string, number: number, edit: { body?:
 
 /** Merge a PR. With headSha, GitHub refuses if anything was pushed after that commit (e.g. after QA signed it off). */
 export async function mergePull(fullName: string, number: number, method: 'squash' | 'merge' | 'rebase', headSha?: string): Promise<void> {
-  const pr = await ghJson<{ headRefName: string; isCrossRepository: boolean }>(['pr', 'view', String(number), '-R', fullName, '--json', 'headRefName,isCrossRepository']);
-  await gh(['pr', 'merge', String(number), '-R', fullName, `--${method}`, ...(headSha ? ['--match-head-commit', headSha] : [])], { timeoutMs: 60_000 });
+  const pr = await ghJson<{ headRefName: string; isCrossRepository: boolean; body: string; commits: PrCommit[] }>(['pr', 'view', String(number), '-R', fullName, '--json', 'headRefName,isCrossRepository,body,commits']);
+  // No AI attribution lands (#599): the PR body cleaned, and the squash commit written without it.
+  if (hasAttribution(pr.body ?? '')) await gh(['pr', 'edit', String(number), '-R', fullName, '--body-file', '-'], { input: stripAttribution(pr.body) || ' ' }).catch((err) => console.warn(`could not clean ${fullName}#${number}'s body`, err));
+  const body = method === 'squash' ? squashBody(pr.commits ?? []) : null;
+  await gh(['pr', 'merge', String(number), '-R', fullName, `--${method}`, ...(body !== null ? ['--body', body] : []), ...(headSha ? ['--match-head-commit', headSha] : [])], { timeoutMs: 60_000 });
   // Tidy up the swarm branch on the remote; the local worktree is cleaned when the agent takes its next issue.
   if (!pr.isCrossRepository && pr.headRefName.startsWith('swarm/')) {
     await gh(['api', '-X', 'DELETE', `repos/${fullName}/git/refs/heads/${pr.headRefName}`]).catch(() => undefined);

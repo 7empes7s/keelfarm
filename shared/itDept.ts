@@ -8,6 +8,11 @@ import type { TelegramView } from './types/notify.ts';
 /** The IT lead's agent id: never in the office's agent list, so no floor, desk or task is ever theirs. */
 export const IT_ID = 'it-lead';
 
+/** Auto-approve (#585): off (every change is a card), routine (reads and reversible, scoped shapes), or everything
+ * except the danger list (server/itAuto.ts). */
+export type ItAutoLevel = 'off' | 'routine' | 'all';
+const AUTO_LEVELS: readonly ItAutoLevel[] = ['off', 'routine', 'all'];
+
 /** Settings → The IT department. */
 export interface ItDeptSettings {
   on: boolean;
@@ -16,10 +21,11 @@ export interface ItDeptSettings {
   account: string; // an account id or tag (Providers & accounts); '' = the coding agent's default (the rotation)
   model: string; // '' = the coding agent's default
   effort: EffortLevel;
+  autoApprove: ItAutoLevel;
 }
 
 /** A mid model and effort: IT reads a few commands and writes a short answer, so cost stays low. */
-export const IT_DEPT_DEFAULTS: ItDeptSettings = { on: true, name: 'Iris', cli: 'claude', account: '', model: 'claude-sonnet-5-5', effort: 'medium' };
+export const IT_DEPT_DEFAULTS: ItDeptSettings = { on: true, name: 'Iris', cli: 'claude', account: '', model: 'claude-sonnet-5-5', effort: 'medium', autoApprove: 'off' };
 
 const CLIS: readonly AgentCli[] = ['claude', 'codex', 'opencode', 'gemini'];
 const EFFORTS: readonly EffortLevel[] = ['low', 'medium', 'high', 'xhigh', 'max'];
@@ -37,6 +43,7 @@ export function itDeptSettings(prev: ItDeptSettings | undefined, raw: unknown): 
     account: typeof r.account === 'string' ? r.account.trim().slice(0, 60) : p.account,
     model: typeof r.model === 'string' ? r.model.trim().slice(0, 120) : p.model,
     effort: EFFORTS.includes(r.effort as EffortLevel) ? (r.effort as EffortLevel) : p.effort,
+    autoApprove: AUTO_LEVELS.includes(r.autoApprove as ItAutoLevel) ? (r.autoApprove as ItAutoLevel) : p.autoApprove,
   };
 }
 

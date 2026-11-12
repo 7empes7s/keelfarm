@@ -11,6 +11,7 @@ import { itWatchSettings } from '../../shared/itWatch.ts';
 import { makeArtifacts, parseMessage } from '../../shared/chatParts.ts';
 import { ceoModelOn } from '../../shared/ceoRunsOn.ts';
 import { forwardText, isHarnessText, stripHarness } from '../../shared/chat.ts';
+import { isReaction, react } from '../../shared/reactions.ts';
 import type { AgentStatus, PhoneMessage, WorldSnapshot } from '../../shared/types.ts';
 import { HOME_DIR } from '../config.ts';
 import { HttpError } from '../httpError.ts';
@@ -155,6 +156,20 @@ export abstract class SwarmItDept extends SwarmSetup {
     return { id: m.id };
   }
 
+  /** POST /api/it/messages/:id/react: the manager adds or removes a reaction on IT's message (#589), kept on it and shown in the chat. */
+  reactToItMessage(id: number, emoji: string) {
+    const m = this.state.it.messages.find((x) => x.id === id);
+    if (!m) throw new HttpError(404, 'That message is no longer saved');
+    if (m.from !== 'ceo') throw new HttpError(400, `Only ${this.state.settings.itDept.name}'s messages take reactions.`);
+    if (!isReaction(emoji)) throw new HttpError(400, 'Pick a reaction from the bar.');
+    const next = react(m.reactions, 'manager', emoji);
+    if (next.length) m.reactions = next;
+    else delete m.reactions;
+    this.broadcast({ type: 'it', it: this.itHead(), message: m });
+    this.save();
+    return { reactions: m.reactions ?? [] };
+  }
+
   /** The CEO's ask_it: the question opens in IT's chat, and IT's answer reaches the CEO in their next job. */
   protected askIt(a: { question: string }): string {
     const s = this.state.settings.itDept;
@@ -286,6 +301,20 @@ export abstract class SwarmItDept extends SwarmSetup {
     this.postIt('office', text, { notice: { details: out.trim() || '(no output)' } });
     void this.itTelegram(`${text}\n${out.trim().split('\n').slice(0, 8).join('\n')}`.slice(0, 1500));
     if (ran && this.state.settings.itDept.on && !p.rec) this.enqueueIt({ kind: 'ran', line: argvLine(p.argv), code: ran.code, out, at: Date.now() });
+  }
+
+  /** An auto-approved step (#585) or its Undo: into IT's chat (an auto step's card has its Undo) and Telegram. */
+  protected itAutoPosted(text: string, out: string, itAuto?: PhoneMessage['itAuto']) {
+    this.postIt('office', text, { notice: { details: out.trim() || '(no output)' }, ...(itAuto && { itAuto }) });
+    void this.itTelegram(`${text}\n${out.trim().split('\n').slice(0, 8).join('\n')}`.slice(0, 1500));
+  }
+
+  /** An auto step's card after its Undo: the button goes. */
+  protected itAutoUndone(logId: string) {
+    const m = this.state.it.messages.find((x) => x.itAuto?.log === logId);
+    if (!m?.itAuto) return;
+    m.itAuto = { ...m.itAuto, undone: true };
+    this.broadcast({ type: 'it', it: this.itHead(), message: m });
   }
 
   /** A Run / Not now button on Telegram (IT's bot, or IT's card on the CEO's). */

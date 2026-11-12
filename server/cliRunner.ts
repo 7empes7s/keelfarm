@@ -9,7 +9,7 @@ import { HOME_DIR } from './config.ts';
 import { BOX_CDP, BoxPty, boxHooksReady, finishedTurn, lookAtBoxCli, readFrom, type BoxCliRecord } from './boxCli.ts';
 import { BOX_BIN, BOX_CLI_BIN, BOX_HOME, boxSessionDir, signInCommand, tmuxKill } from './boxScripts.ts';
 import { adoptsCli } from './cliAdopt.ts';
-import { cliLabel, CLIS, codexThread, commandFor, geminiLimit, interruptions, isCli, launchArgs, lostLogin, prepareLaunch, writeHelperFiles } from './clis.ts';
+import { CLAUDE_NO_ATTRIBUTION, cliLabel, CLIS, codexThread, commandFor, geminiLimit, interruptions, isCli, launchArgs, lostLogin, prepareLaunch, writeHelperFiles } from './clis.ts';
 import { answerNote, countAnswer, gaveUpNote, keyBytes, screenStep, screenTry, signInError } from './cliScreens.ts';
 import { adoptPty, discardPty, hooksReady as keeperHooksReady, keeperHookUrl, keeperPid, leaveKeeper, spawnPty, startKeeper, terminalsAvailable, type Pty } from './ptyClient.ts';
 import type { BoxApi } from './box.ts';
@@ -907,7 +907,7 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
       fs.mkdirSync(dir, { recursive: true });
     }
     const boxHook = `node ${BOX_BIN}/hook.cjs ${events}`;
-    const settings = {
+    const settings = { ...CLAUDE_NO_ATTRIBUTION, // no Co-Authored-By or "Generated with" in its commits and PRs (#599)
       hooks: Object.fromEntries(HOOK_EVENTS.map((e) => [e, [{ hooks: [box ? { type: 'command', command: boxHook, timeout: 30 } : { type: 'http', url: hookUrl, timeout: keeper ? 120 : 30 }] }]])),
       statusLine: box
         ? { type: 'command', command: `node ${BOX_BIN}/statusline.cjs ${events}`, padding: 0 }

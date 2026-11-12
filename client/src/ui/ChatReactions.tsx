@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { createContext, useContext, useRef, useState } from 'react';
 import { useStore } from '../store';
 import { api } from '../api';
 import type { PhoneMessage, StatusReaction } from '../../../shared/types';
@@ -11,7 +11,11 @@ import './chatReactions.css';
 // (tap to add or remove yours; hover or hold for who reacted, #215), and the reaction bar in a CEO message's actions,
 // asking what was wrong after a 👎.
 
-const react = (id: number, emoji: string, note?: string) => void api.reactToMessage(id, emoji, note).catch(() => undefined); // api already toasted
+const ceoReact = (id: number, emoji: string, note?: string) => void api.reactToMessage(id, emoji, note).catch(() => undefined); // api already toasted
+
+/** Where a chat's reactions go (#589): the CEO's by default; IT's chat (ItDept.tsx) gives its own, which doesn't ask why after a 👎. */
+export type ReactTo = { react: (id: number, emoji: string, note?: string) => void; askWhy: boolean };
+export const ReactToContext = createContext<ReactTo>({ react: ceoReact, askWhy: true });
 
 /** What a tapped status badge says: the CEO's live step while it works, the job it waits behind while queued. */
 function statusNote(s: StatusReaction, live: CeoLive | null, job: string | undefined): string {
@@ -28,6 +32,7 @@ type Count = ReturnType<typeof reactionCounts>[number];
 function Pill({ c, m, ceoName, onWho }: { c: Count; m: PhoneMessage; ceoName: string; onWho: (text: string) => void }) {
   const hold = useRef<{ timer: number; fired: boolean } | null>(null);
   const who = `${reactionWho(c, ceoName)} reacted ${c.emoji}`;
+  const { react } = useContext(ReactToContext);
   const cancel = () => hold.current && clearTimeout(hold.current.timer);
   return (
     <button
@@ -96,9 +101,10 @@ export function Reactions({ m, ceoName }: { m: PhoneMessage; ceoName: string }) 
 export function ReactionBar({ m, onDone }: { m: PhoneMessage; onDone: () => void }) {
   const [more, setMore] = useState(false);
   const [why, setWhy] = useState<string | null>(null);
+  const { react, askWhy } = useContext(ReactToContext);
   const mine = new Set(m.reactions?.filter((r) => r.by === 'manager').map((r) => r.emoji));
   const pick = (emoji: string) => {
-    if (emoji === '👎' && !mine.has(emoji)) return setWhy('');
+    if (askWhy && emoji === '👎' && !mine.has(emoji)) return setWhy('');
     onDone();
     react(m.id, emoji);
   };

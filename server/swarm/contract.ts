@@ -148,6 +148,8 @@ export abstract class SwarmContract {
   protected abstract itDecide(...a: Parameters<Swarm['itDecide']>): ReturnType<Swarm['itDecide']>;
   protected abstract itProposed(...a: Parameters<Swarm['itProposed']>): ReturnType<Swarm['itProposed']>;
   protected abstract itRan(...a: Parameters<Swarm['itRan']>): ReturnType<Swarm['itRan']>;
+  protected abstract itAutoPosted(...a: Parameters<Swarm['itAutoPosted']>): ReturnType<Swarm['itAutoPosted']>;
+  protected abstract itAutoUndone(...a: Parameters<Swarm['itAutoUndone']>): ReturnType<Swarm['itAutoUndone']>;
 
   // itTickets.ts
   protected abstract autoTicket(...a: Parameters<Swarm['autoTicket']>): ReturnType<Swarm['autoTicket']>;

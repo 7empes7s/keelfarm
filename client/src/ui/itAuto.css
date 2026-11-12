@@ -1,0 +1,23 @@
+/* IT auto-approve (ui/ItAutoApprove.tsx, #585): its switch and levels in IT's setup, and an auto step's Undo in the chat. */
+.it-auto {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  padding-top: var(--ds-space-3);
+  border-top: var(--ds-border) solid var(--ds-line);
+}
+.it-auto p {
+  margin: 0;
+}
+.it-auto-levels {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+}
+.it-auto-undo {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-1);
+  margin: 0;
+  padding-left: var(--ds-space-2);
+}
