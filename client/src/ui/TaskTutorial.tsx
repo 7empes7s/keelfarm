@@ -45,7 +45,7 @@ interface Tutorials {
   finished: string | null;
 }
 
-export const useTutorials = create<Tutorials>(() => ({ progress: readProgress(typeof window === 'undefined' ? null : read(KEY)), invited: typeof window !== 'undefined' && read(INVITE_KEY) === '1', finished: null }));
+const useTutorials = create<Tutorials>(() => ({ progress: readProgress(typeof window === 'undefined' ? null : read(KEY)), invited: typeof window !== 'undefined' && read(INVITE_KEY) === '1', finished: null }));
 
 function save(progress: Progress) {
   write(KEY, JSON.stringify(progress));
@@ -53,7 +53,7 @@ function save(progress: Progress) {
 }
 
 /** Starts a tutorial (or resumes it where it was; `restart`: from its first step). */
-export function runTutorial(id: string, restart = false) {
+function runTutorial(id: string, restart = false) {
   useTour.setState({ replay: null, pocketTour: false }); // one guide on screen at a time
   useTutorials.setState({ finished: null });
   save(startTutorial(useTutorials.getState().progress, id, restart));

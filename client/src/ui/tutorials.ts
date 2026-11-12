@@ -9,7 +9,7 @@ import type { IconName } from './icons';
 export type Mode = 'pocket' | 'office';
 
 /** What finishes a step: a tap on a control inside its ring, or a message sent to the CEO. */
-export type Done = 'tap' | 'sent';
+type Done = 'tap' | 'sent';
 
 /** The office a step's link is picked from. */
 export interface World {
@@ -24,7 +24,7 @@ export interface TutorialStep {
   /** One plain sentence. `{ceo}` is the CEO's name. */
   text: string;
   /** The page to open first: a deep link, 'plan' (the chat with a /plan ready to send), or none (where you are). */
-  open?: string | 'plan' | ((w: World, mode: Mode) => string | null);
+  open?: string | ((w: World, mode: Mode) => string | null);
   /** CSS selectors of the control to ring, best first: the first one on screen gets it. */
   targets: string[];
   done: Done;

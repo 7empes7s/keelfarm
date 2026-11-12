@@ -83,7 +83,9 @@ in every ⓘ sheet brings them back, and **🧭 Replay the tour** starts it over
 
 While the tour or What's new shows, it owns the screen: the page dims around a ring on the real control (none, and
 the card centred, when that control isn't on screen), and toasts wait until it's done. A step about the chat's header
-or a console page opens it first, and Back or Done puts back what was on screen.
+or a console page opens it first, and Back or Done puts back what was on screen. A step whose control hides on some
+screens (the Chat tab's header, a finished guide) opens the page that has it, and `client/src/ui/tourTargets.ts` says
+where each control is drawn on each track: `tourSteps.test.ts` fails a step that would point at nothing.
 
 The steps are in `client/src/ui/tourSteps.ts`; a step's PR adds it there, with its id here:
 
@@ -107,6 +109,22 @@ The steps are in `client/src/ui/tourSteps.ts`; a step's PR adds it there, with i
 | `chat-charts`: 📊 ready chart prompts in the chat's header (or its ⋯), pinned ones on top | ✓ | ✓ | ✓ |
 | `info`: every screen's ⓘ | ✓ | ✓ | |
 | `switch`: the 2D office | | | ✓ |
+
+### Tutorials
+
+Where the tour points at controls, a tutorial walks you through a real job (#517). Each step is one sentence: it
+opens its page by itself, rings the control and waits until you've used it (or sent the message) before moving on,
+with **Back**, **Skip step** and **Close** (Resume picks it up at the same step, even after a reload). The four:
+
+- **Get started**: sign in a coding agent, add a project, write its charter (or let the CEO draft it) and its QA brief.
+- **Your first feature**: ask the CEO to plan it, the issues it filed, an agent at work, QA and the preview, Merge,
+  and the merged work on the board.
+- **When something needs you**: the bell, the approvals, Retry QA / Send back / Merge anyway, and the agent carrying on.
+- **Keep it running**: usage and accounts, pacing, team size, disk and memory, Telegram alerts.
+
+The guide (✅), every ⓘ sheet and Settings → Company list them with their progress (3/6), **Start**, **Resume** and
+**Restart**; this device remembers where each one is. The first launch offers **Get started**. They're in
+`client/src/ui/tutorials.ts`; the demo office runs every one end to end on its own data.
 
 ## Install it
 
