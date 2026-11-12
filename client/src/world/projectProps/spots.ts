@@ -5,6 +5,7 @@
 
 import { HALF_D, HALF_W, rect, type Rect } from '../layout';
 import { deskToolFor, floorPropSet, type DeskTool, type FloorProfile, type PropSet } from '../../../../shared/floorProps';
+import type { FloorTheme } from '../../../../shared/floorThemes';
 import type { UseCase } from '../../../../shared/types';
 
 const FACE = { south: 0, east: Math.PI / 2, north: Math.PI, west: -Math.PI / 2 };
@@ -149,10 +150,10 @@ export function projectRects(set: PropSet): Rect[] {
 
 // ---------- a floor's set ----------
 
-type Floor = FloorProfile & { props?: PropSet | null; setup?: { useCase: UseCase | null } };
+type Floor = FloorProfile & { props?: PropSet | null; setup?: { useCase: UseCase | null }; theme?: FloorTheme };
 
 /** A floor's set: the manager's pick, else from its profile and use case (shared/floorProps.ts). */
 export const repoPropSet = (repo: Floor): PropSet => floorPropSet({ ...repo, useCase: repo.setup?.useCase ?? null });
 
-/** The tool on a floor's desks. */
-export const repoDeskTool = (repo: Floor): DeskTool => deskToolFor(repo.setup?.useCase ?? null, repoPropSet(repo));
+/** The tool on a floor's desks (a game studio's controllers, a newsroom's notebooks: #570). */
+export const repoDeskTool = (repo: Floor): DeskTool => deskToolFor(repo.setup?.useCase ?? null, repoPropSet(repo), repo.theme);

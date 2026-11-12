@@ -88,3 +88,13 @@ export function buildProgress(stages: readonly PrStage[]): { done: number; capti
   const ready = stages.filter((s) => s === 'toMerge').length;
   return { done, caption: `${stages.length} PR${stages.length === 1 ? '' : 's'} in the build · ${ready} ready to ship` };
 }
+
+/** The newsroom's TVs (#570): the floor's news, merges first, then PRs in review and the issues being worked out. */
+export function headlines(pulls: readonly { title: string; state: string }[], issues: readonly { title: string }[], max = 5): string[] {
+  const out = [
+    ...pulls.filter((p) => p.state === 'MERGED').map((p) => `Shipped: ${p.title}`),
+    ...pulls.filter((p) => p.state === 'OPEN').map((p) => `In review: ${p.title}`),
+    ...issues.map((i) => `Developing: ${i.title}`),
+  ].slice(0, max);
+  return out.length ? out : ['No news is good news'];
+}

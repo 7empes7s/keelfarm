@@ -2,6 +2,7 @@
 // backup vault for a backup product, a ballot box for civic tech, a blueprint table for this office, a camera rig
 // for a video studio. Picked from the floor's profile (its name, description, summary and mission) and use case, unless
 // the manager picks a set by hand (PersistedRepo.props). Pure; the client draws them (client/src/world/projectProps/).
+import type { FloorTheme } from './floorThemes.ts';
 import type { UseCase } from './types/setup.ts';
 
 // New sets go at the end: the demo gives floor N the Nth.
@@ -91,5 +92,8 @@ const USE_CASE_TOOL: Record<UseCase, DeskTool> = {
 };
 const SET_TOOL: Record<PropSet, DeskTool> = { vault: 'terminal', civic: 'notebook', workshop: 'terminal', broadcast: 'camera', devices: 'phone', servers: 'terminal', arcade: 'controller' };
 
-/** A floor's desk tool: from its use case when it has one, else from its prop set. */
-export const deskToolFor = (useCase: UseCase | null | undefined, set: PropSet): DeskTool => (useCase ? USE_CASE_TOOL[useCase] : SET_TOOL[set]);
+/** The themes whose desks always carry their tool, so the floor reads as the theme at a glance (#570). */
+const THEME_TOOL: Partial<Record<FloorTheme, DeskTool>> = { 'game-studio': 'controller', 'media-studio': 'camera', newsroom: 'notebook' };
+
+/** A floor's desk tool: its theme's when it has one, else from its use case when it has one, else from its prop set. */
+export const deskToolFor = (useCase: UseCase | null | undefined, set: PropSet, theme?: FloorTheme): DeskTool => (theme && THEME_TOOL[theme]) ?? (useCase ? USE_CASE_TOOL[useCase] : SET_TOOL[set]);
