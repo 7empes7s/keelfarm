@@ -103,6 +103,7 @@ test('the 3D office keeps its frame rate with the camera tile open', async ({ pa
   await page.waitForTimeout(3000);
   const withTile = await frames();
   expect(await page.evaluate(() => (window as unknown as CamWindow).__swarmAgentCam.frames), 'the tile draws').toBeGreaterThan(5);
+  await page.evaluate(() => document.exitPointerLock()); // looking around holds the mouse, as Esc frees it
   await page.getByRole('button', { name: /^Turn off .+'s camera$/ }).click();
   await expect(page.locator('.cam-tile')).toHaveCount(0);
   await page.waitForTimeout(2000);
