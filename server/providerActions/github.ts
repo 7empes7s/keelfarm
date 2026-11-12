@@ -7,7 +7,7 @@ import { ActionError, expectOk, keyById, withKeys, type ActionCtx, type ActionRe
 
 const API = 'https://api.github.com';
 const NAME = 'GitHub';
-const REPO = /^[\w.-]+\/[\w.-]+$/;
+const REPO = /^(?!\.\.?\/)[\w.-]+\/(?!\.\.?$)[\w.-]+$/; // owner/name, never . or .. (they'd walk the API's path)
 const repoArg = z.string().regex(REPO, 'a repo like owner/name').optional();
 const branchArg = z.string().min(1).max(100).regex(/^[\w./-]+$/).optional();
 /** The merge settings repo_settings may change: booleans, each one reversible. */
@@ -140,7 +140,7 @@ export const githubModule: ProviderModule = {
           const before = Object.fromEntries(changed.map((s) => [s, !!r[s as (typeof SETTINGS)[number]]]));
           return {
             change: { provider: 'github', op: 'repo_settings', keyId: k.id, data: { repo, want, before } },
-            summary: `turns ${changed.map((s) => `${s} ${onOff(want[s])}`).join(', ') || 'nothing'} on ${repo}`,
+            summary: `turns ${changed.map((s) => `${s} ${onOff(want[s])}`).join(', ') || 'nothing'} for ${repo}`,
             diff: `${repo} settings:\n${diff}`,
             argv: ['github', 'repo_settings', repo, ...changed.map((s) => `${s}=${want[s]}`)],
             undo: `set ${changed.map((s) => `${s}=${before[s]}`).join(', ')} again (provider_action github repo_settings)`,

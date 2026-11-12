@@ -69,6 +69,7 @@ describe('the provider-action layer', () => {
     await expect(runAction(ctx, { provider: 'gitlab', op: 'x' })).rejects.toThrow(/No provider "gitlab": pick one of .*github/);
     await expect(runAction(ctx, { provider: 'github', op: 'merge' })).rejects.toThrow(/GitHub has no op "merge". Its ops: key_scopes \{ repo\? \}; .*secret_delete/);
     await expect(runAction(ctx, { provider: 'github', op: 'run_rerun', args: { run_id: 'x' } })).rejects.toThrow(/github run_rerun takes \{ repo\?, run_id \}: run_id/);
+    for (const repo of ['../x', 'owner/..', './x']) await expect(runAction(ctx, { provider: 'github', op: 'repo_get', args: { repo } }), repo).rejects.toThrow(/repo a repo like owner\/name/);
   });
 });
 
@@ -80,6 +81,7 @@ describe('GitHub', () => {
     expect(out.plan.diff).toContain('- delete_branch_on_merge: off\n+ delete_branch_on_merge: on');
     expect(out.plan.diff).toContain('  allow_squash_merge: on');
     expect(out.plan.argv).toEqual(['github', 'repo_settings', DEMO_REPO, 'delete_branch_on_merge=true']);
+    expect(out.plan.summary).toBe(`turns delete_branch_on_merge on for ${DEMO_REPO}`);
     expect(out.plan.change.keyId).toBe('live'); // the dead key was turned away
     expect(net.calls.every((c) => c.method === 'GET')).toBe(true);
     expect(await applyAction(ctx, out.plan.change)).toMatchObject({ ok: true, text: expect.stringMatching(/^Read back: .*delete_branch_on_merge: on/) });
