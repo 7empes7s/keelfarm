@@ -61,6 +61,71 @@ const KILL = /^(kill|pkill|killall|skill|xkill)$/;
 /** Programs that run another command (beyond server/itDesk.ts' WRAPPERS, which the never-list refuses): what really runs
  * would hide from this list, so they're always a card. */
 const RUNS_OTHERS = /^(systemd-run|chroot|runuser|setpriv|flock|stdbuf|unbuffer|nsenter|unshare|chrt|taskset|strace|ltrace|gdb|pkexec|sg|newgrp|machinectl|run-parts|start-stop-daemon|parallel|make|expect|[gmn]?awk|sed|ed|ex|vi|vim|nvim|less|more|lua\S*|tclsh|wish|ruby\S*|perl\S*|python\S*|php\S*|node|deno|bun|nohup|setsid|xargs|watch|script|env|nice|ionice|timeout|sudo|su|doas|sh|bash|zsh|dash|ksh|fish|csh|tcsh|busybox|toybox)$/;
+/** Database clients and data tools: their argument is a command in another language (DROP DATABASE, FLUSHALL), so
+ * they're always a card, wherever they're named (docker exec pg dropdb app too). */
+const DATABASES = /^(psql|pg_ctl\w*|pg_restore|pg_upgrade|dropdb|dropuser|createuser|mysql|mariadb|mysqladmin|mysqlimport|sqlite3?|mongo|mongosh|mongorestore|redis-cli|valkey-cli|cqlsh|influx|clickhouse(-client)?|etcdctl)$/;
+/** git subcommands that can't throw work away; every other one is a card. */
+const GIT_SAFE = new Set(['fetch', 'pull', 'clone', 'status', 'log', 'diff', 'show', 'checkout', 'switch']);
+/** Short options that take a value (the rest of the cluster, or the next argument), for reading where a download writes. */
+const CURL_ARG = 'AbcCdDeEFHKmoPQrtTuUwxXyYz';
+const WGET_ARG = 'aAbBDeiIloOPQRtTUwXY';
+/** Each option of a command as [name, value]: `-xzf a` gives x, z, f=a when f takes a value; `--out=x` / `--out x`. */
+function optionsOf(args: readonly string[], shortArg: string, longArg: readonly string[]): [string, string | undefined][] {
+  const out: [string, string | undefined][] = [];
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === '--') break;
+    if (a.startsWith('--')) {
+      const eq = a.indexOf('=');
+      if (eq > 0) out.push([a.slice(0, eq), a.slice(eq + 1)]);
+      else out.push([a, longArg.includes(a) ? args[++i] : undefined]);
+    } else if (a.startsWith('-') && a.length > 1) {
+      for (let j = 1; j < a.length; j++) {
+        if (!shortArg.includes(a[j])) {
+          out.push([a[j], undefined]);
+          continue;
+        }
+        out.push([a[j], a.slice(j + 1) || args[++i]]);
+        break;
+      }
+    }
+  }
+  return out;
+}
+/** Files a download writes, or why it's a card anyway (it names its own file, or a config could). */
+function downloadOf(program: string, args: readonly string[]): string[] | string | null {
+  if (program === 'curl') {
+    const o = optionsOf(args, CURL_ARG, ['--output', '--dump-header', '--cookie-jar', '--trace', '--trace-ascii', '--stderr', '--config', '--header', '--data', '--request', '--user', '--url']);
+    if (o.some(([k]) => ['O', 'J', 'K', '--remote-name', '--remote-name-all', '--remote-header-name', '--config', '--output-dir'].includes(k))) return 'curl saves under a name of its own choosing';
+    return o.filter(([k]) => ['o', 'D', 'c', '--output', '--dump-header', '--cookie-jar', '--trace', '--trace-ascii', '--stderr'].includes(k)).map(([, v]) => v ?? '');
+  }
+  if (program === 'wget') {
+    const o = optionsOf(args, WGET_ARG, ['--output-document', '--output-file', '--execute', '--directory-prefix', '--input-file', '--config']);
+    if (o.some(([k]) => ['e', 'r', 'm', 'p', 'N', '--execute', '--recursive', '--mirror', '--page-requisites', '--timestamping', '--config'].includes(k))) return 'wget replaces files it already has (-r, -m, -p, -N or -e)';
+    return o.filter(([k]) => ['O', 'o', '--output-document', '--output-file'].includes(k)).map(([, v]) => v ?? '');
+  }
+  return null;
+}
+/** Extracting an archive overwrites what's already there unless told to keep old files; so does writing one onto an
+ * existing file, or (de)compressing with --force. */
+function archiveOver(program: string, args: readonly string[], exists: (p: string) => boolean): boolean {
+  if (program === 'tar') {
+    const old = args[0] && /^[a-zA-Z]+$/.test(args[0]) ? args[0].split('') : []; // tar xzf a.tgz
+    const o = optionsOf(args, 'bCfFgHIKLNTVX', ['--file', '--directory', '--to-command', '--use-compress-program']);
+    const flags = [...old, ...o.map(([k]) => k)];
+    const file = o.find(([k]) => k === 'f' || k === '--file')?.[1] ?? (old.includes('f') ? args[1] : undefined);
+    if (flags.some((k) => ['c', '--create'].includes(k)) && file && exists(file)) return true;
+    if (flags.some((k) => ['--to-command', '--use-compress-program', 'I', 'F', '--info-script', '--new-volume-script', '--checkpoint-action', '--rsh-command'].includes(k))) return true; // they run programs
+    const extract = flags.some((k) => ['x', '--extract', '--get'].includes(k));
+    return extract && (!flags.some((k) => ['k', '--keep-old-files', '--skip-old-files'].includes(k)) || flags.includes('--overwrite'));
+  }
+  if (program === 'unzip') {
+    const flags = optionsOf(args, 'dx', []).map(([k]) => k);
+    return flags.includes('o') || !flags.some((k) => ['n', 'l', 't', 'v', 'p', 'c', 'Z'].includes(k));
+  }
+  if (/^(g?unzip|gzip|xz|unxz|bzip2|bunzip2|zstd|unzstd|lz4)$/.test(program) && args.some((a) => a === '--force' || /^-[a-zA-Z]*f/.test(a))) return true;
+  return /^(7z[ar]?|cpio|bsdtar|unrar|unar)$/.test(program);
+}
 /** Copying or writing programs: onto a file that already exists, they replace it. */
 const WRITES = new Set(['cp', 'install', 'ln', 'tee', 'rsync', 'scp']);
 
@@ -78,11 +143,13 @@ function dangerOf(argv: readonly string[], ctx: Pick<AutoContext, 'itUnits' | 'o
   if (all.some((w) => DATA.has(w)) || (program === 'find' && args.some((a) => /^-(delete|exec|execdir|ok|okdir|fprint\w*|fls)$/.test(a)))) return 'it deletes or moves data';
   if (args.some((a) => /^--(delete|remove-source-files|remove-files|del)\b/.test(a))) return 'it deletes data (a --delete or --remove option)';
   if (args.some((a) => /^\/dev\/(null|zero|u?random|sd\w*|nvme\w*|vd\w*)$/.test(a))) return 'it writes from or to a device';
-  if (args.some((a) => /(^|\/)backups?(\/|$)|\.bak\b|backup/i.test(a))) return 'it touches backups';
+  if (/^(restic|borg|duplicity|rdiff-backup|rsnapshot)$/.test(program) || args.some((a) => /(^|\/)backups?(\/|$)|\.bak\b|backup/i.test(a))) return 'it touches backups';
   if (all.some((w) => DISK.test(w))) return 'it changes disks, partitions or mounts';
   if (all.some((w) => FIREWALL.test(w))) return 'it changes the firewall';
   if (all.some((w) => USERS.test(w)) || /(^|\s|\/)\.ssh(\/|\s|$)|\/etc\/ssh\b|authorized_keys|\bsshd?(\.service|\.socket)?$/.test(join)) return 'it touches users, passwords or SSH';
   if (all.some((w) => KILL.test(w))) return 'it kills processes';
+  const db = all.find((w) => DATABASES.test(w));
+  if (db) return `it runs ${db}, a database client whose commands can drop data`;
   const runner = all.find((w) => RUNS_OTHERS.test(w) && !['sg', 'ed', 'ex', 'more'].includes(w)); // short ones too common as plain words
   if (runner) return `it names ${runner}, which runs other commands`;
   if (/keel/i.test(join)) return "it touches KEEL (its live tenant, database or services)";
@@ -93,23 +160,38 @@ function dangerOf(argv: readonly string[], ctx: Pick<AutoContext, 'itUnits' | 'o
     const hit = targets.find((t) => ctx.exists(t));
     if (hit) return `it replaces ${hit}, which already exists, with no backup`;
   }
+  const download = downloadOf(program, args);
+  if (typeof download === 'string') return download;
+  const over = download?.find((t) => t !== '-' && (!t || ctx.exists(t)));
+  if (over !== undefined) return `it downloads over ${over || 'a file'}, which already exists`;
+  if (archiveOver(program, args, ctx.exists)) return 'it writes an archive or its files over ones that already exist';
+  if (program === 'rclone' && args.some((a) => ['sync', 'delete', 'deletefile', 'purge', 'rmdir', 'rmdirs', 'cleanup', 'dedupe', 'move', 'moveto'].includes(a))) return 'rclone deletes or moves files';
   if (program === 'chmod' || program === 'chown' || program === 'chgrp') return args.some((a) => /^-[a-zA-Z]*R|^--recursive/.test(a)) ? 'it changes owners or permissions recursively' : null;
   if (program === 'systemctl' || program === 'service') {
     const plain = args.filter((a) => !a.startsWith('-'));
     // systemctl <verb> <units…>; service <unit> <verb>
     const [verb, units] = program === 'systemctl' ? [plain[0] ?? '', plain.slice(1).map(unitName)] : [plain[1] ?? '', plain.slice(0, 1).map(unitName)];
-    const stops = ['stop', 'kill', 'disable', 'mask', 'isolate', 'set-default', 'edit', 'revert', 'set-property', 'link', 'preset', 'preset-all'];
+    const stops = ['stop', 'kill', 'clean', 'disable', 'mask', 'isolate', 'set-default', 'edit', 'revert', 'set-property', 'link', 'preset', 'preset-all'];
     if (program === 'service') stops.push('restart', 'force-reload', 'try-restart', 'reload');
     if (stops.includes(verb) && !(units.length && units.every((u) => ctx.itUnits.includes(u)))) return `${program} ${verb} of a unit IT didn't install`;
   }
-  if (program === 'docker') {
+  if (/^(docker|podman|nerdctl)(-compose)?$/.test(program)) {
     const verbs = args.filter((a) => !a.startsWith('-'));
-    if (verbs.some((v) => ['rm', 'kill', 'stop', 'down', 'volume'].includes(v)) || (verbs[0] === 'system' && verbs[1] === 'prune') || (verbs.includes('prune') && verbs[0] === 'container')) return 'it removes or stops containers or volumes';
+    if (verbs.some((v) => ['rm', 'rmi', 'kill', 'stop', 'down', 'volume', 'prune'].includes(v))) return 'it removes or stops containers, images or volumes';
+    if (verbs.some((v) => ['exec', 'run'].includes(v))) return 'it runs a command in a container';
   }
   if (program === 'git') {
-    const sub = args.filter((a, i) => !a.startsWith('-') && args[i - 1] !== '-C')[0];
-    if (sub === 'push') return 'git push';
-    if (sub === 'clean' || (sub === 'reset' && args.includes('--hard')) || (sub === 'branch' && args.some((a) => a === '-D' || a === '--delete' || a === '-d')) || (sub === 'stash' && args.some((a) => a === 'drop' || a === 'clear')) || (sub === 'checkout' && args.some((a) => a === '-f' || a === '--force' || a === '.'))) return 'it throws away work in a clone';
+    const at = args.findIndex((a, i) => !a.startsWith('-') && args[i - 1] !== '-C');
+    const [sub, rest] = [args[at] ?? '', args.slice(at + 1)];
+    const words = rest.filter((a) => !a.startsWith('-'));
+    const flags = rest.filter((a) => a.startsWith('-'));
+    const discard = 'it can throw away work in a clone (only fetch, pull --ff-only, clone, status, log, diff, show and checkout or switch of a branch run without a tap)';
+    if (args.slice(0, Math.max(at, 0)).some((a) => a.startsWith('-') && a !== '-C')) return `git options before the subcommand: ${discard}`;
+    if (!GIT_SAFE.has(sub)) return `${`git ${sub}`.trim()}: ${discard}`;
+    if (flags.some((f) => /^(-u|-c|--upload-pack|--config|--template|--exec)\b/.test(f))) return `git ${sub} running a program or config of its own: ${discard}`;
+    if (['fetch', 'pull'].includes(sub) && (words.some((w) => /[:+]/.test(w)) || flags.some((f) => /^(-f|--force|--rebase.*|-r|--no-ff|--squash)$/.test(f)))) return `git ${sub} that rewrites a branch: ${discard}`;
+    if (sub === 'pull' && !flags.includes('--ff-only')) return `git pull without --ff-only: ${discard}`;
+    if (['checkout', 'switch'].includes(sub) && (words.length !== 1 || words[0] === '.' || flags.some((f) => !['-q', '--quiet'].includes(f)))) return `git ${sub} of anything but one branch: ${discard}`;
   }
   if (['apt', 'apt-get', 'aptitude', 'dpkg', 'snap', 'pip', 'pip3', 'npm'].includes(program) && args.some((a) => ['purge', '--purge', 'remove', 'autoremove', 'uninstall', '-r', '-P', '--remove'].includes(a))) return 'it removes packages';
   return null;

@@ -119,6 +119,50 @@ describe('IT auto-approve: the danger list is always a card', () => {
     [['service', 'nginx', 'restart']],
     [['apt', 'remove', '-y', 'postgresql']],
     [['apt-get', 'autoremove', '-y']],
+    // #591 QA round 2: database clients, git that throws work away, downloads and archives over existing files
+    [['psql', '-c', 'DROP DATABASE app']],
+    [['dropdb', 'app']],
+    [['mysql', '-e', 'drop database x']],
+    [['sqlite3', '/srv/app.db', 'DELETE FROM users']],
+    [['redis-cli', 'FLUSHALL']],
+    [['mongosh', '--eval', 'db.dropDatabase()']],
+    [['docker', 'exec', 'pg', 'dropdb', 'app']],
+    [['docker', 'compose', 'exec', 'db', 'psql']],
+    [['docker', 'exec', 'web', '/opt/cleanup']],
+    [['docker-compose', 'down', '-v']],
+    [['docker', 'rmi', 'web']],
+    [['git', '-C', '/opt/x', 'restore', '.']],
+    [['git', '-C', '/opt/x', 'checkout', '--', 'file']],
+    [['git', '-C', '/opt/x', 'checkout', 'HEAD', 'file']],
+    [['git', '-C', '/opt/x', 'checkout', '-B', 'main']],
+    [['git', '-C', '/opt/x', 'switch', '--discard-changes', 'main']],
+    [['git', '-C', '/opt/x', 'branch', '-f', 'main', 'HEAD~5']],
+    [['git', '-C', '/opt/x', 'update-ref', '-d', 'refs/heads/main']],
+    [['git', '-C', '/opt/x', 'gc', '--prune=now']],
+    [['git', '-C', '/opt/x', 'reflog', 'expire', '--expire=now', '--all']],
+    [['git', '-C', '/opt/x', 'worktree', 'remove', '/opt/y']],
+    [['git', '-C', '/opt/x', 'rm', 'file']],
+    [['git', '-C', '/opt/x', 'filter-branch', 'HEAD']],
+    [['git', '-C', '/opt/x', 'pull']],
+    [['git', '-C', '/opt/x', 'pull', '--ff-only', '--rebase']],
+    [['git', '-C', '/opt/x', 'fetch', 'origin', '+main:main']],
+    [['git', '-c', 'core.hooksPath=/opt/h', '-C', '/opt/x', 'status']],
+    [['curl', '-o', '/etc/hosts', 'https://example.com/hosts']],
+    [['curl', '-sSLo', '/etc/hosts', 'https://example.com/hosts']],
+    [['curl', '--output=/etc/hosts', 'https://example.com/hosts']],
+    [['curl', '-O', 'https://example.com/hosts']],
+    [['wget', '-qO', '/etc/hosts', 'https://example.com/hosts']],
+    [['wget', '-r', 'https://example.com/']],
+    [['tar', '-xzf', '/opt/a.tgz', '-C', '/srv/data']],
+    [['tar', 'xzf', '/opt/a.tgz']],
+    [['tar', '-czf', '/etc/hosts', '/srv/a']],
+    [['unzip', '-o', '/opt/a.zip', '-d', '/srv/data']],
+    [['unzip', '/opt/a.zip', '-d', '/srv/data']],
+    [['gunzip', '-f', '/srv/a.gz']],
+    [['7z', 'x', '/opt/a.7z']],
+    [['rclone', 'sync', '/srv/a', 'remote:b']],
+    [['restic', 'forget', '--prune']],
+    [['systemctl', 'clean', 'nginx']],
   ])('%j → card, even at Everything except dangerous', (argv) => {
     const exists = (p: string) => ['/etc/hosts', '/usr/local/bin/run.sh'].includes(p);
     expect(auto(argv, { exists })).toBe(false);
@@ -152,6 +196,15 @@ describe('IT auto-approve: anything else', () => {
     expect(auto(['journalctl', '--vacuum-size=500M'], { level: 'all' })).toBe(true);
     expect(auto(['cp', '/opt/x/new.conf', '/etc/new.conf'], { level: 'all' })).toBe(true); // a new file replaces nothing
     expect(auto(['service', 'clipfarm', 'restart'], { level: 'all' })).toBe(true); // IT's own unit
+    // git that can't lose work, downloads and archives that replace nothing
+    expect(auto(['git', '-C', '/opt/x', 'checkout', 'main'], { level: 'all' })).toBe(true);
+    expect(auto(['git', 'clone', 'https://github.com/o/r', '/opt/r'], { level: 'all' })).toBe(true);
+    expect(auto(['git', '-C', '/opt/x', 'pull', '--ff-only', 'origin', 'main'], { level: 'all' })).toBe(true);
+    expect(auto(['curl', '-fsSL', '-o', '/opt/new.tgz', 'https://example.com/a.tgz'], { level: 'all' })).toBe(true);
+    expect(auto(['curl', '-fsS', 'https://example.com/health'], { level: 'all' })).toBe(true);
+    expect(auto(['wget', '-q', 'https://example.com/a.tgz'], { level: 'all' })).toBe(true);
+    expect(auto(['tar', '-xkzf', '/opt/a.tgz', '-C', '/srv/data'], { level: 'all' })).toBe(true);
+    expect(auto(['unzip', '-n', '/opt/a.zip', '-d', '/srv/data'], { level: 'all' })).toBe(true);
   });
 
   it('Off runs nothing by itself', () => {
