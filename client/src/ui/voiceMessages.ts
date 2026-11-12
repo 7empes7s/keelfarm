@@ -1,6 +1,8 @@
 // Phone messages read aloud the moment they arrive (docs/voice.md): ElevenLabs' clip through sfx.ts's 'voice' group,
 // or the browser's own voice. One at a time and in order, other sounds ducked meanwhile, and one office tab per
-// message (voiceClaim.ts). The phone's ▶ replays a message here too, from its saved clip only (never a new synthesis).
+// message (voiceClaim.ts). The phone's ▶ replays a message here too: its saved clip, else one made on the tap (#532),
+// through the <audio> element the tap unlocked (voiceTap.ts), which also plays live messages while iOS keeps the
+// AudioContext asleep.
 // What's read is the CEO's short spoken summary (#282); the ⋯ menu's "Read the whole message" reads all of it.
 // The store loads this on the first message to speak, so it isn't in the main bundle. window.__swarmVoice records what was read, for QA and e2e.
 // A CEO message that ends by itself, with nothing else to read, may open the hands-free phone's mic (mic.ts).
@@ -21,7 +23,8 @@ import { audio, chirp, duckOthers, getAudioPrefs, groupOutput, subscribeAudio } 
 import { sentenceAt, sentenceFraction, sentenceStarts, splitSentences } from './voiceCall';
 import { callOn, callVoice, dispatchCall, useCall } from './voiceCallStore';
 import { wonVoice } from './voiceClaim';
-import { enqueue, nextUp, type Queued, type ReplayKind } from './voiceQueue';
+import { elevenOnTap, enqueue, nextUp, type Queued } from './voiceQueue';
+import { elementPrimed, useReplay, voiceElement, type Replay } from './voiceTap';
 
 /** One message read aloud, for window.__swarmVoice. Times are performance.now(); end is null while it plays. */
 export interface SpokenRecord {
@@ -36,9 +39,6 @@ export interface SpokenRecord {
   /** The words read aloud. */
   words: string;
 }
-
-/** A replay: the ▶'s saved clip or browser voice, or 'whole' (the ⋯ menu's "Read the whole message", a new clip). */
-type Replay = Exclude<ReplayKind, 'gone'> | 'whole';
 
 const spoken: SpokenRecord[] = [];
 (window as unknown as Record<string, unknown>).__swarmVoice = spoken;
@@ -159,7 +159,8 @@ async function read(m: PhoneMessage, replay?: Replay) {
   const { voiceName, speed } = settings.voice;
   const call = !replay && m.from === 'ceo' && callOn();
   const set = settings.voice.provider === 'off' && call ? 'browser' : settings.voice.provider; // a call always speaks
-  const provider = replay && replay !== 'whole' ? (replay === 'clip' ? 'elevenlabs' : 'browser') : set;
+  const tapVoice = elevenOnTap({ provider: settings.voice.provider, keySet: voiceKeySet }) ? 'elevenlabs' : 'browser';
+  const provider = !replay ? set : replay === 'whole' ? tapVoice : replay === 'browser' ? 'browser' : 'elevenlabs';
   if (provider === 'off') return; // turned off while it waited
   const now: { rec: SpokenRecord | null; unduckMusic?: () => void } = { rec: null };
   cutShort = false;
@@ -181,13 +182,13 @@ async function read(m: PhoneMessage, replay?: Replay) {
   try {
     if (provider === 'browser' && call) await speakSentences(m.id, words, voiceName, speed, () => began(null), sentence);
     else if (provider === 'browser') await speak(words, voiceName, speed, () => began(null), (i) => speechWord(m.id, i));
-    else if (replay && !whole) await playClip(m.id, words, began, sentence, 'cached');
+    else if (replay && replay !== 'browser') await playTapped(m.id, replay, began);
     else if (!voiceKeySet) throw new Error('no ElevenLabs key is saved');
-    else await playClip(m.id, words, began, sentence, whole ? 'whole' : 'new');
+    else await playClip(m.id, words, began, sentence);
   } catch (err) {
-    // A replay whose clip went meanwhile (pruned or cleared) says so; the phone's ▶ follows the server's list.
+    // A replay says why in plain words under its message (ChatBubble.tsx's ReplayError), unless it was stopped.
     if (replay) {
-      if (!now.rec) useStore.getState().pushToast('info', replay === 'clip' ? 'Audio no longer saved' : whole ? "Couldn't read this message aloud" : "The browser couldn't speak this message");
+      if (!now.rec && !cutShort && (err as Error).name !== 'AbortError') useReplay.setState({ error: { id: m.id, text: tapError(provider, err) } });
       return;
     }
     // No key, ElevenLabs being down, no voice in this browser: the message still rings, just without words.
@@ -217,12 +218,11 @@ async function read(m: PhoneMessage, replay?: Replay) {
 // ---------- ElevenLabs ----------
 
 /**
- * Fetches the message's clip and plays it through the 'voice' group, so the master volume, M and its slider apply.
- * 'cached': the phone's ▶, saved clips only (a 404 when they're gone), every part of a long message in order; 'whole':
- * the whole message's clip rather than its summary's.
+ * Fetches a live message's clip and plays it through the 'voice' group, so the master volume, M and its slider apply.
  * A call can pause it where it is and skip to the next sentence, found by its share of the words (`words`).
+ * With the AudioContext asleep (iOS after the background, until a tap), it plays on the unlocked <audio> element.
  */
-async function playClip(id: number, words: string, began: (clipMs: number, parts: number) => void, sentence: (index: number) => void, clip: 'new' | 'cached' | 'whole') {
+async function playClip(id: number, words: string, began: (clipMs: number, parts: number) => void, sentence: (index: number) => void) {
   let stopped = false;
   let end: (() => void) | null = null;
   stopCurrent = () => {
@@ -231,13 +231,18 @@ async function playClip(id: number, words: string, began: (clipMs: number, parts
   };
   let doneMs = 0; // the earlier parts' length
   for (let part = 0, parts = 1; part < parts; part++) {
-    const res = await fetch(clip === 'cached' ? `/api/voice/messages/${id}?cached=1&part=${part}` : `/api/voice/messages/${id}${clip === 'whole' ? '?whole=1' : ''}`);
+    const res = await fetch(`/api/voice/messages/${id}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     parts = Math.max(1, Number(res.headers.get('X-Voice-Parts')) || 1);
-    const data = await res.arrayBuffer();
-    if (stopped) return;
     const a = audio();
     const out = groupOutput('voice');
+    if ((!a || !out) && elementPrimed()) {
+      const blob = await res.blob();
+      if (!stopped) await playOnElement(blob, (ms) => began(ms ?? 0, 1), (stop) => (end = stop));
+      return;
+    }
+    const data = await res.arrayBuffer();
+    if (stopped) return;
     if (!a || !out) throw new Error('audio is unavailable');
     const buffer = await a.ctx.decodeAudioData(data);
     if (stopped) return;
@@ -315,6 +320,91 @@ async function playClip(id: number, words: string, began: (clipMs: number, parts
     gain.disconnect();
     doneMs += dur * 1000;
     if (stopped) return;
+  }
+}
+
+// ---------- a tapped replay (#532) ----------
+
+/**
+ * The ▶ or "Read the whole message" by ElevenLabs: the saved clip (every part of a long message in order), else one
+ * made now and saved under the message, played on the <audio> element the tap unlocked. The ▶ spins meanwhile, and a
+ * tap on it cancels.
+ */
+async function playTapped(id: number, kind: Exclude<Replay, 'browser'>, began: (clipMs: number | null, parts: number) => void) {
+  const abort = new AbortController();
+  let end: (() => void) | null = null;
+  stopCurrent = () => {
+    abort.abort();
+    end?.();
+  };
+  const make = `/api/voice/messages/${id}?tap=1${kind === 'whole' ? '&whole=1' : ''}`;
+  useReplay.setState({ loading: id });
+  try {
+    for (let part = 0, parts = 1; part < parts; part++) {
+      let res = kind === 'clip' ? await fetch(`/api/voice/messages/${id}?cached=1&part=${part}`, { signal: abort.signal }) : null;
+      if (!res || (res.status === 404 && part === 0)) res = await fetch(make, { signal: abort.signal }); // deleted meanwhile: made again
+      if (!res.ok) throw new Error(await errorText(res));
+      parts = Math.max(1, Number(res.headers.get('X-Voice-Parts')) || 1);
+      const blob = await res.blob();
+      if (abort.signal.aborted) return;
+      await playOnElement(blob, (ms) => {
+        useReplay.setState({ loading: null });
+        if (part === 0) began(ms, parts);
+        else speechClip(id, part, parts, ms ?? 0);
+      }, (stop) => (end = stop));
+      if (abort.signal.aborted) return;
+    }
+  } finally {
+    if (useReplay.getState().loading === id) useReplay.setState({ loading: null });
+  }
+}
+
+/** The server's `{ error }`, else the status. */
+async function errorText(res: Response): Promise<string> {
+  const body = (await res.json().catch(() => null)) as { error?: unknown } | null;
+  return typeof body?.error === 'string' ? body.error : `the office answered ${res.status}`;
+}
+
+/** What a failed tap says, in plain words. */
+function tapError(provider: Exclude<VoiceProvider, 'off'>, err: unknown): string {
+  const e = err as Error;
+  if (e.name === 'NotAllowedError') return 'Your browser blocked the sound. Tap play again.';
+  if (provider === 'browser') return "The phone's voice couldn't read this message.";
+  return `Couldn't make the audio: ${e.name === 'TypeError' ? "the office didn't answer" : e.message}`;
+}
+
+/**
+ * Plays `blob` on the shared <audio> element, resolving when it ends or is stopped: `onStart` gets its length in ms (null when unknown),
+ * `stopper` the way to stop it. Rejects when the browser refuses to play.
+ */
+async function playOnElement(blob: Blob, onStart: (ms: number | null) => void, stopper: (stop: () => void) => void) {
+  const el = voiceElement();
+  if (!el) throw new Error('audio is unavailable');
+  const url = URL.createObjectURL(blob);
+  let done: () => void = () => undefined;
+  const ended = new Promise<void>((resolve) => (done = resolve));
+  const volume = () => (el.volume = Math.min(1, level()));
+  const unsubscribe = subscribeAudio(volume);
+  let deadline: ReturnType<typeof setTimeout> | undefined;
+  stopper(() => {
+    el.pause();
+    done();
+  });
+  try {
+    el.onended = () => done();
+    el.src = url;
+    volume();
+    await el.play();
+    const secs = Number.isFinite(el.duration) ? el.duration : 0;
+    onStart(secs ? secs * 1000 : null);
+    deadline = setTimeout(done, ((secs || 60) + 2) * 1000); // a stalled element never ends the clip
+    await ended;
+  } finally {
+    clearTimeout(deadline);
+    unsubscribe();
+    el.onended = null;
+    el.pause();
+    URL.revokeObjectURL(url);
   }
 }
 

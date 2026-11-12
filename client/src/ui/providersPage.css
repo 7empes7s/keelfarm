@@ -167,3 +167,80 @@
   flex: none;
   margin-top: 0.2em;
 }
+/* By capability (#533, ProviderCapabilities.tsx): a tile per capability, as many across as fit beside the CEO chat */
+.pv-caps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  min-width: 0;
+}
+.pv-caps h4 {
+  margin: 0;
+}
+.pv-cap-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
+  gap: var(--ds-space-2);
+}
+.pv-cap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  min-width: 0;
+  padding: var(--ds-space-3);
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-raised);
+}
+.pv-cap-head,
+.pv-cap-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-2);
+  min-width: 0;
+}
+.pv-cap-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pv-cap .ds-row-meta,
+.pv-gap {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.pv-gap {
+  color: var(--ds-warn-text);
+}
+.pv-cap-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-2);
+  margin-top: auto;
+}
+/* Guided setup (#533, ProviderSignIn.tsx): steps, limits, the scopes asked for */
+.pv-guide,
+.pv-scopes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.pv-guide p,
+.pv-scopes ul {
+  margin: 0;
+}
+.pv-steps,
+.pv-scopes ul {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  margin: 0;
+  padding-left: 1.4em;
+}
+.pv-sheet code {
+  overflow-wrap: anywhere;
+}

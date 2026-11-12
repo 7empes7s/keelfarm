@@ -1,6 +1,8 @@
 // Floor themes (#370): what a floor in the 3D office is dressed as, so a game studio looks nothing like a trading desk.
 // The id lives on the floor (PersistedRepo.theme, RepoView.theme); the look itself is client data
 // (client/src/world/floorThemes/packs.ts). Unknown or missing ids are the plain office, so old floors stay as they were.
+// A floor's confirmed use case picks its theme (#528) until the manager picks one by hand (PersistedRepo.themeByHand).
+import type { UseCase } from './types/setup.ts';
 
 // New themes go at the end: the demo dresses floor N in the Nth (`--floors 7` shows them all).
 export const FLOOR_THEMES = ['office', 'game-studio', 'trading', 'design-studio', 'media-studio', 'research-lab', 'ops-control'] as const;
@@ -29,4 +31,31 @@ export const floorThemeOf = (raw: unknown): FloorTheme => (isFloorTheme(raw) ? r
 export function cleanFloorTheme(raw: unknown): FloorTheme {
   if (isFloorTheme(raw)) return raw;
   throw new Error(`theme must be one of ${FLOOR_THEMES.join(', ')}`);
+}
+
+// ---------- from the use case (#528) ----------
+
+/** The theme a use case dresses its floor in; use cases without a look of their own get the office. */
+const USE_CASE_THEME: Partial<Record<UseCase, FloorTheme>> = { video: 'media-studio', 'game-3d': 'game-studio', design: 'design-studio', research: 'research-lab', ops: 'ops-control' };
+
+export const themeForUseCase = (useCase: UseCase): FloorTheme => USE_CASE_THEME[useCase] ?? 'office';
+
+interface ThemedFloor {
+  theme?: FloorTheme;
+  themeByHand?: boolean; // undefined: saved before #528
+  setup?: { useCase: UseCase | null; guessed: boolean };
+}
+
+/** A floor's theme once its use case is set: it follows the use case unless the manager picked one by hand. */
+export const themeAfterUseCase = (f: ThemedFloor, useCase: UseCase): FloorTheme | undefined => (f.themeByHand ? f.theme : themeForUseCase(useCase));
+
+/**
+ * Once, for floors saved before #528: a theme already saved was the manager's pick (only their picker saved one), and a
+ * floor never themed gets its confirmed use case's theme. A guessed use case leaves it as it is.
+ */
+export function upgradeFloorTheme(f: ThemedFloor): { theme?: FloorTheme; themeByHand: boolean } {
+  if (f.themeByHand !== undefined) return { theme: f.theme, themeByHand: f.themeByHand };
+  if (f.theme !== undefined) return { theme: f.theme, themeByHand: true };
+  const u = f.setup && !f.setup.guessed ? f.setup.useCase : null;
+  return { theme: u ? themeForUseCase(u) : undefined, themeByHand: false };
 }
