@@ -131,7 +131,7 @@ export interface CamShown {
 }
 
 /** The tile's frames take at most this share of the time, so a slow device's office view keeps its frame rate. */
-export const CAM_SHARE = 0.1;
+const CAM_SHARE = 0.1;
 
 /** Frames a second the tile draws at, its last frame having taken `costMs` to draw: CAM_FPS, fewer when frames are dear. */
 export const camFps = (costMs: number) => Math.min(CAM_FPS, (1000 * CAM_SHARE) / Math.max(costMs, 1e-3));
