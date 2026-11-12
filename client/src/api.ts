@@ -12,6 +12,7 @@ import type { TimelineView } from '../../shared/careerTimeline';
 import type { Experiment, ExperimentInput } from '../../shared/experiments';
 import type { PracticeOverrides } from '../../shared/practices';
 import type { FloorTheme } from '../../shared/floorThemes';
+import type { PropSet } from '../../shared/floorProps';
 import type { DecorItem, ProgressView } from '../../shared/progress';
 import type { QuickPicks } from '../../shared/used';
 import type { ConversationHit, ConversationPatch } from '../../shared/conversations';
@@ -89,6 +90,7 @@ export const api = {
       browserTesting?: boolean;
       color?: string;
       theme?: FloorTheme;
+      props?: PropSet | 'auto';
       links?: string[];
       mission?: string;
       summary?: string;
@@ -304,6 +306,7 @@ export const api = {
   signInAnswer: (id: string, option: number) => call('POST', `/api/accounts/${encodeURIComponent(id)}/signin/answer`, { option }),
   useAccountNow: (id: string) => call('POST', `/api/accounts/${encodeURIComponent(id)}/use-now`),
   simulateAccountLimit: (id: string) => call('POST', `/api/accounts/${encodeURIComponent(id)}/simulate-limit`),
+  simulateAccountBack: (id: string) => call('POST', `/api/accounts/${encodeURIComponent(id)}/simulate-back`),
   removeAccount: (id: string) => call<{ result: 'removed' | 'waiting' }>('DELETE', `/api/accounts/${encodeURIComponent(id)}`),
   pushKey: () => call<{ publicKey: string }>('GET', '/api/notify/push/key'),
   pushSubscribe: (subscription: PushSubscriptionJSON, name: string) => call<{ id: string }>('POST', '/api/notify/push/devices', { subscription, name }, false),

@@ -19,7 +19,7 @@ import { useBackLayer } from './Panel';
 import { Sheet } from './Sheet';
 import { sharesNote, shareStats } from './peekFacts';
 import { SignInSheet } from './SignInSheet';
-import { AgentsSheet, OnIt, UsageActionButton, runUsageAction, useUsageContext, type UsageHost } from './UsageActions';
+import { AgentsSheet, NotifyReach, OnIt, UsageActionButton, runUsageAction, useUsageContext, type UsageHost } from './UsageActions';
 import { backAt, chipAction, rowAction, usageActions } from './usageActionRules';
 import { OnItNow, WindowSplit } from './UsageWho';
 import { PlanFlag } from './PlanFlag';
@@ -155,6 +155,7 @@ function UsageDetail({ s, now, host, onClose }: { s: UsageSource; now: number; h
         </span>
         {ctx.account && <PlanFlag a={ctx.account} onSignIn={() => host.signIn(ctx.account!.id)} />}
         {s.status === 'limited' && <p className="small">{back ? <>Back <b>{back}</b></> : "It's back when its limit resets."}</p>}
+        <NotifyReach s={s} host={host} />
         {s.windows.map((w) => (
           <div key={w.name}>
             <WindowBar w={w} now={now} />

@@ -60,4 +60,12 @@ describe('fitModel', () => {
     const f = fitModel({ min: [0, 0, 0], max: [1, 1, 1] }, [2, 0.5, 2]);
     expect(f.scale).toEqual([0.5, 0.5, 0.5]);
   });
+
+  it('stretches to fill the box on every axis when asked, so a table top lands at its height (#536)', () => {
+    const f = fitModel({ min: [0, 0, -0.45], max: [0.84, 0.33, 0] }, [1.2, 0.75, 0.75], true);
+    expect(f.scale.map((n) => n.toFixed(3))).toEqual([(1.2 / 0.84).toFixed(3), (0.75 / 0.33).toFixed(3), (0.75 / 0.45).toFixed(3)]);
+    expect(f.offset[0]).toBeCloseTo(-0.42 * (1.2 / 0.84));
+    expect(f.offset[1]).toBeCloseTo(0);
+    expect(f.offset[2]).toBeCloseTo(0.225 * (0.75 / 0.45));
+  });
 });

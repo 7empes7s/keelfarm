@@ -22,6 +22,7 @@ import { cleanTerminalText } from '../../shared/terminalText.ts';
 import type { ToolSwitches } from '../../shared/tooling.ts';
 import type { PracticeOverrides } from '../../shared/practices.ts';
 import type { FloorTheme } from '../../shared/floorThemes.ts';
+import type { PropSet } from '../../shared/floorProps.ts';
 import type { FollowupState } from '../../shared/followups.ts';
 import type { ItDeskState } from '../../shared/itDesk.ts';
 import type { TicketsState } from '../../shared/itTickets.ts';
@@ -92,6 +93,7 @@ export interface PersistedRepo {
   practices?: PracticeOverrides; // its own version-control practice switches over Every project's (#24)
   theme?: FloorTheme; // how the floor is dressed in the 3D office (#370); missing: the plain office
   themeByHand?: boolean; // the manager picked the theme, so its use case no longer does (#528); missing: saved before then
+  props?: PropSet; // the project props the manager picked (#536); missing: its profile picks them
   addedAt: number;
   /** The charter besides its mission (#48), the CEO's pending proposal, who changed what, and the drift view's log. */
   charter: CharterRecord;
@@ -252,6 +254,7 @@ export interface Persisted {
   itWatch: ItWatchState; // IT monitoring (#525): the latest checks, their wake marks, recommendations, the digest, disk samples
   itTickets: TicketsState; // office problems reported to IT, and their outcomes (#542)
   diskAlert?: DiskAlertMark | null; // the last disk notification, so a restart doesn't repeat it (#502)
+  usageWatch: string[]; // usage rows the manager asked to hear about once they're back (#404, kept across restarts since #538)
   usageWaiver?: Waiver | null; // pacing the manager cleared with Resume full speed, kept for its window across restarts (#323)
   experiments: LabState; // the lab's experiments and the issues in them (experiments.ts)
   questions: AgentQuestion[]; // agents waiting on an answer (shared/questions.ts)

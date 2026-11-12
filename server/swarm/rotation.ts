@@ -413,4 +413,13 @@ export abstract class SwarmRotation extends SwarmUsage {
     if (!live.length) this.toast('info', `${this.accounts.label(id)} is limited until ${clock(until)}: new sessions start on the next account.`);
     return this.accounts.view();
   }
+
+  /** POST /api/accounts/:id/simulate-back (demo only): its limit ends now, and "Notify me when it's back" fires (#538). */
+  simulateAccountBack(id: string): AccountsView {
+    if (!this.backend.demo) throw new HttpError(404, 'A limit can only be simulated in the demo office.');
+    if (!this.accounts.list().some((x) => x.id === id)) throw new HttpError(404, 'No such account.');
+    this.accounts.back(id);
+    this.checkUsageBack();
+    return this.accounts.view();
+  }
 }
