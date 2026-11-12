@@ -164,3 +164,14 @@
   font-size: 0.9rem;
   margin: 6px 0;
 }
+/* why a ready update waits (#600) */
+.office-wait {
+  overflow-wrap: anywhere;
+}
+.office-wait-log {
+  max-height: 160px;
+  overflow: auto;
+  margin: var(--ds-space-1) 0 0;
+  white-space: pre-wrap;
+  font-size: 12px;
+}

@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createDemoBackend } from './demo.ts';
+import { heardAtStart } from './managerAsks.ts';
+import type { OfficeTools } from './ceo.ts';
+import type { PhoneMessage } from '../shared/types.ts';
+import type { PersistedRepo } from './swarm/model.ts';
 import type { LastUpdate } from './officeUpdate.ts';
 import { Swarm } from './swarm.ts';
 
@@ -13,6 +17,12 @@ type Internals = {
   officeHead: string | null;
   updateRun: { pendingSince: number | null; lastCommitAt: number | null; holding: boolean };
   agentRt: Map<string, { session: unknown }>;
+  ensureCeo(interrupted: unknown[]): void;
+  officeTools(): OfficeTools;
+  postMessage(from: PhoneMessage['from'], text: string): PhoneMessage;
+  ceoHeard: number[];
+  syncFolder(repo: PersistedRepo): Promise<unknown>;
+  state: { repos: PersistedRepo[] };
 };
 
 const FROM = 'a'.repeat(40);
@@ -25,6 +35,9 @@ afterEach(() => {
 async function office(runtime: 'terminal' | 'sdk' = 'terminal') {
   const backend = createDemoBackend();
   const handOvers: string[] = [];
+  const pulls: string[] = []; // the office's own folder fast-forwarded in place, which only the launcher may do
+  const syncMain = backend.syncMain;
+  backend.syncMain = (fullName, branch, opts) => (opts.touch && backend.office.isOwnFolder(backend.mainDir(fullName)) && pulls.push(fullName), syncMain(fullName, branch, opts));
   let finish: (r: LastUpdate) => void = () => undefined;
   // The launcher: it takes the update and runs the preflight until the test says how it went.
   backend.office = { ...backend.office, launcher: true, update: (from) => (handOvers.push(from), new Promise<LastUpdate>((r) => (finish = r))) };
@@ -43,7 +56,7 @@ async function office(runtime: 'terminal' | 'sdk' = 'terminal') {
   expect(workers().map((a) => a.status)).toEqual(['working', 'working']);
   /** The settle window passing: as if the commits had landed minutes ago. */
   const settle = () => Object.assign(i.updateRun, { pendingSince: Date.now() - 10 * 60_000, lastCommitAt: Date.now() - 4 * 60_000 });
-  return { swarm, repo, i, workers, handOvers, settle, done: (r: Partial<LastUpdate> = {}) => finish({ from: FROM, to: 'b'.repeat(40), ok: true, installed: false, built: true, at: Date.now(), ...r }) };
+  return { swarm, repo, i, backend, workers, handOvers, pulls, settle, done: (r: Partial<LastUpdate> = {}) => finish({ from: FROM, to: 'b'.repeat(40), ok: true, installed: false, built: true, at: Date.now(), ...r }) };
 }
 
 const tick = () => new Promise((r) => setTimeout(r, 10));
@@ -120,5 +133,66 @@ describe("the office's own update without the keeper", () => {
     const newcomer = swarm.hireAgent(repo.id, { name: 'Cy' });
     i.schedule();
     expect(swarm.snapshot().agents.find((a) => a.id === newcomer.id)?.status).not.toMatch(/preparing|working/);
+  });
+});
+
+describe('apply_update, the CEO\'s Update now (#600)', () => {
+  const asking = (i: Internals) => {
+    i.ensureCeo([]);
+    const ask = i.postMessage('manager', 'Update the office now please');
+    i.ceoHeard = heardAtStart({ kind: 'chat', messageIds: [ask.id] });
+    return { tools: i.officeTools(), asked_in: ask.id };
+  };
+
+  it('hands the update to the launcher (its preflight, restart and probation), never a pull of the office folder', async () => {
+    const { swarm, i, handOvers, pulls, done } = await office();
+    i.setOfficeBehind(1); // settling: more merges may come
+    const { tools, asked_in } = asking(i);
+    expect(await tools.call('apply_update', {})).toMatch(/^Refused: Only the manager can ask for this/);
+    expect(handOvers).toEqual([]);
+
+    expect(await tools.call('apply_update', { asked_in })).toMatch(/^Started the office's update \(1 commit\)/);
+    await until(() => handOvers.length > 0);
+    expect(handOvers).toEqual([FROM]);
+    expect(swarm.snapshot().officeUpdate).toMatchObject({ state: 'updating', wait: { kind: 'launcher' } });
+    done();
+    await until(() => swarm.snapshot().officeUpdate?.state !== 'updating');
+    expect(pulls).toEqual([]);
+
+    // Asked again during that update's probation: it says it waits for it.
+    i.setOfficeBehind(1);
+    expect(await tools.call('apply_update', { asked_in })).toMatch(/still on probation/);
+    expect(swarm.snapshot().officeUpdate?.wait?.kind).toBe('probation');
+  });
+
+  it('a refused preflight: the reason and its log in the view, the office not restarted, no retry by itself', async () => {
+    const { swarm, repo, i, workers, handOvers, done, backend } = await office();
+    backend.office.fakeCommit!(); // a commit lands on the office's folder: still there after the refused preflight
+    await i.syncFolder(i.state.repos.find((r) => r.id === repo.id)!);
+    const { tools, asked_in } = asking(i);
+    await tools.call('apply_update', { asked_in });
+    await until(() => handOvers.length > 0);
+    done({ ok: false, stage: 'preflight', error: 'tests failed (npm test failed (exit 1): FAIL x)', to: FROM, target: 'b'.repeat(40) });
+    await until(() => swarm.snapshot().officeUpdate?.state !== 'updating');
+    expect(swarm.snapshot().officeUpdate).toMatchObject({ state: 'failed', wait: { kind: 'preflight', log: 'tests failed (npm test failed (exit 1): FAIL x)' } });
+    i.schedule();
+    await tick();
+    expect(handOvers).toHaveLength(1);
+    expect(workers().map((a) => a.status)).toEqual(['working', 'working']);
+  });
+});
+
+describe('a ready update that waits for the manager (#600)', () => {
+  it('notifies once per new commit, with why it waits', async () => {
+    const { swarm, i, handOvers } = await office();
+    swarm.updateSettings({ autoUpdate: false });
+    const ready = () => swarm.snapshot().notices.filter((n) => n.title === 'An office update is ready');
+    i.setOfficeBehind(1);
+    i.setOfficeBehind(1);
+    expect(ready().map((n) => n.text)).toEqual(['1 new commit. Automatic updates are off: tap Update now to apply it. Update now is in Settings → Company and on the header\'s Update.']);
+    i.setOfficeBehind(2);
+    expect(ready()).toHaveLength(2);
+    expect(swarm.snapshot().officeUpdate).toMatchObject({ state: 'available', wait: { kind: 'manual' } });
+    expect(handOvers).toEqual([]);
   });
 });

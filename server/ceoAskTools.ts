@@ -19,6 +19,7 @@ export interface AskHandlers {
   setCeoSetup(a: Asked & { account?: string; model?: string; effort?: string }): string;
   applyCharter(a: Asked & CharterProposalArgs): string;
   mergePull(a: Asked & { floor: number; pr: number }): Promise<string>;
+  applyUpdate(a: Asked): string;
 }
 
 type Run = (fn: () => string | Promise<string>) => Promise<{ content: { type: 'text'; text: string }[]; isError?: boolean }>;
@@ -72,6 +73,12 @@ export function askTools(h: AskHandlers, run: Run) {
       `Merge a pull request whose QA passed, even with a red or pending check (the console's Merge anyway). ${WHEN}`,
       { floor: z.number().int(), pr: z.number().int().positive(), asked_in: ASKED_IN },
       (a) => run(() => h.mergePull(a)),
+    ),
+    tool(
+      'apply_update',
+      `Apply the office's own ready update now (the console's Update now, #600): the launcher's preflight, restart and probation, rolled back on failure; never a plain git pull. Busy agents' sessions are kept or resumed. ${WHEN}`,
+      { asked_in: ASKED_IN },
+      (a) => run(() => h.applyUpdate(a)),
     ),
   ];
 }
