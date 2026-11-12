@@ -1,7 +1,7 @@
 // Notifications you can act on (#107): the toasts (rich ones with an icon, title, floor chip and up to two buttons;
 // paused while touched or hovered, swiped or ✕'d away, errors and what needs you staying), the bell with the unread
 // count, and the notification centre listing the recent ones. Tapping one jumps where it's about (noticeNav.ts).
-import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type Ref, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type Ref, type RefObject } from 'react';
 import { create } from 'zustand';
 import { api } from '../api';
 import { useStore, type Toast } from '../store';
@@ -21,6 +21,7 @@ import { CloseButton, Icon } from './Icon';
 import { iconFor } from './icons';
 
 const SWIPE_PX = 80;
+const SWIPE_UP_PX = 40;
 
 const world = () => {
   const s = useStore.getState();
@@ -129,9 +130,9 @@ function NoticeButtons({ n, pocket, after }: { n: NoticeView; pocket: boolean; a
 function ToastItem({ t, pocket }: { t: Toast; pocket: boolean }) {
   const dismiss = () => useStore.getState().dismissToast(t.id);
   const [paused, setPaused] = useState(false);
-  const [dx, setDx] = useState(0);
+  const [drag, setDrag] = useState({ x: 0, y: 0 });
   const left = useRef(toastMs(t.level, t.notice));
-  const swipe = useRef<{ x: number; id: number } | null>(null);
+  const swipe = useRef<{ x: number; y: number; id: number } | null>(null);
   const swiped = useRef(false); // a swipe that ends on a button isn't a tap on it
   useEffect(() => {
     if (paused || left.current === null) return;
@@ -143,46 +144,46 @@ function ToastItem({ t, pocket }: { t: Toast; pocket: boolean }) {
     };
   }, [paused, t.id]);
   const n = t.notice;
-  const hold = {
+  // swiped sideways or up, like a phone's banner (#521); never pulled down
+  const onDown = (e: ReactPointerEvent) => {
+    setPaused(true);
+    if (e.pointerType !== 'mouse') swipe.current = { x: e.clientX, y: e.clientY, id: e.pointerId };
+  };
+  const onMove = (e: ReactPointerEvent) => {
+    const at = swipe.current;
+    if (at?.id === e.pointerId) setDrag({ x: e.clientX - at.x, y: Math.min(0, e.clientY - at.y) });
+  };
+  const onUp = () => {
+    swipe.current = null;
+    swiped.current = Math.abs(drag.x) > 10 || drag.y < -10;
+    if (Math.abs(drag.x) > SWIPE_PX || drag.y < -SWIPE_UP_PX) dismiss();
+    else setDrag({ x: 0, y: 0 });
+  };
+  const moved = drag.x || drag.y;
+  const props = {
+    style: moved ? { transform: `translate(${drag.x}px, ${drag.y}px)`, opacity: Math.max(0.3, 1 - Math.max(Math.abs(drag.x) / 240, -drag.y / 120)) } : undefined,
     onPointerEnter: () => setPaused(true),
     onPointerLeave: () => setPaused(false),
     onFocus: () => setPaused(true),
     onBlur: () => setPaused(false),
+    onPointerDown: onDown,
+    onPointerMove: onMove,
+    onPointerUp: onUp,
+    onPointerCancel: onUp,
+    onClickCapture: (e: ReactMouseEvent) => {
+      if (swiped.current) e.stopPropagation();
+      swiped.current = false;
+    },
   };
   if (!n) {
     return (
-      <div className={`toast toast-${t.level}`} title={`${t.text} (click to dismiss)`} onClick={dismiss} {...hold}>
+      <div className={`toast toast-${t.level}`} title={`${t.text} (click to dismiss)`} onClick={dismiss} {...props}>
         <span className="toast-text">{t.text}</span>
       </div>
     );
   }
-  const onDown = (e: ReactPointerEvent) => {
-    setPaused(true);
-    if (e.pointerType !== 'mouse') swipe.current = { x: e.clientX, id: e.pointerId };
-  };
-  const onMove = (e: ReactPointerEvent) => {
-    if (swipe.current?.id === e.pointerId) setDx(e.clientX - swipe.current.x);
-  };
-  const onUp = () => {
-    swipe.current = null;
-    swiped.current = Math.abs(dx) > 10;
-    if (Math.abs(dx) > SWIPE_PX) dismiss();
-    else setDx(0);
-  };
   return (
-    <div
-      className={`toast toast-${t.level} notice-toast ${sticky(n) ? 'notice-sticky' : ''}`}
-      style={dx ? { transform: `translateX(${dx}px)`, opacity: Math.max(0.3, 1 - Math.abs(dx) / 240) } : undefined}
-      {...hold}
-      onPointerDown={onDown}
-      onPointerMove={onMove}
-      onPointerUp={onUp}
-      onPointerCancel={onUp}
-      onClickCapture={(e) => {
-        if (swiped.current) e.stopPropagation();
-        swiped.current = false;
-      }}
-    >
+    <div className={`toast toast-${t.level} notice-toast ${sticky(n) ? 'notice-sticky' : ''}`} {...props}>
       <NoticeBody n={n} pocket={pocket} after={dismiss} />
       <NoticeButtons n={n} pocket={pocket} after={dismiss} />
       <CloseButton className="notice-x" label="Dismiss" onClick={dismiss} />

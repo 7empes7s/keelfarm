@@ -359,7 +359,7 @@ export function HUD() {
       {!compact && <PhoneButton />}
       <VoiceIndicator />
       {/* the tour owns the screen: toasts wait in the store until it's over (#406) */}
-      {tourAllows(tourStep, { kind: 'toast' }) && <NoticeToasts max={3} />}
+      {tourAllows(tourStep, { kind: 'toast' }) && <NoticeToasts max={2} />}
     </div>
   );
 }
