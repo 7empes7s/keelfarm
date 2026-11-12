@@ -2,7 +2,8 @@
 // change is a card). Routine: read-only commands and a fixed list of reversible, scoped shapes (git fetch / pull
 // --ff-only in a clone, systemctl start/restart/enable of units IT installed itself, installing a unit or Caddy site,
 // caddy reload right after caddy validate). Everything except dangerous: any change the danger list doesn't name.
-// The danger list (data, backups, disks, firewall, users and SSH, kills, KEEL, the live office) is always a card, and
+// The danger list (data, databases, git beyond a few safe subcommands, overwrites by copies, downloads and archives,
+// backups, disks, firewall, users and SSH, kills, KEEL, the live office) is always a card, and
 // so is a change past AUTO_STEPS_MAX in one job. Matched on argv shapes, never on free text. Pure.
 import path from 'node:path';
 import type { ItAutoLevel } from '../shared/itDept.ts';
