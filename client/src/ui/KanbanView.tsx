@@ -15,6 +15,7 @@ import type { EmptyKind } from './emptyStates';
 import type { Target } from './goTo';
 import { cardPhrase } from './statusPhrase';
 import { FloorBuilds } from './FloorBuilds';
+import { FloorChecklists } from './ChecklistSheet';
 import { COLUMN_IDS, foldSummary, isFolded, parseFolds, withFold, type ColumnId, type FoldMap } from './kanbanFold';
 import { useLayout } from '../pocket/mode';
 import { reduceMotion } from './a11y';
@@ -515,6 +516,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
       <CiOutageBanner repo={repo} />
       {showForm && <IssueForm repoId={repo.id} agents={workers} onDone={() => setShowForm(false)} />}
       {!phone && <FloorBuilds repoId={repo.id} />}
+      <FloorChecklists repoId={repo.id} />
 
       {phone && (
         <nav className="kanban-jump" aria-label="Kanban columns">

@@ -503,6 +503,10 @@ app.put('/api/it/telegram', route((req) => swarm.itBot.setToken(req.body?.token)
 app.post('/api/it/telegram/link', route(() => swarm.itBot.link()));
 app.delete('/api/it/telegram', route(() => swarm.itBot.remove()));
 app.post('/api/it/telegram/demo', route((req) => swarm.itTelegramDemo(req.body ?? {})));
+// Checklists (#612): the manager's tick, untick, not needed or comment on a step, a secret field (to Providers only), a copy.
+app.post('/api/checklists/:id/steps/:step', route((req) => swarm.checklistStep(String(req.params.id), String(req.params.step), req.body ?? {})));
+app.post('/api/checklists/:id/steps/:step/secret', route((req) => swarm.checklistSecret(String(req.params.id), String(req.params.step), req.body?.value)));
+app.post('/api/checklists/:id/duplicate', route((req) => swarm.checklistDuplicate(String(req.params.id), req.body?.title)));
 // IT monitoring (#525): the checks now, a recommendation's option picked, Not now.
 app.post('/api/it/watch/check', route(() => swarm.itWatchTick()));
 app.post('/api/agent-sdk/check', route(() => swarm.checkAgentSdk()));

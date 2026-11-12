@@ -1,0 +1,262 @@
+/* Checklists (#612): the page (ui/ChecklistsPage.tsx), the tile, chat card, floor strip and sheet (ui/ChecklistSheet.tsx), a step (ui/ChecklistStep.tsx). */
+.cl-page,
+.cl-list,
+.cl-pinned {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  min-width: 0;
+}
+.cl-list,
+.cl-steps,
+.cl-comments {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.cl-search {
+  width: 100%;
+  min-height: var(--ds-target);
+  font-size: var(--ds-text-md);
+}
+.cl-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-2);
+}
+.cl-tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  width: 100%;
+  min-width: 0;
+  min-height: var(--ds-target);
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface);
+  box-shadow: var(--ds-shadow-2);
+  color: var(--ds-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cl-tile:hover {
+  background: var(--ds-surface-hover);
+}
+.cl-tile:focus-visible {
+  outline: 3px solid var(--ds-focus);
+  outline-offset: 2px;
+}
+.cl-tile-done {
+  border-left: 4px solid var(--ds-good-fill);
+}
+.cl-tile-head {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-width: 0;
+}
+.cl-tile-title {
+  flex: 1;
+  min-width: 0;
+  font-weight: var(--ds-weight-strong);
+  overflow-wrap: anywhere;
+}
+.cl-card {
+  padding: var(--ds-space-1);
+}
+.cl-pinned {
+  margin: var(--ds-space-2) 0;
+}
+.cl-sheet .artifact-head {
+  padding-top: max(var(--ds-space-3), var(--ds-safe-top));
+}
+.cl-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-3);
+  padding-bottom: max(var(--ds-space-4), var(--ds-safe-bottom));
+}
+.cl-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+}
+.cl-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  min-width: 0;
+  padding: var(--ds-space-2);
+  border: 1.5px solid var(--ds-line-strong);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface);
+}
+.cl-step-done,
+.cl-step-skipped {
+  background: var(--ds-surface-sunken);
+}
+.cl-step-head {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-width: 0;
+}
+.cl-tick {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ds-target);
+  height: var(--ds-target);
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface-raised);
+  color: var(--ds-text);
+  font-size: var(--ds-text-lg);
+  cursor: pointer;
+}
+.cl-step-done .cl-tick {
+  background: var(--ds-good-fill);
+  color: var(--ds-on-color);
+}
+.cl-step-skipped .cl-tick {
+  color: var(--ds-text-muted);
+}
+.cl-step-title {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-1);
+  min-width: 0;
+  min-height: var(--ds-target);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ds-text);
+  font: inherit;
+  font-weight: var(--ds-weight-strong);
+  text-align: left;
+  cursor: pointer;
+}
+.cl-step-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.cl-step-done .cl-step-name,
+.cl-step-skipped .cl-step-name {
+  color: var(--ds-text-muted);
+  text-decoration: line-through;
+}
+.cl-step-n {
+  color: var(--ds-text-muted);
+}
+.cl-step-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  min-width: 0;
+}
+.cl-details {
+  overflow-wrap: anywhere;
+}
+.cl-note {
+  margin: 0;
+}
+.cl-copy {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-width: 0;
+  padding: var(--ds-space-2);
+  border: 1.5px dashed var(--ds-line-strong);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface-sunken);
+}
+.cl-copy-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.cl-copy-label {
+  font-size: var(--ds-text-xs);
+  color: var(--ds-text-muted);
+}
+.cl-copy-value {
+  font-size: var(--ds-text-sm);
+  overflow-wrap: anywhere;
+  user-select: all;
+  -webkit-user-select: all;
+}
+.cl-secret,
+.cl-inline,
+.cl-comment-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--ds-space-2);
+  min-width: 0;
+}
+.cl-secret-label {
+  flex: 1 1 12rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  min-width: 0;
+  font-size: var(--ds-text-sm);
+}
+.cl-secret input,
+.cl-inline input {
+  flex: 1 1 12rem;
+  min-width: 0;
+  min-height: var(--ds-target);
+  font-size: var(--ds-text-md);
+}
+.cl-comment-form textarea {
+  flex: 1 1 100%;
+  min-width: 0;
+  font-size: var(--ds-text-md);
+}
+.cl-comment-form p {
+  flex: 1 1 100%;
+  margin: 0;
+}
+.cl-secret-saved {
+  margin: 0;
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-sm);
+}
+.cl-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-2);
+}
+.cl-comments {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+}
+.cl-comment {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  padding-left: var(--ds-space-2);
+  border-left: 3px solid var(--ds-line-strong);
+}
+.cl-comment p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.cl-photo {
+  display: block;
+  max-width: min(100%, 16rem);
+  max-height: 12rem;
+  border-radius: var(--ds-radius-sm);
+}
+.cl-error {
+  color: var(--ds-danger-text);
+}

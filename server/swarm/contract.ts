@@ -165,6 +165,11 @@ export abstract class SwarmContract {
   protected abstract problemSession(...a: Parameters<Swarm['problemSession']>): ReturnType<Swarm['problemSession']>;
   protected abstract problemsList(...a: Parameters<Swarm['problemsList']>): ReturnType<Swarm['problemsList']>;
 
+  // checklists.ts
+  protected abstract checklistCreate(...a: Parameters<Swarm['checklistCreate']>): ReturnType<Swarm['checklistCreate']>;
+  protected abstract checklistUpdate(...a: Parameters<Swarm['checklistUpdate']>): ReturnType<Swarm['checklistUpdate']>;
+  protected abstract checklistRead(...a: Parameters<Swarm['checklistRead']>): ReturnType<Swarm['checklistRead']>;
+
   // itWatch.ts
   protected abstract itRecommend(...a: Parameters<Swarm['itRecommend']>): ReturnType<Swarm['itRecommend']>;
 

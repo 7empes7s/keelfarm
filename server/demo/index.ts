@@ -24,3 +24,4 @@ import './agentSdk.ts';
 import './itDesk.ts';
 import './cloudflare.ts';
 import './problems.ts';
+import './checklists.ts';
