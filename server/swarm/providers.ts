@@ -14,11 +14,14 @@ import { checkRequest, checkResult, foundView, importName, importSource, keyScan
 import { redact } from '../../shared/journal.ts';
 import type { KeyScanView, ProvidersView, WorldSnapshot } from '../../shared/types.ts';
 import { SwarmCloudCredit } from './cloudCredit.ts';
+import { mergeSecrets, readSecrets } from '../secrets.ts';
+import type { EntraCred, EntraStore } from '../providerActions/types.ts';
 
 export abstract class SwarmProviders extends SwarmCloudCredit {
+  private readonly providerSecrets = path.join(HOME_DIR, this.backend.demo ? 'demo-providers-secrets.json' : 'secrets.json');
   readonly providers = new Providers({
     file: path.join(HOME_DIR, this.backend.demo ? 'demo-providers.json' : 'providers.json'),
-    secretsFile: path.join(HOME_DIR, this.backend.demo ? 'demo-providers-secrets.json' : 'secrets.json'),
+    secretsFile: this.providerSecrets,
     probe: (req) => this.backend.providerProbe(req),
     changed: (view) => this.providersChanged(view),
     fakeConsent: this.backend.demo,
@@ -53,13 +56,25 @@ export abstract class SwarmProviders extends SwarmCloudCredit {
     return { ...super.snapshot(), providers: this.providers.view(), keyScan: this.keyScan };
   }
 
+  private entraCred: EntraCred | undefined;
+  /** The Entra app's secret for Cloudflare Access (#621), in the secrets file; masked everywhere like every key. */
+  protected readonly entraStore: EntraStore = {
+    get: () => this.entraCred,
+    set: async (c) => {
+      await mergeSecrets(this.providerSecrets, { entraAccess: c });
+      this.entraCred = c;
+    },
+  };
+
   /** Read the saved ones; a fresh demo office gets a made-up connection in every category. */
   protected async initProviders() {
     await this.providers.init();
+    const e = (await readSecrets(this.providerSecrets)).entraAccess as EntraCred | undefined;
+    if (e && typeof e.secret === 'string' && typeof e.clientId === 'string') this.entraCred = e;
     const seed = this.backend.demoProviders?.();
     const v = this.providers.view();
     if (!seed || v.connections.length || v.mcp.length) return;
-    for (const k of seed.keys) await this.providers.add(k.provider, k.key, k.label);
+    for (const k of seed.keys) await this.providers.add(k.provider, k.key, k.label, '', k.accountId);
     for (const m of seed.mcp) await this.providers.addMcp(m);
   }
 
@@ -84,7 +99,7 @@ export abstract class SwarmProviders extends SwarmCloudCredit {
   }
 
   protected override secrets(): string[] {
-    return [...super.secrets(), ...this.providers.secretValues(), ...this.found.map((f) => f.value)];
+    return [...super.secrets(), ...this.providers.secretValues(), ...this.found.map((f) => f.value), ...(this.entraCred ? [this.entraCred.secret] : [])];
   }
 
   // ---------- keys found on this computer (#367) ----------

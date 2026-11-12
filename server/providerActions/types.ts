@@ -7,14 +7,16 @@ import type { CfApi } from '../cloudflare.ts';
 import type { CfSecretFile } from '../cfSecretFile.ts';
 import type { ProviderChange } from '../../shared/providerActions.ts';
 
-/** How the key goes on a request: a bearer token, ElevenLabs' header, or GitHub's bearer with its API headers. */
-type ActionAuth = 'bearer' | 'xi-api-key' | 'github';
+/** How the key goes on a request: a bearer token, ElevenLabs' header, GitHub's bearer with its API headers, or (#621) an Entra "client id:secret" as a client-credentials form. */
+type ActionAuth = 'bearer' | 'xi-api-key' | 'github' | 'entra-token';
 
 export interface ActionRequest {
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   url: string;
   auth: ActionAuth;
   body?: unknown;
+  /** entra-token: the form's other fields (scope, grant_type); http.ts adds the client id and secret. */
+  form?: Record<string, string>;
 }
 export interface ActionResponse {
   status: number; // 0: unreachable
@@ -45,6 +47,26 @@ export interface ActionCtx {
   repo?: string;
   /** Where a Cloudflare service token's secret is written (#607): the env file asked for (checked), else the office's own. Throws when refused. */
   secretFile?: (envFile: string | undefined, name: string) => CfSecretFile;
+  /** Cloudflare's keys, for the Entra app's callback (its team domain) (#621). */
+  cfKeys?: readonly ActionKey[];
+  /** The office's own Entra app secret (#621), in secrets.json: written by entra_app_ensure, read by access_idp_ensure. */
+  entra?: EntraStore;
+}
+
+/** The Entra app the office made for Cloudflare Access, and its client secret (#621). Never in a card, log or tool result. */
+export interface EntraCred {
+  tenant: string;
+  appObjectId: string;
+  clientId: string;
+  keyId: string;
+  secret: string;
+  expiresAt: number;
+  /** The Cloudflare IdP holding this secret, once access_idp_ensure wrote it: renewal updates it. */
+  idp?: { cfKeyId: string; accountId: string; id: string; name: string; keyId: string };
+}
+export interface EntraStore {
+  get(): EntraCred | undefined;
+  set(c: EntraCred): Promise<void>;
 }
 
 /** A write's plan: the change for its card (no key in it), a one-line summary, its before and after. */

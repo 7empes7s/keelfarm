@@ -221,7 +221,7 @@ export interface Backend {
   /** Keys found on this computer (#367): the retired projects' env and JSON files, read server-side (the demo's archive is fake). */
   scanForKeys(): Promise<RawKey[]>;
   /** The demo only: made-up keys and MCP servers for Settings → Providers, so a fresh demo office shows every category. */
-  demoProviders?(): { keys: { provider: string; key: string; label: string }[]; mcp: (McpInput & { secrets?: Record<string, string> })[] };
+  demoProviders?(): { keys: { provider: string; key: string; label: string; accountId?: string }[]; mcp: (McpInput & { secrets?: Record<string, string> })[] };
   /** The demo only (#366): the company's main use cases, repos listed but not moved in (a three.js game), and a floor's agent left signed out. */
   demoSetup?(): { company: UseCase[]; spare: string[]; signedOut: { floor: number; model: string }; accountOut?: string };
   /** The demo only: a made-up past week for mission control, so a fresh demo office has numbers from the start. */

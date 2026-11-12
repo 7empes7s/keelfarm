@@ -136,7 +136,7 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
 - `ceo.ts`: the CEO's office MCP tools (`createOfficeTools`, zod-validated: `scale_team`, `configure_agent`, issues,
   triage), `scalePlan` (team-size arithmetic), `ceoSystemPrompt`, `ceoJobPrompt`.
 - `backend.ts`: the `Backend` interface (everything touching GitHub, git, disk and sessions) and `realBackend`.
-- `providerActions/`: the provider-action layer (#602): one module per provider (Cloudflare over `cloudflare.ts`, GitHub, the OpenAI-style inference keys, ElevenLabs, Upstash Box) behind IT's and the CEO's `provider_action`; the key goes only into `http.ts`'s headers (`backend.providerHttp`). Ops and the auto-approve rule are pure in `shared/providerActions.ts`; fakes in `demo/providerActions.ts`.
+- `providerActions/`: the provider-action layer (#602): one module per provider (Cloudflare over `cloudflare.ts`, GitHub, the OpenAI-style inference keys, ElevenLabs, Upstash Box, Microsoft Entra: the Cloudflare Access sign-in app, its secret in secrets.json and renewed 30 days before it ends, #621) behind IT's and the CEO's `provider_action`; the key goes only into `http.ts`'s headers (`backend.providerHttp`). Ops and the auto-approve rule are pure in `shared/providerActions.ts`; fakes in `demo/providerActions.ts`.
 - `machines.ts`: agents' machines, `MachineProvider`: each agent's own clone, worktree and temp folder (the local
   provider is folders under `<SWARM_HOME>/machines/<machine>/`, in `workspace.ts`; cloud agents' are Upstash Boxes).
 - Cloud agents (docs/cloud.md, opt-in; `PersistedAgent.host === 'box'`): `cloud.ts` is the account (the Upstash key and
