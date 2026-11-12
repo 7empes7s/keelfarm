@@ -103,8 +103,8 @@ export function TaskTutorial({ track }: { track: Track }) {
   const progress = useTutorials((s) => s.progress);
   const finished = useTutorials((s) => s.finished);
   const tourOn = useTour((s) => s.on);
-  const entered = useStore((s) => s.started || track !== 'office');
-  const aside = tourOn || !entered; // the tour, or the 3D office's start screen, comes first
+  const entered = useStore((s) => s.loaded && (s.started || track !== 'office'));
+  const aside = tourOn || !entered; // the tour, the first snapshot or the 3D office's start screen comes first
   const mode = modeOf(track);
   const id = progress.running;
   const tut = id ? tutorialById(id) : undefined;
@@ -136,7 +136,7 @@ export function TaskTutorial({ track }: { track: Track }) {
 
   // done once the manager uses the ringed control, or sends the message
   useEffect(() => {
-    if (!step) return;
+    if (!step || aside) return;
     if (step.done === 'sent') {
       const before = sentCount(useStore.getState().messages);
       return useStore.subscribe((s) => void (sentCount(s.messages) > before && setDone(true)));
@@ -145,7 +145,7 @@ export function TaskTutorial({ track }: { track: Track }) {
     document.addEventListener('click', onClick, true);
     return () => document.removeEventListener('click', onClick, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+  }, [key, aside]);
 
   // and moves on by itself, unless the tap opened a form to finish first
   useEffect(() => {

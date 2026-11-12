@@ -87,11 +87,13 @@ export function showTab(tab: string) {
 
 let here: { mode: Mode; stand?: (s: Stand) => boolean } | null = null; // the office running, for openLink
 
-/** Opens a link from inside the office (the task tutorials, #517), as if followed, without a new history entry. */
+/**
+ * Opens a link from inside the office (the task tutorials, #517), as if followed, without a new history entry. Before
+ * the office is in, it waits in the address, which useRouteLink opens once it is.
+ */
 export function openLink(hash: string) {
-  if (!here) return;
   history.replaceState(history.state, '', location.pathname + location.search + hash);
-  void open(here.mode, hash, false, here.stand);
+  if (here) void open(here.mode, hash, false, here.stand);
 }
 
 /** Opens the address's link once loaded, follows hash changes, and keeps the address on what's open. */
