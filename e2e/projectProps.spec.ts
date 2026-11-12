@@ -57,6 +57,7 @@ async function checkFloor(page: Page, request: Parameters<Parameters<typeof test
 
 for (const width of [1280, 390]) {
   test(`floors 1-4 show their project props and a live board screen at ${width} px`, async ({ page, request }) => {
+    test.slow(); // four cold loads of the 3D office in software WebGL
     await page.setViewportSize({ width, height: width > 600 ? 800 : 844 });
     for (const floor of [1, 2, 3]) {
       await visit(page, floor);
