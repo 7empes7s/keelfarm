@@ -38,9 +38,9 @@ test('the IT office: models, the wall screen from the API, smooth enough, and E 
   expect(rows[0]).toEqual(expect.objectContaining({ label: 'Disk free', value: gb(Math.min(...state.health.disk.disks.map((d) => d.freeMb))) }));
   expect(rows[1].value).toBe(`${(state.health.memory.availableMb / 1024).toFixed(1)} of ${gb(state.health.memory.totalMb)}`);
 
-  await page.waitForTimeout(3000);
+  // StatsProbe only reports once frames come under a second apart, which software WebGL can take a while to reach
+  await expect.poll(() => page.evaluate(() => (window as unknown as ItWindow).__swarmStats.fps), { timeout: 60_000 }).toBeGreaterThan(0);
   const stats = await page.evaluate(() => (window as unknown as ItWindow).__swarmStats);
-  expect(stats.fps).toBeGreaterThan(0);
   expect(stats.calls, 'draw calls looking into the IT office').toBeLessThan(700);
   await page.screenshot({ path: test.info().outputPath('it-office.png') });
 

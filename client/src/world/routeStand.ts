@@ -15,9 +15,9 @@ export interface Pose {
 export const yawFor = (heading: number) => Math.atan2(-Math.cos(heading), -Math.sin(heading));
 
 const at = (x: number, z: number, heading: number, pitch = -0.05): Pose => ({ x, z, yaw: yawFor(heading), pitch });
-const named = (id: string) => {
+const named = (id: string, pitch?: number) => {
   const s = spot(walkways('lobby'), id)!;
-  return at(s.x, s.z, s.facing);
+  return at(s.x, s.z, s.facing, pitch);
 };
 
 /** A spot's pose: where to stand and which way to look. */
@@ -33,6 +33,8 @@ export function standPose(s: Spot): Pose {
       return at((LOBBY_SCREENS.testlab.at[0] + LOBBY_SCREENS.directory.at[0]) / 2, HALF_D - 6, Math.PI / 2, 0.02);
     case 'elevator':
       return { x: SPAWN.x, z: SPAWN.z, yaw: SPAWN.yaw, pitch: -0.05 };
+    case 'it':
+      return named(s, -0.12); // down at the IT lead across the counter, so E opens their chat
     default:
       return named(s);
   }
