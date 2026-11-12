@@ -77,3 +77,14 @@
   padding: 0;
   list-style: none;
 }
+/* Two buttons beside who and when: keep that on one line and let the buttons wrap under it on a phone. */
+.it-imp-card .it-rec-foot {
+  flex-wrap: wrap;
+}
+.it-imp-card .it-rec-foot > .grow {
+  flex: 1 1 auto;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
