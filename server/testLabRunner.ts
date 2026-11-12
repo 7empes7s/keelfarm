@@ -7,12 +7,12 @@ import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { hasChrome } from './browser.ts';
-import { labBrowserMb } from './health.ts';
+import { labBrowserMb, realResources } from './health.ts';
 import { endGroup, installDesk, killTree } from './deps.ts';
 import { LAB_PREVIEW_PORT } from './portLanes.ts';
 import { git } from './exec.ts';
 import { prepareDesk } from './workspace.ts';
-import { BROWSER_INSTALL_MIN_MB, browsersPath, labFile, labInitScript, labLaunchArgs, labUrl, type BrowserOpts, type CheckResult, type LabAction, type LabRunner, type LabStep, type PageIssues, type RunResult } from './testLab.ts';
+import { BROWSER_INSTALL_MIN_MB, browsersPath, LAB_MEMORY_CHECK_MS, labFile, labInitScript, labLaunchArgs, labUrl, type BrowserOpts, type CheckResult, type LabAction, type LabRunner, type LabStep, type PageIssues, type RunResult } from './testLab.ts';
 import type { LabProfile } from '../shared/testLab.ts';
 
 /** The floor desk the lab's heavy commands run in (kept by the desk sweep). */
@@ -309,13 +309,25 @@ export function createLabRunner(): LabRunner {
         timedOut = true;
         void killTree(child);
       }, o.timeoutMs);
+      // Every process working in the checkout (an e2e suite's browser too), summed; over maxMb the run stops (#578, Linux).
+      let oomMb: number | undefined;
+      const guard = setInterval(() => {
+        void realResources.usage([o.dir]).then((u) => {
+          const used = u.get(o.dir);
+          if (!used || used.rssMb <= o.maxMb || oomMb) return;
+          oomMb = Math.round(used.rssMb);
+          void killTree(child);
+          realResources.kill(used.pids);
+        }).catch(() => undefined);
+      }, LAB_MEMORY_CHECK_MS);
       return new Promise<RunResult>((resolve) => {
         const end = (code: number | null) => {
           clearTimeout(timer);
           clearTimeout(quiet);
+          clearInterval(guard);
           endGroup(child);
           if (partial) tail.push(partial);
-          resolve({ code, ms: Date.now() - started, tail: tail.slice(-TAIL), timedOut, silent, artifacts: artifacts(o.dir) });
+          resolve({ code, ms: Date.now() - started, tail: tail.slice(-TAIL), timedOut, silent, ...(oomMb ? { oomMb } : {}), artifacts: artifacts(o.dir) });
         };
         child.on('error', (err) => {
           tail.push(err.message);
