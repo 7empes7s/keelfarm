@@ -9,6 +9,7 @@ import { runTool, toolServer, type OfficeTools } from './ceo.ts';
 import { TICKET_WHERE } from '../shared/itTickets.ts';
 import type { ItProposeArgs, ItRunArgs } from './swarm/itDesk.ts';
 import type { ItRecommendArgs } from './swarm/itWatch.ts';
+import { problemTools, type ProblemHandlers } from './ceoProblemTools.ts';
 
 export interface ItHandlers {
   itRun(a: ItRunArgs): Promise<string>;
@@ -97,8 +98,8 @@ function itTools(h: ItHandlers, run: Run) {
   ];
 }
 
-/** The IT lead's office server: its tools only. */
-export const itOfficeTools = (h: ItHandlers): OfficeTools => toolServer(itTools(h, runTool));
+/** The IT lead's office server: its tools and the problems register's (#544). */
+export const itOfficeTools = (h: ItHandlers & ProblemHandlers): OfficeTools => toolServer([...itTools(h, runTool), ...problemTools(h, runTool)]);
 
 export function askItTools(h: AskItHandlers, run: Run) {
   return [

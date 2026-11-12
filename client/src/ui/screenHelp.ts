@@ -64,6 +64,12 @@ export const SCREEN_HELP: Record<ScreenId, ScreenHelp> = {
     actions: ['Act on an alarm that needs you.', 'See where the plan’s usage goes and what was wasted.', 'Start an experiment on a practice.'],
     docs: `${HOW}#mission-control`,
   },
+  problems: {
+    title: 'Problems',
+    shows: 'Every problem of work, infrastructure and process in one register, grouped by cause and floor, worst first by time and dollars lost.',
+    actions: ['Decide what needs you, on top.', 'Filter by owner and state, or see this week’s resolved ones.', 'Set the hour of the daily digest in the CEO chat.'],
+    docs: `${HOW}#problems`,
+  },
   charter: {
     title: 'Charter',
     shows: 'Each floor’s mission, objectives, standards and non-goals, with numbers per objective and where the week went.',

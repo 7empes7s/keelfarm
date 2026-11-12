@@ -25,6 +25,7 @@ import type { FloorTheme } from '../../shared/floorThemes.ts';
 import type { FollowupState } from '../../shared/followups.ts';
 import type { ItDeskState } from '../../shared/itDesk.ts';
 import type { TicketsState } from '../../shared/itTickets.ts';
+import type { ProblemsState } from '../../shared/problems.ts';
 import type { ItState } from '../../shared/itDept.ts';
 import type { ItWatchState } from '../../shared/itWatch.ts';
 import type { ChatsState } from '../../shared/conversations.ts';
@@ -251,6 +252,7 @@ export interface Persisted {
   it: ItState; // the IT department's chat, queue and the session it resumes (#524)
   itWatch: ItWatchState; // IT monitoring (#525): the latest checks, their wake marks, recommendations, the digest, disk samples
   itTickets: TicketsState; // office problems reported to IT, and their outcomes (#542)
+  problems: ProblemsState; // the problems register (#544): work and process problems; IT's tickets join it as infrastructure
   diskAlert?: DiskAlertMark | null; // the last disk notification, so a restart doesn't repeat it (#502)
   usageWatch: string[]; // usage rows the manager asked to hear about once they're back (#404, kept across restarts since #538)
   usageWaiver?: Waiver | null; // pacing the manager cleared with Resume full speed, kept for its window across restarts (#323)

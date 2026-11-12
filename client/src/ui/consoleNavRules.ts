@@ -10,6 +10,7 @@ export type SectionId =
   | 'issues'
   | 'team'
   | 'ops'
+  | 'problems'
   | 'charter'
   | 'map'
   | 'ceo'
@@ -65,7 +66,8 @@ export const SECTIONS: Section[] = [
   { id: 'floors', group: 'work', icon: 'building-2', label: 'Floors & repos', find: ['Office update', 'Update automatically', 'Floor colour', 'Auto-assign issues', 'Auto-merge', 'Browser testing', 'App preview', 'Add a project', 'Sync the folder', 'Disconnect', 'Practices', 'Setup', 'Not now', 'Kind of project'] },
   { id: 'issues', group: 'work', icon: 'notebook-pen', label: 'Issues', find: ['File a new issue', 'Open issues', 'Assign', 'Close as not planned'] },
   { id: 'team', group: 'work', icon: 'laptop', label: 'Team', find: ['Add an agent', 'Model', 'Effort', 'Coding agent', 'Look', 'Terminal', 'Let go', 'Team stats'] },
-  { id: 'ops', group: 'company', icon: 'satellite', label: 'Mission control', find: ['Claude usage', 'Needs you', 'Office doctor', 'The numbers', 'Where the plan goes', 'Costs', 'Experiments', 'Server health', 'IT desk', 'Disk', 'Free up space', 'Test lab', 'Who runs on what'] },
+  { id: 'ops', group: 'company', icon: 'satellite', label: 'Mission control', find: ['Claude usage', 'Needs you', 'Office doctor', 'The numbers', 'Where the plan goes', 'Costs', 'Experiments', 'Server health', 'IT desk', 'Disk', 'Free up space', 'Test lab', 'Who runs on what', 'Problems'] },
+  { id: 'problems', group: 'company', icon: 'clipboard-list', label: 'Problems', find: ['Problems', 'Problems register', 'Needs your decision', 'Trends per cause', 'Daily digest', 'Recurring'] },
   { id: 'charter', group: 'company', icon: 'target', label: 'Charter', find: ['Mission', 'Objectives', 'Standards', 'Non-goals', 'Current focus', 'Proposal'] },
   { id: 'map', group: 'company', icon: 'map', label: 'Memory map', find: ['Search the map', 'Local graph', 'Colour by', 'Replay how the map grew', 'Hottest files', 'No objective'] },
   { id: 'ceo', group: 'ceo', icon: 'brain', label: 'The CEO', find: ['Message the CEO', 'CEO coding agent', 'CEO runs on', 'CEO model', 'CEO effort', 'Review the company now', 'Standing mandates', 'Team changes', 'Project briefs', 'QA brief', 'Playbook'] },

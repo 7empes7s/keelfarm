@@ -15,6 +15,7 @@ import { Reactions } from './ChatReactions';
 import { LongText, StepsRow } from './ChatLive';
 import { replyLog, rowLog } from './chatCardRules';
 import { ActionCards, CeoStuckCard, NoticeCard, NoticePill, PacingCard, UseKeyCard } from './ChatCards';
+import { ProblemsDigestCard } from './ProblemsDigestCard';
 import { CeoRunsPill } from './CeoRunsOn';
 import { FileCard, UsedLine } from './ChatFiles';
 import type { FileRef } from '../../../shared/files';
@@ -230,13 +231,14 @@ export const Bubble = memo(function Bubble({ item, ceoName, quoted, highlight, l
   };
 
   // An office note: hold or right-click it for its actions (Delete).
-  if (m && (look === 'pill' || m.switch?.useKey || m.pacing || m.ceoStuck || ((m.notice || m.signIn) && look === 'card')))
+  if (m && (look === 'pill' || m.switch?.useKey || m.pacing || m.ceoStuck || m.problems || ((m.notice || m.signIn) && look === 'card')))
     return (
       <div className="bubble-row-office" data-msg={id} {...gestures}>
         {m.signIn && look === 'card' ? <SignInCard card={m.signIn} />
           : m.notice && look === 'card' ? <NoticeCard text={officeText(m.text)} notice={m.notice} />
           : m.switch?.useKey ? <UseKeyCard text={officeText(m.text)} account={m.switch.useKey} />
           : m.pacing ? <PacingCard text={officeText(m.text)} />
+          : m.problems ? <ProblemsDigestCard text={officeText(m.text)} digest={m.problems} />
           : m.ceoStuck ? <CeoStuckCard text={officeText(m.text)} stuck={m.ceoStuck} />
           : m.ceoRuns ? <CeoRunsPill text={officeText(m.text)} back={m.ceoRuns.back} />
           : <NoticePill text={officeText(m.text)} />}
