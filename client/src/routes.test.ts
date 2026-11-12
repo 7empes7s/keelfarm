@@ -61,6 +61,9 @@ describe('the route table (#413)', () => {
     expect(pocket('#tab/team')).toMatchObject({ tab: 'team', ready: '.pk-main[data-tab="team"]' });
     expect(pocket('#tab/chat')?.ready).toBe('.pocket .phone-chat');
     expect(office('#tab/chat')?.overlay).toEqual({ kind: 'phone', tab: 'chat' });
+    expect(pocket('#agent/mimoun/terminal')?.overlay).toEqual({ kind: 'terminal', agentId: 'ceo', view: 'terminal' }); // the CEO's terminal on a phone too (#596)
+    expect(pocket('#agent/mimoun/chat')).toMatchObject({ overlay: null, tab: 'chat' });
+    expect(overlayRoute({ kind: 'terminal', agentId: 'ceo' }, world, 'office')).toEqual({ to: 'agent', name: 'ceo', tab: 'chat' }); // the console's CEO tab, not its terminal
     expect(office('#agent/linus/setup')).toMatchObject({ overlay: { kind: 'terminal', agentId: 'a1', details: 'setup' }, stand: { floor: 1, at: { desk: 3 } } });
     expect(office('#pr/1/12')?.overlay).toEqual({ kind: 'card', repoId: 'r1', key: 'pr-12', number: 12, pr: true });
     expect(office('#issue/2/7')?.overlay).toEqual({ kind: 'card', repoId: 'r2', key: 'i-7', number: 7, pr: false });

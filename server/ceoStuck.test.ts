@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ceoStuckKind, ceoStuckText, switchBackTo } from './ceoStuck.ts';
+import { ceoSilentStuck, ceoStuckKind, ceoStuckText, switchBackTo } from './ceoStuck.ts';
 
 describe('a stuck CEO (#375)', () => {
   it("names the account and what's needed, and offers the way back", () => {
@@ -19,5 +19,11 @@ describe('a stuck CEO (#375)', () => {
     expect(switchBackTo('claude-rvuese', 'claude-rvuese', 'claude-rvuese')).toBe('');
     expect(switchBackTo('claude-rvuese', null, 'claude-rvuese')).toBe('');
     expect(switchBackTo(null, null, undefined)).toBeNull();
+  });
+
+  it('a silent CEO inside wait_for, consult or any tool call is busy, not stuck (#596)', () => {
+    expect(ceoSilentStuck('PR #592 on floor 1 to merge', null)).toBe(false);
+    expect(ceoSilentStuck(null, 'mcp__office__wait_for')).toBe(false);
+    expect(ceoSilentStuck(null, null)).toBe(true);
   });
 });

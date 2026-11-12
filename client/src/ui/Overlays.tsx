@@ -27,6 +27,8 @@ import { hitchSummary, performanceReport } from '../hitches';
 import { setReplay, usePhotoGate } from '../photo/gate';
 import { Icon } from './Icon';
 import { TutorialsHub } from './TaskTutorial';
+import { CeoTerminal } from './CeoTerminal';
+import { isCeoTerminal } from './ceoTermRules';
 
 export { closeOverlay, Panel } from './Panel';
 
@@ -450,6 +452,7 @@ export function Overlays() {
   if (!overlay) return null;
   switch (overlay.kind) {
     case 'terminal':
+      if (isCeoTerminal(overlay)) return <CeoTerminal />;
       return overlay.agentId === CEO_ID ? <ManagerConsole initialTab="ceo" /> : <TerminalView agentId={overlay.agentId} view={overlay.view} jump={overlay.jump} details={overlay.details} profile={overlay.profile} />;
     case 'phone':
       return <Phone tab={overlay.tab} requestId={overlay.requestId} />;

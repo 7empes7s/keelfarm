@@ -309,9 +309,11 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true, away
     ceo.status === 'working'
       ? replying
         ? 'typing…'
-        : info.job?.kind === 'research'
-          ? 'researching…'
-          : `busy: ${info.job?.label ?? 'working'}`
+        : info.session?.waiting
+          ? `waiting for ${info.session.waiting}…` // inside wait_for or consult: busy, not stuck (#596)
+          : info.job?.kind === 'research'
+            ? 'researching…'
+            : `busy: ${info.job?.label ?? 'working'}`
       : chatQueued
         ? info.held
           ? 'held by the usage limit'
