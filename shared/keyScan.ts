@@ -137,11 +137,33 @@ export function foundView(f: FoundKey): FoundKeyView {
   return { id: f.id, provider: f.provider, variable: f.variable, sources: [...f.sources], keyHint: keyHint(f.value), check: f.check ?? null, ...(f.savedAs && { savedAs: f.savedAs }), importable: providerDef(f.provider)?.home === 'providers' && !f.savedAs };
 }
 
-/** An imported key's connection name: "Google Gemini API (LiteLLM litellm.env)", its variable too when it isn't the usual one. */
-export function importLabel(f: Pick<FoundKey, 'provider' | 'variable' | 'sources'>): string {
-  const def = providerDef(f.provider);
-  const where = f.variable === def?.keyEnv ? f.sources[0] : `${f.variable}, ${f.sources[0]}`;
-  return `${def?.name ?? f.provider} (${where})`.slice(0, 60);
+/** Words in a variable that say nothing about the key ("CEREBRAS_API_KEY_PAID" keeps "paid"). */
+const NOISE = new Set(['API', 'KEY', 'TOKEN', 'SECRET', 'PAT', 'AI', 'GENERATIVE', 'GH', 'CF']);
+
+/** An imported key's clean name (#523): "OpenRouter", "Cerebras (paid)", the variable's own word when it isn't the usual one. */
+export function importName(provider: string, variable: string): string {
+  const def = providerDef(provider);
+  const known = new Set([...(def?.keyEnv ?? '').split('_'), ...(def?.name ?? '').toUpperCase().split(/\W+/), ...NOISE]);
+  const rest = variable.toUpperCase().split('_').filter((t) => t && !known.has(t));
+  const name = def?.name ?? provider;
+  return (rest.length ? `${name} (${rest.join(' ').toLowerCase()})` : name).slice(0, 60);
+}
+
+/** Where an imported key came from, for the small line under its name: "CEREBRAS_API_KEY_PAID · LiteLLM litellm.env". */
+export const importSource = (f: Pick<FoundKey, 'variable' | 'sources'>) => [f.variable, f.sources.join(' + ')].join(' · ').slice(0, 200);
+
+/**
+ * A name an import gave before #523, "Cerebras (CEREBRAS_API_KEY_PAID, LiteLLM litellm.env)", as its clean name and
+ * source; null for any other name (one the manager typed, "OpenRouter (work)", has no file in it).
+ */
+export function legacyImportName(provider: string, label: string): { label: string; source: string } | null {
+  const def = providerDef(provider);
+  if (!def || !label.startsWith(`${def.name} (`) || !label.endsWith(')')) return null;
+  const inner = label.slice(def.name.length + 2, -1);
+  const comma = inner.indexOf(', ');
+  const [variable, where] = comma > 0 && /^[A-Z][A-Z0-9_]*$/.test(inner.slice(0, comma)) ? [inner.slice(0, comma), inner.slice(comma + 2)] : [def.keyEnv ?? '', inner];
+  if (!/\.[A-Za-z0-9]+$/.test(where)) return null; // a file: "LiteLLM litellm.env", "Mimule config.json"
+  return { label: importName(provider, variable), source: [variable, where].filter(Boolean).join(' · ') };
 }
 
 // ---------- tests ----------

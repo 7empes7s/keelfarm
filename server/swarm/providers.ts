@@ -9,7 +9,7 @@ import { Providers } from '../providers.ts';
 import { CliSetup, cliBinDir, cliPrefix } from '../cliInstall.ts';
 import { useOfficeCliBin } from '../clis.ts';
 import { providerCards, providerDef, providersLine, type McpInput } from '../../shared/providers.ts';
-import { checkRequest, checkResult, foundView, importLabel, keyScanText, mergeFound, scanSummary, type FoundKey } from '../../shared/keyScan.ts';
+import { checkRequest, checkResult, foundView, importName, importSource, keyScanText, mergeFound, scanSummary, type FoundKey } from '../../shared/keyScan.ts';
 import { redact } from '../../shared/journal.ts';
 import type { KeyScanView, ProvidersView, WorldSnapshot } from '../../shared/types.ts';
 import { SwarmCloudCredit } from './cloudCredit.ts';
@@ -134,7 +134,7 @@ export abstract class SwarmProviders extends SwarmCloudCredit {
         continue;
       }
       try {
-        f.savedAs = (await this.providers.add(f.provider, f.value, importLabel(f))).label;
+        f.savedAs = (await this.providers.add(f.provider, f.value, importName(f.provider, f.variable), importSource(f))).label;
         imported++;
       } catch (err) {
         skipped.push(`${name}: ${(err as Error).message}`);

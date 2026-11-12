@@ -8,8 +8,10 @@ import path from 'node:path';
 import { createHmac, randomUUID } from 'node:crypto';
 import { HttpError } from './httpError.ts';
 import { mergeSecrets, readSecrets } from './secrets.ts';
-import { keyHint, keyProblem, mcpProblem, mcpTestNote, mcpTestRequest, providerDef, sessionMcpServers, splitCommand, testNote, testPlan, testRequest, testUsage, type McpInput, type ProbeRequest, type ProbeResult } from '../shared/providers.ts';
-import type { McpServerConfig, ProviderConnection, ProvidersView, ProviderTest } from '../shared/types.ts';
+import { defaultUse, isProviderUse, keyHint, keyProblem, mcpProblem, mcpTestNote, mcpTestRequest, providerDef, sessionMcpServers, splitCommand, testNote, testPlan, testRequest, testUsage, type McpInput, type ProbeRequest, type ProbeResult } from '../shared/providers.ts';
+import { checkResult, legacyImportName } from '../shared/keyScan.ts';
+import { cleanTags } from '../shared/accounts.ts';
+import type { McpServerConfig, ProviderConnection, ProvidersView, ProviderTest, ProviderUse } from '../shared/types.ts';
 
 const keyOf = (id: string) => `provider:${id}`;
 const mcpKeyOf = (id: string, name: string) => `mcp:${id}:${name}`;
@@ -26,12 +28,34 @@ const str = (v: unknown) => (typeof v === 'string' ? v : '');
 const strs = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
 const testOf = (v: unknown): ProviderTest | null => (v && typeof v === 'object' && typeof (v as ProviderTest).at === 'number' ? (v as ProviderTest) : null);
 
+/** A saved connection, anything malformed dropped; an import's old name (before #523) cleaned, its source kept. */
+function readConnection(c: Record<string, unknown>): ProviderConnection[] {
+  const def = c && str(c.id) ? providerDef(str(c.provider)) : undefined;
+  if (!def) return [];
+  const named = c.named === true;
+  const label = str(c.label) || def.name;
+  const legacy = !named && !str(c.source) ? legacyImportName(def.id, label) : null;
+  const source = legacy?.source ?? str(c.source);
+  return [
+    {
+      id: str(c.id),
+      provider: def.id,
+      label: legacy?.label ?? label,
+      addedAt: Number(c.addedAt) || 0,
+      keyHint: str(c.keyHint),
+      test: testOf(c.test),
+      tags: cleanTags(c.tags),
+      usedFor: isProviderUse(c.usedFor) ? c.usedFor : defaultUse(def.category),
+      ...(source ? { source } : {}),
+      ...(named ? { named } : {}),
+    },
+  ];
+}
+
 /** The saved file as a view, anything malformed dropped. */
 export function readProvidersFile(raw: unknown): ProvidersView {
   const o = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
-  const connections = (Array.isArray(o.connections) ? o.connections : []).flatMap((c: Record<string, unknown>): ProviderConnection[] =>
-    c && str(c.id) && providerDef(str(c.provider)) ? [{ id: str(c.id), provider: str(c.provider), label: str(c.label) || providerDef(str(c.provider))!.name, addedAt: Number(c.addedAt) || 0, keyHint: str(c.keyHint), test: testOf(c.test) }] : [],
-  );
+  const connections = (Array.isArray(o.connections) ? o.connections : []).flatMap(readConnection);
   const mcp = (Array.isArray(o.mcp) ? o.mcp : []).flatMap((m: Record<string, unknown>): McpServerConfig[] =>
     m && str(m.id) && str(m.name) && (str(m.command) || str(m.url))
       ? [{ id: str(m.id), name: str(m.name), ...(str(m.command) ? { command: str(m.command), args: strs(m.args) } : { url: str(m.url) }), envKeys: strs(m.envKeys), on: m.on !== false, agents: strs(m.agents), test: testOf(m.test) }]
@@ -89,7 +113,7 @@ export class Providers {
   // ---------- keys ----------
 
   /** A key for a catalogue provider: saved, then tested. An empty one reuses the key it shares (Google video's Gemini key). */
-  async add(provider: string, rawKey: string, rawLabel = ''): Promise<ProviderConnection> {
+  async add(provider: string, rawKey: string, rawLabel = '', source = ''): Promise<ProviderConnection> {
     const shared = providerDef(provider)?.sharesKeyWith;
     const from = shared && this.data.connections.find((x) => x.provider === shared);
     const key = rawKey.trim() || (from ? (this.keys.get(keyOf(from.id)) ?? '') : '');
@@ -97,7 +121,7 @@ export class Providers {
     if (problem) throw new HttpError(400, problem);
     const def = providerDef(provider)!;
     const label = rawLabel.trim().slice(0, 60) || def.name;
-    const c: ProviderConnection = { id: randomUUID().slice(0, 8), provider, label, addedAt: Date.now(), keyHint: keyHint(key), test: null };
+    const c: ProviderConnection = { id: randomUUID().slice(0, 8), provider, label, addedAt: Date.now(), keyHint: keyHint(key), test: null, tags: [], usedFor: defaultUse(def.category), ...(source ? { source } : {}) };
     await mergeSecrets(this.deps.secretsFile, { [keyOf(c.id)]: key });
     this.keys.set(keyOf(c.id), key);
     this.data.connections.push(c);
@@ -105,9 +129,24 @@ export class Providers {
     return this.test(c.id);
   }
 
+  /** Rename and tags (#523): its name (empty: the provider's), tags and what it's for. A name set here stays. */
+  async update(id: string, patch: { label?: string; tags?: unknown; usedFor?: ProviderUse }): Promise<ProviderConnection> {
+    const c = this.connection(id);
+    if (patch.label !== undefined) {
+      c.label = patch.label.trim().slice(0, 60) || providerDef(c.provider)!.name;
+      c.named = true;
+    }
+    if (patch.tags !== undefined) c.tags = cleanTags(patch.tags);
+    if (patch.usedFor !== undefined) {
+      if (!isProviderUse(patch.usedFor)) throw new HttpError(400, 'Used for is AI inference, Operations or Both.');
+      c.usedFor = patch.usedFor;
+    }
+    await this.save();
+    return { ...c };
+  }
+
   async remove(id: string) {
-    const c = this.data.connections.find((x) => x.id === id);
-    if (!c) throw new HttpError(404, 'No such connection: it may be gone already.');
+    this.connection(id);
     this.data.connections = this.data.connections.filter((x) => x.id !== id);
     this.keys.delete(keyOf(id));
     await mergeSecrets(this.deps.secretsFile, { [keyOf(id)]: undefined });
@@ -116,8 +155,7 @@ export class Providers {
 
   /** Its cheap read-only call, and what that said about usage where the provider tells. */
   async test(id: string): Promise<ProviderConnection> {
-    const c = this.data.connections.find((x) => x.id === id);
-    if (!c) throw new HttpError(404, 'No such connection: it may be gone already.');
+    const c = this.connection(id);
     const key = this.keys.get(keyOf(id)) ?? '';
     const req = testRequest(c.provider, c.provider === 'kling' ? klingToken(key) : key);
     if (!req) throw new HttpError(400, `${c.label} is tested in its own settings.`);
@@ -125,7 +163,7 @@ export class Providers {
     const ok = r.status >= 200 && r.status < 300;
     const windows = ok ? testUsage(c.provider, r.body) : [];
     const plan = ok ? testPlan(c.provider, r.body) : undefined;
-    c.test = { at: Date.now(), ...testNote(r), ...(windows.length ? { windows } : {}), ...(plan ? { plan } : {}) };
+    c.test = { at: Date.now(), ...testNote(r), ...(windows.length ? { windows } : {}), ...(plan ? { plan } : {}), result: checkResult(c.provider, r).result };
     await this.save();
     return { ...c };
   }
@@ -170,6 +208,12 @@ export class Providers {
     m.test = { at: Date.now(), ...mcpTestNote(m, await this.deps.probe(mcpTestRequest(m))) };
     await this.save();
     return { ...m };
+  }
+
+  private connection(id: string): ProviderConnection {
+    const c = this.data.connections.find((x) => x.id === id);
+    if (!c) throw new HttpError(404, 'No such connection: it may be gone already.');
+    return c;
   }
 
   private mcp(id: string): McpServerConfig {

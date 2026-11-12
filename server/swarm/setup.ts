@@ -4,7 +4,7 @@
 import { HttpError } from '../httpError.ts';
 import { resolveAccount } from '../../shared/accounts.ts';
 import { rotationSettings } from '../../shared/accountRotation.ts';
-import { providerDef } from '../../shared/providers.ts';
+import { modelProvider, providerDef } from '../../shared/providers.ts';
 import { blockedAgents, openGaps, setupGaps, setupLine, snooze, toTell, type SetupAgent, type SetupInput } from '../../shared/setup.ts';
 import { itemState } from '../../shared/tooling.ts';
 import { detectUseCase, isUseCase, missingChecks, qaBriefChecks, SIGNAL_FILES, caseDef } from '../../shared/useCases.ts';
@@ -15,7 +15,6 @@ import { SwarmDisk } from './disk.ts';
 const REFRESH_MS = 30_000;
 const CLI_NAME = { claude: 'Claude', codex: 'Codex', gemini: 'Gemini' } as const;
 /** An opencode model's provider, by its prefix, for the key it needs. */
-const MODEL_PROVIDER: [RegExp, string][] = [[/^(google\/|gemini)/i, 'gemini'], [/^openai\//i, 'openai'], [/^anthropic\//i, 'anthropic'], [/^openrouter\//i, 'openrouter']];
 
 const emptyRecord = (): FloorSetupRecord => ({ useCase: null, guessed: true, why: '', snoozed: {}, told: [], review: false });
 
@@ -107,7 +106,7 @@ export abstract class SwarmSetup extends SwarmDisk {
       return out ? { why: `Their ${CLI_NAME[cli]} login${runsOn.length > 1 ? 's are' : ` "${runsOn[0].label}" is`} signed out.`, fix: 'accounts' } : null;
     }
     if (cli !== 'opencode') return null;
-    const provider = MODEL_PROVIDER.find(([re]) => re.test(a.model))?.[1];
+    const provider = modelProvider(a.model);
     if (!provider) return null;
     const name = providerDef(provider)?.name ?? provider;
     const keys = this.providers.view().connections.filter((c) => c.provider === provider);

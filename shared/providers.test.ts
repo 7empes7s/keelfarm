@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { connectionSource, geminiVideoModels, IMAGE_MODELS, imageModels, keyProblem, mcpProblem, PROVIDERS, providerCards, providersLine, sessionMcpServers, splitCommand, testNote, testPlan, testRequest, testUsage, type CardInput } from './providers.ts';
+import { connectionSource, connectionUsers, defaultUse, geminiVideoModels, IMAGE_MODELS, imageModels, keyProblem, mcpProblem, PROVIDERS, providerCards, providersLine, sessionMcpServers, splitCommand, testNote, testPlan, testRequest, testUsage, usedForMatches, type CardInput } from './providers.ts';
 import { EMPTY_CLOUD } from './cloud.ts';
 import type { AccountView, McpServerConfig } from './types.ts';
 
@@ -69,7 +69,7 @@ describe('the providers page shows what the old stores hold', () => {
     const mcp: McpServerConfig = { id: 'm1', name: 'github', command: 'npx', args: ['server-github'], envKeys: [], on: true, agents: [], test: null };
     const cards = providerCards(
       input({
-        providers: { connections: [{ id: 'h1', provider: 'hetzner', label: 'Hetzner', addedAt: 1, keyHint: 'zz99', test: { at: 2, ok: false, note: 'Turned away (401): check the key' } }, { id: 'o1', provider: 'openai', label: 'OpenAI API', addedAt: 1, keyHint: 'ff00', test: null }], mcp: [mcp] },
+        providers: { connections: [{ id: 'h1', provider: 'hetzner', label: 'Hetzner', addedAt: 1, keyHint: 'zz99', test: { at: 2, ok: false, note: 'Turned away (401): check the key' }, tags: [], usedFor: 'operations' }, { id: 'o1', provider: 'openai', label: 'OpenAI API', addedAt: 1, keyHint: 'ff00', test: null, tags: [], usedFor: 'inference' }], mcp: [mcp] },
         clis: [{ id: 'opencode', label: 'OpenCode', installed: true, version: '1', integrated: false }],
       }),
     );
@@ -81,6 +81,29 @@ describe('the providers page shows what the old stores hold', () => {
     ]);
     expect(cards.at(-1)?.uses).toEqual(['Every agent']);
     expect(providersLine(cards)).toBe('Providers: OpenCode, OpenAI API, Hetzner Cloud "Hetzner" (failed test) · MCP: github');
+  });
+});
+
+describe('what a key is for (#523)', () => {
+  it('defaults from the category, filters with Both under either, and says what uses a key', () => {
+    expect(['text', 'image', 'audio', 'video', 'coding', 'cloud', 'mcp'].map((c) => defaultUse(c as never))).toEqual(['inference', 'inference', 'inference', 'inference', 'inference', 'operations', 'operations']);
+    expect([usedForMatches('both', 'operations'), usedForMatches('inference', 'operations'), usedForMatches(undefined, 'inference'), usedForMatches(undefined, 'all')]).toEqual([true, false, false, true]);
+    const users = { floors: [{ name: 'brand', useCase: 'design' }, { name: 'web', useCase: 'web-app' }], agents: [{ name: 'Ada', cli: 'opencode' as const, model: 'openrouter/qwen' }, { name: 'Bo', cli: 'claude' as const, model: 'openrouter/qwen' }] };
+    expect(connectionUsers('openai-images', users)).toEqual(['brand floor']);
+    expect(connectionUsers('openrouter', users)).toEqual(['Ada (OpenCode)']);
+    expect(connectionUsers('cloudflare', users)).toEqual([]);
+  });
+
+  it("puts each key's last test, Used for, tags and source on its card, and a provider's keys side by side", () => {
+    const conn = (id: string, provider: string, test: CardInput['providers']['connections'][number]['test']) => ({ id, provider, label: id, addedAt: 1, keyHint: '', test, tags: id === 'cf2' ? ['dns'] : [], usedFor: defaultUse('cloud'), ...(id === 'cf2' ? { source: 'CF_API_TOKEN · Control Surface .env' } : {}) });
+    const cards = providerCards(input({ providers: { connections: [conn('cf1', 'cloudflare', { at: 9, ok: true, note: 'Key works', result: 'live' }), conn('h1', 'hetzner', null), conn('cf2', 'cloudflare', { at: 8, ok: false, note: 'Turned away (401)' }), conn('g1', 'groq', { at: 7, ok: false, note: 'x', result: 'no-credit' })], mcp: [] } }));
+    expect(cards.map((c) => [c.key, c.check, c.status, c.testedAt ?? null])).toEqual([
+      ['connection:g1', 'no-credit', 'limited', 7],
+      ['connection:cf1', 'live', 'ready', 9],
+      ['connection:cf2', 'dead', 'error', 8],
+      ['connection:h1', 'unknown', 'untested', null],
+    ]);
+    expect(cards.find((c) => c.key === 'connection:cf2')).toMatchObject({ usedFor: 'operations', tags: ['dns'], source: 'CF_API_TOKEN · Control Surface .env', uses: [] });
   });
 });
 

@@ -4,7 +4,8 @@
 // in PROVIDERS, plus a usage reader in testUsage when it has a usage API.
 import { cardPlan } from './accounts.ts';
 import { secretMismatch } from './secretFormats.ts';
-import type { AccountView, CloudView, CliView, McpServerConfig, ProviderAuth, ProviderCategory, ProvidersView, UsageProvider, UsageSource, UsageWindow } from './types.ts';
+import { USE_CASES } from './useCases.ts';
+import type { AccountView, AgentCli, CloudView, CliView, KeyCheck, McpServerConfig, ProviderAuth, ProviderCategory, ProvidersView, ProviderTest, ProviderUse, UsageProvider, UsageSource, UsageWindow } from './types.ts';
 
 /** Where a provider's key or login lives: its old store (whose settings stay where they were) or the Providers page. */
 type ProviderHome = 'accounts' | 'voice' | 'cloud' | 'providers' | 'own-setup';
@@ -71,6 +72,34 @@ export const PROVIDERS: ProviderDef[] = [
 ];
 
 export const providerDef = (id: string) => PROVIDERS.find((p) => p.id === id);
+
+// ---------- what a key is for (#523) ----------
+
+export const USES: { id: ProviderUse; label: string; blurb: string }[] = [
+  { id: 'inference', label: 'AI inference', blurb: 'Text, image, video and voice models' },
+  { id: 'operations', label: 'Operations', blurb: 'DNS, tunnels, hosting, GitHub, storage, notifications' },
+  { id: 'both', label: 'Both', blurb: 'Models and operations' },
+];
+
+export const isProviderUse = (v: unknown): v is ProviderUse => USES.some((u) => u.id === v);
+
+/** A key's default: cloud keys and MCP servers run things, every other category is a model. */
+export const defaultUse = (category: ProviderCategory): ProviderUse => (category === 'cloud' || category === 'mcp' ? 'operations' : 'inference');
+
+/** Whether a card shows under the Used for filter: "Both" shows under either. */
+export const usedForMatches = (use: ProviderUse | undefined, filter: ProviderUse | 'all') => filter === 'all' || use === filter || (use === 'both' && filter !== 'both');
+
+/** A connection's last test as live, dead or no credit; tests saved before #523 have only ok. */
+const testCheck = (t: ProviderTest | null): KeyCheck => (!t ? 'unknown' : (t.result ?? (t.ok ? 'live' : 'dead')));
+
+/** The provider an OpenCode model id runs on ("openrouter/…", "google/gemini-…"), or undefined. */
+const MODEL_PROVIDER: [RegExp, string][] = [
+  [/^(google\/|gemini)/i, 'gemini'],
+  [/^openai\//i, 'openai'],
+  [/^anthropic\//i, 'anthropic'],
+  [/^openrouter\//i, 'openrouter'],
+];
+export const modelProvider = (model: string) => MODEL_PROVIDER.find(([re]) => re.test(model))?.[1];
 
 // ---------- test calls ----------
 
@@ -261,6 +290,11 @@ export interface ProviderCard {
   uses: string[]; // "What uses it": agents' names, Voice, Cloud agents…
   usageId?: string; // its row on the usage card
   warning?: string; // a Claude login signed in with another plan than its name says (#442)
+  check: KeyCheck; // live, dead, no credit or not tested, for the Status filter (#523)
+  usedFor?: ProviderUse; // none for MCP servers
+  tags?: string[];
+  source?: string; // where an imported key came from
+  testedAt?: number;
   /** Where it's changed: its old settings section, or here. */
   settings: 'accounts' | 'voice' | 'cloud-agents' | 'tools' | null;
 }
@@ -276,9 +310,23 @@ export interface CardInput {
   agentName: (id: string) => string;
   /** Agents running in a cloud machine. */
   cloudAgents: number;
+  /** Floors and their use cases, and agents on OpenCode, for a key's "Used by" (#523). */
+  floors?: readonly { name: string; useCase: string | null }[];
+  agents?: readonly { name: string; cli: AgentCli | ''; model: string }[];
 }
 
 const ACCOUNT_STATUS: Record<AccountView['status'], CardStatus> = { ready: 'ready', near: 'near', limited: 'limited', 'signed-out': 'signed-out', paused: 'paused' };
+const CHECK_STATUS: Partial<Record<KeyCheck, CardStatus>> = { live: 'ready', dead: 'error', 'no-credit': 'limited' };
+const STATUS_CHECK: Record<CardStatus, KeyCheck> = { ready: 'live', near: 'live', limited: 'no-credit', 'signed-out': 'dead', error: 'dead', untested: 'unknown', paused: 'unknown', off: 'unknown' };
+
+/** What uses a saved key today: floors whose work needs its kind of model, agents whose OpenCode model runs on it. */
+export function connectionUsers(provider: string, i: Pick<CardInput, 'floors' | 'agents'>): string[] {
+  const def = providerDef(provider);
+  if (!def) return [];
+  const floors = (i.floors ?? []).filter((f) => USE_CASES.find((u) => u.id === f.useCase)?.providers.includes(def.category)).map((f) => `${f.name} floor`);
+  const agents = (i.agents ?? []).filter((a) => a.cli === 'opencode' && modelProvider(a.model) === provider).map((a) => `${a.name} (OpenCode)`);
+  return [...floors, ...agents];
+}
 
 /** Every connection as a card, by the catalogue's order. Nothing in it is a secret. */
 export function providerCards(i: CardInput): ProviderCard[] {
@@ -300,14 +348,17 @@ export function providerCards(i: CardInput): ProviderCard[] {
       uses: a.agents.length ? a.agents.map(i.agentName) : a.enabled ? ['Agents on the rotation'] : [],
       usageId: a.id,
       settings: 'accounts',
+      check: STATUS_CHECK[ACCOUNT_STATUS[a.status]],
+      usedFor: 'inference',
+      tags: a.tags,
       ...(a.planWarning ? { warning: a.planWarning } : {}),
     });
   }
   if (i.clis.some((c) => c.id === 'opencode' && c.installed)) {
-    out.push({ key: 'cli:opencode', provider: 'opencode', name: 'OpenCode', label: 'OpenCode', category: 'coding', status: 'ready', note: 'Its own setup on this computer', plan: '', keyHint: '', uses: [], settings: null });
+    out.push({ key: 'cli:opencode', provider: 'opencode', name: 'OpenCode', label: 'OpenCode', category: 'coding', status: 'ready', note: 'Its own setup on this computer', plan: '', keyHint: '', uses: [], settings: null, check: 'live', usedFor: 'inference' });
   }
   if (i.voiceKeySet) {
-    out.push({ key: 'voice', provider: 'elevenlabs', name: 'ElevenLabs', label: 'ElevenLabs', category: 'audio', status: 'ready', note: 'API key', plan: '', keyHint: i.voiceKeyHint, uses: ['Voice'], usageId: 'elevenlabs', settings: 'voice' });
+    out.push({ key: 'voice', provider: 'elevenlabs', name: 'ElevenLabs', label: 'ElevenLabs', category: 'audio', status: 'ready', note: 'API key', plan: '', keyHint: i.voiceKeyHint, uses: ['Voice'], usageId: 'elevenlabs', settings: 'voice', check: 'live', usedFor: 'inference' });
   }
   if (i.cloud.keySet) {
     out.push({
@@ -323,9 +374,13 @@ export function providerCards(i: CardInput): ProviderCard[] {
       uses: i.cloudAgents ? [`Cloud agents (${i.cloudAgents})`] : ['Cloud agents'],
       usageId: 'upstash',
       settings: 'cloud-agents',
+      check: i.cloud.keyError ? 'dead' : 'live',
+      usedFor: 'operations',
     });
   }
-  for (const c of i.providers.connections) {
+  // a provider's keys side by side, so duplicates read together
+  const byCatalogue = (p: string) => PROVIDERS.findIndex((x) => x.id === p);
+  for (const c of [...i.providers.connections].sort((a, b) => byCatalogue(a.provider) - byCatalogue(b.provider))) {
     const def = providerDef(c.provider);
     if (!def) continue;
     out.push({
@@ -334,13 +389,18 @@ export function providerCards(i: CardInput): ProviderCard[] {
       name: def.name,
       label: c.label,
       category: def.category,
-      status: !c.test ? 'untested' : c.test.ok ? 'ready' : 'error',
+      status: CHECK_STATUS[testCheck(c.test)] ?? (!c.test ? 'untested' : c.test.ok ? 'ready' : 'error'),
       note: c.test?.note ?? 'Not tested yet',
       plan: c.test?.plan ?? 'API',
       keyHint: c.keyHint,
-      uses: [],
+      uses: connectionUsers(c.provider, i),
       usageId: `provider:${c.id}`,
       settings: null,
+      check: testCheck(c.test),
+      usedFor: c.usedFor,
+      tags: c.tags,
+      ...(c.source ? { source: c.source } : {}),
+      ...(c.test ? { testedAt: c.test.at } : {}),
     });
   }
   for (const m of i.providers.mcp) {
@@ -356,6 +416,7 @@ export function providerCards(i: CardInput): ProviderCard[] {
       keyHint: '',
       uses: m.agents.length ? m.agents.map(i.agentName) : ['Every agent'],
       settings: null,
+      check: !m.on ? 'unknown' : testCheck(m.test),
     });
   }
   const order = (c: ProviderCard) => CATEGORIES.findIndex((x) => x.id === c.category);
@@ -374,7 +435,7 @@ export function providersLine(cards: readonly ProviderCard[]): string {
 }
 
 /** A Providers-page key's row on the usage card (#361): its credit where the provider tells, else its last test. */
-export function connectionSource(c: ProvidersView['connections'][number]): UsageSource | null {
+export function connectionSource(c: Omit<ProvidersView['connections'][number], 'tags' | 'usedFor'>): UsageSource | null {
   const def = providerDef(c.provider);
   if (!def?.usage) return null;
   const windows = c.test?.windows ?? [];
