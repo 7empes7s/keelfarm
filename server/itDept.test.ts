@@ -6,6 +6,7 @@ import { Swarm } from './swarm.ts';
 import { IT_ID, loadIt, queueItJob, nextItJob, itDeptSettings, IT_DEPT_DEFAULTS, type ItJob, type ItState } from '../shared/itDept.ts';
 import type { ItDeskState } from '../shared/itDesk.ts';
 import type { PhoneMessage } from '../shared/types.ts';
+import { excerpt } from '../shared/chat.ts';
 
 // #524 through the office: the IT lead's own session (account, model, resume), its tools, the CEO's ask_it, the
 // manager's Run checked by IT, and IT's own Telegram bot (or the CEO's, labelled "IT:").
@@ -87,6 +88,24 @@ describe('the IT department', () => {
     expect(itSessions()[0].prompt).toMatch(/Morgan.*asks.*Why is the disk at 95%/s);
     swarm.updateSettings({ itDept: { ...IT_DEPT_DEFAULTS, on: false } });
     expect(await ceo.call('ask_it', { question: 'x' })).toMatch(/^Refused: The IT department is off/);
+  });
+
+  it("takes a reply with its quote to IT, and keeps the manager's reactions on IT's messages (#589)", async () => {
+    const { swarm, itSessions, itSaid } = await office();
+    await swarm.messageIt('How much disk is free?');
+    await until(() => itSaid().some((m) => m.from === 'ceo'));
+    const answer = itSaid().find((m) => m.from === 'ceo')!;
+    await until(() => !swarm.snapshot().it?.busy);
+    const { id } = await swarm.messageIt('Clean that up', undefined, undefined, answer.id);
+    expect(itSaid().find((m) => m.id === id)).toMatchObject({ replyTo: answer.id });
+    const forwarded = `(message ${id}) Replying to your message: «${excerpt(answer.text)}»\nClean that up`;
+    await until(() => itSessions().some((s) => s.prompt.includes(forwarded)));
+    expect(swarm.reactToItMessage(answer.id, '👍')).toEqual({ reactions: [{ by: 'manager', emoji: '👍' }] });
+    expect(itSaid().find((m) => m.id === answer.id)!.reactions).toEqual([{ by: 'manager', emoji: '👍' }]);
+    expect(swarm.reactToItMessage(answer.id, '👍')).toEqual({ reactions: [] }); // a second tap takes it back
+    expect(() => swarm.reactToItMessage(id, '👍')).toThrow(/Only Iris's messages/);
+    expect(() => swarm.reactToItMessage(answer.id, '🦄')).toThrow(/Pick a reaction/);
+    expect(() => swarm.reactToItMessage(99999, '👍')).toThrow(/no longer saved/);
   });
 
   it('resumes its session after an office restart', async () => {
