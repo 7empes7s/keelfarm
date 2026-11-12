@@ -14,7 +14,8 @@ import { cleanTags } from '../shared/accounts.ts';
 import { OAUTH, authorizeUrl, callbackPath, codeForm, needsRefresh, oauthDef, readTokens, refreshForm, type OAuthDef } from '../shared/oauth.ts';
 import { cloudflareVerify, missingClassicScopes, missingNote, permissionSteps, runPermissionSteps, turnedAwayNote } from '../shared/keySetup.ts';
 import { CAPABILITIES } from '../shared/capabilities.ts';
-import type { Capability, CapabilityChoice, McpServerConfig, ProviderConnection, ProvidersView, ProviderTest, ProviderUse } from '../shared/types.ts';
+import type { Capability, CapabilityChoice, KeyMint, McpServerConfig, ProviderConnection, ProvidersView, ProviderTest, ProviderUse } from '../shared/types.ts';
+import type { KeyInstall } from '../shared/keyInstall.ts';
 
 const keyOf = (id: string) => `provider:${id}`; // a sign-in's refresh token (Meta's long-lived token)
 const accessOf = (id: string) => `oauth-access:${id}`; // a sign-in's access token
@@ -61,6 +62,9 @@ function readConnection(c: Record<string, unknown>): ProviderConnection[] {
       ...(str(c.accountId) ? { accountId: str(c.accountId) } : {}),
       ...(Array.isArray(c.scopes) ? { scopes: strs(c.scopes) } : {}),
       ...(Number(c.expiresAt) > 0 ? { expiresAt: Number(c.expiresAt) } : {}),
+      ...(str(c.usedBy) ? { usedBy: str(c.usedBy) } : {}),
+      ...(Array.isArray(c.installs) && c.installs.length ? { installs: (c.installs as KeyInstall[]).filter((i) => i && str(i.file) && str(i.var)) } : {}),
+      ...(c.mint && typeof c.mint === 'object' && str((c.mint as KeyMint).tokenId) ? { mint: c.mint as KeyMint } : {}),
     },
   ];
 }
@@ -147,6 +151,27 @@ export class Providers {
     });
   }
 
+  /** One key's value (#609: install_key and renewals). Server memory only. */
+  keyValue(id: string): string | undefined {
+    return this.keys.get(keyOf(id));
+  }
+
+  /** install_key put it in a service's env file (#609): kept on the key, so a renewal installs there too. */
+  async noteInstall(id: string, ki: KeyInstall) {
+    const c = this.connection(id);
+    c.installs = [...(c.installs ?? []).filter((i) => !(i.file === ki.file && i.var === ki.var)), ki];
+    await this.save();
+  }
+
+  /** A made key renewed (#609): its new value, expiry and token. */
+  async renewed(id: string, value: string, expiresAt: number, tokenId: string) {
+    const c = this.connection(id);
+    await mergeSecrets(this.deps.secretsFile, { [keyOf(id)]: value });
+    this.keys.set(keyOf(id), value);
+    Object.assign(c, { keyHint: keyHint(value), expiresAt, ...(c.mint && { mint: { ...c.mint, tokenId } }) });
+    await this.save();
+  }
+
   /** The MCP servers an agent's session gets (its own mcp.json). */
   mcpFor(agentId: string): Record<string, Record<string, unknown>> {
     return sessionMcpServers(this.data.mcp, agentId, (id, name) => this.keys.get(mcpKeyOf(id, name)) ?? '');
@@ -155,7 +180,7 @@ export class Providers {
   // ---------- keys ----------
 
   /** A key for a catalogue provider: saved, then tested. An empty one reuses the key it shares (Google video's Gemini key). */
-  async add(provider: string, rawKey: string, rawLabel = '', source = '', accountId = ''): Promise<ProviderConnection> {
+  async add(provider: string, rawKey: string, rawLabel = '', source = '', accountId = '', extra: { usedBy?: string; expiresAt?: number; mint?: KeyMint } = {}): Promise<ProviderConnection> {
     const shared = providerDef(provider)?.sharesKeyWith;
     const from = shared && this.data.connections.find((x) => x.provider === shared);
     const key = rawKey.trim() || (from ? (this.keys.get(keyOf(from.id)) ?? '') : '');
@@ -165,12 +190,13 @@ export class Providers {
     const label = rawLabel.trim().slice(0, 60) || def.name;
     const acct = accountId.trim();
     if (acct && !/^[0-9a-f]{32}$/i.test(acct)) throw new HttpError(400, 'An Account ID is 32 letters and digits: copy it from any domain’s Overview page.');
-    const c: ProviderConnection = { id: randomUUID().slice(0, 8), provider, label, addedAt: Date.now(), keyHint: keyHint(key), test: null, tags: [], usedFor: defaultUse(def.category), ...(source ? { source } : {}), ...(acct ? { accountId: acct } : {}) };
+    const usedBy = extra.usedBy?.trim().slice(0, 200);
+    const c: ProviderConnection = { id: randomUUID().slice(0, 8), provider, label, addedAt: Date.now(), keyHint: keyHint(key), test: null, tags: [], usedFor: defaultUse(def.category), ...(source ? { source } : {}), ...(acct ? { accountId: acct } : {}), ...(usedBy && { usedBy }), ...(extra.expiresAt && { expiresAt: extra.expiresAt }), ...(extra.mint && { mint: extra.mint }) };
     await mergeSecrets(this.deps.secretsFile, { [keyOf(c.id)]: key });
     this.keys.set(keyOf(c.id), key);
     this.data.connections.push(c);
     await this.save();
-    return this.test(c.id);
+    return testRequest(provider, key) || provider === 'cloudflare' ? this.test(c.id) : { ...c }; // Postiz and Other keys have no test call
   }
 
   /** Rename and tags (#523): its name (empty: the provider's), tags and what it's for. A name set here stays. */

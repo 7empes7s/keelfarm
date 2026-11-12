@@ -3,6 +3,7 @@
 // server/itDesk.ts; this file has what both sides show: the cards, the log and the read-only list.
 import type { CfChange } from './cloudflare';
 import type { ProviderChange } from './providerActions';
+import type { KeyInstall } from './keyInstall';
 import { loadRunbooks, type ItRunbookJob, type ItRunbookView } from './itRunbook';
 
 export type ItRisk = 'low' | 'medium' | 'high';
@@ -20,6 +21,7 @@ export interface ItProposal {
   rec?: string; // a recommendation's option the manager picked (#525): the office measures before and after, IT isn't woken
   cf?: CfChange; // a Cloudflare write (#586): applied through the API on Approve, not run as a command
   pa?: ProviderChange; // another provider's write (#602), the same way
+  ki?: KeyInstall & { keyId: string }; // install_key (#609): a Providers key written into a service's env file on Approve, its value never on the card
   diff?: string; // its before and after, "+ " on added lines
 }
 
@@ -35,6 +37,7 @@ export interface ItLogEntry {
   why?: string;
   auto?: true; // run by auto-approve (#585), without the manager's tap
   undo?: string[][]; // an auto step's undo, run on the manager's Undo
+  restore?: { file: string; backup: string | null; unit?: string }; // an auto install_key's undo (#609): the file put back from its backup
   undone?: true;
 }
 

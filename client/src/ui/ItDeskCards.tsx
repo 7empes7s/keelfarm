@@ -34,7 +34,7 @@ function ProposalCard({ p, busy, act }: { p: ItProposal; busy: boolean; act: (id
       </dl>
       <div className="it-actions">
         <button type="button" className="btn btn-good" disabled={busy} onClick={() => act([p.id], true)}>
-          <Icon name={p.cf || p.pa ? 'check' : 'play'} /> {p.cf || p.pa ? 'Approve' : 'Run'}
+          <Icon name={p.cf || p.pa || p.ki ? 'check' : 'play'} /> {p.cf || p.pa || p.ki ? 'Approve' : 'Run'}
         </button>
         <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => act([p.id], false)}>
           Not now
@@ -58,7 +58,7 @@ export function ItDeskCards({ inChat = false }: { inChat?: boolean }) {
     setBusy(true);
     void (run ? api.itRun(ids) : api.itDismiss(ids)).catch(() => undefined).finally(() => setBusy(false)); // api() already toasted the error
   };
-  const what = waiting.every((p) => p.cf) ? ['approve a Cloudflare change', 'Cloudflare changes'] : waiting.every((p) => p.cf || p.pa) ? ['approve a change', 'changes'] : ['run a command', 'commands']; // #586, #602
+  const what = waiting.every((p) => p.cf) ? ['approve a Cloudflare change', 'Cloudflare changes'] : waiting.every((p) => p.cf || p.pa || p.ki) ? ['approve a change', 'changes'] : ['run a command', 'commands']; // #586, #602, #609
   const asks = `${waiting[0].by ?? ceo} asks to ${waiting.length === 1 ? what[0] : `${what[0].split(' ')[0]} ${waiting.length} ${what[1]}`}`; // the IT lead's since #524
   const cards = (
     <>

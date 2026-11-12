@@ -18,7 +18,12 @@ import type { ItJob } from '../../shared/itDept.ts';
 import { OFFICE_DIR } from '../officeUpdate.ts';
 import { CfError } from '../cloudflare.ts';
 import { envPathRefusal, envSecretFile } from '../cfSecretFile.ts';
-import type { CloudflareArgs, ProviderActionArgs } from '../ceoItTools.ts';
+import type { CloudflareArgs, InstallKeyArgs, ProviderActionArgs, SaveKeyArgs } from '../ceoItTools.ts';
+import { INSTALL_TARGETS, installLine, installRefusal, keyPart, maskPasted, renewDue, savedMark, type KeyInstall } from '../../shared/keyInstall.ts';
+import { keyHint } from '../../shared/providers.ts';
+import { installKeyFile, restoreKeyFile } from '../keyInstall.ts';
+import { renewMinted } from '../keyRenew.ts';
+import { CF_OPS } from '../../shared/cloudflare.ts';
 import { ActionError, applyAction, MODULES, runAction, type ActionCtx } from '../providerActions/index.ts';
 import { actionOp, autoApplies, type ActionRisk, type ProviderChange } from '../../shared/providerActions.ts';
 import type { CfChange } from '../../shared/cloudflare.ts';
@@ -150,13 +155,13 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
   private itQueue(c: Omit<ItProposal, 'id' | 'at'>): string {
     if (this.state.itDesk.waiting.length >= WAITING_MAX) throw new HttpError(409, `${WAITING_MAX} changes already wait for the manager: let them decide on those first.`);
     const line = argvLine(c.argv);
-    if (this.state.itDesk.waiting.some((p) => argvLine(p.argv) === line)) throw new HttpError(409, `\`${line}\` already waits for the manager's ${c.cf || c.pa ? 'Approve' : 'Run'}.`);
+    if (this.state.itDesk.waiting.some((p) => argvLine(p.argv) === line)) throw new HttpError(409, `\`${line}\` already waits for the manager's ${c.cf || c.pa || c.ki ? 'Approve' : 'Run'}.`);
     const at = Date.now();
     const p: ItProposal = { ...c, id: `it-${at.toString(36)}-${++this.itSeq}`, why: this.itMask(c.why.trim()), affects: this.itMask(c.affects.trim()), undo: this.itMask(c.undo.trim()), ...(c.diff && { diff: this.itMask(c.diff) }), at };
     this.state.itDesk.waiting.push(p);
     this.itDeskChanged();
     this.itProposed(p); // its card in IT's chat and on Telegram, with Run / Not now
-    this.notifier.notify('decisions', `${p.by} asks to ${c.cf ? 'change Cloudflare' : c.pa ? `change ${MODULES[c.pa.provider]?.name ?? c.pa.provider}` : 'run a command'}`, `${line}\n${p.why}`);
+    this.notifier.notify('decisions', `${p.by} asks to ${c.cf ? 'change Cloudflare' : c.pa ? `change ${MODULES[c.pa.provider]?.name ?? c.pa.provider}` : c.ki ? 'install a key' : 'run a command'}`, `${line}\n${p.why}`);
     return line;
   }
 
@@ -186,14 +191,20 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
   /** POST /api/it/undo: the manager's Undo on an auto step: its undo lines one after another (each through the never-list), stopping at a failure. */
   async itUndo(logId: string) {
     const e = this.state.itDesk.log.find((x) => x.id === logId);
-    if (!e?.undo || e.undone) throw new HttpError(404, 'That step has no Undo, or was undone already.');
+    if (!(e?.undo || e?.restore) || e.undone) throw new HttpError(404, 'That step has no Undo, or was undone already.');
     if (this.itRunning.has(logId)) throw new HttpError(409, 'Undoing it already.');
     this.itRunning.add(logId);
     try {
       const by = `${this.managerLabel()} (Undo)`;
       let ok = true;
       const outs: string[] = [];
-      for (const argv of e.undo) {
+      if (e.restore) {
+        const r = await this.keyRestore(e.restore);
+        this.itLog({ kind: 'change', by, argv: ['restore_key_file', e.argv[2] ?? ''], code: r.ok ? 0 : 1, out: r.text, why: `Undo of ${argvLine(e.argv)}` });
+        outs.push(r.text);
+        ok = r.ok;
+      }
+      for (const argv of e.undo ?? []) {
         const never = neverRefusal(argv, { protectedDirs: this.itProtected });
         const ran = never ? { code: null, out: never, err: '' } : await this.backend.itExec(argv, CHANGE_TIMEOUT_MS);
         const out = shapeOutput({ ...ran, mask: this.itMask, max: 4_000 });
@@ -219,7 +230,7 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
   /** A provider's keys (ElevenLabs' is Voice's), the one network call, and the Box API: the keys stay on the server. */
   private actionCtx(provider: string): ActionCtx {
     const voice = provider === 'elevenlabs' && this.voice.secret() ? [{ id: 'voice', label: 'ElevenLabs (Voice)', key: this.voice.secret(), ok: true }] : [];
-    return { keys: [...voice, ...this.providers.keysFor(provider)], http: this.backend.providerHttp, cloudflareApi: this.backend.cloudflareApi, boxes: this.cloud.boxApi(), repo: this.state.repos[0]?.fullName, secretFile: (envFile, name) => envSecretFile(this.cfSecretPath(envFile, name)) };
+    return { keys: [...voice, ...this.providers.keysFor(provider)], http: this.backend.providerHttp, cloudflareApi: this.backend.cloudflareApi, boxes: this.cloud.boxApi(), repo: this.state.repos[0]?.fullName, secretFile: (envFile, name) => envSecretFile(this.cfSecretPath(envFile, name)), saveMinted: async (k) => (await this.providers.add(k.provider, k.value, k.label, '', k.mint.accountId, { expiresAt: k.expiresAt, mint: k.mint, usedBy: 'Made by the office' })).label };
   }
 
   /** Where a service token's secret goes (#607): the env file asked for, else one under the office's home (the demo's always is). */
@@ -255,7 +266,7 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
       }
       const held = level === 'off' ? '' : ` (auto-approve: ${autoApplies(risk, level) ? `${AUTO_STEPS_MAX} automatic steps in this change already` : ACTION_HELD[risk]})`;
       const name = MODULES[a.provider].name;
-      const change = a.provider === 'cloudflare' ? { cf: plan.change.data as unknown as CfChange } : { pa: plan.change };
+      const change = a.provider === 'cloudflare' && (CF_OPS as readonly string[]).includes(a.op) ? { cf: plan.change.data as unknown as CfChange } : { pa: plan.change };
       const line = this.itQueue({ argv: plan.argv, why: why || `${name}: ${plan.summary}.`, affects: plan.summary, undo: plan.undo, risk: ACTION_RISK[risk], by, diff: plan.diff, ...change });
       return `On the manager's card with its diff${held}: \`${line}\`. Nothing is written until they tap Approve; then it's applied and read back.\n${this.itMask(plan.diff)}`;
     } catch (err) {
@@ -288,19 +299,19 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
       try {
         const line = argvLine(p.argv);
         const by = `${this.managerLabel()}, proposed by ${p.by ?? this.ceo().name}`;
-        const never = neverRefusal(p.argv, { protectedDirs: this.itProtected });
+        const never = p.ki ? null : neverRefusal(p.argv, { protectedDirs: this.itProtected }); // install_key's is no command: its target was checked against the allow-list, and is again at Approve
         if (never) {
           this.itLog({ kind: 'change', by, argv: p.argv, code: null, out: never, why: p.why });
           this.itRan(p, `🖥️ Refused \`${line}\`: ${never}`, never, null);
           results.push({ id: p.id, code: null });
           continue;
         }
-        const ran = p.cf || p.pa ? await this.actionApply(p) : await this.backend.itExec(p.argv, CHANGE_TIMEOUT_MS);
+        const ran = p.ki ? await this.keyApply(p.ki.keyId, p.ki) : p.cf || p.pa ? await this.actionApply(p) : await this.backend.itExec(p.argv, CHANGE_TIMEOUT_MS);
         const out = shapeOutput({ ...ran, mask: this.itMask, max: 8_000 });
         this.itLog({ kind: 'change', by, argv: p.argv, code: ran.code, out, why: p.why });
-        const how = ran.code === 0 ? (p.cf || p.pa ? 'Applied' : 'Ran') : ran.code === null ? "Couldn't finish" : `Exit ${ran.code} for`;
+        const how = ran.code === 0 ? (p.cf || p.pa || p.ki ? 'Applied' : 'Ran') : ran.code === null ? "Couldn't finish" : `Exit ${ran.code} for`;
         this.itRan(p, `🖥️ ${how} \`${line}\` for ${p.by ?? this.ceo().name}`, out, { code: ran.code });
-        if (p.cf || p.pa) this.postMessage('office', `${p.cf ? '☁️' : '🔑'} ${ran.code === 0 ? 'Applied' : "Couldn't apply"} \`${line}\``, undefined, { notice: { details: out } }); // the CEO's chat too
+        if (p.cf || p.pa || p.ki) this.postMessage('office', `${p.cf ? '☁️' : '🔑'} ${ran.code === 0 ? 'Applied' : "Couldn't apply"} \`${line}\``, undefined, { notice: { details: out } }); // the CEO's chat too
         results.push({ id: p.id, code: ran.code });
       } finally {
         this.itRunning.delete(p.id);
@@ -326,6 +337,161 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
     for (const p of gone) this.itLog({ kind: 'change', by: `${this.managerLabel()} (Not now)`, argv: p.argv, code: null, out: 'Not run: the manager said Not now.', why: p.why });
     this.itDeskChanged();
     return { ok: true };
+  }
+
+  // ---------- keys end to end (#609) ----------
+
+  /** Where a target's file is written: the demo's go into its own home. */
+  private installPath(file: string) {
+    const t = INSTALL_TARGETS.find((x) => x.file === file);
+    return this.backend.demo ? path.join(HOME_DIR, 'demo-services', `${(t?.name ?? 'service').toLowerCase()}.env`) : file;
+  }
+
+  /** A Providers key by its id, its name, or its provider when that has one key. */
+  private findKey(ref: string) {
+    const all = this.providers.view().connections;
+    const r = ref.trim().toLowerCase();
+    const by = [(c: (typeof all)[number]) => c.id === ref.trim(), (c: (typeof all)[number]) => c.label.toLowerCase() === r, (c: (typeof all)[number]) => c.provider === r];
+    for (const match of by) {
+      const hits = all.filter(match);
+      if (hits.length === 1) return hits[0];
+      if (hits.length > 1) throw new HttpError(400, `Several keys match "${ref}": give its id (${hits.map((c) => `${c.label}: ${c.id}`).join(', ')}).`);
+    }
+    throw new HttpError(404, `No key "${ref}" in Settings → Providers. Its keys: ${all.map((c) => `${c.label} (${c.provider}, ${c.id})`).join(', ') || 'none yet'}.`);
+  }
+
+  /** install_key: a card for the manager's Approve, or written at once when IT auto-approve allows a routine step. */
+  protected async installKey(a: InstallKeyArgs, by: string): Promise<string> {
+    if (!this.itOn) throw new HttpError(403, OFF);
+    const c = this.findKey(String(a.key ?? ''));
+    const file = String(a.target ?? '').trim();
+    const varName = String(a.var_name ?? '').trim();
+    const no = installRefusal(file, varName);
+    if (no) throw new HttpError(403, no);
+    const value = this.providers.keyValue(c.id);
+    const part = value === undefined ? null : keyPart(value, a.part);
+    if (part === null) throw new HttpError(400, value === undefined ? `${c.label} has no key saved: save it again.` : `${c.label} isn't an "id:secret" pair: leave part out.`);
+    const t = INSTALL_TARGETS.find((x) => x.file === file)!;
+    const ki: KeyInstall = { file, var: varName, ...(t.unit && { unit: t.unit }), ...(a.part && { part: a.part }) };
+    const line = installLine(varName, file, keyHint(part));
+    const why = (a.why ?? '').trim();
+    const level = this.state.settings.itDept.autoApprove;
+    if (autoApplies('routine', level)) {
+      if (this.itAuto.job !== this.state.it.job) this.itAuto = { job: this.state.it.job, steps: 0 };
+      if (this.itAuto.steps < AUTO_STEPS_MAX) return this.keyAutoInstall(c.id, ki, line, why, by);
+    }
+    const queued = this.itQueue({ argv: ['install_key', varName, file], why: why || `Install ${c.label} into ${t.name}.`, affects: `${line}${t.unit ? `, then restart ${t.unit}` : ''}`, undo: 'the file before is kept next to it as a backup', risk: 'low', by, ki: { keyId: c.id, ...ki } });
+    return `On the manager's card${level === 'off' ? '' : ` (auto-approve: ${AUTO_STEPS_MAX} automatic steps in this change already)`}: \`${queued}\`, ${line}. Nothing is written until they tap Approve; then the file is written (mode 600, its old copy kept)${t.unit ? ` and ${t.unit} restarted` : ''}.`;
+  }
+
+  /** Writes a key's value into a target, notes it on the key, restarts the unit. Code 0 when it all went; never throws. */
+  private async keyApply(keyId: string, ki: KeyInstall, value = this.providers.keyValue(keyId)) {
+    const fail = (out: string) => ({ code: 1, out, err: '', wrote: null as null | { file: string; backup: string | null } });
+    const part = value === undefined ? null : keyPart(value, ki.part);
+    if (part === null) return fail('The key is gone from Settings → Providers, or is no longer an "id:secret" pair.');
+    if (installRefusal(ki.file, ki.var)) return fail(installRefusal(ki.file, ki.var)!);
+    const file = this.installPath(ki.file);
+    let backup: string | null;
+    try {
+      ({ backup } = await installKeyFile(file, ki.var, part, new Date().toISOString().replace(/\D/g, '').slice(0, 14)));
+    } catch (err) {
+      return fail(`Couldn't write ${ki.file}: ${this.itMask((err as Error).message)}`);
+    }
+    await this.providers.noteInstall(keyId, { file: ki.file, var: ki.var, ...(ki.unit && { unit: ki.unit }), ...(ki.part && { part: ki.part }) }).catch(() => undefined);
+    const lines = [`Installed ${installLine(ki.var, ki.file, keyHint(part))} (mode 600${backup ? `; the file before is at ${backup}` : ''}).`];
+    let code = 0;
+    if (ki.unit) {
+      const r = await this.backend.itExec(['systemctl', 'restart', ki.unit], CHANGE_TIMEOUT_MS);
+      code = r.code === 0 ? 0 : 1;
+      lines.push(r.code === 0 ? `Restarted ${ki.unit}.` : `Restarting ${ki.unit} failed (${r.code === null ? 'timed out' : `exit ${r.code}`}): ${this.itMask((r.err || r.out).trim()).slice(0, 300)}`);
+    }
+    return { code, out: lines.join('\n'), err: '', wrote: { file, backup } };
+  }
+
+  /** An auto-approved install: written, logged and posted as done automatically, with an Undo that puts the file back. */
+  private async keyAutoInstall(keyId: string, ki: KeyInstall, line: string, why: string, by: string): Promise<string> {
+    this.itAuto.steps++;
+    const r = await this.keyApply(keyId, ki);
+    const out = this.itMask(r.out);
+    const entry = this.itLog({ kind: 'change', auto: true, by: `${by} (auto-approve)`, argv: ['install_key', ki.var, ki.file], code: r.code, out, why: this.itMask(why), ...(r.wrote && { restore: { ...r.wrote, ...(ki.unit && { unit: ki.unit }) } }) });
+    this.itDeskChanged();
+    const how = r.code === 0 ? 'Done automatically' : "Couldn't do automatically";
+    this.itAutoPosted(`🤖 ${how}: \`${line}\``, `Auto-approve: installing a key is routine, and its Undo puts the file back.${why ? ` ${why}` : ''}\n\n${out}`, { log: entry.id, undo: !!r.wrote });
+    return `${how} (auto-approve): ${out}${r.wrote ? '\nThe manager has an Undo on its card.' : ''}`;
+  }
+
+  /** An auto install's Undo: the file from its backup, and its unit restarted. */
+  private async keyRestore(r: NonNullable<ItLogEntry['restore']>): Promise<{ ok: boolean; text: string }> {
+    try {
+      await restoreKeyFile(r.file, r.backup);
+    } catch (err) {
+      return { ok: false, text: `Couldn't put the file back: ${this.itMask((err as Error).message)}` };
+    }
+    if (!r.unit) return { ok: true, text: 'Put the file back as it was.' };
+    const x = await this.backend.itExec(['systemctl', 'restart', r.unit], CHANGE_TIMEOUT_MS);
+    return { ok: x.code === 0, text: `Put the file back as it was; ${x.code === 0 ? `restarted ${r.unit}` : `restarting ${r.unit} failed`}.` };
+  }
+
+  /** save_provider_key: the pasted key saved in Providers, and masked wherever the chat kept it. */
+  protected async saveProviderKey(a: SaveKeyArgs): Promise<string> {
+    const value = String(a.value ?? '').trim();
+    const c = await this.providers.add(String(a.provider ?? ''), value, a.label ?? '', '', '', a.uses ? { usedBy: a.uses } : {});
+    const n = this.maskPastedKey(value, c.label);
+    const test = c.test ? ` Its test: ${c.test.note}.` : '';
+    return this.itMask(`Saved in Settings → Providers as "${c.label}" (id ${c.id}, ends …${c.keyHint}).${test} ${n ? `The chat shows "${savedMark(c.label)}" where it was pasted (${n} message${n === 1 ? '' : 's'}).` : "It wasn't in the chat, so nothing there was masked."} Put it where it's used with install_key.`);
+  }
+
+  /** The value out of the CEO's and IT's stored chats and queued jobs. Returns the messages changed. */
+  private maskPastedKey(value: string, label: string): number {
+    const mask = (t: string) => maskPasted(t, value, label);
+    let n = 0;
+    for (const m of this.state.messages) {
+      const text = mask(m.text);
+      const versions = m.versions?.map((v) => ({ ...v, text: mask(v.text) ?? v.text }));
+      if (text === null && !m.versions?.some((v, i) => v.text !== versions![i].text)) continue;
+      if (text !== null) m.text = text;
+      if (versions) m.versions = versions;
+      n++;
+      this.broadcast({ type: 'ceoChat', message: m });
+    }
+    for (const j of this.state.ceo.queue) if (typeof j.text === 'string') j.text = mask(j.text) ?? j.text;
+    for (const rt of this.agentRt.values()) for (const l of rt.log) l.text = mask(l.text) ?? l.text; // the sessions' log lines (the CEO's and IT's echo the message and the call)
+    for (const a of this.state.agents) for (const l of a.logTail ?? []) l.text = mask(l.text) ?? l.text;
+    n += this.itMaskPasted(mask);
+    if (n) this.save();
+    return n;
+  }
+
+  /** Renewals once an hour, the first a minute after start (#609). */
+  protected override async startUsage() {
+    setInterval(() => void this.renewKeys(), 3_600_000).unref();
+    setTimeout(() => void this.renewKeys(), 60_000).unref();
+    await super.startUsage();
+  }
+
+  private renewTried = new Map<string, number>();
+
+  /** Every key the office made that's within RENEW_DAYS of expiring: renewed, installed again, the old one revoked; a failure retried a day later. */
+  protected async renewKeys(now = Date.now()) {
+    for (const c of this.providers.view().connections) {
+      if (!c.mint || !renewDue(c.expiresAt, now) || now - (this.renewTried.get(c.id) ?? 0) < 86_400_000) continue;
+      this.renewTried.set(c.id, now);
+      const r = await renewMinted(c, {
+        cloudflareApi: this.backend.cloudflareApi,
+        parentKey: (id) => this.providers.keyValue(id),
+        renewed: (id, value, at, tokenId) => this.providers.renewed(id, value, at, tokenId),
+        install: async (ki, value) => {
+          const x = await this.keyApply(c.id, ki, value);
+          return { ok: x.code === 0, text: x.out };
+        },
+      }, now);
+      if (r.ok) this.renewTried.delete(c.id);
+      const out = this.itMask(r.text);
+      this.itLog({ kind: 'change', auto: true, by: `${this.itName} (renewal)`, argv: ['renew_key', c.label], code: r.ok ? 0 : 1, out });
+      this.itDeskChanged();
+      this.itAutoPosted(`🔑 ${r.ok ? 'Renewed' : "Couldn't renew"} "${c.label}"`, out);
+      if (!r.ok) this.notifier.notify('decisions', `Couldn't renew "${c.label}"`, out.split('\n').at(-1) ?? out);
+    }
   }
 
   // ---------- runbook jobs (#611) ----------

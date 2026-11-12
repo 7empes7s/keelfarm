@@ -254,7 +254,7 @@ export const api = {
   demoUpdateWait: () => call<OfficeUpdateView>('POST', '/api/demo/update-wait'),
   /** Saves an Anthropic or OpenAI Admin key for the usage card's organisation spend (#361); '' removes it. */
   // Settings → Providers (#362): keys and MCP servers' secrets go in and never come back out.
-  addProvider: (provider: string, key: string, label?: string, accountId?: string) => call<ProviderConnection>('POST', '/api/providers', { provider, key, label, accountId }, false),
+  addProvider: (provider: string, key: string, label?: string, accountId?: string, usedBy?: string) => call<ProviderConnection>('POST', '/api/providers', { provider, key, label, accountId, usedBy }, false),
   // Providers by what they do (#533): a capability's default and fallback, and a company's one sign-in.
   setProviderDefault: (capability: Capability, choice: CapabilityChoice) => call<ProvidersView>('PUT', `/api/providers/defaults/${capability}`, choice),
   setOAuthClient: (company: string, clientId: string, clientSecret: string) => call('PUT', `/api/providers/oauth/${encodeURIComponent(company)}/client`, { clientId, clientSecret }, false),

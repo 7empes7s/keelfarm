@@ -14,6 +14,7 @@ import { CEO_ID, type Capability, type FoundKeyView, type KeyCheck, type Provide
 import { CAPABILITIES, providerCaps } from '../../../shared/capabilities';
 import { createKeyUrl, setupGuide } from '../../../shared/keySetup';
 import { keyAbilities } from '../../../shared/providerActions';
+import { expiryLine } from '../../../shared/keyInstall';
 import { CAPABILITY_ICON, ProviderCapabilities } from './ProviderCapabilities';
 import { SetupSteps, SignInForm } from './ProviderSignIn';
 import { ago } from '../../../shared/usage';
@@ -250,7 +251,9 @@ function CardRow({ c, twins, onWho, onEdit }: { c: ProviderCard; twins: Provider
       {own && <div className="ds-row-meta">Last test: {c.testedAt ? `${checkWord(c)}, ${ago(c.testedAt, now)} · ${c.note}` : 'not tested yet'}</div>}
       {c.usedFor && <div className="ds-row-meta">Used for: {USE_WORD[c.usedFor]}</div>}
       <div className="ds-row-meta">Used by: {c.uses.length ? c.uses.join(', ') : 'Nothing uses it yet'}</div>
+      {c.expiresAt && <div className="ds-row-meta">{expiryLine(c.expiresAt, now, !!c.renews)}</div>}
       {abilities && abilities.can.length > 0 && <div className="ds-row-meta">The office can: {abilities.can.join(', ')}</div>}
+      {c.renewNote && <div className="ds-row-meta">{c.renewNote}</div>}
       {abilities?.fix && (
         <div className="pv-warning" role="status">
           <Icon name="triangle-alert" /> {abilities.fix}
@@ -377,6 +380,7 @@ function KeyForm({ def, onDone }: { def: ProviderDef; onDone: () => void }) {
   const [key, setKey] = useState('');
   const [label, setLabel] = useState('');
   const [accountId, setAccountId] = useState('');
+  const [usedBy, setUsedBy] = useState(''); // Other key's "What uses it" (#609)
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const owner = useStore((s) => s.repos[0]?.fullName.split('/')[0] ?? '');
@@ -407,7 +411,7 @@ function KeyForm({ def, onDone }: { def: ProviderDef; onDone: () => void }) {
       if (def.home === 'voice') await api.setVoiceKey(key);
       else if (def.home === 'cloud') await api.setCloudKey(key);
       else {
-        const c = await api.addProvider(def.id, key, label, accountId);
+        const c = await api.addProvider(def.id, key, label, accountId, usedBy);
         if (c.test && !c.test.ok) {
           setNote(`Saved, but its test said: ${c.test.note}`);
           return;
@@ -425,7 +429,12 @@ function KeyForm({ def, onDone }: { def: ProviderDef; onDone: () => void }) {
   return (
     <form className="acc-form" onSubmit={(e) => void save(e)}>
       <p className="muted small">
-        {def.blurb}. <a href={def.docsUrl} target="_blank" rel="noopener noreferrer">Docs</a>
+        {def.blurb}.{' '}
+        {def.docsUrl && (
+          <a href={def.docsUrl} target="_blank" rel="noopener noreferrer">
+            Docs
+          </a>
+        )}
       </p>
       {def.note && <p className="muted small">{def.note}</p>}
       <SetupSteps guide={guide} />
@@ -444,6 +453,12 @@ function KeyForm({ def, onDone }: { def: ProviderDef; onDone: () => void }) {
         <span>API key</span>
         <SecretInput name={`provider-${def.id}`} value={key} placeholder={def.placeholder} onChange={(e) => setKey(e.target.value)} />
       </label>
+      {def.id === 'other-key' && (
+        <label className="field">
+          <span>What uses it</span>
+          <input value={usedBy} maxLength={200} placeholder="clipfarm's transcription" onChange={(e) => setUsedBy(e.target.value)} />
+        </label>
+      )}
       {guide.accountId && (
         <label className="field">
           <span>{guide.accountId.label}</span>
