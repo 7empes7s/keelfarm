@@ -165,6 +165,12 @@ export function parseDecision(data: string): { verdict: 'approve' | 'decline'; i
 /** An IT card's buttons (#524): Run or Not now, decided as the chat's card is. */
 export const runKeyboard = (id: string): TgButton[][] => [[{ text: 'Run', callback_data: decisionData('approve', id) }, { text: 'Not now', callback_data: decisionData('decline', id) }]];
 
+/** A recommendation's buttons (#525): one row per option (best first), then Not now. */
+export const recKeyboard = (id: string, options: { does: string }[]): TgButton[][] => [
+  ...options.map((o, i) => [{ text: `${i + 1}. ${o.does}`.slice(0, 60), callback_data: decisionData('approve', `${id}_${i}`) }]),
+  [{ text: 'Not now', callback_data: decisionData('decline', id) }],
+];
+
 /** One row per team change: approve it (hire / let go) or decline it. */
 export function teamKeyboard(changes: readonly { id: string; name: string; kind: 'hire' | 'let-go' }[]): TgButton[][] {
   return changes.map((c) => [

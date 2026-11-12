@@ -1,6 +1,7 @@
 // The IT department (#524): its chat with the IT lead (the CEO chat's bubbles, suggestions, voice input, and the IT
 // desk's Run / Not now cards inline), and its setup: on/off, the lead's name, coding agent, account, model and effort
-// (the same pickers as the CEO's), and its own Telegram bot. Console → The CEO → IT department.
+// (the same pickers as the CEO's), and its own Telegram bot; its health checks (#525, ItHealth.tsx). Console → The CEO →
+// IT department.
 import { Fragment, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
@@ -12,6 +13,7 @@ import type { EffortLevel } from '../../../shared/types';
 import { Bubble } from './ChatBubble';
 import { DaySeparator } from './ChatCards';
 import { ItDeskCards } from './ItDeskCards';
+import { ItHealth, ItRecCards } from './ItHealth';
 import { MessageBox } from './MessageBox';
 import { MicButton } from './MicButton';
 import { ModelPicker } from './ModelPicker';
@@ -75,6 +77,7 @@ function ItChat() {
           </Fragment>
         ))}
         <ItDeskCards />
+        <ItRecCards />
       </div>
       <form
         className="chat-input"
@@ -251,13 +254,16 @@ function ItTelegram() {
   );
 }
 
-/** Console → The CEO → IT department: the chat beside its setup (stacked when narrow). */
+/** Console → The CEO → IT department: the chat beside its health checks and setup (stacked when narrow). */
 export function ItDept() {
   return (
     <div className="it-dept">
       <div className="it-dept-grid">
         <ItChat />
-        <ItSetup />
+        <div className="it-side">
+          <ItHealth />
+          <ItSetup />
+        </div>
       </div>
     </div>
   );

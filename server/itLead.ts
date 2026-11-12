@@ -29,5 +29,7 @@ export function itJobPrompt(job: ItJob): string {
       return `${job.from}, the CEO, asks (message ${job.messageId} in your chat):\n${job.text}\nLook, answer in a few lines, and put any change on a card.`;
     case 'ran':
       return `The manager ran \`${job.line}\`: ${job.code === null ? 'did not finish' : `exit ${job.code}`}\n${fence(job.out)}\nCheck the result (e.g. df -h now) and tell them what changed, with the numbers.`;
+    case 'watch':
+      return `The office's checks got worse:\n${job.facts}\nLook closer with it_run if needed, then call it_recommend once per problem: 1-4 options, best first, each one command with what it frees, risk and undo. Only the office's folders or known caches; anything else is the manager's call.`;
   }
 }

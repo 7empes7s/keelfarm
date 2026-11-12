@@ -97,6 +97,7 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
   | `team.ts` | hire and let-go requests, approvals, `scale_team` |
   | `itDesk.ts` | the IT desk (#506): it_run's read-only commands, it_propose's cards with Run / Not now, the never-list again at Run, the log (rules pure in `server/itDesk.ts`, runner `server/itExec.ts`) |
   | `itDept.ts` | the IT department (#524): the IT lead's own session (Settings → The IT department), chat, Telegram bot (`telegramIt`) and tools (`server/ceoItTools.ts`), the CEO's `ask_it`, a Run's result checked by IT (rules pure in `shared/itDept.ts`, prompts `server/itLead.ts`) |
+  | `itWatch.ts` | IT monitoring (#525): health checks every 5 min in plain code (`server/itChecks.ts`), a check getting worse wakes IT (once per level, once an hour), it_recommend's ranked options, the manager's pick re-measured with before/after, Not now, the daily digest (rules pure in `shared/itWatch.ts`) |
   | `ceoTools.ts` | the CEO's office tools (`officeTools`, `company_status`, mandates, read-only tools) |
   | `voices.ts` | a voice for every agent (#320): picked on hire, or when a key is saved or ElevenLabs turned on |
   | `serverLoad.ts` | the server's load by program (#271): who's who for the grouping, the reading every 15 s, the 24 h trend, "Stop it" for leftovers |

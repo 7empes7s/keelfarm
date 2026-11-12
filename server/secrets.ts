@@ -3,6 +3,7 @@
 // Writes merge into what's there and run one after another per file, so the voice and the notifier never race.
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 
 const queues = new Map<string, Promise<unknown>>();
 
@@ -21,7 +22,7 @@ export function mergeSecrets(file: string, patch: Record<string, unknown>): Prom
     const next: Record<string, unknown> = { ...(await readSecrets(file)), ...patch };
     for (const k of Object.keys(next)) if (next[k] === undefined) delete next[k];
     await fs.mkdir(path.dirname(file), { recursive: true });
-    const tmp = `${file}.tmp`;
+    const tmp = `${file}.${process.pid}-${randomUUID().slice(0, 8)}.tmp`; // its own: another process's queue may write the same file
     await fs.writeFile(tmp, JSON.stringify(next, null, 2), { mode: 0o600 });
     await fs.rename(tmp, file);
     await fs.chmod(file, 0o600).catch(() => undefined);

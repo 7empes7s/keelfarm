@@ -1,0 +1,167 @@
+/* IT monitoring (ui/ItHealth.tsx, #525): the checks as rows with a status glyph, and IT's recommendations as cards. */
+.it-health {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-3);
+  min-width: 0;
+}
+.it-health-head {
+  flex-wrap: wrap;
+  gap: var(--ds-space-2);
+  min-width: 0;
+}
+.it-health-head h3 {
+  flex: 1 1 8rem;
+  margin: 0;
+}
+.it-checks {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.it-check {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-3);
+  min-width: 0;
+  min-height: var(--ds-target);
+  padding: var(--ds-space-2) 0;
+  border-top: var(--ds-border) solid var(--ds-line);
+}
+.it-check:first-child {
+  border-top: 0;
+}
+.it-check-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-sunken);
+  color: var(--ds-text-muted);
+}
+.it-check-icon svg {
+  width: 16px;
+  height: 16px;
+}
+.it-check-good .it-check-icon {
+  background: var(--ds-good-fill);
+  color: var(--ds-on-color);
+}
+.it-check-warn .it-check-icon {
+  background: var(--ds-warn-fill);
+  color: var(--ds-on-color);
+}
+.it-check-bad .it-check-icon {
+  background: var(--ds-bad-fill);
+  color: var(--ds-on-color);
+}
+.it-check-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.it-check-word {
+  flex: none;
+  text-align: right;
+}
+@container (max-width: 420px) {
+  .it-check-word {
+    display: none;
+  }
+}
+.it-recs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-3);
+  min-width: 0;
+}
+.it-chat-log .it-recs {
+  align-self: center;
+  width: min(100%, 30rem);
+}
+.it-rec {
+  min-width: 0;
+  padding: var(--ds-space-3);
+  border: var(--ds-border) solid var(--ds-outline);
+  border-left: 4px solid var(--ds-warn-fill);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-raised);
+  box-shadow: var(--ds-shadow-2);
+}
+.it-rec-title {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ds-space-2);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.it-rec-evidence {
+  margin: var(--ds-space-2) 0;
+  overflow-wrap: anywhere;
+}
+.it-rec-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: it-rec;
+}
+.it-rec-option {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-width: 0;
+  padding: var(--ds-space-2);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface-sunken);
+  counter-increment: it-rec;
+}
+.it-rec-option::before {
+  content: counter(it-rec);
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-strong);
+}
+.it-rec-option-text {
+  display: flex;
+  flex: 1 1 12rem;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.it-rec-cmd {
+  overflow-wrap: anywhere;
+  color: var(--ds-text-muted);
+}
+.it-rec-foot {
+  gap: var(--ds-space-2);
+  margin-top: var(--ds-space-2);
+}
+.it-snoozed {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  margin: 0;
+}
+.it-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-4);
+  min-width: 0;
+}

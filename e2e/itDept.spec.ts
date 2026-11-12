@@ -40,3 +40,27 @@ for (const width of [390, 1280]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   });
 }
+
+// IT monitoring (#525): the Health card lists each check with its state; a low disk wakes IT, whose recommendation's
+// first option runs from the card and the before/after comes back in the chat.
+for (const width of [390, 1280]) {
+  test(`IT department: Health lists checks, a recommendation runs from its card, at ${width}px`, async ({ page }) => {
+    test.setTimeout(90_000);
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto('/?pocket=1#ceo/it-dept');
+    const health = page.getByRole('region', { name: 'Health' });
+    await expect(health).toBeVisible();
+    await health.getByRole('button', { name: 'Simulate low disk' }).click();
+    const checks = health.getByRole('list', { name: 'Health checks' });
+    await expect(checks.locator('.it-check-bad').filter({ hasText: 'Disk' })).toBeVisible({ timeout: 30_000 });
+    await expect(checks.locator('.it-check').filter({ hasText: 'Services' })).toBeVisible();
+    const card = health.getByRole('article', { name: /^Recommendation: Disk/ });
+    await expect(card).toBeVisible({ timeout: 30_000 });
+    await expect(card.getByRole('button', { name: /^Run option/ })).toHaveCount(3);
+    expect(await overflowProblems(page.locator('body'))).toEqual([]);
+    await card.getByRole('button', { name: 'Run option 1: Remove unused Docker images' }).click();
+    await expect(card).toHaveCount(0, { timeout: 30_000 });
+    await expect(page.getByRole('region', { name: /^IT chat with / })).toContainText(/Before: .*\(bad\) → after: .*\(good\)/, { timeout: 30_000 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  });
+}

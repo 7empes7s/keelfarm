@@ -1,10 +1,12 @@
 // The demo's IT department (#506, #524): made-up output for the read-only commands, a pretend run for a change the
 // manager taps Run on (the disk's free space grows with it), and a scripted IT lead (itSession) that answers in IT's
 // chat through the real IT tools: "how much disk is free?" reads df; "free up space" reads du and journalctl, then puts
-// two changes on cards; after a Run it checks df again and reports. The demo CEO hands "check the machine" to IT.
+// two changes on cards; after a Run it checks df again and reports; a health check gone bad gets a recommendation of
+// three ranked clean-ups (#525). The demo CEO hands "check the machine" to IT.
 import { describeOfficeTool, type LogEntry, type SessionCallbacks, type SessionHandle, type SessionOptions } from '../agentRunner.ts';
 import { logStreamed, writeReply } from '../demoChat.ts';
 import { registerCeoReply, registerDemo } from './registry.ts';
+import { demoDiskRoom } from './disk.ts';
 
 /** GB the demo's pretend changes have freed, so df after a Run shows it. */
 let freedGb = 0;
@@ -21,6 +23,14 @@ const OUT: Record<string, string> = {
   uptime: ' 18:02:11 up 12 days,  3:41,  1 user,  load average: 1.21, 0.98, 0.87',
 };
 
+/** The monitoring's reads (#525): every listed unit running, none failed, last night's backup. */
+function watchOut(argv: string[]): string | null {
+  if (argv[0] === 'systemctl' && argv[1] === 'show') return argv.slice(argv.indexOf('Id,LoadState,ActiveState') + 1).map((u) => `Id=${u.includes('.') ? u : `${u}.service`}\nLoadState=loaded\nActiveState=active`).join('\n\n');
+  if (argv[0] === 'systemctl' && argv[1] === 'list-units') return '';
+  if (argv[0] === 'find') return `${(Date.now() - 10 * 3_600_000) / 1000} ${argv[1]}/2026-11-12\n${(Date.now() - 34 * 3_600_000) / 1000} ${argv[1]}/2026-11-11`;
+  return null;
+}
+
 /** What a demo change "did", and the GB it freed. */
 const DONE: Record<string, { out: string; gb: number }> = {
   journalctl: { out: 'Vacuuming done, freed 3.4G of archived journals from /var/log/journal.', gb: 3.4 },
@@ -35,11 +45,15 @@ registerDemo('itDesk', () => ({
     const change = argv.some((a) => /^--vacuum|^prune$|^clean$|^autoremove$|^rm$/.test(a));
     if (change) {
       freedGb += DONE[program]?.gb ?? 0;
+      demoDiskRoom();
       return { code: 0, out: DONE[program]?.out ?? `(demo) ran ${argv.join(' ')}`, err: '' };
     }
     if (program === 'df') return { code: 0, out: df(), err: '' };
+    const watch = watchOut(argv);
+    if (watch !== null) return { code: 0, out: watch, err: '' };
     return { code: 0, out: OUT[program] ?? `(demo) ${argv.join(' ')}: nothing to show in the demo`, err: '' };
   },
+  certExpiry: async () => Date.now() + 61 * 24 * 3_600_000,
 }));
 
 /** The system disk's line of df -h: size, free and use%. */
@@ -70,6 +84,29 @@ export function itSession(opts: SessionOptions, cb: SessionCallbacks): SessionHa
     const ran = p.match(/The manager ran `([^`]+)`: (exit \d+|did not finish)/);
     const disk = rootDisk(await use('it_run', { command: 'df -h' }));
     const free = disk ? `${disk.avail} free of ${disk.size} (${disk.use} used)` : 'no reading from df';
+    if (/The office's checks got worse/.test(p) && !/- Disk is/.test(p)) {
+      const out = await use('it_recommend', {
+        check: 'logs',
+        title: 'System logs: 3.9 GB, over the 2 GB line',
+        evidence: 'journalctl --disk-usage: 3.9 GB of archived and active journals.',
+        options: [{ argv: ['journalctl', '--vacuum-size=500M'], does: 'Trim the system logs to 500 MB', frees: 'frees about 3.4 GB', risk: 'low', undo: "can't be undone: only archived logs go" }],
+      });
+      return out.startsWith('Refused') ? `I couldn't put the options on a card: ${out}` : 'The system logs have grown to 3.9 GB: one clean-up is on the card.';
+    }
+    if (/The office's checks got worse/.test(p)) {
+      await use('it_run', { command: 'du -sh /var/lib/docker /var/log /root/.cache /opt/backups', sort: 'size' });
+      const out = await use('it_recommend', {
+        check: 'disk', // the demo's only check that goes wrong: Simulate low disk
+        title: `Disk: ${p.match(/Disk is \w+: ([\d.]+ GB) free/)?.[1] ?? disk?.avail ?? 'little'} free, below the 10 GB reserve`,
+        evidence: 'Docker holds 14 GB (8.9 GB unused images, 1.6 GB build cache); system logs 3.9 GB; /opt/backups 2.4 GB.',
+        options: [
+          { argv: ['docker', 'image', 'prune', '-af'], does: 'Remove unused Docker images', frees: 'frees about 8.9 GB', risk: 'low', undo: 'pulled again when a build needs them' },
+          { argv: ['journalctl', '--vacuum-size=500M'], does: 'Trim the system logs to 500 MB', frees: 'frees about 3.4 GB', risk: 'low', undo: "can't be undone: only archived logs go" },
+          { argv: ['docker', 'builder', 'prune', '-f'], does: "Clear Docker's build cache", frees: 'frees about 1.6 GB', risk: 'low', undo: 'rebuilt on the next build' },
+        ],
+      });
+      return out.startsWith('Refused') ? `I couldn't put the options on a card: ${out}` : `The disk is low: ${free}. Three clean-ups are on the card, best first; pick one and I'll measure again.\n\`\`\`spoken\nThe disk is low. Pick a clean-up on the card.\n\`\`\``;
+    }
     if (ran) return `Checked after \`${ran[1]}\` (${ran[2]}): the system disk now has **${free}**.\n\`\`\`spoken\nDone. The disk now has ${disk?.avail ?? 'more'} free.\n\`\`\``;
     if (/\b(gain|free up|clean|make room|recommend|what can go)\b|9\d%/i.test(p)) {
       await use('it_run', { command: 'du -sh /var/lib/docker /var/log /root/.cache /opt/backups /opt/keel', sort: 'size' });

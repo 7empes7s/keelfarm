@@ -39,7 +39,7 @@ export abstract class SwarmDisk extends SwarmServerLoad {
     await super.startUsage();
   }
 
-  private diskDirs() {
+  protected diskDirs() {
     return [{ label: 'Office data', path: HOME_DIR }, { label: 'Temp files', path: os.tmpdir() }, ...(this.disk.workRoot ? [{ label: 'Working copies', path: this.disk.workRoot }] : [])];
   }
 
