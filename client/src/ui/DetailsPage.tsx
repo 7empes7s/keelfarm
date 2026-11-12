@@ -83,7 +83,7 @@ export function StatStrip({ children }: { children: ReactNode }) {
 }
 
 /** The QA checks stat: passed out of all, with its ring. */
-export function ChecksStat({ checks, to }: { checks: readonly QaCheck[]; to: string }) {
+export function ChecksStat({ checks, to, empty = 'no report yet' }: { checks: readonly QaCheck[]; to: string; empty?: string }) {
   const t = checkTally(checks);
   return (
     <Stat
@@ -96,7 +96,7 @@ export function ChecksStat({ checks, to }: { checks: readonly QaCheck[]; to: str
           {t.passed}/{t.total}
         </span>
       }
-      note={t.total ? `${t.failed} failed · ${t.skipped} skipped` : 'no report yet'}
+      note={t.total ? `${t.failed} failed · ${t.skipped} skipped` : empty}
     />
   );
 }

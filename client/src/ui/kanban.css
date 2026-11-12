@@ -17,8 +17,13 @@
   border-radius: 16px;
   background: var(--ds-surface-raised);
 }
+/* on a phone the picker takes its own line, its whole choice showing, the button under it */
+.issue-form .row {
+  flex-wrap: wrap;
+}
 .issue-form .row select {
-  flex: 1;
+  flex: 1 1 18em;
+  min-width: 0;
 }
 .kanban {
   flex: 1;

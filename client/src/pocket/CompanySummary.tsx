@@ -1,6 +1,6 @@
-// The Company page's summary row (#345): usage, the memory map and the CEO as cards of one height in summaryGrid()'s
-// columns, so the row ends at the floors' right edge; whatever comes before them (the callout, the tour, the guide)
-// takes a row of its own.
+// The Company page's summary row (#345): usage on a row of its own (it holds up to four accounts, so cards beside it
+// were mostly empty), then the memory map and the CEO as cards of one height in summaryGrid()'s columns, so every row
+// ends at the floors' right edge; whatever comes before them (the callout, the tour, the guide) takes a row of its own.
 import { useCallback, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { useStore } from '../store';
 import { CEO_ID } from '../../../shared/types';
@@ -21,7 +21,7 @@ export function CompanySummary({ go, settings, children }: { go: (tab: PocketTab
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const { cols, lastSpan } = summaryGrid(width, ceo ? 3 : 2);
+  const { cols, lastSpan } = summaryGrid(width, ceo ? 2 : 1);
   const last = { gridColumn: `span ${lastSpan}` };
   return (
     <div className="pk-company-side" ref={measure} style={{ '--pk-side-cols': cols } as CSSProperties}>

@@ -1,7 +1,8 @@
 /* Company (#223): sized by the page's own width (pkmain, beside the chat), never the viewport, so the chat open or closed
    and the browser's zoom only change that width. Floors in floorColumns()'s --pk-cols columns; usage and the CEO in a
-   column beside them from 1100px, else a strip above them in summaryGrid()'s --pk-side-cols columns, filling the row
-   with no empty track and every card in a row at one height, its content centred (#345). */
+   column beside them from 1100px, else a strip above them: usage across it, its accounts side by side, then the map and
+   the CEO in summaryGrid()'s --pk-side-cols columns, filling the row with no empty track and every card in a row at
+   one height, its content centred (#345). */
 .pk-railed .pk-page:has(> .pk-company) {
   max-width: 1600px;
 }
@@ -16,11 +17,16 @@
   grid-template-columns: repeat(var(--pk-side-cols, 1), minmax(0, 1fr));
   gap: var(--ds-space-2);
 }
-.pk-railed .pk-company-side > :not(.pk-summary) {
+.pk-railed .pk-company-side > :not(.pk-summary),
+.pk-railed .pk-summary.pk-usage {
   grid-column: 1 / -1;
 }
-.pk-railed .pk-summary.pk-usage {
-  justify-content: center;
+.pk-railed .pk-summary.pk-usage .us-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+}
+.pk-railed .pk-summary.pk-usage .us-list > p {
+  grid-column: 1 / -1;
 }
 .pk-railed .pk-company-side .tour-invite > .grow {
   flex-basis: 14em; /* its buttons go below the text in the narrow column */

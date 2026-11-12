@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { QaCheck } from '../../../shared/types';
-import { charterViolation, checkTally, groupChecks, mergeRows, stateChip } from './detailsRules';
+import { charterViolation, checkTally, groupChecks, mergeRows, noQaWords, stateChip } from './detailsRules';
 
 const check = (name: string, result: QaCheck['result']): QaCheck => ({ name, result, details: `${name} details` });
 
@@ -79,5 +79,17 @@ describe('mergeRows', () => {
 
   it('has no merge blockers once merged', () => {
     expect(mergeRows({ ...pull, state: 'MERGED', mergeable: 'CONFLICTING' }, 'main').map((r) => r.key)).toEqual(['checks']);
+  });
+});
+
+describe('noQaWords', () => {
+  it("says an open PR wasn't sent, and never that of a merged or closed one (#513)", () => {
+    expect(noQaWords({ state: 'OPEN' }).section).toBe('Not sent to QA yet.');
+    expect(noQaWords(undefined).tile).toBe('not sent yet');
+    for (const state of ['MERGED', 'CLOSED'] as const) {
+      const w = noQaWords({ state });
+      expect(Object.values(w).join(' ')).not.toMatch(/not sent|not in QA|no report yet/);
+      expect(w.section).toMatch(/History/);
+    }
   });
 });
