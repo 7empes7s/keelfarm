@@ -67,11 +67,13 @@ test('a message mid-job is acked out loud and answered before the job ends; prog
     if (delay) await new Promise((resolve) => setTimeout(resolve, 2000));
     await route.fulfill({ response });
   });
-  const before = (await state(page)).messages.filter((m) => m.from === 'ceo').length;
-  await textCeo(page, 'Also check the footer');
-  // The demo CEO answers mid-job, while it's still working (checked first: a slow page's ack can outlast the job).
-  await expect.poll(async () => (await state(page)).messages.filter((m) => m.from === 'ceo').length, { timeout: 15_000 }).toBeGreaterThan(before);
-  expect((await state(page)).messages.filter((m) => m.from === 'ceo').at(-1)?.text).toMatch(/^Noted/);
+  const sent = await page.request.post('/api/ceo/message', { data: { text: 'Also check the footer' } });
+  expect(sent.ok()).toBe(true);
+  const { id } = (await sent.json()) as { id: number };
+  // The demo CEO answers mid-job, while it's still working (checked first: a slow page's ack can outlast the job). By id:
+  // the snapshot holds only the chat's latest page, so a count of the CEO's messages can stay the same.
+  const answer = async () => (await state(page)).messages.find((m) => m.from === 'ceo' && m.id > id)?.text;
+  await expect.poll(answer, { timeout: 15_000 }).toMatch(/^Noted/);
   expect(await ceoWorking(page)).toBe(true);
   // The player starts an ack up to ACK_MAX_AGE_MS (20 s) after it arrives; the lab's busy page runs timers seconds late,
   // then the 2 s delay above and the clip's decoding, so allow a little past that.
