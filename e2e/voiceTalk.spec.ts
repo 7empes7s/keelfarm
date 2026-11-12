@@ -24,7 +24,11 @@ test.afterAll(async ({ request }) => {
 });
 
 const lines = (page: Page) => page.evaluate(() => ((window as unknown as { __swarmVoiceLines?: SaidLine[] }).__swarmVoiceLines ?? []).map((l) => ({ ...l })));
-const state = async (page: Page) => (await page.request.get('/api/state')).json() as Promise<{ agents: { id: string; status: string }[]; messages: { id: number; from: string; text: string }[] }>;
+const state = async (page: Page) => (await page.request.get('/api/state')).json() as Promise<{
+  agents: { id: string; status: string }[];
+  messages: { id: number; from: string; text: string }[];
+  ceo: { job: { kind: string } | null; queue: unknown[] };
+}>;
 /** Nothing read aloud for 3 s (no message playing or starting), so a line isn't queued behind one. */
 const quiet = (page: Page) => page.evaluate(async () => {
   const read = () => (window as unknown as { __swarmVoice?: { end: number | null }[] }).__swarmVoice ?? [];
@@ -33,13 +37,17 @@ const quiet = (page: Page) => page.evaluate(async () => {
   return read().length === n && read().every((r) => r.end !== null);
 });
 const ceoWorking = async (page: Page) => (await state(page)).agents.find((a) => a.id === CEO_ID)?.status === 'working';
+/** The CEO's job now: a demo background job (triage, a follow-up) also shows it working, and a message sent then waits in the queue. */
+const ceoJob = async (page: Page) => (await state(page)).ceo.job?.kind ?? 'idle';
+const ceoIdle = async (page: Page) => !(await state(page)).ceo.queue.length && (await ceoJob(page)) === 'idle' && !(await ceoWorking(page));
 const textCeo = async (page: Page, text: string) => expect((await page.request.post('/api/ceo/message', { data: { text } })).ok()).toBe(true);
 
-/** Starts the demo CEO's long round (the step log's look-into job) once all is quiet, and waits until it's under way. */
+/** Starts the demo CEO's long round (the step log's look-into job) once all is quiet, and waits until it's the job running. */
 async function busyCeo(page: Page) {
-  await expect.poll(() => ceoWorking(page), { timeout: 60_000 }).toBe(false);
+  await expect.poll(() => ceoIdle(page), { timeout: 60_000 }).toBe(true);
   await expect.poll(() => quiet(page), { timeout: 30_000 }).toBe(true);
   await textCeo(page, 'Please look into the mobile joystick');
+  await expect.poll(() => ceoJob(page), { timeout: 60_000 }).toBe('chat');
   await expect.poll(() => ceoWorking(page), { timeout: 15_000 }).toBe(true);
 }
 
@@ -90,6 +98,6 @@ test('a message mid-job is acked out loud and answered before the job ends; prog
   expect((await page.request.patch('/api/settings', { data: { voice: { talk: 'off' } } })).ok()).toBe(true);
   const said = (await lines(page)).filter((l) => l.kind === 'progress').length;
   await busyCeo(page);
-  await expect.poll(() => ceoWorking(page), { timeout: 60_000 }).toBe(false);
+  await expect.poll(() => ceoIdle(page), { timeout: 60_000 }).toBe(true);
   expect((await lines(page)).filter((l) => l.kind === 'progress').length).toBe(said);
 });
