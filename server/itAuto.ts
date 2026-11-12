@@ -1,0 +1,207 @@
+// IT auto-approve (#585): which of IT's it_propose changes run at once, without the manager's tap. Off: none (every
+// change is a card). Routine: read-only commands and a fixed list of reversible, scoped shapes (git fetch / pull
+// --ff-only in a clone, systemctl start/restart/enable of units IT installed itself, installing a unit or Caddy site,
+// caddy reload right after caddy validate). Everything except dangerous: any change the danger list doesn't name.
+// The danger list (data, backups, disks, firewall, users and SSH, kills, KEEL, the live office) is always a card, and
+// so is a change past AUTO_STEPS_MAX in one job. Matched on argv shapes, never on free text. Pure.
+import path from 'node:path';
+import type { ItAutoLevel } from '../shared/itDept.ts';
+import type { ItLogEntry } from '../shared/itDesk.ts';
+import { neverRefusal, readOnlyPlan } from './itDesk.ts';
+
+/** Auto steps in one change (one IT job); past it, IT asks. */
+export const AUTO_STEPS_MAX = 20;
+/** Where an install's previous file is kept, so Undo can put it back. */
+const IT_BACKUP_DIR = '/var/backups/cubefarm-it';
+
+export interface AutoContext {
+  level: ItAutoLevel;
+  protectedDirs: string[];
+  /** Units IT installed itself (with an auto install), e.g. "clipfarm.service". */
+  itUnits: readonly string[];
+  /** The office's own systemd units: never started, stopped or restarted by IT. */
+  officeUnits: readonly string[];
+  /** Auto steps already taken in this change. */
+  steps: number;
+  /** The IT desk's log, newest first: caddy reload needs a caddy validate just before. */
+  log: readonly Pick<ItLogEntry, 'argv' | 'code'>[];
+  /** Whether a file exists (installs back up what they replace, and never override a unit IT didn't install). */
+  exists: (p: string) => boolean;
+  /** A stamp for backup file names. */
+  stamp: string;
+  linux: boolean;
+}
+
+/** What to run first (its output feeds the undo), and the undo: argv lines run one after another on the manager's Undo. */
+export interface AutoPlan {
+  auto: true;
+  shape: string;
+  argv: string[];
+  timeoutMs?: number;
+  before?: string[];
+  undo: (beforeOut: string) => string[][] | null;
+  unit?: string; // a unit this install makes IT's own
+}
+export type AutoVerdict = AutoPlan | { auto: false; why: string };
+
+const no = (why: string): AutoVerdict => ({ auto: false, why });
+const none = () => null;
+const UNIT_RE = /^[\w@.:-]+\.(service|timer|socket|path)$/;
+const unitName = (u: string) => (/\.(service|timer|socket|path|target|mount)$/.test(u) ? u : `${u}.service`);
+const UNIT_DIRS = ['/etc/systemd/system', '/lib/systemd/system', '/usr/lib/systemd/system'];
+const abs = (p: string) => p.startsWith('/') && !p.split('/').includes('..') && path.posix.normalize(p) === p;
+
+// ---------- the danger list ----------
+
+const DATA = new Set(['rm', 'rmdir', 'unlink', 'shred', 'truncate', 'dd', 'srm', 'wipe']);
+const DISK = /^(mkfs(\..+)?|mkswap|fdisk|sfdisk|cfdisk|gdisk|sgdisk|parted|partprobe|wipefs|mount|umount|swapon|swapoff|resize2fs|e2fsck|fsck(\..+)?|tune2fs|xfs_\w+|btrfs|zpool|zfs|cryptsetup|mdadm|losetup|(pv|vg|lv)\w+)$/;
+const FIREWALL = /^(ufw|iptables(-\w+)?|ip6tables(-\w+)?|nft|firewall-cmd|ebtables|arptables)$/;
+const USERS = /^(useradd|userdel|usermod|adduser|deluser|addgroup|delgroup|groupadd|groupdel|groupmod|passwd|chpasswd|chage|chsh|gpasswd|visudo|vipw|newusers|ssh-keygen|ssh-copy-id|ssh-add|sshd|loginctl)$/;
+const KILL = /^(kill|pkill|killall|skill|xkill)$/;
+
+/** Why a change is never run automatically, whatever the level; null when it's not on the danger list. */
+function dangerOf(argv: readonly string[], ctx: Pick<AutoContext, 'itUnits' | 'officeUnits'>): string | null {
+  const [program, ...args] = argv;
+  const join = argv.join(' ');
+  if (DATA.has(program) || (program === 'find' && args.some((a) => /^-(delete|exec|execdir|ok|okdir)$/.test(a)))) return 'it deletes data';
+  if (args.some((a) => /(^|\/)backups?(\/|$)|\.bak\b|backup/i.test(a))) return 'it touches backups';
+  if (DISK.test(program)) return 'it changes disks, partitions or mounts';
+  if (FIREWALL.test(program)) return 'it changes the firewall';
+  if (USERS.test(program) || /(^|\s|\/)\.ssh(\/|\s|$)|\/etc\/ssh\b|authorized_keys|\bsshd?(\.service|\.socket)?$/.test(join)) return 'it touches users, passwords or SSH';
+  if (KILL.test(program)) return 'it kills processes';
+  if (/keel/i.test(join)) return "it touches KEEL (its live tenant, database or services)";
+  if (/cubefarm/i.test(join) || args.some((a) => ctx.officeUnits.includes(unitName(a)))) return 'it touches the live office';
+  if (program === 'chmod' || program === 'chown' || program === 'chgrp') return args.some((a) => /^-[a-zA-Z]*R|^--recursive/.test(a)) ? 'it changes owners or permissions recursively' : null;
+  if (program === 'systemctl') {
+    const verb = args.find((a) => !a.startsWith('-')) ?? '';
+    const units = args.filter((a) => !a.startsWith('-')).slice(1).map(unitName);
+    if (['stop', 'kill', 'disable', 'mask', 'isolate', 'set-default', 'edit', 'revert', 'set-property', 'link', 'preset', 'preset-all'].includes(verb) && !(units.length && units.every((u) => ctx.itUnits.includes(u)))) return `systemctl ${verb} of a unit IT didn't install`;
+  }
+  if (program === 'docker') {
+    const verbs = args.filter((a) => !a.startsWith('-'));
+    if (verbs.some((v) => ['rm', 'kill', 'stop', 'down', 'volume'].includes(v)) || (verbs[0] === 'system' && verbs[1] === 'prune') || (verbs.includes('prune') && verbs[0] === 'container')) return 'it removes or stops containers or volumes';
+  }
+  if (program === 'git') {
+    const sub = args.filter((a, i) => !a.startsWith('-') && args[i - 1] !== '-C')[0];
+    if (sub === 'push') return 'git push';
+    if (sub === 'clean' || (sub === 'reset' && args.includes('--hard')) || (sub === 'branch' && args.some((a) => a === '-D' || a === '--delete' || a === '-d')) || (sub === 'stash' && args.some((a) => a === 'drop' || a === 'clear')) || (sub === 'checkout' && args.some((a) => a === '-f' || a === '--force' || a === '.'))) return 'it throws away work in a clone';
+  }
+  if ((program === 'apt' || program === 'apt-get') && args.some((a) => a === 'purge' || a === '--purge')) return 'apt purge deletes configuration';
+  return null;
+}
+
+// ---------- the routine shapes ----------
+
+/** git -C <clone> fetch …, or git -C <clone> pull --ff-only [remote [branch]] (undone by resetting to the HEAD before). */
+function gitShape(argv: readonly string[]): AutoVerdict | null {
+  if (argv[0] !== 'git' || argv[1] !== '-C' || !argv[2] || !abs(argv[2])) return null;
+  const [dir, sub, ...rest] = argv.slice(2);
+  const words = rest.filter((a) => !a.startsWith('-'));
+  if (words.some((w) => /[:+]/.test(w))) return null; // a refspec could overwrite a local branch
+  if (sub === 'fetch' && rest.every((a) => !a.startsWith('-') || ['--all', '--prune', '-p', '--tags', '--quiet', '-q'].includes(a)) && words.length <= 1)
+    return { auto: true, shape: 'git fetch in a clone', argv: [...argv], undo: none };
+  if (sub === 'pull' && rest.includes('--ff-only') && rest.every((a) => !a.startsWith('-') || ['--ff-only', '--quiet', '-q'].includes(a)) && words.length <= 2)
+    return {
+      auto: true,
+      shape: 'git pull --ff-only in a clone',
+      argv: [...argv],
+      before: ['git', '-C', dir, 'rev-parse', 'HEAD'],
+      undo: (out) => (/^[0-9a-f]{40}$/.test(out.trim()) ? [['git', '-C', dir, 'reset', '--keep', out.trim()]] : null),
+    };
+  return null;
+}
+
+/** systemctl daemon-reload, or start / restart / reload / enable [--now] of units IT installed itself. */
+function systemctlShape(argv: readonly string[], ctx: AutoContext): AutoVerdict | null {
+  if (argv[0] !== 'systemctl') return null;
+  const [verb, ...rest] = argv.slice(1);
+  if (verb === 'daemon-reload' && !rest.length) return { auto: true, shape: 'systemctl daemon-reload', argv: [...argv], undo: none };
+  if (!['start', 'restart', 'reload', 'enable'].includes(verb)) return null;
+  const now = rest.includes('--now');
+  const units = rest.filter((a) => a !== '--now');
+  if (!units.length || units.some((u) => u.startsWith('-') || !UNIT_RE.test(unitName(u)))) return null;
+  if (verb !== 'enable' && now) return null;
+  const mine = units.map(unitName);
+  if (mine.some((u) => !ctx.itUnits.includes(u))) return no(`systemctl ${verb} of ${mine.filter((u) => !ctx.itUnits.includes(u)).join(', ')}: only units IT installed itself start without a tap`);
+  const undo = verb === 'start' ? [['systemctl', 'stop', ...mine]] : verb === 'enable' ? [['systemctl', 'disable', ...(now ? ['--now'] : []), ...mine]] : null;
+  return { auto: true, shape: `systemctl ${verb} of IT's own unit`, argv: [...argv], undo: () => undo };
+}
+
+/** install [-m 644] <file> <target> (or cp): a unit file into /etc/systemd/system, or a Caddy site into /etc/caddy. */
+function installShape(argv: readonly string[], ctx: AutoContext): AutoVerdict | null {
+  let rest: string[];
+  if (argv[0] === 'install') {
+    rest = argv.slice(1);
+    if (rest[0] === '-m') {
+      if (!['644', '0644'].includes(rest[1])) return null;
+      rest = rest.slice(2);
+    }
+  } else if (argv[0] === 'cp') rest = argv.slice(1);
+  else return null;
+  if (rest.length !== 2 || rest.some((a) => a.startsWith('-') || !abs(a))) return null;
+  const [src, target] = rest;
+  if (/^\/(tmp|dev|proc|sys|run)(\/|$)/.test(src)) return no(`${src}: install from a clone's merged runbook, not a scratch folder`);
+  const dir = path.posix.dirname(target);
+  const base = path.posix.basename(target);
+  const unit = dir === '/etc/systemd/system' && UNIT_RE.test(base);
+  const caddy = target === '/etc/caddy/Caddyfile' || (/^\/etc\/caddy\/[\w.-]+$/.test(dir) && /^[\w.-]+$/.test(base));
+  if (!unit && !caddy) return null;
+  const foreign = unit && !ctx.itUnits.includes(base) && UNIT_DIRS.some((d) => ctx.exists(path.posix.join(d, base)));
+  if (foreign && ctx.level === 'routine') return no(`${base} already exists and IT didn't install it: replacing it needs the manager's tap`);
+  const own = unit && !foreign ? { unit: base } : {};
+  const keep = ctx.exists(target);
+  const install = argv[0] === 'install' ? [...argv] : ['install', '-m', '0644', src, target];
+  if (keep) {
+    const backup = path.posix.join(IT_BACKUP_DIR, `${base}.${ctx.stamp}`);
+    return { auto: true, shape: unit ? 'replacing IT\'s own unit file' : 'replacing a Caddy file', argv: install, before: ['install', '-D', '-p', '-m', '0644', target, backup], undo: () => [['install', '-p', '-m', '0644', backup, target]], ...own };
+  }
+  return {
+    auto: true,
+    shape: unit ? 'installing a new unit' : 'installing a new Caddy file',
+    argv: install,
+    undo: () => (unit ? [['systemctl', 'disable', '--now', base], ['rm', target], ['systemctl', 'daemon-reload']] : [['rm', target]]),
+    ...own,
+  };
+}
+
+const caddyConfig = (args: readonly string[]) => {
+  const i = args.findIndex((a) => a === '--config' || a === '-c');
+  return i >= 0 ? args[i + 1] : '/etc/caddy/Caddyfile';
+};
+/** Only --config <file> and --adapter caddyfile, as pairs. */
+function caddyOk(args: readonly string[]): boolean {
+  if (args.length % 2) return false;
+  for (let i = 0; i < args.length; i += 2) {
+    const [flag, value] = [args[i], args[i + 1]];
+    if ((flag === '--config' || flag === '-c') && abs(value)) continue;
+    if ((flag === '--adapter' || flag === '-a') && value === 'caddyfile') continue;
+    return false;
+  }
+  return true;
+}
+
+/** caddy validate (it only reads); caddy reload only when the IT desk's last caddy step was a validate of the same file that passed. */
+function caddyShape(argv: readonly string[], ctx: AutoContext): AutoVerdict | null {
+  if (argv[0] !== 'caddy' || !['validate', 'reload'].includes(argv[1]) || !caddyOk(argv.slice(2))) return null;
+  const config = caddyConfig(argv.slice(2));
+  if (argv[1] === 'validate') return { auto: true, shape: 'caddy validate', argv: [...argv], undo: none };
+  const last = ctx.log.find((e) => e.argv[0] === 'caddy' || ((e.argv[0] === 'install' || e.argv[0] === 'cp') && e.argv.some((a) => a.startsWith('/etc/caddy/'))));
+  if (!last || last.argv[1] !== 'validate' || last.code !== 0 || caddyConfig(last.argv.slice(2)) !== config) return no('caddy reload runs by itself only right after a caddy validate of the same file passed: validate first');
+  return { auto: true, shape: 'caddy reload after caddy validate', argv: [...argv], undo: none };
+}
+
+/** Whether this change runs now (and how), or goes on a card (and why). The never-list's refusals never get here. */
+export function autoVerdict(argv: readonly string[], ctx: AutoContext): AutoVerdict {
+  if (ctx.level === 'off') return no('auto-approve is off');
+  const never = neverRefusal(argv, { protectedDirs: ctx.protectedDirs });
+  if (never) return no(never);
+  if (ctx.steps >= AUTO_STEPS_MAX) return no(`${AUTO_STEPS_MAX} automatic steps in this change already: the rest wait for the manager`);
+  const read = readOnlyPlan(argv, { linux: ctx.linux });
+  if (!('refused' in read)) return { auto: true, shape: 'read-only', argv: read.argv, timeoutMs: read.timeoutMs, undo: none };
+  const danger = dangerOf(argv, ctx);
+  if (danger) return no(`never automatic: ${danger}`);
+  const shaped = gitShape(argv) ?? systemctlShape(argv, ctx) ?? installShape(argv, ctx) ?? caddyShape(argv, ctx);
+  if (shaped?.auto || (shaped && ctx.level === 'routine')) return shaped;
+  if (ctx.level === 'all') return { auto: true, shape: 'not on the danger list', argv: [...argv], undo: none };
+  return no("not one of the routine shapes (git fetch/pull --ff-only, IT's own units, installing a unit or Caddy file, caddy validate/reload)");
+}

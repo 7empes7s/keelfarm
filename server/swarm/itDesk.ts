@@ -1,7 +1,10 @@
 // The IT desk (#506): the IT department's commands on this machine (#524: the IT lead's, no longer the CEO's). it_run
 // runs a read-only command at once; it_propose puts a change on a card in the chats, Mission control and Telegram, run
 // only on the manager's Run (several at once with Run all) and checked against the never-list again then; IT then checks
-// the result (itRan). Every command is logged here and in the daily log. Rules in server/itDesk.ts.
+// the result (itRan). With auto-approve on (#585, server/itAuto.ts), a routine change runs at once instead, logged in
+// IT's chat as done automatically with an Undo where there is one. Every command is logged here and in the daily log.
+// Rules in server/itDesk.ts.
+import { existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { argvLine, IT_LOG_KEPT, IT_LOG_SHOWN, type ItDeskView, type ItLogEntry, type ItProposal, type ItRisk } from '../../shared/itDesk.ts';
@@ -10,6 +13,8 @@ import type { WorldSnapshot } from '../../shared/types.ts';
 import { HOME_DIR } from '../config.ts';
 import { HttpError } from '../httpError.ts';
 import { CHANGE_TIMEOUT_MS, LOG_OUT_MAX, neverRefusal, parseCommand, readOnlyPlan, shapeOutput } from '../itDesk.ts';
+import { AUTO_STEPS_MAX, autoVerdict, type AutoPlan } from '../itAuto.ts';
+import type { ItJob } from '../../shared/itDept.ts';
 import { OFFICE_DIR } from '../officeUpdate.ts';
 import { SwarmManagerAsks } from './managerAsks.ts';
 
@@ -30,10 +35,14 @@ export interface ItProposeArgs {
 const OFF = 'The IT desk is off (Settings → CEO settings → IT desk): tell the manager what you would run instead.';
 const DEPT_OFF = 'The IT department is off (Settings → The IT department).';
 const WAITING_MAX = 12;
+/** The live office's own systemd units: auto-approve never touches them. */
+const OFFICE_UNITS = ['cubefarm.service'];
 
 export abstract class SwarmItDesk extends SwarmManagerAsks {
   private itSeq = 0;
   private itRunning = new Set<string>();
+  /** Auto steps in the IT job that's running (a change is one job): AUTO_STEPS_MAX at most. */
+  private itAuto: { job: ItJob | null; steps: number } = { job: null, steps: 0 };
 
   protected get itOn() {
     return this.state.settings.itDesk !== false;
@@ -68,7 +77,7 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
     const at = Date.now();
     const entry: ItLogEntry = { ...e, id: `${at.toString(36)}-${++this.itSeq}`, at, out: e.out.slice(0, LOG_OUT_MAX) };
     this.state.itDesk.log = [entry, ...this.state.itDesk.log].slice(0, IT_LOG_KEPT);
-    const head = `IT desk (${e.kind}, by ${e.by}): \`${argvLine(e.argv)}\` → ${e.code === null ? 'did not run' : `exit ${e.code}`}`;
+    const head = `IT desk (${e.auto ? 'done automatically' : e.kind}, by ${e.by}): \`${argvLine(e.argv)}\` → ${e.code === null ? 'did not run' : `exit ${e.code}`}`;
     void this.history.note(`${head}${e.why ? ` · ${e.why}` : ''}${e.out.trim() ? `\n  ${e.out.trim().split('\n').slice(0, 5).join('\n  ')}` : ''}`);
     return entry;
   }
@@ -90,8 +99,8 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
     return `$ ${argvLine(parsed.argv)}\n${ran.code === null ? 'did not finish' : `exit ${ran.code}`}\n${out}`;
   }
 
-  /** it_propose: a change on a card for the manager; nothing runs until their Run. */
-  protected itPropose(a: ItProposeArgs): string {
+  /** it_propose: a change on a card for the manager, nothing running until their Run; or at once when auto-approve allows it. */
+  protected async itPropose(a: ItProposeArgs): Promise<string> {
     if (!this.itOn) throw new HttpError(403, OFF);
     if (!this.state.settings.itDept.on) throw new HttpError(403, DEPT_OFF);
     const argv = (Array.isArray(a.argv) ? a.argv : []).map(String);
@@ -100,13 +109,80 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
     if (this.state.itDesk.waiting.length >= WAITING_MAX) throw new HttpError(409, `${WAITING_MAX} changes already wait for the manager: let them decide on those first.`);
     const line = argvLine(argv);
     if (this.state.itDesk.waiting.some((p) => argvLine(p.argv) === line)) throw new HttpError(409, `\`${line}\` already waits for the manager's Run.`);
+    const level = this.state.settings.itDept.autoApprove;
+    let held = '';
+    if (level !== 'off') {
+      const job = this.state.it.job;
+      if (this.itAuto.job !== job) this.itAuto = { job, steps: 0 };
+      const stamp = new Date().toISOString().replace(/\D/g, '').slice(0, 14);
+      const v = autoVerdict(argv, { level, protectedDirs: this.itProtected, itUnits: this.state.itDesk.units ?? [], officeUnits: OFFICE_UNITS, steps: this.itAuto.steps, log: this.state.itDesk.log, exists: (p) => !this.backend.demo && existsSync(p), stamp, linux: process.platform === 'linux' });
+      if (v.auto) {
+        const done = await this.itAutoRun(argv, v, String(a.why ?? '').trim());
+        if (done) return done;
+        held = ' (auto-approve held it: its backup step failed)';
+      } else held = ` (auto-approve: ${v.why})`;
+    }
     const at = Date.now();
     const p: ItProposal = { id: `it-${at.toString(36)}-${++this.itSeq}`, argv, why: this.itMask(String(a.why ?? '').trim()), affects: this.itMask(String(a.affects ?? '').trim()), undo: this.itMask(String(a.undo ?? '').trim()), risk: a.risk ?? 'medium', at, by: this.itName };
     this.state.itDesk.waiting.push(p);
     this.itDeskChanged();
     this.itProposed(p); // its card in IT's chat and on Telegram, with Run / Not now
     this.notifier.notify('decisions', `${this.itName} asks to run a command`, `${line}\n${p.why}`);
-    return `On the manager's card: \`${line}\`. Nothing has run: it runs only when they tap Run, and you get its output to check.`;
+    return `On the manager's card${held}: \`${line}\`. Nothing has run: it runs only when they tap Run, and you get its output to check.`;
+  }
+
+  /** An auto-approved step: its backup or HEAD first (for the undo), then the change, logged and posted as done automatically. Null: the step before failed, so it goes on a card. */
+  private async itAutoRun(argv: string[], v: AutoPlan, why: string): Promise<string | null> {
+    let undo: string[][] | null = null;
+    let first = '';
+    if (v.before) {
+      const b = await this.backend.itExec(v.before, CHANGE_TIMEOUT_MS);
+      if (b.code !== 0) return null;
+      undo = v.undo(b.out);
+      first = `$ ${argvLine(v.before)}\n${b.out.trim()}\n`;
+    } else undo = v.undo('');
+    this.itAuto.steps++;
+    const ran = await this.backend.itExec(v.argv, v.timeoutMs ?? CHANGE_TIMEOUT_MS);
+    const out = shapeOutput({ ...ran, out: first + ran.out, mask: this.itMask, max: 8_000 });
+    if (ran.code !== 0) undo = null;
+    if (ran.code === 0 && v.unit && !this.state.itDesk.units?.includes(v.unit)) this.state.itDesk.units = [...(this.state.itDesk.units ?? []), v.unit];
+    const entry = this.itLog({ kind: 'change', auto: true, by: `${this.itName} (auto-approve)`, argv, code: ran.code, out, why: this.itMask(why), ...(undo && { undo }) });
+    this.itDeskChanged();
+    const line = argvLine(argv);
+    const how = ran.code === 0 ? 'Done automatically' : ran.code === null ? "Couldn't finish automatically" : `Exit ${ran.code}, done automatically`;
+    this.itAutoPosted(`🤖 ${how}: \`${line}\``, `Auto-approve: ${v.shape}.${why ? ` ${why}` : ''}\n\n${out.trim() || '(no output)'}`, { log: entry.id, undo: !!undo });
+    return `Done automatically (auto-approve, step ${this.itAuto.steps} of ${AUTO_STEPS_MAX}): $ ${line}\n${ran.code === null ? 'did not finish' : `exit ${ran.code}`}\n${out}${undo ? '\nThe manager has an Undo on its card.' : ''}`;
+  }
+
+  /** POST /api/it/undo: the manager's Undo on an auto step: its undo lines one after another (each through the never-list), stopping at a failure. */
+  async itUndo(logId: string) {
+    const e = this.state.itDesk.log.find((x) => x.id === logId);
+    if (!e?.undo || e.undone) throw new HttpError(404, 'That step has no Undo, or was undone already.');
+    if (this.itRunning.has(logId)) throw new HttpError(409, 'Undoing it already.');
+    this.itRunning.add(logId);
+    try {
+      const by = `${this.managerLabel()} (Undo)`;
+      let ok = true;
+      const outs: string[] = [];
+      for (const argv of e.undo) {
+        const never = neverRefusal(argv, { protectedDirs: this.itProtected });
+        const ran = never ? { code: null, out: never, err: '' } : await this.backend.itExec(argv, CHANGE_TIMEOUT_MS);
+        const out = shapeOutput({ ...ran, mask: this.itMask, max: 4_000 });
+        this.itLog({ kind: 'change', by, argv, code: ran.code, out, why: `Undo of ${argvLine(e.argv)}` });
+        outs.push(`$ ${argvLine(argv)}\n${out}`);
+        if (ran.code !== 0) {
+          ok = false;
+          break;
+        }
+      }
+      e.undone = true;
+      this.itAutoUndone(logId);
+      this.itAutoPosted(`${ok ? '↩️ Undone' : '⚠️ Undo stopped'}: \`${argvLine(e.argv)}\``, outs.join('\n'));
+      this.itDeskChanged();
+      return { ok };
+    } finally {
+      this.itRunning.delete(logId);
+    }
   }
 
   /** POST /api/it/run: the manager's Run on these cards, one after another; the never-list is checked again first. */

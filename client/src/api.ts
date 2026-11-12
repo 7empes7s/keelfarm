@@ -180,6 +180,7 @@ export const api = {
   cleanDisk: () => call<CleanResult>('POST', '/api/disk/clean'),
   itRun: (ids: string[]) => call('POST', '/api/it/run', { ids }),
   itDismiss: (ids: string[]) => call('POST', '/api/it/dismiss', { ids }),
+  itUndo: (logId: string) => call<{ ok: boolean }>('POST', `/api/it/undo/${encodeURIComponent(logId)}`),
   // The IT department (#524): its chat, and its own Telegram bot (no toasts on the token: the card shows why).
   messageIt: (text: string, replyTo?: number) => call<{ id: number }>('POST', '/api/it/message', { text, replyTo }),
   setItTelegram: (token: string) => call<{ view: TelegramView; startUrl: string }>('PUT', '/api/it/telegram', { token }, false),

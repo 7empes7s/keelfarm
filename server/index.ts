@@ -495,6 +495,7 @@ const itIds = (body: unknown) => {
 };
 app.post('/api/it/run', route((req) => swarm.itRunProposals(itIds(req.body))));
 app.post('/api/it/dismiss', route((req) => swarm.itDismiss(itIds(req.body))));
+app.post('/api/it/undo/:id', route((req) => swarm.itUndo(String(req.params.id))));
 // The IT department (#524): the manager's message to IT, and IT's own Telegram bot (as the CEO's, under "telegramIt").
 app.post('/api/it/message', route((req) => swarm.messageIt(str(req.body?.text), undefined, undefined, typeof req.body?.replyTo === 'number' ? req.body.replyTo : undefined)));
 app.put('/api/it/telegram', route((req) => swarm.itBot.setToken(req.body?.token)));

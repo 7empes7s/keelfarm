@@ -2,7 +2,8 @@
 // manager taps Run on (the disk's free space grows with it), and a scripted IT lead (itSession) that answers in IT's
 // chat through the real IT tools: "how much disk is free?" reads df; "free up space" reads du and journalctl, then puts
 // two changes on cards; after a Run it checks df again and reports; a ticket (#542) gets an answer and a close; a health
-// check gone bad gets a recommendation of three ranked clean-ups (#525); the weekly review proposes a fix (#543). The demo CEO hands "check the machine" to IT.
+// check gone bad gets a recommendation of three ranked clean-ups (#525); the weekly review proposes a fix (#543); "install
+// clipfarm" walks a runbook's steps, which auto-approve runs without a tap when it's on (#585). The demo CEO hands "check the machine" to IT.
 // Now and then a demo agent reports a lost lab result with it_report (withItReport).
 import { describeOfficeTool, type LogEntry, type SessionCallbacks, type SessionHandle, type SessionOptions } from '../agentRunner.ts';
 import { logStreamed, writeReply } from '../demoChat.ts';
@@ -32,6 +33,22 @@ function watchOut(argv: string[]): string | null {
   return null;
 }
 
+/** The clipfarm runbook's steps (#585): one card each, or done automatically with auto-approve on. */
+const RUNBOOK: string[][] = [
+  ['git', '-C', '/opt/clipfarm', 'pull', '--ff-only'],
+  ['install', '-m', '0644', '/opt/clipfarm/deploy/clipfarm.service', '/etc/systemd/system/clipfarm.service'],
+  ['systemctl', 'daemon-reload'],
+  ['systemctl', 'enable', '--now', 'clipfarm.service'],
+  ['install', '-m', '0644', '/opt/clipfarm/deploy/clipfarm.caddy', '/etc/caddy/sites/clipfarm.caddy'],
+  ['caddy', 'validate', '--config', '/etc/caddy/Caddyfile'],
+  ['caddy', 'reload', '--config', '/etc/caddy/Caddyfile'],
+];
+const RUNBOOK_OUT: Record<string, string> = {
+  git: 'Updating 3f9c2a1..8b0d4e2\nFast-forward\n deploy/clipfarm.service | 4 ++--\n 1 file changed, 2 insertions(+), 2 deletions(-)',
+  systemctl: 'Created symlink /etc/systemd/system/multi-user.target.wants/clipfarm.service → /etc/systemd/system/clipfarm.service.',
+  caddy: 'Valid configuration',
+};
+
 /** What a demo change "did", and the GB it freed. */
 const DONE: Record<string, { out: string; gb: number }> = {
   journalctl: { out: 'Vacuuming done, freed 3.4G of archived journals from /var/log/journal.', gb: 3.4 },
@@ -50,6 +67,8 @@ registerDemo('itDesk', () => ({
       return { code: 0, out: DONE[program]?.out ?? `(demo) ran ${argv.join(' ')}`, err: '' };
     }
     if (program === 'df') return { code: 0, out: df(), err: '' };
+    if (argv.includes('rev-parse')) return { code: 0, out: '3f9c2a1b7d4e5f60718293a4b5c6d7e8f9012345\n', err: '' };
+    if (RUNBOOK_OUT[program]) return { code: 0, out: RUNBOOK_OUT[program], err: '' };
     const watch = watchOut(argv);
     if (watch !== null) return { code: 0, out: watch, err: '' };
     return { code: 0, out: OUT[program] ?? `(demo) ${argv.join(' ')}: nothing to show in the demo`, err: '' };
@@ -128,6 +147,14 @@ export function itSession(opts: SessionOptions, cb: SessionCallbacks): SessionHa
       return out.startsWith('Refused') ? `I couldn't put the options on a card: ${out}` : `The disk is low: ${free}. Three clean-ups are on the card, best first; pick one and I'll measure again.\n\`\`\`spoken\nThe disk is low. Pick a clean-up on the card.\n\`\`\``;
     }
     if (ran) return `Checked after \`${ran[1]}\` (${ran[2]}): the system disk now has **${free}**.\n\`\`\`spoken\nDone. The disk now has ${disk?.avail ?? 'more'} free.\n\`\`\``;
+    if (/\binstall clipfarm\b/i.test(p)) {
+      let auto = 0;
+      for (const argv of RUNBOOK) {
+        const out = await use('it_propose', { argv, why: "Floor 4 #20's runbook: install clipfarm", affects: 'clipfarm on this machine, behind Caddy', undo: 'disable the unit and remove its files', risk: 'low' });
+        if (out.startsWith('Done automatically')) auto++;
+      }
+      return auto === RUNBOOK.length ? `clipfarm is installed: ${auto} steps done automatically, each with its output (and an Undo where there is one) in the chat.` : `The runbook is ${RUNBOOK.length} steps: ${auto ? `${auto} ran automatically, ` : ''}${RUNBOOK.length - auto} wait on cards for your Run. Turn on Auto-approve in the setup to let routine steps run by themselves.`;
+    }
     if (/\b(gain|free up|clean|make room|recommend|what can go)\b|9\d%/i.test(p)) {
       await use('it_run', { command: 'du -sh /var/lib/docker /var/log /root/.cache /opt/backups /opt/keel', sort: 'size' });
       await use('it_run', { command: 'journalctl --disk-usage' });
@@ -137,7 +164,7 @@ export function itSession(opts: SessionOptions, cb: SessionCallbacks): SessionHa
     }
     if (/\b(disk|space|free)\b/i.test(p)) return `The system disk has **${free}**.\n\`\`\`suggestions\nFree up space\nCheck the machine\n\`\`\``;
     const health = await use('it_health', {});
-    return `All quiet: the system disk has ${free}, and ${health.startsWith('Refused') ? "the office's readings aren't in yet" : "memory and the watchdog look fine"}.\n\`\`\`suggestions\nFree up space\nHow much disk is free?\n\`\`\``;
+    return `All quiet: the system disk has ${free}, and ${health.startsWith('Refused') ? "the office's readings aren't in yet" : "memory and the watchdog look fine"}.\n\`\`\`suggestions\nFree up space\nHow much disk is free?\nInstall clipfarm\n\`\`\``;
   };
   const finish = (ok: boolean, text: string, error?: string) => {
     if (done) return;

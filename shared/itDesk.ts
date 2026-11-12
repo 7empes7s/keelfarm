@@ -27,12 +27,16 @@ export interface ItLogEntry {
   code: number | null; // null: it didn't run (refused) or was killed
   out: string; // its output, short and masked
   why?: string;
+  auto?: true; // run by auto-approve (#585), without the manager's tap
+  undo?: string[][]; // an auto step's undo, run on the manager's Undo
+  undone?: true;
 }
 
 /** What the office keeps in its state file. */
 export interface ItDeskState {
   waiting: ItProposal[];
   log: ItLogEntry[]; // newest first, IT_LOG_KEPT at most
+  units?: string[]; // systemd units IT installed itself (#585): routine auto-approve may start and restart them
 }
 
 /** What a tab sees: whether it's on, the waiting cards, and the latest IT_LOG_SHOWN log lines. */
@@ -70,5 +74,6 @@ const strings = (v: unknown): v is string[] => Array.isArray(v) && v.length > 0 
 export function loadItDesk(v: unknown): ItDeskState {
   const d = (v && typeof v === 'object' ? v : {}) as Partial<Record<keyof ItDeskState, unknown>>;
   const list = (x: unknown) => (Array.isArray(x) ? x.filter((e) => e && typeof e === 'object' && typeof e.id === 'string' && strings(e.argv) && Number.isFinite(e.at)) : []);
-  return { waiting: list(d.waiting) as ItProposal[], log: (list(d.log) as ItLogEntry[]).slice(0, IT_LOG_KEPT) };
+  const units = Array.isArray(d.units) ? d.units.filter((u): u is string => typeof u === 'string').slice(0, 100) : [];
+  return { waiting: list(d.waiting) as ItProposal[], log: (list(d.log) as ItLogEntry[]).slice(0, IT_LOG_KEPT), ...(units.length && { units }) };
 }
