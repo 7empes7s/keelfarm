@@ -10,6 +10,7 @@ const DAY_MS = 86_400_000;
 export const NOTICE_KINDS: { id: NoticeKind; icon: string; label: string }[] = [
   { id: 'needsYou', icon: '⚠️', label: 'Needs you' },
   { id: 'approval', icon: '✋', label: 'Approvals' },
+  { id: 'it', icon: '🔧', label: 'IT' },
   { id: 'ceo', icon: '💬', label: 'CEO' },
   { id: 'merge', icon: '🔀', label: 'Merges' },
   { id: 'qaPass', icon: '✅', label: 'QA passed' },
@@ -33,6 +34,7 @@ export const ACTION_LABEL: Record<NoticeAction, string> = {
   approvals: 'Approvals',
   setup: 'Set it up',
   reviewKeys: 'Review',
+  openIt: 'Open IT',
 };
 
 const LEVEL: Partial<Record<NoticeKind, NoticeView['level']>> = { merge: 'success', qaPass: 'success', qaFail: 'error', error: 'error', stuck: 'error' };

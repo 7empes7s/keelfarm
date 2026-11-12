@@ -40,6 +40,7 @@ import { PhoneHud } from './PhoneHud';
 import { BrowserFullButton } from './BrowserFullButton';
 import { useAimCard } from './AgentCard';
 import { touchHelpShows, tourAllows, useTourGate } from './tourGate';
+import { openIt, useItBadge } from './useItBadge';
 
 /** While the office is on its way to updating itself (or restarting to do it); opens the console's Office row. */
 function OfficeUpdateChip() {
@@ -91,6 +92,18 @@ function DoctorChip() {
   return (
     <button className="office-chip doctor-chip" onClick={() => openOverlay({ kind: 'manager', tab: 'ops', card: 'doctor' })} title="The office doctor found something stuck. Open Mission control">
       <Icon name="stethoscope" /> {count} to check
+    </button>
+  );
+}
+
+/** IT's open cards and checks needing a look (#580); opens the IT department. */
+function ItChip() {
+  const count = useItBadge();
+  const manager = useStore((s) => s.overlay?.kind === 'manager');
+  if (!count || manager) return null;
+  return (
+    <button className="office-chip" onClick={openIt} title="IT has cards for you or a check needs a look. Open the IT department">
+      <Icon name="wrench" /> IT · {count} waiting
     </button>
   );
 }
@@ -235,6 +248,7 @@ export function HUD() {
       <UsageChip />
       <MemoryChip />
       <DoctorChip />
+      <ItChip />
     </>
   );
 

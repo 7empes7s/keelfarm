@@ -7,6 +7,7 @@ import { GROUPS, hashFor, loadRemembered, opening, remember, search, sectionRow,
 import { CeoTab, FloorsTab, IssuesTab, TeamTab } from './ManagerConsole';
 import { ItDeskSettings } from './ItDeskCards';
 import { ItDept } from './ItDept';
+import { useItBadge } from './useItBadge';
 import { AboutOffice, AgentsSettings, CeoSettings, CompanySettings, PreviewsSettings, RuntimeSettings } from './SettingsSections';
 import { OpsTab } from './MissionConsole';
 import { ProblemsPage } from './ProblemsPage';
@@ -158,12 +159,12 @@ export function SectionBody({ id, where, focus = {} }: { id: SectionId; where: W
   }
 }
 
-/** The number waiting in each section: team changes for the CEO, alarms in Mission control, charter proposals. */
+/** The number waiting in each section: team changes for the CEO, alarms in Mission control, charter proposals, IT's cards and checks (#580). */
 export function useBadges(): Partial<Record<SectionId, number>> {
   const ceo = useStore((s) => pendingRequests(s.requests).length);
   const ops = useStore((s) => s.ops.alarms.length + s.doctor.length);
   const charter = useStore((s) => s.repos.filter((r) => r.charter.proposal).length);
-  return { ceo, ops, charter };
+  return { ceo, ops, charter, 'it-dept': useItBadge() };
 }
 
 const groupBadge = (g: GroupId, where: Where, badges: Partial<Record<SectionId, number>>) => sectionsIn(g, where).reduce((n, s) => n + (badges[s.id] ?? 0), 0);

@@ -25,7 +25,7 @@ function Status({ s }: { s: CauseStatus }) {
   return <span className={`it-imp-status it-imp-${s}`}>{STATUS[s]}</span>;
 }
 
-function ImproveCard({ c }: { c: ItImproveCard }) {
+export function ImproveCard({ c }: { c: ItImproveCard }) {
   const [busy, setBusy] = useState(false);
   const act = (fn: () => Promise<unknown>) => {
     setBusy(true);
@@ -52,6 +52,11 @@ function ImproveCard({ c }: { c: ItImproveCard }) {
         </details>
       )}
       <p className="small muted">{c.why}</p>
+      {c.full && (
+        <p className="small it-imp-full" role="status">
+          <Icon name="info" /> {c.full}
+        </p>
+      )}
       <div className="row it-rec-foot">
         <span className="muted small grow">
           {c.by} · {agoText(c.at, Date.now())}
@@ -60,9 +65,15 @@ function ImproveCard({ c }: { c: ItImproveCard }) {
           <button type="button" className="btn btn-small btn-ghost" disabled={busy} onClick={() => act(() => api.itImproveDismiss(c.id))}>
             Not now
           </button>
-          <button type="button" className="btn btn-small btn-good" disabled={busy} onClick={() => act(() => api.itImproveApprove(c.id))}>
-            <Icon name="check" /> Approve
-          </button>
+          {c.full ? (
+            <button type="button" className="btn btn-small btn-good" disabled={busy} onClick={() => act(() => api.itImproveFit(c.id))}>
+              <Icon name="brain" /> Ask the CEO to fit it
+            </button>
+          ) : (
+            <button type="button" className="btn btn-small btn-good" disabled={busy} onClick={() => act(() => api.itImproveApprove(c.id))}>
+              <Icon name="check" /> Approve
+            </button>
+          )}
         </span>
       </div>
     </article>

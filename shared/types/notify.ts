@@ -78,9 +78,9 @@ export interface NoteView {
 }
 
 /** The notification centre (#107, shared/notices.ts): what a notice is about, and the buttons it offers. */
-export type NoticeKind = 'merge' | 'qaPass' | 'qaFail' | 'needsYou' | 'ceo' | 'stuck' | 'usage' | 'error' | 'approval' | 'update' | 'keys' | 'setup';
+export type NoticeKind = 'merge' | 'qaPass' | 'qaFail' | 'needsYou' | 'ceo' | 'stuck' | 'usage' | 'error' | 'approval' | 'update' | 'keys' | 'setup' | 'it';
 /** Each maps to an existing api call or panel in the client (ui/noticeActions.ts), never to a URL from the server. */
-export type NoticeAction = 'openPr' | 'openQa' | 'approve' | 'reply' | 'terminal' | 'retry' | 'approvals' | 'reviewKeys' | 'setup';
+export type NoticeAction = 'openPr' | 'openQa' | 'approve' | 'reply' | 'terminal' | 'retry' | 'approvals' | 'reviewKeys' | 'setup' | 'openIt';
 type NoticeTarget = DistributiveOmit<Exclude<ChatRef, { kind: 'file' }>, 'start' | 'end'>;
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 export interface NoticeView {

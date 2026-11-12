@@ -4,7 +4,7 @@
 // proposals are cards with Approve / Not now in its chat and on Telegram. Approve files the issue on its floor, or adds
 // the line through the CEO's own set_office_playbook / set_floor_profile. Nothing changes without a tap. Rules pure in
 // shared/itImprove.ts.
-import { addCards, addRecord, approveCard, cardText, groupCauses, IMPROVE_CARD_ID, improveView, loadImprove, makeCard, makeRecord, openRecord, refreshCosts, reviewBrief, reviewWeek, withLine, type ImproveInput, type ItImproveView } from '../../shared/itImprove.ts';
+import { addCards, addRecord, approveCard, cardPlace, cardText, fitAsk, fitLine, groupCauses, IMPROVE_CARD_ID, improveView, loadImprove, makeCard, makeRecord, openRecord, refreshCosts, reviewBrief, reviewWeek, type ImproveInput, type ItImproveCard, type ItImproveView } from '../../shared/itImprove.ts';
 import type { ItTicket } from '../../shared/itTickets.ts';
 import type { CostSession } from '../../shared/costs.ts';
 import { OFFICE_PLAYBOOK_MAX, PLAYBOOK_MAX, type WorldSnapshot } from '../../shared/types.ts';
@@ -143,7 +143,7 @@ export abstract class SwarmItImprove extends SwarmItWatch {
     addCards(this.state.itImprove, cards);
     this.improveChanged();
     for (const c of cards) void this.itTelegram(cardText(c), improveKeyboard(c.id));
-    this.notifier.notify('decisions', `${this.itName}: ${cards.length} improvement${cards.length === 1 ? '' : 's'} to approve`, cards.map((c) => c.title).join('\n'));
+    this.notice({ kind: 'it', title: `${this.itName}: ${cards.length} improvement${cards.length === 1 ? '' : 's'} to approve`, text: cards.map((c) => c.title).join('\n'), actions: ['openIt'] }, { event: 'decisions' });
     return `${cards.length} card${cards.length === 1 ? '' : 's'} for the manager with Approve / Not now. Nothing changes until they approve: an issue is filed on its floor, a line goes into the playbook or QA brief.`;
   }
 
@@ -168,19 +168,17 @@ export abstract class SwarmItImprove extends SwarmItWatch {
       });
       Object.assign(ref, { issue: n, url: `https://github.com/${repo.fullName}/issues/${n}` });
       done = `filed #${n} on floor ${repo.floor}: ${c.title}`;
-    } else if (c.kind === 'office_playbook') {
-      const next = withLine(this.state.settings.officePlaybook ?? '', c.line!);
-      if (next !== null && next.length > OFFICE_PLAYBOOK_MAX) throw new HttpError(400, `The office playbook would be ${next.length} characters, over its ${OFFICE_PLAYBOOK_MAX}: shorten it in Settings first.`);
-      if (next !== null) this.setOfficePlaybook(next);
-      done = next === null ? 'the office playbook has that line already' : 'added a line to the office playbook';
     } else {
-      const repo = this.floorRepo(c.floor!);
-      const brief = c.kind === 'qa_brief';
-      const next = withLine((brief ? repo.qaBrief : repo.playbook) ?? '', c.line!);
-      const max = brief ? QA_BRIEF_MAX : PLAYBOOK_MAX;
-      if (next !== null && next.length > max) throw new HttpError(400, `Floor ${repo.floor}'s ${brief ? 'QA brief' : 'playbook'} would be ${next.length} characters, over its ${max}: shorten it first.`);
-      if (next !== null) this.setFloorProfile({ floor: repo.floor, ...(brief ? { qa_brief: next } : { playbook: next }) });
-      done = next === null ? `floor ${repo.floor}'s ${brief ? 'QA brief' : 'playbook'} has that line already` : `added a line to floor ${repo.floor}'s ${brief ? 'QA brief' : 'playbook'}`;
+      const line = this.lineTarget(c);
+      const fit = fitLine(c, line.text, line.max);
+      if ('full' in fit) {
+        // not an error: the card says so and offers Ask the CEO to fit it (#580)
+        c.full = fit.full;
+        this.improveChanged();
+        return { full: fit.full };
+      }
+      if (fit.next !== null) line.set(fit.next);
+      done = fit.next === null ? `${cardPlace(c)} has that line already` : `added a line to ${cardPlace(c)}`;
     }
     const change = approveCard(s, c, Date.now(), ref);
     const line = `🔁 Approved for "${c.cause}": ${done}.`;
@@ -188,6 +186,25 @@ export abstract class SwarmItImprove extends SwarmItWatch {
     void this.itTelegram(line);
     this.improveChanged();
     return { change };
+  }
+
+  /** The text a line card adds to, its limit and how it's saved (the CEO's own set_office_playbook / set_floor_profile). */
+  private lineTarget(c: ItImproveCard) {
+    if (c.kind === 'office_playbook') return { text: this.state.settings.officePlaybook ?? '', max: OFFICE_PLAYBOOK_MAX, set: (t: string) => this.setOfficePlaybook(t) };
+    const repo = this.floorRepo(c.floor!);
+    const brief = c.kind === 'qa_brief';
+    return { text: (brief ? repo.qaBrief : repo.playbook) ?? '', max: brief ? QA_BRIEF_MAX : PLAYBOOK_MAX, set: (t: string) => this.setFloorProfile({ floor: repo.floor, ...(brief ? { qa_brief: t } : { playbook: t }) }) };
+  }
+
+  /** POST /api/it/improve/:id/fit: Ask the CEO to fit it: the manager's message to the CEO, and the card is the CEO's now. */
+  async improveFit(id: string) {
+    const c = this.card(id);
+    if (c.kind === 'issue') throw new HttpError(400, 'That proposal files an issue: Approve it instead.');
+    const line = this.lineTarget(c);
+    const { id: message } = await this.messageCeo(fitAsk(c, line.text.length, line.max));
+    this.state.itImprove.cards = this.state.itImprove.cards.filter((x) => x !== c);
+    this.improveChanged();
+    return { message };
   }
 
   /** POST /api/it/improve/:id/dismiss: Not now; the next review may propose it again. */
@@ -205,7 +222,9 @@ export abstract class SwarmItImprove extends SwarmItWatch {
       this.improveDismiss(id);
       return '✋ Not now.';
     }
-    const { change } = await this.improveApprove(id);
+    const r = await this.improveApprove(id);
+    if ('full' in r) return `✋ ${r.full}`;
+    const { change } = r;
     return change.issue ? `✅ Filed #${change.issue}.` : '✅ Added.';
   }
 }
