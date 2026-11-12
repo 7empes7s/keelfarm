@@ -1,0 +1,17 @@
+/* The CEO's terminal window (#596): the terminal fills the panel, phones and computers alike. */
+.ceo-terminal .panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  min-height: 0;
+}
+.ceo-terminal .live-term,
+.ceo-terminal .term {
+  flex: 1;
+  min-height: min(420px, 60dvh);
+}
+.ceo-terminal-note {
+  margin: 0;
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-sm);
+}

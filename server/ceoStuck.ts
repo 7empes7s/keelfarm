@@ -6,6 +6,12 @@ import type { ChatCeoStuck } from '../shared/types.ts';
 /** A message to the CEO with nothing back (no text, no tool call) this long: it's shown as stuck. */
 export const CEO_SILENT_MS = 60_000;
 
+/**
+ * A CEO session silent for CEO_SILENT_MS is stuck only when nothing it started is still open (#596): an office wait
+ * (wait_for, consult, ask_manager: `waiting`, their labels) or a tool call (`tool`) means it's busy, not stuck.
+ */
+export const ceoSilentStuck = (waiting: string | null, tool: string | null) => !waiting && !tool;
+
 /** The card's kind for a blocked state (liveState.ts), or 'silent' for no answer. */
 export function ceoStuckKind(kind: StuckKind | 'silent'): ChatCeoStuck['kind'] {
   if (kind === 'not-started') return 'silent';

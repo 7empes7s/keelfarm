@@ -60,6 +60,7 @@ import { badgeCount } from '../ui/badgeCount';
 import type { IconName } from '../ui/icons';
 import { floorColumns, statusLine } from './companyLayout';
 import { layerOf, panels, topPanel, usePanels, type PanelEntry, type Panels } from '../ui/panels';
+import { isCeoTerminal } from '../ui/ceoTermRules';
 import { DockGrip, useDockWidth } from './DockGrip';
 import './pocket.css';
 import './desktop.css'; // pocket.css's feature blocks (#257), in their old order
@@ -68,6 +69,7 @@ import './pages.css';
 
 // Opened from the Team and Kanban tabs; loaded when first opened (the terminal brings xterm.js).
 const TerminalView = lazy(() => import('../ui/TerminalView').then((m) => ({ default: m.TerminalView })));
+const CeoTerminal = lazy(() => import('../ui/CeoTerminal').then((m) => ({ default: m.CeoTerminal })));
 const CardView = lazy(() => import('../ui/CardView').then((m) => ({ default: m.CardView })));
 // The console's tabs, loaded when Settings is first opened.
 const PocketConsole = lazy(() => import('./PocketConsole').then((m) => ({ default: m.PocketConsole })));
@@ -306,7 +308,7 @@ function Board({ repoId, pick }: { repoId: string | null; pick: (id: string) => 
 // ---------- the shell ----------
 
 /** The overlays that open in the pane: an agent's terminal, a card and the notification centre (a floor's app opens the Previews page). */
-const inPane = (o: Overlay | null) => (o?.kind === 'terminal' && o.agentId !== CEO_ID) || o?.kind === 'card' || o?.kind === 'notices';
+const inPane = (o: Overlay | null) => (o?.kind === 'terminal' && (o.agentId !== CEO_ID || isCeoTerminal(o))) || o?.kind === 'card' || o?.kind === 'notices';
 
 /** The pane's overlay for the panel manager (#212): its key, and what the back chip says. */
 function paneEntry(o: Overlay): PanelEntry<Overlay> {
@@ -352,6 +354,7 @@ function ChatButton({ open, toggle }: { open: boolean; toggle: () => void }) {
 /** Panels the tabs (and the chat's chips) open over the page: an agent's terminal, a floor's app and a card. */
 function PocketOverlay() {
   const overlay = useStore((s) => s.overlay);
+  if (isCeoTerminal(overlay)) return <CeoTerminal />;
   if (overlay?.kind === 'terminal' && overlay.agentId !== CEO_ID) return <TerminalView agentId={overlay.agentId} view={overlay.view} jump={overlay.jump} details={overlay.details} profile={overlay.profile} />;
   if (overlay?.kind === 'card') return <CardView repoId={overlay.repoId} cardKey={overlay.key} number={overlay.number} pr={overlay.pr} />;
   if (overlay?.kind === 'notices') return <NoticeCentre />;

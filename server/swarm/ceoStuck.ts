@@ -3,7 +3,7 @@
 // sign-in says so. Each is a card in the chat (Open terminal, Sign in, Switch back) and one notification per job.
 // The words and Switch back's target are pure, in server/ceoStuck.ts.
 import type { SessionCallbacks, SessionHandle, SessionOptions } from '../agentRunner.ts';
-import { CEO_SILENT_MS, ceoStuckKind, ceoStuckText, switchBackTo } from '../ceoStuck.ts';
+import { CEO_SILENT_MS, ceoSilentStuck, ceoStuckKind, ceoStuckText, switchBackTo } from '../ceoStuck.ts';
 import type { CeoJob } from '../ceo.ts';
 import type { StuckKind } from '../liveState.ts';
 import { HttpError } from '../httpError.ts';
@@ -24,6 +24,7 @@ export abstract class SwarmCeoStuck extends SwarmCeo {
     const rt = this.agentRt.get(a.id)!;
     const job = this.state.ceo.job;
     let timer: ReturnType<typeof setTimeout> | null = null;
+    let tool: string | null = null; // the tool call it's in, if any
     const quiet = () => {
       if (timer) clearTimeout(timer);
       timer = null;
@@ -35,7 +36,8 @@ export abstract class SwarmCeoStuck extends SwarmCeo {
     };
     const arm = () => {
       quiet();
-      timer = setTimeout(() => stuck('silent', "hasn't answered in a minute"), CEO_SILENT_MS);
+      // Inside wait_for or consult (the CLI shows nothing meanwhile) or any tool call, it's busy: look again later.
+      timer = setTimeout(() => (ceoSilentStuck(this.holds.waiting(), tool) ? stuck('silent', "hasn't answered in a minute") : arm()), CEO_SILENT_MS);
     };
     const alive = () => {
       quiet();
@@ -53,6 +55,7 @@ export abstract class SwarmCeoStuck extends SwarmCeo {
         cb.text?.(text, done);
       },
       tool: (name) => {
+        tool = name;
         if (name) alive();
         cb.tool(name);
       },

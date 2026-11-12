@@ -48,9 +48,9 @@ afterEach(async () => {
 const realTimeout = globalThis.setTimeout; // before the fake timers
 
 /** Fake time moves in steps, with a moment of real time for real I/O (the CEO's folder, the accounts file) between them. */
-async function wait(ms: number) {
-  for (let t = 0; t < ms; t += 100) {
-    await vi.advanceTimersByTimeAsync(100);
+async function wait(ms: number, step = 100) {
+  for (let t = 0; t < ms; t += step) {
+    await vi.advanceTimersByTimeAsync(step);
     await new Promise((r) => realTimeout(r, 2));
   }
 }
@@ -510,6 +510,21 @@ describe('the CEO on a second account', { timeout: 30_000 }, () => {
     cb!.text?.('Here.', true); // it answers: no longer shown as stuck
     expect(swarm.snapshot().agents.find((a) => a.id === 'ceo')?.blocked).toBeNull();
     expect(ceo().status).toBe('working');
+  });
+
+  it("isn't stuck while it waits in wait_for, and is once nothing is open for a minute (#596)", async () => {
+    const { swarm, i, cards } = await ceoOn();
+    i.backend.startSession = (_opts, c) => ({ send: () => undefined, stop: () => c.finished({ ok: false, text: '', costUsd: 0, turns: 0, errors: ['Stopped'], interrupted: true }) });
+    const holds = (swarm as unknown as { holds: { wait: (label: string, check: () => string | null, ms: number) => Promise<string>; cancel: (why: string) => void } }).holds;
+    await swarm.messageCeo('Merge it when green');
+    void holds.wait('PR #592 on floor 1 to merge', () => null, 15 * 60_000); // the MCP call went to the background: the CLI shows nothing
+    await wait(3_000); // the session starts (real I/O), then long steps: small ones time out on Windows
+    await wait(5 * 60_000, 5_000);
+    expect(cards()).toHaveLength(0);
+    expect(swarm.snapshot().agents.find((a) => a.id === 'ceo')?.blocked).toBeFalsy();
+    holds.cancel('done'); // the wait is over and nothing else runs
+    await wait(61_000, 1_000);
+    expect(cards().map((m) => m.ceoStuck?.kind)).toEqual(['silent']);
   });
 });
 
