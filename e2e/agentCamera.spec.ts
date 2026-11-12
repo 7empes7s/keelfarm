@@ -88,7 +88,7 @@ for (const width of [390, 1280]) {
   });
 }
 
-test('the 3D office keeps its frame rate with the camera tile open', async ({ page }) => {
+test('in the 3D office the camera tile keeps to its frame budget and stops when closed', async ({ page }) => {
   test.setTimeout(240_000); // two warm-ups and two measurements, in software WebGL
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/?camera=ceo');
