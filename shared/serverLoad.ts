@@ -1,5 +1,5 @@
 // How much of the server is used and by which programs (#271): the latest reading (memory, swap, load, disk and each
-// program's memory and CPU), a 24 h trend of 1-minute points kept in the office's memory only, and the pure rules both
+// program's memory and CPU), a 24 h trend of 1-minute points (in memory, on disk every 10 minutes), and the pure rules both
 // sides share. The server samples it (server/serverLoad.ts); the chat's `server:*` sources and Mission control's
 // Server card draw it (client/src/ui/chatVisualSources.ts, ServerCard.tsx). Only program names leave the server,
 // never command lines.
@@ -60,6 +60,8 @@ export interface ServerPoint {
 export const SAMPLE_MS = 15_000;
 export const POINT_MS = 60_000;
 export const TREND_MS = 24 * 3_600_000;
+/** How often the trend is written to disk, so a restart keeps the day (#587). */
+export const SAVE_MS = 10 * 60_000;
 /** Programs in a reading at most; smaller ones are summed into Other (keeps the snapshot small in a big company). */
 const MAX_PROGRAMS = 24;
 export const MAX_ORPHANS = 10;
@@ -89,6 +91,16 @@ export function addPoint(trend: readonly ServerPoint[], p: ServerPoint): ServerP
   const last = trend[trend.length - 1];
   const kept = trend.filter((x) => x.at > p.at - TREND_MS);
   return last && p.at - last.at < POINT_MS ? kept : [...kept, p];
+}
+
+/** The trend read back from disk: well-formed points of the last 24 h, oldest first; [] for anything else. */
+export function keptTrend(raw: unknown, now: number): ServerPoint[] {
+  if (!Array.isArray(raw)) return [];
+  const num = (v: unknown) => typeof v === 'number' && Number.isFinite(v);
+  return raw
+    .filter((p): p is ServerPoint => !!p && num(p.at) && num(p.memPct) && num(p.swapPct) && (p.loadPct === null || num(p.loadPct)) && p.at > now - TREND_MS && p.at <= now)
+    .map(({ at, memPct, swapPct, loadPct }) => ({ at, memPct, swapPct, loadPct }))
+    .sort((a, b) => a.at - b.at);
 }
 
 /** The trend in buckets of `bucketMs` (each bucket's average), oldest first, so a phone draws a day in ~144 points. */

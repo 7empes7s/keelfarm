@@ -6,9 +6,11 @@ import { deltaTone, formatDelta, formatValue, SERIES_COLORS, sortRows, xTicks, t
 import type { CostsView } from '../../../shared/costs';
 import { costDays, needsServerTrend, resolveVisual, type Resolved, type SourceData } from './chatVisualSources';
 import type { ServerPoint } from '../../../shared/serverLoad';
+import { yTop } from '../../../shared/timeScale';
 import { useRefOpen } from './RefChips';
 import { useWidth } from './useWidth';
 import { Sheet } from './ChatArtifacts';
+import { TimeChart } from './TimeChart';
 import './chatVisuals.css';
 import { Icon } from './Icon';
 import type { IconName } from './icons';
@@ -90,11 +92,7 @@ const CHAR_PX = 7; // a character of axis text, about
 const heightOf = (w: number) => Math.min(260, Math.max(140, Math.round(w * 0.47)));
 
 /** A round top for the y axis: 1, 2, 2.5 or 5 times a power of ten. */
-function niceMax(v: number): number {
-  if (v <= 0) return 1;
-  const p = 10 ** Math.floor(Math.log10(v));
-  return ([1, 2, 2.5, 5, 10].find((m) => m * p >= v) ?? 10) * p;
-}
+const niceMax = (v: number) => yTop(v, false);
 
 interface ChartProps {
   c: VisualChart;
@@ -319,6 +317,7 @@ function ChartBody({ c, big }: { c: Resolved<VisualChart>; big?: boolean }) {
   const [plotRef, w] = useWidth(W);
   if (c.missing || !c.labels.length) return <p className="viz-missing">{c.missing ?? 'Nothing to show yet.'}</p>;
   const donut = c.type === 'donut';
+  const time = (c.type === 'line' || c.type === 'area') && c.time?.at.length === c.labels.length ? c.time : null; // its readout sits by the crosshair
   const props: ChartProps = { c, hidden, sel: sel !== null && sel < c.labels.length ? sel : null, onSel: setSel, w };
   const Body = donut ? DonutChart : c.type === 'progress' ? ProgressChart : c.type === 'line' || c.type === 'area' ? LinesChart : BarsChart;
   const legend = donut ? c.labels : c.series.length > 1 ? c.series.map((s) => s.name) : [];
@@ -336,7 +335,7 @@ function ChartBody({ c, big }: { c: Resolved<VisualChart>; big?: boolean }) {
   return (
     <div className={`viz-chart ${big ? 'viz-big' : ''}`}>
       <div ref={plotRef} className="viz-plot" role="img" aria-label={summary}>
-        <Body {...props} />
+        {time ? <TimeChart c={c} time={time} hidden={hidden} w={w} h={heightOf(w)} color={(i) => seriesColor(i, c.series[i]?.color)} /> : <Body {...props} />}
       </div>
       {legend.length > 0 && (
         <div className="viz-legend">
@@ -348,7 +347,7 @@ function ChartBody({ c, big }: { c: Resolved<VisualChart>; big?: boolean }) {
           ))}
         </div>
       )}
-      <div className="viz-tip" aria-live="polite">
+      {!time && <div className="viz-tip" aria-live="polite">
         {props.sel !== null ? (
           <>
             <b className="grow viz-tip-text">
@@ -363,7 +362,7 @@ function ChartBody({ c, big }: { c: Resolved<VisualChart>; big?: boolean }) {
         ) : (
           <span className="muted small">{`Tap a ${donut ? 'slice' : c.type === 'line' || c.type === 'area' ? 'point' : c.type === 'progress' ? 'row' : 'bar'} ${c.refs?.some(Boolean) ? 'to see it and open it' : 'for its value'}`}</span>
         )}
-      </div>
+      </div>}
       <DataTable c={c} visible={big} />
     </div>
   );

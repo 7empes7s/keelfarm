@@ -175,8 +175,10 @@ export interface ResourceProbe {
   server(ctx: LoadContext): Promise<ServerNow>;
   /** Stop a process left over from an ended session, and what it started, by pid (#271). */
   stopOrphan(pid: number, ctx: LoadContext): Promise<void>;
-  /** The 24 h trend's points from before the office started: the demo's made-up day; none for the real one. */
+  /** The 24 h trend's points from before the office started: the real one's kept on disk, the demo's made-up day. */
   serverSeed(): ServerPoint[];
+  /** Keep the trend for the next start (the real office: `<SWARM_HOME>/server-trend.json`). */
+  serverSave?(points: ServerPoint[]): void;
   /** The demo only: pretend memory is low, or back. */
   simulate?(low: boolean): void;
 }
@@ -282,7 +284,7 @@ export interface LiveSession {
 }
 
 export interface HealthHost {
-  probe(): Omit<ResourceProbe, 'server' | 'stopOrphan' | 'serverSeed'>; // the server's load is ServerLoad's (#271)
+  probe(): Omit<ResourceProbe, 'server' | 'stopOrphan' | 'serverSeed' | 'serverSave'>; // the server's load is ServerLoad's (#271)
   settings(): MemorySettings;
   sessions(): LiveSession[];
   /** A line in the agent's feed. */

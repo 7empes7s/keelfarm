@@ -1,12 +1,13 @@
 // The server's load by program (#271, shared/serverLoad.ts): every 15 s, memory, swap, load and disk, and each
 // process's memory and CPU from /proc, grouped into programs: an agent's CLI session, the test browsers and demo
 // offices or test runners they started, previews, this office, Postgres/Docker, the rest. A 24 h trend of 1-minute
-// points stays in memory (never in the state file). Linux reads /proc; elsewhere only memory, load and disk.
+// points stays in memory, kept in its own file every 10 minutes for the next start (#587). Linux reads /proc; elsewhere only memory, load and disk.
 // Pure parsing and grouping first, then the readings, then ServerLoad, which the Swarm drives.
+import fsSync from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { addPoint, capPrograms, MAX_ORPHANS, pointOf, type DiskUse, type OrphanUse, type ProgramUse, type ServerNow, type ServerPoint } from '../shared/serverLoad.ts';
+import { addPoint, capPrograms, keptTrend, MAX_ORPHANS, pointOf, SAVE_MS, type DiskUse, type OrphanUse, type ProgramUse, type ServerNow, type ServerPoint } from '../shared/serverLoad.ts';
 import { HOME_DIR } from './config.ts';
 import { HttpError } from './httpError.ts';
 import { kill, killPlan, orphans, type Proc } from './procSweep.ts';
@@ -282,16 +283,19 @@ async function stopOrphanTree(pid: number, ctx: LoadContext): Promise<void> {
 
 export interface LoadHost {
   read(ctx: LoadContext): Promise<ServerNow>;
-  /** Points from before this office started (the demo's made-up day); [] for the real one. */
+  /** Points from before this office started (the real one's from disk, the demo's made-up day). */
   seed(): ServerPoint[];
   context(): LoadContext;
   emit(now: ServerNow): void;
+  /** Keeps the trend for the next start (every SAVE_MS); the demo keeps nothing. */
+  save?(points: ServerPoint[]): void;
 }
 
 export class ServerLoad {
   private latest: ServerNow | null = null;
   private trend: ServerPoint[];
   private reading = false;
+  private savedAt = 0;
 
   constructor(private host: LoadHost) {
     this.trend = host.seed();
@@ -304,6 +308,10 @@ export class ServerLoad {
     try {
       this.latest = await this.host.read(this.host.context());
       this.trend = addPoint(this.trend, pointOf(this.latest));
+      if (this.host.save && this.latest.at - this.savedAt >= SAVE_MS) {
+        this.savedAt = this.latest.at;
+        this.host.save(this.trend);
+      }
       this.host.emit(this.latest);
     } catch (err) {
       console.warn('server load: could not read', err);
@@ -322,10 +330,29 @@ export class ServerLoad {
 }
 
 const memo: LoadMemo = { at: 0, cpu: null, procs: new Map() };
+const TREND_FILE = path.join(HOME_DIR, 'server-trend.json');
+
+/** The day's trend from before a restart (#587), so the chart isn't empty after every update. */
+function readTrend(): ServerPoint[] {
+  try {
+    return keptTrend(JSON.parse(fsSync.readFileSync(TREND_FILE, 'utf8')), Date.now());
+  } catch {
+    return []; // none yet, or unreadable: start a new day
+  }
+}
+
+function saveTrend(points: ServerPoint[]) {
+  const tmp = `${TREND_FILE}.tmp`;
+  void fs
+    .writeFile(tmp, JSON.stringify(points))
+    .then(() => fs.rename(tmp, TREND_FILE))
+    .catch((err) => console.warn('server load: could not keep the trend', err));
+}
 
 /** This computer's readings, for the ResourceProbe (health.ts): the system disk and the office's data folder. */
 export const realLoad = {
   server: (ctx: LoadContext) => readServer(ctx, memo, [{ label: 'System disk', dir: path.parse(HOME_DIR).root }, { label: 'Office data', dir: HOME_DIR }]),
   stopOrphan: stopOrphanTree,
-  serverSeed: (): ServerPoint[] => [],
+  serverSeed: readTrend,
+  serverSave: saveTrend,
 };
