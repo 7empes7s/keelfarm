@@ -2,14 +2,38 @@ import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_MEMORY, heldNote, memorySettings, type HealthView, type MemoryReading, type MemorySettings } from '../shared/health.ts';
 import { DEFAULT_DISK, type DiskAlertMark } from '../shared/disk.ts';
 import { createDemoBackend } from './demo.ts';
-import { admission, checkRestart, heldMessage, heldPing, idlePreview, KILL_RETRIES, killRetry, learnEstimate, MEMORY_PING_GAP_MS, memoryRelief, memoryVictim, OfficeHealth, requeueMessage, reservedMb, sessionKilled, stopDigest, type LiveSession } from './health.ts';
+import fs from 'node:fs';
+import path from 'node:path';
+import { admission, checkRestart, heldMessage, heldPing, idlePreview, KILL_RETRIES, labAdmission, killRetry, learnEstimate, MEMORY_PING_GAP_MS, memoryRelief, memoryVictim, OfficeHealth, requeueMessage, reservedMb, sessionKilled, stopDigest, type LiveSession } from './health.ts';
 import { Swarm } from './swarm.ts';
+import { parseMeminfo } from './serverLoad.ts';
 
 // The office never takes its computer down (#55): sessions start only when memory allows, sessions killed for memory
 // resume (at most twice) and then go back to the queue, and the CEO can restart and guide stuck agents.
 
 const mem = (availableMb: number, swapFreeMb = 0): MemoryReading => ({ availableMb, totalMb: 7800, swapFreeMb, swapTotalMb: 8192, load: 2, cpus: 4, at: 0 });
 const est = () => 1536;
+
+describe("the test lab's memory gate (#560)", () => {
+  // This box's /proc/meminfo: MemFree is 0.3 GB, MemAvailable (free plus reclaimable cache) 3.3 GB.
+  const sample = fs.readFileSync(path.join(import.meta.dirname, 'fixtures', 'proc', 'meminfo'), 'utf8');
+  const reading = (text: string): MemoryReading => ({ ...parseMeminfo(text)!, load: 2, cpus: 4, at: 0 });
+  const gate = (memory: MemoryReading, kind: 'labRun' | 'labBrowser' = 'labRun') => labAdmission({ kind, memory, estimateMb: 1536, headroomMb: 1536 });
+
+  it('starts a lab job on MemAvailable, not MemFree, and not held back by what agent sessions might still grow by', () => {
+    expect(gate(reading(sample))).toBeNull();
+    // The agents' admission, with eight young sessions reserved, would hold that same reading.
+    expect(admission({ kind: 'labRun', memory: reading(sample), estimateMb: 1536, headroomMb: 1536, reservedMb: 8 * 1100 })).toMatch(/^Waiting for memory/);
+  });
+
+  it('waits when MemAvailable is truly low, keeping a floor free so a real OOM cannot happen', () => {
+    const low = reading(sample.replace(/^MemAvailable:\s+\d+/m, 'MemAvailable:    2097152'));
+    expect(gate(low)).toBe('Waiting for memory: 2.0 GB available, a lab run needs about 1.5 GB and 0.8 GB stays free.');
+    expect(gate({ ...low, swapFreeMb: 8000 })).toMatch(/^Waiting for memory/); // swap doesn't count
+    expect(gate(mem(2304))).toBeNull();
+    expect(labAdmission({ kind: 'labBrowser', memory: mem(900), estimateMb: 512, headroomMb: 0 })).toMatch(/a lab browser job needs about 0\.5 GB and 0\.5 GB stays free/);
+  });
+});
 
 describe('admission', () => {
   const ask = (kind: 'build' | 'ceo', memory: MemoryReading | null, reserved = 0) => admission({ kind, memory, estimateMb: 1536, headroomMb: 1536, reservedMb: reserved });
