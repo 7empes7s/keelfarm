@@ -17,6 +17,7 @@ import { AUTO_STEPS_MAX, autoVerdict, type AutoPlan } from '../itAuto.ts';
 import type { ItJob } from '../../shared/itDept.ts';
 import { OFFICE_DIR } from '../officeUpdate.ts';
 import { applyWrite, CfError, ingressGet, planWrite, tokenScopes } from '../cloudflare.ts';
+import { envPathRefusal, envSecretFile } from '../cfSecretFile.ts';
 import type { CloudflareArgs } from '../ceoItTools.ts';
 import { SwarmManagerAsks } from './managerAsks.ts';
 
@@ -198,6 +199,16 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
 
   private cfKeys = () => this.providers.keysFor('cloudflare');
 
+  /** Where a service token's secret goes (#607): the env file asked for, else one under the office's home (the demo's always is). */
+  private cfSecretPath(envFile: string | undefined, name: string) {
+    const own = path.join(HOME_DIR, 'secrets', `cf-access-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'token'}.env`);
+    if (!envFile) return own;
+    if (this.backend.demo) return path.join(HOME_DIR, 'secrets', path.basename(envFile));
+    const no = envPathRefusal(envFile, this.itProtected);
+    if (no) throw new CfError(no);
+    return path.resolve(envFile);
+  }
+
   /** cloudflare: a read now, or a write on a diff card for the manager's Approve. The key stays on the server. */
   protected async cloudflareAct(a: CloudflareArgs, by: string): Promise<string> {
     if (!this.itOn) throw new HttpError(403, OFF);
@@ -206,12 +217,13 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
       if (a.op === 'token_scopes') return this.itMask(await tokenScopes(this.cfKeys(), api, a));
       if (a.op === 'tunnel_ingress_get') return this.itMask(await ingressGet(this.cfKeys(), api, a.tunnel));
       if (!a.hostname) throw new CfError('Give the hostname, e.g. clip.example.com.');
-      const plan = await planWrite(this.cfKeys(), api, { ...a, op: a.op, hostname: a.hostname });
+      const secretFile = a.op === 'access_service_token_ensure' ? envSecretFile(this.cfSecretPath(a.env_file, a.name ?? '')) : undefined;
+      const plan = await planWrite(this.cfKeys(), api, { ...a, op: a.op, hostname: a.hostname, secretFile });
       if (plan.already) return `${plan.already} Nothing to approve.`;
       const c = plan.change;
-      const argv = ['cloudflare', c.op, c.hostname, ...(c.op === 'tunnel_ingress_add' ? [c.service] : [])];
-      const undo = c.op === 'tunnel_ingress_add' ? 'remove the rule in Zero Trust → Networks → Tunnels' : c.op === 'dns_cname_ensure' ? 'delete the record in DNS' : 'delete the app in Zero Trust → Access → Applications';
-      const line = this.itQueue({ argv, why: a.why ?? `Cloudflare: ${plan.summary}.`, affects: plan.summary, undo, risk: c.op === 'access_app_ensure' ? 'medium' : 'low', by, cf: c, diff: plan.diff });
+      const argv = ['cloudflare', c.op, c.hostname, ...(c.op === 'tunnel_ingress_add' ? [c.service] : c.op === 'access_service_token_ensure' ? [c.name] : [])];
+      const undo = c.op === 'tunnel_ingress_add' ? 'remove the rule in Zero Trust → Networks → Tunnels' : c.op === 'dns_cname_ensure' ? 'delete the record in DNS' : c.op === 'access_service_token_ensure' ? "delete its policy on the app, then the token in Zero Trust → Access → Service auth, and its two lines in the env file" : 'delete the app in Zero Trust → Access → Applications';
+      const line = this.itQueue({ argv, why: a.why ?? `Cloudflare: ${plan.summary}.`, affects: plan.summary, undo, risk: c.op === 'access_app_ensure' || c.op === 'access_service_token_ensure' ? 'medium' : 'low', by, cf: c, diff: plan.diff });
       return `On the manager's card with its diff: \`${line}\`. Nothing is written until they tap Approve; then it's applied and read back.\n${this.itMask(plan.diff)}`;
     } catch (err) {
       if (err instanceof CfError) throw new HttpError(400, this.itMask(err.message));
@@ -255,7 +267,7 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
 
   /** Approve on a Cloudflare card: written and read back, as a command's result (code 0 when the read-back matches). */
   private async cfApply(p: ItProposal) {
-    const r = await applyWrite(this.cfKeys(), this.backend.cloudflareApi, p.cf!);
+    const r = await applyWrite(this.cfKeys(), this.backend.cloudflareApi, p.cf!, p.cf?.op === 'access_service_token_ensure' ? envSecretFile(p.cf.envFile) : undefined);
     return { code: r.ok ? 0 : 1, out: r.text, err: '' };
   }
 

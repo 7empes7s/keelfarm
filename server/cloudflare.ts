@@ -4,9 +4,10 @@
 // and read back. The key is picked by what it can do: the first whose calls aren't turned away. `api` is the only
 // network (backend.cloudflareApi); everything here is testable with a fake one.
 import type { CfChange } from '../shared/cloudflare.ts';
+import type { CfSecretFile } from './cfSecretFile.ts';
 
 export interface CfRequest {
-  method: 'GET' | 'POST' | 'PUT';
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE';
   path: string; // under /client/v4, e.g. "/accounts"
   body?: unknown;
 }
@@ -33,6 +34,7 @@ const CF_PERM = {
   zone: 'Zone › Zone › Read',
   dns: 'Zone › DNS › Edit',
   access: 'Account › Access: Apps and Policies › Edit',
+  tokens: 'Account › Access: Service Tokens › Edit',
 } as const;
 
 export class CfError extends Error {
@@ -61,7 +63,7 @@ async function cf<T>(call: Call, req: CfRequest, perm: string): Promise<T> {
   if (r.status === 0) throw new CfError("Couldn't reach Cloudflare's API.");
   const b = (r.body && typeof r.body === 'object' ? r.body : {}) as Envelope;
   const errs = Array.isArray(b.errors) ? b.errors : [];
-  if (r.status === 401 || r.status === 403 || errs.some((e) => DENIED.has(Number(e.code)))) throw new CfError(`The key lacks ${perm}.`, perm);
+  if (r.status === 401 || r.status === 403 || errs.some((e) => DENIED.has(Number(e.code)))) throw new CfError(`The key needs ${perm}.`, perm);
   if (r.status >= 400 || b.success === false) throw new CfError(`Cloudflare answered ${r.status}: ${errs.map((e) => `${e.code ?? ''} ${e.message ?? ''}`.trim()).join('; ').slice(0, 300) || 'no reason given'}.`);
   return b.result as T;
 }
@@ -78,10 +80,10 @@ export async function withKey<T>(keys: readonly CfKey[], api: CfApi, fn: (call: 
       return await fn((req) => api(k.key, req), k);
     } catch (err) {
       if (!(err instanceof CfError) || !err.missing) throw err;
-      lacks.push(`"${k.label}" lacks ${err.missing}`);
+      lacks.push(`the key needs ${err.missing} ("${k.label}")`);
     }
   }
-  throw new CfError(`No Cloudflare key can do this: ${lacks.join('; ')}. Give a token that permission (or add one with it) in Settings → Providers.`);
+  throw new CfError(`No Cloudflare key can do this: ${lacks.join('; ')}. Nothing was changed: give a token that permission (or add one with it) in Settings → Providers.`);
 }
 
 // ---------- pure rules ----------
@@ -167,6 +169,14 @@ const dnsOf = (call: Call, zone: string, host: string) => cf<DnsRecord[]>(call, 
 type AccessApp = { id: string; domain?: string; name?: string };
 const appsOf = (call: Call, account: string) => cf<AccessApp[]>(call, { method: 'GET', path: `/accounts/${account}/access/apps?per_page=500` }, CF_PERM.access);
 
+type ServiceToken = { id: string; name: string; client_id?: string };
+type Policy = { id: string; name?: string; decision?: string; include?: Record<string, unknown>[] };
+/** The account's service token with exactly this name, if any. */
+const tokenOf = async (call: Call, account: string, name: string) => (await cf<ServiceToken[]>(call, { method: 'GET', path: `/accounts/${account}/access/service_tokens?name=${encodeURIComponent(name)}&per_page=50` }, CF_PERM.tokens))?.find((t) => t.name === name);
+const policiesOf = async (call: Call, account: string, app: string) => (await cf<Policy[]>(call, { method: 'GET', path: `/accounts/${account}/access/apps/${app}/policies` }, CF_PERM.access)) ?? [];
+/** A Service Auth policy letting this token in. */
+const servesToken = (p: Policy, id: string) => p.decision === 'non_identity' && (p.include ?? []).some((r) => (r.service_token as { token_id?: string } | undefined)?.token_id === id);
+
 /** tunnel_ingress_get: the tunnel's rules, one a line. */
 export function ingressGet(keys: readonly CfKey[], api: CfApi, tunnel?: string): Promise<string> {
   return withKey(keys, api, async (call, k) => {
@@ -190,7 +200,7 @@ export async function tokenScopes(keys: readonly CfKey[], api: CfApi, o: { hostn
         lines.push(`  ✓ ${what}`);
         return v;
       } catch (err) {
-        lines.push(`  ✗ ${what}: ${err instanceof CfError && err.missing ? `missing ${perm}` : (err as Error).message}`);
+        lines.push(`  ✗ ${what}: ${err instanceof CfError && err.missing ? `the key needs ${perm}` : (err as Error).message}`);
         return null;
       }
     };
@@ -205,6 +215,7 @@ export async function tokenScopes(keys: readonly CfKey[], api: CfApi, o: { hostn
       const zone = o.hostname ? await check('zone', CF_PERM.zone, () => zoneOf(call, cleanHost(o.hostname!))) : null;
       if (zone) await check(`DNS records in ${zone.name}`, CF_PERM.dns, () => dnsOf(call, zone.id, cleanHost(o.hostname!)));
       if (account) await check('Access apps', CF_PERM.access, () => appsOf(call, account));
+      if (account) await check('Access service tokens', CF_PERM.tokens, () => tokenOf(call, account, 'cubefarm'));
     }
     out.push(`"${k.label}"${k.ok === false ? ' (its Providers test fails)' : ''}:\n${lines.join('\n')}`);
   }
@@ -221,9 +232,10 @@ export interface CfPlan {
 }
 
 /** A write's plan: the ids found, the card's diff, or `already` when it's in place. */
-export function planWrite(keys: readonly CfKey[], api: CfApi, a: { op: CfChange['op']; hostname: string; service?: string; tunnel?: string; emails?: string[]; bypass?: string[] }): Promise<CfPlan> {
+export function planWrite(keys: readonly CfKey[], api: CfApi, a: { op: CfChange['op']; hostname: string; service?: string; tunnel?: string; emails?: string[]; bypass?: string[]; name?: string; duration?: string; secretFile?: CfSecretFile }): Promise<CfPlan> {
   const host = cleanHost(a.hostname);
   return withKey(keys, api, async (call, k) => {
+    if (a.op === 'access_service_token_ensure') return planServiceToken(call, k, host, a);
     if (a.op === 'tunnel_ingress_add') {
       if (!a.service) throw new CfError('Give the service, e.g. http://localhost:80.');
       const account = await accountOf(call, k);
@@ -273,12 +285,91 @@ const accessMissing = (apps: readonly AccessApp[], host: string, bypass: readonl
   return [host, ...bypass.map((p) => `${host}${p}`)].filter((d) => !have.has(d));
 };
 
+// ---------- service tokens (#607) ----------
+
+const cleanName = (n?: string) => {
+  const s = (n ?? '').trim();
+  if (!/^[\w .@-]{1,100}$/.test(s)) throw new CfError(`Give the service token a name like "clipfarm e2e" (letters, digits, spaces, . _ - @).`);
+  return s;
+};
+const cleanDuration = (d?: string) => {
+  const s = d?.trim();
+  if (s && !/^\d{1,6}h$/.test(s)) throw new CfError(`"${d}" isn't a duration like 8760h.`);
+  return s || undefined;
+};
+const tokenPolicy = (name: string, id: string) => ({ name: `Service token ${name}`, decision: 'non_identity', include: [{ service_token: { token_id: id } }] });
+
+/** access_service_token_ensure's plan: the token by name, its secret in the file, its Service Auth policy on the hostname's app. */
+async function planServiceToken(call: Call, k: CfKey, host: string, a: { name?: string; duration?: string; secretFile?: CfSecretFile }): Promise<CfPlan> {
+  const name = cleanName(a.name);
+  const duration = cleanDuration(a.duration);
+  if (!a.secretFile) throw new CfError('No file to store the secret in.');
+  const file = a.secretFile;
+  const account = await accountOf(call, k);
+  const app = (await appsOf(call, account))?.find((x) => x.domain?.toLowerCase() === host);
+  if (!app) throw new CfError(`No Access app on ${host}: put it behind Access first (access_app_ensure).`);
+  const token = await tokenOf(call, account, name);
+  const policies = await policiesOf(call, account, app.id);
+  const stored = !!token?.client_id && (await file.clientId()) === token.client_id;
+  const hasPolicy = !!token && policies.some((p) => servesToken(p, token.id));
+  const lines = [
+    token ? `${stored ? ' ' : '~'} service token ${name}${stored ? '' : ': rotate its secret (the old secret stops working)'}` : `+ service token ${name}${duration ? ` (${duration})` : ''}`,
+    `${stored ? ' ' : '+'} its client id and secret stored at ${file.path} (mode 600)`,
+    ...policies.filter((p) => !token || !servesToken(p, token.id)).map((p) => `  policy ${p.name ?? p.id}: ${p.decision ?? '?'}`),
+    `${hasPolicy ? ' ' : '+'} policy Service token ${name}: non_identity (Service Auth)`,
+  ];
+  const change: CfChange = { op: 'access_service_token_ensure', keyId: k.id, accountId: account, hostname: host, appId: app.id, name, ...(duration && { duration }), envFile: file.path };
+  return { change, diff: `Access app ${host}:
+${lines.join('\n')}`, summary: `lets service token "${name}" through Access on ${host}, keeping its ${policies.length} polic${policies.length === 1 ? 'y' : 'ies'}; the secret is stored at ${file.path}`, ...(stored && hasPolicy && { already: `Service token "${name}" already gets through Access on ${host}, its secret stored at ${file.path}.` }) };
+}
+
+/** Approve on a service token card: each write undone if a later one fails, the secret only ever into the file. */
+async function applyServiceToken(call: Call, c: Extract<CfChange, { op: 'access_service_token_ensure' }>, file: CfSecretFile): Promise<{ ok: boolean; text: string }> {
+  const undo: (() => Promise<unknown>)[] = [];
+  const addPolicy = (id: string) => cf<Policy>(call, { method: 'POST', path: `/accounts/${c.accountId}/access/apps/${c.appId}/policies`, body: tokenPolicy(c.name, id) }, CF_PERM.access);
+  let wrote = 0;
+  let rotated = false;
+  try {
+    const token = await tokenOf(call, c.accountId, c.name);
+    if (token) {
+      if (!(await policiesOf(call, c.accountId, c.appId)).some((p) => servesToken(p, token.id))) {
+        const p = await addPolicy(token.id);
+        undo.push(() => call({ method: 'DELETE', path: `/accounts/${c.accountId}/access/apps/${c.appId}/policies/${p.id}` }));
+        wrote++;
+      }
+      if (!token.client_id || (await file.clientId()) !== token.client_id) {
+        const r = await cf<{ client_id?: string; client_secret?: string }>(call, { method: 'POST', path: `/accounts/${c.accountId}/access/service_tokens/${token.id}/rotate` }, CF_PERM.tokens);
+        rotated = true;
+        await file.write(r?.client_id ?? token.client_id ?? '', r?.client_secret ?? '');
+        wrote++;
+      }
+    } else {
+      const t = await cf<ServiceToken & { client_secret?: string }>(call, { method: 'POST', path: `/accounts/${c.accountId}/access/service_tokens`, body: { name: c.name, ...(c.duration && { duration: c.duration }) } }, CF_PERM.tokens);
+      undo.push(() => call({ method: 'DELETE', path: `/accounts/${c.accountId}/access/service_tokens/${t.id}` }));
+      undo.push(await file.write(t.client_id ?? '', t.client_secret ?? ''));
+      await addPolicy(t.id);
+      wrote++;
+    }
+  } catch (err) {
+    for (const u of undo.reverse()) await u().catch(() => undefined);
+    const msg = err instanceof Error ? err.message : String(err);
+    return { ok: false, text: rotated ? `The secret was rotated but couldn't be stored at ${file.path}: ${msg}` : `${msg} Nothing was kept${undo.length ? ': what was written is undone' : ''}.` };
+  }
+  const back = await tokenOf(call, c.accountId, c.name);
+  const policy = !!back && (await policiesOf(call, c.accountId, c.appId)).some((p) => servesToken(p, back.id));
+  const stored = !!back?.client_id && (await file.clientId()) === back.client_id;
+  const ok = policy && stored;
+  if (!wrote && ok) return { ok, text: `Service token "${c.name}" already got through Access on ${c.hostname}: nothing written.` };
+  return { ok, text: ok ? `Read back: service token "${c.name}" gets through Access on ${c.hostname} (Service Auth); its secret is stored at ${file.path}.` : `Read back, but ${!back ? 'no token' : !policy ? 'no Service Auth policy' : `the secret at ${file.path} isn't this token's`}.` };
+}
+
 /** Approve: plans again with the card's key (rules added since are kept), writes, reads back. Never throws. */
-export async function applyWrite(keys: readonly CfKey[], api: CfApi, c: CfChange): Promise<{ ok: boolean; text: string }> {
+export async function applyWrite(keys: readonly CfKey[], api: CfApi, c: CfChange, secretFile?: CfSecretFile): Promise<{ ok: boolean; text: string }> {
   const key = keys.find((k) => k.id === c.keyId);
   if (!key) return { ok: false, text: 'The Cloudflare key this card was planned with is gone from Settings → Providers: ask for it again.' };
   const call: Call = (req) => api(key.key, req);
   try {
+    if (c.op === 'access_service_token_ensure') return secretFile ? await applyServiceToken(call, c, secretFile) : { ok: false, text: 'No file to store the secret in.' };
     if (c.op === 'tunnel_ingress_add') {
       const { config, ingress } = await ingressOf(call, c.accountId, c.tunnelId);
       const p = planIngressAdd(ingress, c.hostname, c.service);
