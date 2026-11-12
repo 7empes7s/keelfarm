@@ -395,7 +395,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
     const { cards, total, page, note } = paged(id, all);
     const summary = shut && foldSummary(id, all, total);
     return (
-      <div className={`kcol ${cls} ${shut ? 'kcol-shut' : ''}`} ref={(el) => void (colEls.current[id] = el)}>
+      <div className={`kcol ${cls} ${shut ? 'kcol-shut' : ''}`} data-tour={`kanban-${id}`} ref={(el) => void (colEls.current[id] = el)}>
         <button type="button" className="kcol-head" aria-expanded={!shut} aria-controls={`${foldId}-${id}`} onClick={() => fold(id, !shut)}>
           <span className="kcol-name">{title}</span> <span className="count">{total}</span>
           {summary && <span className="kcol-summary">{summary}</span>}

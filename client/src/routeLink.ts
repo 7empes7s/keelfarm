@@ -85,11 +85,21 @@ export function showTab(tab: string) {
   history.replaceState(history.state, '', `${location.pathname}?${q}${stale ? '' : location.hash}`);
 }
 
+let here: { mode: Mode; stand?: (s: Stand) => boolean } | null = null; // the office running, for openLink
+
+/** Opens a link from inside the office (the task tutorials, #517), as if followed, without a new history entry. */
+export function openLink(hash: string) {
+  if (!here) return;
+  history.replaceState(history.state, '', location.pathname + location.search + hash);
+  void open(here.mode, hash, false, here.stand);
+}
+
 /** Opens the address's link once loaded, follows hash changes, and keeps the address on what's open. */
 export function useRouteLink(mode: Mode, stand?: (s: Stand) => boolean) {
   const ready = useStore((s) => s.loaded && (mode === 'pocket' || s.settings.setupDone));
   useEffect(() => {
     if (!ready) return;
+    here = { mode, stand };
     void open(mode, location.hash, true, stand);
     let popped = 0;
     const onPop = () => void (popped = performance.now());
@@ -104,6 +114,7 @@ export function useRouteLink(mode: Mode, stand?: (s: Stand) => boolean) {
     });
     (window as unknown as Record<string, unknown>).__swarmRoutes = { table: ROUTES, links: () => sampleLinks(worldOf(useStore.getState()), mode) };
     return () => {
+      here = null;
       window.removeEventListener('popstate', onPop);
       window.removeEventListener('hashchange', onHash);
       unsubscribe();

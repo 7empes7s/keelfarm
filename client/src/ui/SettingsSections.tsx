@@ -17,6 +17,7 @@ import { EffortByKind } from './CostsSection';
 import { AwakeSettings, FollowupSettings } from './CeoFollowups';
 import { useChatMode } from './chatMode';
 import { openWhatsNew, useTour } from './tour';
+import { TutorialsHub } from './TaskTutorial';
 import { Icon } from './Icon';
 import { PR_PREVIEW_SLOTS } from './channels';
 import { STATUS_EMOJI } from '../../../shared/reactions';
@@ -102,7 +103,7 @@ export function AgentsSettings() {
         />
       </label>
       <p className="muted small">When Claude warns that usage is getting high, new issues only start while fewer sessions than this are running. QA, fixes and the CEO carry on.</p>
-      <label className="field">
+      <label className="field" data-tour="pacing">
         <span>When Claude warns that usage is high</span>
         <select value={usageChoice(settings.usageWarnings)} onChange={(e) => set({ usageWarnings: e.target.value as UsageWarningChoice })}>
           {USAGE_WARNING_CHOICES.map((c) => (
@@ -116,7 +117,7 @@ export function AgentsSettings() {
         Pace new work: your Resume full speed holds for that usage window, restarts included. Keep full speed: warnings show but never pace. Ask me each time: pace, and ask again after a restart. Reaching
         the limit still pauses new work.
       </p>
-      <label className="field">
+      <label className="field" data-tour="team-size">
         <span>Most agents per floor</span>
         <input
           key={settings.maxAgents}
@@ -356,6 +357,7 @@ export function CompanySettings() {
           <Icon name="sparkles" /> What's new
         </button>
       </div>
+      <TutorialsHub />
     </div>
   );
 }

@@ -76,6 +76,13 @@ function openPage(p: TourPage) {
     case 'costs':
       goTo({ kind: 'section', section: 'ops' });
       return reveal('costs');
+    case 'home': // nothing over the main page: pocket mode's Company tab, the 3D office's floor
+      useFinder.setState({ guide: false, search: false });
+      useStore.getState().openOverlay(null);
+      return window.dispatchEvent(new CustomEvent('cubefarm:open', { detail: '?tab=company' }));
+    case 'guide':
+      useFinder.setState({ search: false });
+      return goTo({ kind: 'guide' });
   }
 }
 
@@ -87,7 +94,7 @@ function keepPage(): () => void {
   return () => useStore.getState().openOverlay(was);
 }
 
-function StepText({ text }: { text: string }) {
+export function StepText({ text }: { text: string }) {
   const company = useStore((s) => s.settings.companyName) || 'the company';
   const ceo = useStore((s) => s.agents[CEO_ID]?.name ?? 'the CEO');
   return (
@@ -132,10 +139,10 @@ function coveredAt(el: Element, x: number, y: number): boolean {
   return !!hit && !el.contains(hit) && !hit.closest('.tour');
 }
 
-/** The first of `targets` on screen, where it's drawn: never inside the tour's card, never under a sheet. */
-function findTarget(targets: readonly string[]): Box | null {
-  const candidates = targets.flatMap((t) =>
-    [...document.querySelectorAll(`[data-tour="${t}"]`)].map((el) => {
+/** The first of `selectors` on screen, where it's drawn: never inside the tour's card, never under a sheet. */
+function findTarget(selectors: readonly string[]): Box | null {
+  const candidates = selectors.flatMap((t) =>
+    [...document.querySelectorAll(t)].map((el) => {
       const r = el.getBoundingClientRect();
       const raw = { left: r.left, top: r.top, width: r.width, height: r.height };
       const zoom = zoomOf(el);
@@ -154,19 +161,22 @@ function findTarget(targets: readonly string[]): Box | null {
 
 const same = (a: Box | null, b: Box | null) => a === b || (!!a && !!b && a.left === b.left && a.top === b.top && a.width === b.width && a.height === b.height);
 
+/** A tour step's `data-tour` ids as the selectors useSpot takes. */
+const tourSelectors = (ids: readonly string[]) => ids.map((t) => `[data-tour="${t}"]`).join('\n');
+
 /**
- * Where to ring the step's control, in the px of the box the card is drawn in (inside the pocket, the UI scale's), so
+ * Where to ring the step's control (`selectors`, one per line), in the px of the box the card is drawn in (inside the pocket, the UI scale's), so
  * the ring sits under the card in its stacking order; following it on resize, scroll and layout changes, null when it
  * isn't on screen.
  */
-function useSpot(targets: string): Box | null {
+export function useSpot(selectors: string): Box | null {
   const [rect, setRect] = useState<Box | null>(null);
   useEffect(() => {
-    if (!targets) return setRect(null);
+    if (!selectors) return setRect(null);
     let frame = 0;
     const look = () => {
       frame = 0;
-      const seen = findTarget(targets.split(' '));
+      const seen = findTarget(selectors.split('\n'));
       const host = document.querySelector('.tour')?.parentElement;
       const z = host ? zoomOf(host) : 1;
       const r = seen && z !== 1 ? { left: seen.left / z, top: seen.top / z, width: seen.width / z, height: seen.height / z } : seen;
@@ -183,14 +193,14 @@ function useSpot(targets: string): Box | null {
       window.removeEventListener('resize', soon);
       window.removeEventListener('scroll', soon, true);
     };
-  }, [targets]);
+  }, [selectors]);
   return rect;
 }
 
 /** A ring around the control a step is about, and the page dimmed around it; the dim alone when it isn't on screen. */
-function Spotlight({ rect }: { rect: Box | null }) {
+export function Spotlight({ rect, className = '' }: { rect: Box | null; className?: string }) {
   const pad = 4;
-  return rect ? <div className={`tour-ring ${reduceMotion() ? '' : 'tour-ring-pulse'}`} aria-hidden style={{ left: rect.left - pad, top: rect.top - pad, width: rect.width + pad * 2, height: rect.height + pad * 2 }} /> : <div className="tour-dim" aria-hidden />;
+  return rect ? <div className={`tour-ring ${className} ${reduceMotion() ? '' : 'tour-ring-pulse'}`} aria-hidden style={{ left: rect.left - pad, top: rect.top - pad, width: rect.width + pad * 2, height: rect.height + pad * 2 }} /> : <div className={`tour-dim ${className}`} aria-hidden />;
 }
 
 /** The tour on this screen: the full one while settings.tutorialStep says so, else a What's new replay. */
@@ -263,8 +273,7 @@ export function Tutorial({ track }: { track: Track }) {
   }, [page]);
   useEffect(() => () => stage.current?.restore(), []);
 
-  const targets = active ? (steps[at]?.targets ?? []).join(' ') : '';
-  const spot = useSpot(targets);
+  const spot = useSpot(active ? tourSelectors(steps[at]?.targets ?? []) : '');
 
   useEffect(() => {
     const rule = id ? DONE[id] : undefined;
