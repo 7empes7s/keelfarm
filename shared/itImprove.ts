@@ -40,6 +40,8 @@ export interface ItRecord {
   auto?: boolean;
 }
 
+/** An improvement card's id (`i-<time>-<n>`), also its Telegram buttons' id on IT's or the CEO's bot. */
+export const IMPROVE_CARD_ID = /^i-[a-z0-9]+-\d+$/;
 export const IMPROVE_KINDS = ['issue', 'office_playbook', 'floor_playbook', 'qa_brief'] as const;
 type ImproveKind = (typeof IMPROVE_KINDS)[number];
 export type CauseStatus = 'new' | 'recurring' | 'fixed';

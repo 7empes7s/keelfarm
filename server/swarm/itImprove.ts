@@ -4,7 +4,7 @@
 // proposals are cards with Approve / Not now in its chat and on Telegram. Approve files the issue on its floor, or adds
 // the line through the CEO's own set_office_playbook / set_floor_profile. Nothing changes without a tap. Rules pure in
 // shared/itImprove.ts.
-import { addCards, addRecord, approveCard, cardText, groupCauses, improveView, loadImprove, makeCard, makeRecord, openRecord, refreshCosts, reviewBrief, reviewWeek, withLine, type ImproveInput, type ItImproveView } from '../../shared/itImprove.ts';
+import { addCards, addRecord, approveCard, cardText, groupCauses, IMPROVE_CARD_ID, improveView, loadImprove, makeCard, makeRecord, openRecord, refreshCosts, reviewBrief, reviewWeek, withLine, type ImproveInput, type ItImproveView } from '../../shared/itImprove.ts';
 import type { ItTicket } from '../../shared/itTickets.ts';
 import type { CostSession } from '../../shared/costs.ts';
 import { OFFICE_PLAYBOOK_MAX, PLAYBOOK_MAX, type WorldSnapshot } from '../../shared/types.ts';
@@ -22,7 +22,6 @@ export interface ItImproveArgs {
 const DAY = 24 * 3_600_000;
 const REVIEW_EVERY_MS = 60 * 60_000;
 const QA_BRIEF_MAX = 2500;
-const CARD_ID = /^i-[a-z0-9]+-\d+$/;
 const improveKeyboard = (id: string): TgButton[][] => [[{ text: 'Approve', callback_data: decisionData('approve', id) }, { text: 'Not now', callback_data: decisionData('decline', id) }]];
 
 export abstract class SwarmItImprove extends SwarmItWatch {
@@ -162,7 +161,11 @@ export abstract class SwarmItImprove extends SwarmItWatch {
     let done: string;
     if (c.kind === 'issue') {
       const repo = this.floorRepo(c.floor!);
-      const n = await this.createIssue(repo.id, c.title, `${c.body}\n\n---\n_Proposed by ${c.by} (IT) from the review of "${c.cause}"; approved by the manager._`);
+      s.cards = s.cards.filter((x) => x !== c); // off the list while it's filed, so a second tap can't file it twice
+      const n = await this.createIssue(repo.id, c.title, `${c.body}\n\n---\n_Proposed by ${c.by} (IT) from the review of "${c.cause}"; approved by the manager._`).catch((err: unknown) => {
+        s.cards = [c, ...s.cards];
+        throw err;
+      });
       Object.assign(ref, { issue: n, url: `https://github.com/${repo.fullName}/issues/${n}` });
       done = `filed #${n} on floor ${repo.floor}: ${c.title}`;
     } else if (c.kind === 'office_playbook') {
@@ -197,7 +200,7 @@ export abstract class SwarmItImprove extends SwarmItWatch {
 
   /** An improvement card's Telegram button; the rest as before. */
   protected override async itDecide(verdict: 'approve' | 'decline', id: string): Promise<string> {
-    if (!CARD_ID.test(id)) return super.itDecide(verdict, id);
+    if (!IMPROVE_CARD_ID.test(id)) return super.itDecide(verdict, id);
     if (verdict === 'decline') {
       this.improveDismiss(id);
       return '✋ Not now.';

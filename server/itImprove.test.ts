@@ -16,6 +16,7 @@ type Internals = {
   itReview(a: { days?: number }): string;
   itImprove(a: { proposals: unknown[] }): string;
   itDecide(verdict: 'approve' | 'decline', id: string): Promise<string>;
+  decideFromTelegram(verdict: 'approve' | 'decline', id: string): string | Promise<string>;
   enqueueIt(job: ItJob): void;
   setOfficePlaybook(text: unknown): string;
   setFloorProfile(x: { floor: number; qa_brief?: string; playbook?: string }): string;
@@ -95,6 +96,25 @@ describe("IT's records and the weekly review's cards", () => {
     expect(await x.itDecide('decline', skip.id)).toBe('✋ Not now.');
     expect(x.state.itImprove.cards).toEqual([]);
     expect(x.state.itImprove.changes.map((c) => c.kind).sort()).toEqual(['office_playbook', 'qa_brief']);
+  });
+
+  it("the CEO bot's Approve / Not now reach IT's cards when IT has no bot of its own; two taps at once file one issue", async () => {
+    const { x, dennis, filed } = await office();
+    x.itReport(oom, dennis);
+    await x.itTicket({ id: 1, close: 'ok' });
+    x.itImprove({
+      proposals: [
+        { cause: 'lab:test lab oom', kind: 'issue', floor: 2, title: 'Two workers', why: '', body: 'Run the lab with 2 workers.' },
+        { cause: 'lab:test lab oom', kind: 'office_playbook', title: 'Skip', why: '', line: 'Never mind.' },
+      ],
+    });
+    const [issue, skip] = x.state.itImprove.cards;
+    const taps = await Promise.allSettled([x.decideFromTelegram('approve', issue.id), x.decideFromTelegram('approve', issue.id)]);
+    expect(taps.map((t) => (t.status === 'fulfilled' ? t.value : (t.reason as Error).message))).toEqual([expect.stringMatching(/^✅ Filed #\d+\.$/), expect.stringMatching(/handled or replaced/)]);
+    expect(filed).toHaveLength(1);
+    expect(await x.decideFromTelegram('decline', skip.id)).toBe('✋ Not now.');
+    expect(x.state.itImprove.cards).toEqual([]);
+    expect(x.state.settings.officePlaybook ?? '').not.toContain('Never mind.');
   });
 
   it("Review now: the demo's IT lead reads it_review and puts the top cause on a card", async () => {
