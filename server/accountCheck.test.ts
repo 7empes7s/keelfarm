@@ -2,7 +2,7 @@ import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { claudeLoginCheck, readClaudeLogin } from './accountCheck.ts';
+import { claudeLoginCheck, loginFileState, loginSignedIn, readClaudeLogin } from './accountCheck.ts';
 import { loginOwner, loginPlan } from './usagePoll.ts';
 
 describe('a Claude login’s Test (#442)', () => {
@@ -33,5 +33,32 @@ describe('a Claude login’s Test (#442)', () => {
     await fs.writeFile(path.join(dir, '.claude.json'), JSON.stringify({ oauthAccount: { accountUuid: 'u2' } }));
     expect(await readClaudeLogin(dir)).toEqual({ plan: 'Pro', who: 'u2' });
     await fs.rm(home, { recursive: true, force: true });
+  });
+});
+
+describe("the built-in Claude login's sign-in from its file, no request (#579)", () => {
+  const now = Date.UTC(2026, 10, 12, 12);
+  const cred = (o: object) => JSON.stringify({ claudeAiOauth: { accessToken: 'secret', ...o } });
+
+  it("reads the token's state", () => {
+    expect(loginFileState(cred({ expiresAt: now + 60_000 }), now)).toBe('in');
+    expect(loginFileState(cred({ expiresAt: now - 60_000, refreshToken: 'r' }), now)).toBe('refresh');
+    expect(loginFileState(cred({ expiresAt: now - 60_000 }), now)).toBe('out');
+    expect(loginFileState('{}', now)).toBe('out');
+  });
+
+  it('is signed out with no token, and after a session found it signed out until the file changes (a sign-in or refresh)', () => {
+    const outAt = now - 5 * 60_000;
+    expect(loginSignedIn({ state: 'out', changedAt: now }, null)).toBe(false);
+    expect(loginSignedIn({ state: 'in', changedAt: now - 3_600_000 }, null)).toBe(true);
+    // expiresAt: 0 reads as a token, but the session's sign-in screen keeps it out while the file is the same one
+    expect(loginSignedIn({ state: loginFileState(cred({ expiresAt: 0, refreshToken: 'r' }), now), changedAt: outAt - 1 }, outAt)).toBe(false);
+    expect(loginSignedIn({ state: 'in', changedAt: outAt + 1 }, outAt)).toBe(true);
+    expect(loginSignedIn({ state: 'refresh', changedAt: outAt + 1 }, outAt)).toBe(true);
+  });
+
+  it('leaves it as it was with no file to judge by (a keychain, a token in the environment)', () => {
+    expect(loginSignedIn(null, null)).toBeNull();
+    expect(loginSignedIn(null, now)).toBeNull();
   });
 });

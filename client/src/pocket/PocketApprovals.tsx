@@ -20,6 +20,10 @@ import { Icon } from '../ui/Icon';
 import { iconFor } from '../ui/icons';
 import { HoverCard, PeekCard } from '../ui/HoverCard';
 import { agoText, prAdvice } from '../ui/peekFacts';
+import { openRecs } from '../../../shared/itWatch';
+import { RecCard } from '../ui/ItHealth';
+import { ImproveCard } from '../ui/ItImprove';
+import { openIt } from '../ui/useItBadge';
 
 type Dot = 'pass' | 'fail' | 'pending';
 
@@ -55,6 +59,8 @@ function useItems(now: number): Item[] {
   const requests = useStore((s) => s.requests);
   const decisions = useStore((s) => s.decisions);
   const agents = useStore((s) => s.agents);
+  const itRecs = useStore((s) => s.itWatch?.recs);
+  const itCards = useStore((s) => s.itImprove?.cards);
   const w = waitingOnYou(repos, qa, requests);
   const floorOf = (id: string) => repos.find((r) => r.id === id);
   const prItem = (repo: RepoView, q: QaView, ready: boolean): Item[] => {
@@ -109,6 +115,8 @@ function useItems(now: number): Item[] {
     ...repos
       .filter((r) => r.charter.proposal)
       .map((r): Item => ({ key: `charter:${r.id}`, why: 'charter', title: `Charter change on ${r.fullName.split('/')[1]}`, floor: r.floor, color: r.color, askedAt: r.charter.proposal!.at, openedAt: null, meta: [], dots: [], score: 0, detail: <ProposalCard key={r.id} repo={r} proposal={r.charter.proposal!} />, peek: { why: r.charter.proposal!.reason || `${r.charter.proposal!.by} proposed a charter change.`, recommend: 'Read the change, then Approve or Dismiss' } })),
+    ...openRecs(itRecs ?? [], now).map((r): Item => ({ key: `it:${r.id}`, why: 'it', title: r.title, floor: null, askedAt: r.at, openedAt: null, meta: [r.by, `${r.options.length} option${r.options.length === 1 ? '' : 's'}`], dots: [], score: 0, detail: <ItDetail key={r.id}><RecCard r={r} /></ItDetail>, peek: { why: r.evidence, recommend: 'Run the option you pick, or Not now' } })),
+    ...(itCards ?? []).map((c): Item => ({ key: `it:${c.id}`, why: 'it', title: c.title, floor: c.floor ?? null, askedAt: c.at, openedAt: null, meta: [c.by], dots: [], score: 0, detail: <ItDetail key={c.id}><ImproveCard c={c} /></ItDetail>, peek: { why: c.why || c.cause, recommend: c.full ? 'Ask the CEO to fit it, or Not now' : 'Approve, or Not now' } })),
     ...w.stuck.flatMap((s) => prItem(s.repo, s.qa, false)),
     ...w.ready.flatMap((s) => prItem(s.repo, s.qa, true)),
   ];
@@ -133,6 +141,23 @@ function TeamDetail({ req, now }: { req: Parameters<typeof Resume>[0]['req']; no
         </p>
       </section>
       <Resume req={req} />
+    </div>
+  );
+}
+
+/** One of IT's cards (#580), as in the IT department, with the way there. */
+function ItDetail({ children }: { children: ReactNode }) {
+  return (
+    <div className="apr-detail">
+      <section className="pk-card apr-section apr-header" aria-label="IT">
+        <div className="apr-chips">
+          <WhyTag why="it" />
+        </div>
+        {children}
+        <button className="btn btn-small" onClick={openIt}>
+          <Icon name="wrench" /> Open IT
+        </button>
+      </section>
     </div>
   );
 }

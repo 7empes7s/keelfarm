@@ -1,0 +1,83 @@
+/* The camera tile (#539, CameraTile.tsx): picture-in-picture, over the call screen and the office. */
+
+.cam-tile {
+  position: fixed;
+  z-index: var(--ds-z-popover);
+  left: calc(var(--ds-safe-left) + var(--ds-space-4));
+  bottom: calc(var(--ds-safe-bottom) + var(--ds-space-4));
+  width: calc(var(--ds-target) * 4);
+  border: var(--ds-border-strong) solid var(--ds-outline);
+  border-radius: var(--ds-radius-lg);
+  background: var(--ds-surface-raised);
+  box-shadow: var(--ds-shadow-float);
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+/* on a phone it sits top right, over the call screen's room view and below its header */
+@media (max-width: 640px) {
+  .cam-tile {
+    left: auto;
+    bottom: auto;
+    right: calc(var(--ds-safe-right) + var(--ds-space-4));
+    top: calc(var(--ds-safe-top) + var(--ds-target) + var(--ds-space-4));
+    width: calc(var(--ds-target) * 3);
+  }
+}
+.cam-frame {
+  position: relative;
+}
+.cam-view {
+  aspect-ratio: 1;
+  width: 100%;
+}
+.cam-view canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+.cam-loading {
+  display: grid;
+  place-items: center;
+  background: var(--ds-surface-sunken);
+  font-size: var(--ds-text-xl);
+  font-weight: var(--ds-weight-strong);
+}
+.cam-name {
+  position: absolute;
+  left: var(--ds-space-2);
+  bottom: var(--ds-space-2);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-1);
+  max-width: calc(100% - var(--ds-space-4));
+  padding: 2px var(--ds-space-2);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-scrim);
+  color: var(--ds-surface-raised);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-strong);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cam-live {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-bad-fill);
+}
+.cam-close {
+  position: absolute;
+  top: var(--ds-space-1);
+  right: var(--ds-space-1);
+}
+.cam-saying {
+  margin: 0;
+  padding: var(--ds-space-2);
+  border-top: var(--ds-border) solid var(--ds-line);
+  font-size: var(--ds-text-xs);
+  line-height: var(--ds-leading-tight);
+  color: var(--ds-text);
+}

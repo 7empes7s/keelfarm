@@ -197,6 +197,10 @@
   justify-content: space-between;
   gap: var(--ds-space-2);
 }
+.vcall-top-end {
+  display: flex;
+  gap: var(--ds-space-1);
+}
 .vcall-middle {
   display: flex;
   flex: 1;

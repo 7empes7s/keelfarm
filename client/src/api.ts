@@ -63,6 +63,7 @@ export interface AgentSetupPatch {
   effort?: EffortLevel | '';
   host?: MachineHost | '';
   account?: string; // an account id or tag (#247); '' for the rotation
+  accountFallback?: boolean; // pinned: false waits while it's out (#579)
 }
 
 /** Choices made when a project moves in: a brief for the CEO, and whether work starts on its own. */
@@ -186,8 +187,13 @@ export const api = {
   removeItTelegram: () => call<TelegramView>('DELETE', '/api/it/telegram'),
   // IT monitoring (#525): the checks now, a recommendation's option, Not now.
   itWatchCheck: () => call('POST', '/api/it/watch/check', {}),
+  agentSdkCheck: () => call('POST', '/api/agent-sdk/check', {}),
   itPick: (id: string, option: number) => call('POST', `/api/it/recs/${encodeURIComponent(id)}/pick`, { option }),
   itSnooze: (id: string) => call('POST', `/api/it/recs/${encodeURIComponent(id)}/snooze`, {}),
+  itReviewNow: () => call('POST', '/api/it/improve/review', {}),
+  itImproveApprove: (id: string) => call('POST', `/api/it/improve/${encodeURIComponent(id)}/approve`, {}),
+  itImproveFit: (id: string) => call('POST', `/api/it/improve/${encodeURIComponent(id)}/fit`, {}),
+  itImproveDismiss: (id: string) => call('POST', `/api/it/improve/${encodeURIComponent(id)}/dismiss`, {}),
   itTelegramDemo: (kind: 'start' | 'message' | 'approve' | 'decline', text = '') => call('POST', '/api/it/telegram/demo', { kind, text }),
   diskSettings: (patch: Partial<DiskSettings>) => call<DiskSettings>('PATCH', '/api/disk/settings', patch),
   simulateDisk: (low: boolean) => call<HealthView>('POST', '/api/disk/simulate', { low }),

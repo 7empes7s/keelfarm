@@ -162,7 +162,7 @@ export abstract class SwarmItWatch extends SwarmItTickets {
     w.recs = [...w.recs.filter((r) => r.check !== a.check), rec];
     this.itWatchChanged();
     void this.itTelegram(recText(rec), recKeyboard(rec.id, rec.options));
-    this.notifier.notify('decisions', `${this.itName}: ${rec.title}`, `${options.length} option${options.length === 1 ? '' : 's'} to pick from`);
+    this.notice({ kind: 'it', title: `${this.itName}: ${rec.title}`, text: `${options.length} option${options.length === 1 ? '' : 's'} to pick from`, actions: ['openIt'] }, { event: 'decisions' });
     return `On the manager's card with ${options.length} option${options.length === 1 ? '' : 's'}. Nothing runs until they pick one; the office then measures again and posts the before/after.`;
   }
 

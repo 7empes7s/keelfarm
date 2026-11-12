@@ -61,6 +61,7 @@ export interface PhoneMessage {
   signIn?: ChatSignIn; // the office's: cloud agents to sign in after the API key stopped working (#258), as a card
   switch?: ChatSwitch; // the office's: the CEO moved to another account (#248), shown as a pill
   ceoRuns?: { back: CeoRunsOn }; // the office's: the manager moved the CEO to another coding agent (#418), a pill with Undo to `back`
+  accountOut?: { account: string }; // the office's: a login read signed out (#579), as a card with Sign in
   ceoStuck?: ChatCeoStuck; // the office's: the CEO's session is stuck (#375), as a card with Open terminal, Sign in and Switch back
   pacing?: true; // the office's: pacing started on a usage warning, as a card with Resume full speed and Always keep full speed (#323)
   problems?: ProblemsDigest; // the office's daily problems digest (#544), as a card with tappable items

@@ -12,8 +12,8 @@ describe('sessionRun', () => {
     const r = sessionRun('claude-ultra', 'claude-pro2', accounts, s);
     expect(r).toMatchObject({ account: 'claude-pro2', label: 'Pro secondary', pinned: 'Claude Ultra', why: 'limited' });
     expect(runLabel(r)).toBe('Pro secondary · Opus 5.5');
-    expect(runPinNote(r)).toBe('pinned: Claude Ultra, limited');
-    expect(runText(r)).toBe('Pro secondary · Opus 5.5 high effort (pinned: Claude Ultra, limited)');
+    expect(runPinNote(r)).toBe('because Claude Ultra is limited');
+    expect(runText(r)).toBe('Pro secondary · Opus 5.5 high effort (because Claude Ultra is limited)');
   });
 
   it('a later session on the same account and model is the same chip; a switch is not', () => {
@@ -30,6 +30,7 @@ describe('sessionRun', () => {
   it('names a tag pin no account of which it is on', () => {
     expect(sessionRun('ultra', 'claude-pro2', accounts, s)).toMatchObject({ pinned: 'ultra' });
     expect(sessionRun('ultra', 'claude-pro2', accounts, s).why).toBeUndefined();
+    expect(runPinNote(sessionRun('ultra', 'claude-pro2', accounts, s))).toBe('pinned: ultra');
   });
 
   it('a session on no account of the registry says what it runs on instead, and the coding agent for its default model', () => {

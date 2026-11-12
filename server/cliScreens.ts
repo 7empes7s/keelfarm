@@ -82,6 +82,26 @@ export function screenStep(screen: string, cli: AgentCli): ScreenStep {
 /** The terminal bytes for a key (`app`: the terminal is in application cursor mode). */
 export const keyBytes = (key: ScreenKey, app: boolean) => (key === 'enter' ? '\r' : `\x1b${app ? 'O' : '['}${key === 'down' ? 'B' : 'A'}`);
 
+// ---------- giving up on a screen ----------
+
+/** Keys the office presses on one start-up screen before it stops and leaves it to the manager (#575). */
+export const SCREEN_TRIES = 6;
+
+/**
+ * Whether one more key goes to start-up screen `id` (counted in `tries`): true while it has tries left; once they're
+ * spent, `giveUp` runs once (to say so) and it's false from then on, so a screen that never goes isn't pressed forever.
+ */
+export function screenTry(tries: Map<string, number>, id: string, giveUp: () => void): boolean {
+  const n = (tries.get(id) ?? 0) + 1;
+  tries.set(id, n);
+  if (n === SCREEN_TRIES + 1) giveUp();
+  return n <= SCREEN_TRIES;
+}
+
+/** The agent's log line when the office stops answering a screen. */
+export const gaveUpNote = (label: string, s: KnownScreen) =>
+  `⚠ ${label} needs setup: the office answered their ${s.what.replace(/ \(.*\)$/, '')} ${SCREEN_TRIES} times and it is still on screen. Open their terminal and pick the answer there.`;
+
 // ---------- counting answers per account ----------
 
 const answered = new Map<string, number>();

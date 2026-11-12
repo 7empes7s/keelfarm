@@ -71,8 +71,8 @@ export async function demoAwake(text: string, floors: Floor[], use: Use): Promis
   return null;
 }
 
-/** A built-in tool's step in the demo: its log line (after "⏺ ") and its result (error: it failed). */
-type Step = (tool: string, line: string, result: string, error?: boolean) => Promise<void>;
+/** A built-in tool's step in the demo: its log line (after "⏺ ") and its result (error: it failed), `ms` its run time. */
+type Step = (tool: string, line: string, result: string, error?: boolean, ms?: number) => Promise<void>;
 
 /**
  * "Look into …": a round of reads, a search, a failed fetch, a wait and a filed issue through the real office tools, so
@@ -86,6 +86,11 @@ export async function demoRound(text: string, floors: (Floor & { pullRequests: {
   await step('Grep', 'Grep "joystick"', 'Found 6 matches in 4 files');
   await step('WebSearch', 'Search "mobile joystick UX"', 'Did 1 search');
   await step('WebFetch', 'Fetch https://example.com/joystick-study', '403 Forbidden', true);
+  // "… thoroughly": a dozen more reads and a minute's test run, so the open live log outgrows the chat on a phone (#526)
+  if (/\bthoroughly\b/i.test(text)) {
+    for (let i = 1; i <= 12; i++) await step('Read', `Read client/src/pocket/touch/part${i}.ts`, `Read ${20 * i} lines`, false, 500);
+    await step('Bash', 'Bash npm test -- joystick', 'All 48 tests passed', false, 60_000);
+  }
   const withPr = floors.find((x) => x.pullRequests[0]?.number); // floor 1 may have none
   if (withPr) await use('pr_diff', { floor: withPr.floor, pr: withPr.pullRequests[0].number });
   await use('wait_for', { conditions: [{ kind: 'usage', usage: 'normal' }], timeout_min: 1 });

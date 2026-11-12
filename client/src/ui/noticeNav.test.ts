@@ -36,6 +36,11 @@ describe('noticeJump', () => {
     expect(noticeJump({ kind: 'keys' }, 'pocket', world)).toEqual({ kind: 'keys' });
     expect(noticeStep('reviewKeys', {}, 'office', world)).toEqual({ kind: 'keys' });
   });
+  it("opens the IT department from IT's notice and its Open IT button (#580)", () => {
+    const it = { kind: 'overlay', overlay: { kind: 'manager', tab: 'it-dept' } };
+    expect(noticeJump({ kind: 'it' }, 'pocket', world)).toEqual(it);
+    expect(noticeStep('openIt', {}, 'office', world)).toEqual(it);
+  });
 });
 
 describe('noticeStep', () => {

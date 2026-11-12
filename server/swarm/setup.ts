@@ -57,6 +57,11 @@ export abstract class SwarmSetup extends SwarmDisk {
     const r = this.state.repos.find((x) => x.floor === demo.signedOut.floor);
     const a = r && this.state.agents.filter((x) => x.repoId === r.id && x.role !== 'ceo').at(-1);
     if (a) Object.assign(a, { cli: 'opencode', model: demo.signedOut.model });
+    // A login signed out (#579): floor 1's last agent pinned to it runs elsewhere and says why; its card and problem.
+    const out = this.accounts.list().find((x) => x.id === demo.accountOut);
+    const b = out && this.state.agents.filter((x) => x.repoId === this.state.repos[0]?.id && x.role !== 'ceo' && x.host !== 'box' && !x.cli && !x.account).at(-1);
+    if (b) b.account = out.id;
+    if (out) this.accountOut(out.id, out.label);
     this.refreshFloorSetup();
   }
 

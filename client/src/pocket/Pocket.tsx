@@ -52,6 +52,8 @@ import { showTab, useRouteLink } from '../routeLink';
 import { linkedSection } from '../routes';
 import { heldNote } from '../../../shared/health';
 import { PreviewsHost, PreviewsRailButton, usePreviewsLink } from './PocketPreviews';
+import { ItRailButton } from './ItRailButton';
+import { itWaiting } from '../ui/itBadge';
 import { pushLayer } from '../ui/backStack';
 import { markTeamLanding, pocketJump } from './pocketJump';
 import { Icon, IconText } from '../ui/Icon';
@@ -385,7 +387,7 @@ export default function Pocket() {
   const loaded = useStore((s) => s.loaded);
   const setupDone = useStore((s) => s.settings.setupDone);
   const unread = useStore((s) => unreadMessages(s.messages, s.phoneReadAt));
-  const waiting = useStore((s) => approvalsBadge(waitingOnYou(s.repos, s.qa, s.requests)) + chatDecisions(s.decisions, Date.now()).length); // + the CEO's open questions (#114)
+  const waiting = useStore((s) => approvalsBadge(waitingOnYou(s.repos, s.qa, s.requests)) + chatDecisions(s.decisions, Date.now()).length + itWaiting(s.itWatch, s.itImprove, Date.now()).cards); // + the CEO's open questions (#114), IT's cards (#580)
   const ceoName = useStore((s) => s.agents[CEO_ID]?.name ?? 'CEO');
   const usage = useStore((s) => s.usage.state);
   const publicDemo = useStore((s) => s.publicDemo);
@@ -698,6 +700,7 @@ export default function Pocket() {
               </button>
             );
           })}
+          <ItRailButton on={settings === 'it-dept' && !previewsOpen} />
           {wide && <PreviewsRailButton open={previewsOpen} />}
           {wide && (
             <button data-tour="console" className={`pk-tab pk-tab-console ${settings && !previewsOpen ? 'pk-tab-on' : ''}`} aria-pressed={!!settings && !previewsOpen} onClick={railConsole} title="Settings and notifications">

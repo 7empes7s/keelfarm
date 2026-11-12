@@ -5,6 +5,7 @@ import type { ApplyHandlers, SnapshotPart } from './types';
 export const handlers = {
   settings: (ev, { set }) => set({ settings: ev.settings }),
   clis: (ev, { set }) => set({ clis: ev.clis }),
+  sdkUpdate: (ev, { set }) => set({ sdkUpdate: ev.sdkUpdate }),
   models: (ev, { set }) => set({ models: ev.models }),
   request: (ev, { set, get, cues }) => {
     const prev = get().requests.find((r) => r.id === ev.request.id);
@@ -27,5 +28,6 @@ export const snapshot: SnapshotPart = (d) => ({
   requests: d.requests,
   ceo: d.ceo,
   clis: d.clis ?? [],
+  sdkUpdate: d.sdkUpdate ?? null,
   models: d.models ?? { entries: [], checkedAt: 0 },
 });

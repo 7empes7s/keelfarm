@@ -177,7 +177,7 @@ describe.runIf(process.platform === 'linux')('a session that leaves a server run
     // A suite that boots a server in its own process group and exits without stopping it.
     const server = `require('http').createServer((q,s)=>s.end()).listen(${port},'127.0.0.1',()=>require('fs').writeFileSync(${JSON.stringify(pids)},JSON.stringify([process.pid])))`;
     const suite = `const fs=require('fs');require('child_process').spawn(process.execPath,['-e',${JSON.stringify(server)}],{stdio:'ignore'}).unref();const t=setInterval(()=>{if(fs.existsSync(${JSON.stringify(pids)})){clearInterval(t);console.log('preview base '+process.env.SWARM_PREVIEW_PORT)}},20)`;
-    const r = await createLabRunner().run({ dir, argv: ['node', '-e', suite], timeoutMs: 20_000, silenceMs: null });
+    const r = await createLabRunner().run({ dir, argv: ['node', '-e', suite], timeoutMs: 20_000, silenceMs: null, maxMb: 4096 });
     const [leftover] = JSON.parse(fs.readFileSync(pids, 'utf8')) as number[];
     left.push(leftover);
     expect(r.tail).toContain(`preview base ${LAB_PREVIEW_PORT}`);
@@ -186,6 +186,18 @@ describe.runIf(process.platform === 'linux')('a session that leaves a server run
     expect(await listening(port)).toBe(false);
     fs.rmSync(dir, { recursive: true, force: true });
   });
+
+  it.runIf(process.platform === 'linux')('stops a lab run whose processes grow past its memory limit (#578)', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lab-'));
+    // A suite whose child (like an e2e run's browser) holds 300 MB and never ends.
+    const hog = "const b=Buffer.alloc(300*1024*1024,1);console.log('holding '+b.length);setInterval(()=>b[0]++,1000)";
+    const suite = `require('child_process').spawn(process.execPath,['-e',${JSON.stringify(hog)}],{stdio:'inherit'});setInterval(()=>{},1000)`;
+    const r = await createLabRunner().run({ dir, argv: ['node', '-e', suite], timeoutMs: 30_000, silenceMs: null, maxMb: 200 });
+    expect(r.timedOut).toBe(false);
+    expect(r.oomMb).toBeGreaterThan(200);
+    expect(r.ms).toBeLessThan(20_000);
+    fs.rmSync(dir, { recursive: true, force: true });
+  }, 40_000);
 
   it("leaves alone what listens on the agent's preview block from outside their worktree (a tunnel, a teammate)", async () => {
     // A reserved port nothing listens on, so the by-port kill touches nobody's process.

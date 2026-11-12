@@ -4,7 +4,7 @@ import { checksCause } from './rounds.ts';
 import type { PullInfo, QaView } from './types.ts';
 
 /** Why it needs the manager. outage: GitHub didn't run CI (billing, no runner); checks: QA passed, only CI is red. */
-export type ApprovalWhy = 'outage' | 'checks' | 'qa' | 'ready' | 'product' | 'design' | 'team' | 'charter';
+export type ApprovalWhy = 'outage' | 'checks' | 'qa' | 'ready' | 'product' | 'design' | 'team' | 'charter' | 'it';
 
 export const WHY_LABELS: Record<ApprovalWhy, { icon: string; label: string; short: string }> = {
   outage: { icon: '💳', label: 'CI outage, not the code', short: 'CI outage' },
@@ -15,10 +15,11 @@ export const WHY_LABELS: Record<ApprovalWhy, { icon: string; label: string; shor
   design: { icon: '🎨', label: 'Design approval', short: 'design' },
   team: { icon: '👥', label: 'Team change', short: 'team' },
   charter: { icon: '🎯', label: 'Charter change', short: 'charter' },
+  it: { icon: '🔧', label: 'IT', short: 'IT' },
 };
 
 /** The order the groups show in: what the manager can clear fastest first. */
-export const WHY_ORDER: ApprovalWhy[] = ['design', 'product', 'team', 'charter', 'qa', 'checks', 'outage', 'ready'];
+export const WHY_ORDER: ApprovalWhy[] = ['design', 'product', 'team', 'charter', 'it', 'qa', 'checks', 'outage', 'ready'];
 
 /**
  * Why a PR is in the approvals: ready once QA passed on a floor that doesn't merge by itself; an outage when every red

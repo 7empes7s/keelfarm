@@ -168,6 +168,7 @@ html[data-reduce-motion] .action-confetti {
 }
 .working-strip .step-log {
   max-height: min(40vh, 18rem);
+  min-height: 0;
   overflow-y: auto;
   padding: var(--ds-space-1) var(--ds-space-2) var(--ds-space-1) 0;
   border-bottom: 1px solid var(--ds-line);
@@ -461,6 +462,17 @@ html[data-typing] .working-next {
    lines, so the newest message and "↓ Latest" stay in view), then the message box; nothing else is squeezed. */
 .phone-chat > :not(.chat-log-wrap, .chat-input) {
   flex-shrink: 0;
+}
+/* the working strip's open step log (#526) gives up its room next, down to the strip's own row, scrolling inside */
+.phone-chat > .working-strip {
+  flex-shrink: 1;
+  min-height: calc(var(--ds-target) + 3px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.working-strip > .working-row {
+  flex: none;
 }
 .chat-input {
   min-height: calc(var(--ds-target) + 18px);

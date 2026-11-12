@@ -87,6 +87,9 @@
 .apr-why-charter {
   background: var(--ds-series-8);
 }
+.apr-why-it {
+  background: var(--ds-series-2);
+}
 
 /* the list's cards */
 .apr-row {
