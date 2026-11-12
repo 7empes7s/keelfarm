@@ -33,7 +33,8 @@ export function installQuickKeys(): () => void {
   return () => window.removeEventListener('keydown', onKey);
 }
 
-const tap = (t: QuickToggle) => toast(flip(t, keyName('mute')));
+/** A tap on Sound or CC, also from pocket mode's ⋯ (#588). */
+export const tap = (t: QuickToggle) => toast(flip(t, keyName('mute')));
 
 /** The rest of the settings: the sound's (Settings → Voice, in both offices) or Accessibility. */
 const more = (what: 'sound' | 'access') => useStore.getState().openOverlay(moreSettingsTarget(what));

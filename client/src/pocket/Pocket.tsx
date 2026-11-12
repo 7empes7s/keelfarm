@@ -32,14 +32,10 @@ import { resolve } from '../ui/consoleNavRules';
 import type { HistoryFocus } from '../ui/HistoryTab';
 import { EmptyState } from '../ui/EmptyState';
 import { GuideCard } from '../ui/GuideCard';
-import { InfoButton } from '../ui/InfoButton';
-import { SearchButton, SearchPalette } from '../ui/SearchPalette';
+import { SearchPalette } from '../ui/SearchPalette';
 import { useFinder } from '../ui/goTo';
 import type { ScreenId } from '../ui/screenHelp';
-import { NoticeBell, NoticeCentre, NoticeToasts } from '../ui/Notices';
-import { BrowserFullButton } from '../ui/BrowserFullButton';
-import { QuickToggles } from '../ui/QuickToggles';
-import { useChatMode } from '../ui/chatMode';
+import { NoticeCentre, NoticeToasts } from '../ui/Notices';
 import { leaveFullFor, useChatFull, useChatFullBack } from '../ui/chatFull';
 import { FullButton } from '../ui/ChatActionsSheet';
 import { XLabel } from '../ui/HoverCard';
@@ -52,6 +48,8 @@ import { linkedSection } from '../routes';
 import { heldNote } from '../../../shared/health';
 import { PreviewsHost, PreviewsRailButton, usePreviewsLink } from './PocketPreviews';
 import { ItRailButton } from './ItRailButton';
+import { HeadTools } from './HeadTools';
+import { shortName } from './headBar';
 import { itWaiting } from '../ui/itBadge';
 import { pushLayer } from '../ui/backStack';
 import { markTeamLanding, pocketJump } from './pocketJump';
@@ -383,6 +381,7 @@ export default function Pocket() {
   const [repoId, setRepoId] = useState<string | null>(null);
   const [settings, setSettings] = useState<ConsoleSection | null>(() => linkedSection(location.hash, 'pocket')); // #settings/cloud-agents (or #console/…) opens that section
   const company = useStore((s) => s.settings.companyName);
+  const short = shortName(company);
   const loaded = useStore((s) => s.loaded);
   const setupDone = useStore((s) => s.settings.setupDone);
   const unread = useStore((s) => unreadMessages(s.messages, s.phoneReadAt));
@@ -621,7 +620,6 @@ export default function Pocket() {
     approvals: ['hand', 'Approvals', waiting],
   };
   // on a phone the chat's buttons sit in its own bar by the CEO's name: the header's row has no room for them and the name
-  const chatMode = useChatMode();
   const chat = <Chat autoFocus={false} onFloor={(id) => go('kanban', id)} tools={wide ? chatTools : undefined} fullButton={wide} away={!wide && tab !== 'chat'} />;
   return (
     <div className={`pocket ds-screen pk-layout-${layout} ${wide ? 'pk-railed' : ''} ${full ? 'pk-chat-full' : ''}`}>
@@ -629,7 +627,10 @@ export default function Pocket() {
         <span className="pk-logo" aria-hidden>
           <Icon name="asterisk" />
         </span>
-        <b className="pk-title">{company || 'cubefarm'}</b>
+        <b className="pk-title" title={company || undefined}>
+          <span className="pk-title-full">{company || 'cubefarm'}</span>
+          {short !== company && <span className="pk-title-short">{short}</span>}
+        </b>
         <span className={`pk-dot ${connected ? 'pk-dot-on' : ''}`} title={connected ? 'Connected' : 'Not connected'} />
         {wide && order.back && (
           <button className="btn btn-small pk-back-chip" onClick={() => reopen(order.back!)} title={`Back to ${order.back.label}`}>
@@ -649,20 +650,10 @@ export default function Pocket() {
             <span className="sr-only">{usage === 'paused' ? ' paused' : ' pacing'}</span>
           </span>
         )}
-        <UpdatePill className="btn btn-small btn-good pk-update" short={!wide} />
-        {/* the chat has its own 🔍 (its conversations); Ctrl+K and the other tabs reach this one */}
-        {(tab !== 'chat' || wide) && <SearchButton className="pk-icon-btn" />}
-        {(wide || tab !== 'chat') && <NoticeBell className="pk-icon-btn" compact={!wide} />}
-        <QuickToggles className="pk-icon-btn" compact={!wide} />
-        {wide && <BrowserFullButton className="pk-icon-btn" />}
-        {tab !== 'chat' && <InfoButton screen={HELP[tab]} className="pk-icon-btn" />}
+        <UpdatePill className="btn btn-small btn-good pk-update" short />
+        <HeadTools wide={wide} tab={tab} help={tab === 'chat' ? undefined : HELP[tab]} />
         {/* a phone's chat header has no room: its ⛶ sits here (#201) */}
         {!wide && tab === 'chat' && <FullButton />}
-        {wide && (
-          <button className="btn btn-small pk-switch" aria-pressed={chatMode.on} onClick={() => chatMode.set(!chatMode.on)} title={`Chat mode (#120): agents' windows open on their ${chatMode.on ? 'chat' : 'terminal'}. Click to switch`}>
-            <Icon name="message-circle" /> Chat {chatMode.on ? 'on' : 'off'}
-          </button>
-        )}
         {wide && <ChatButton open={dock} toggle={() => setDock(!dock)} />}
         {wide ? (
           <button data-tour="switch" className="btn btn-small pk-switch" onClick={switchOffice} title={`Walk around the 3D office (${switchKey})`}>

@@ -3,13 +3,16 @@
 
 export type ChatToolId = 'search' | 'charts' | 'full' | 'files' | 'text' | 'call' | 'handsFree' | 'it';
 
-/** Most used first: the last ones fold first as the header narrows. */
-export const TOOL_ORDER: readonly ChatToolId[] = ['search', 'charts', 'full', 'files', 'text', 'call', 'handsFree', 'it'];
+/** Most used first: the last ones fold first as the header narrows (#588: 🔍, files and call stay longest). */
+export const TOOL_ORDER: readonly ChatToolId[] = ['search', 'files', 'call', 'charts', 'text', 'full', 'handsFree', 'it'];
 
 /** A tool button (44 px) and its gap (8 px). */
 export const TOOL_SLOT = 52;
 /** What the CEO's avatar (28 px and its gap) and a short name keep before tools take the room. */
 export const NAME_ROOM = 100;
+
+/** Under this width only the three most used stay as buttons, however many fit (#588: a row of nine was heavy). */
+export const LIGHT_UNDER = 720;
 
 /**
  * The header row's tools at `width` px (the row the name and tools share; 0 before it's measured): the tools there are
@@ -18,7 +21,7 @@ export const NAME_ROOM = 100;
 export function foldTools(width: number, present: readonly ChatToolId[]): { shown: ChatToolId[]; folded: ChatToolId[] } {
   const tools = TOOL_ORDER.filter((t) => present.includes(t));
   const room = width > 0 ? Math.floor((width - NAME_ROOM) / TOOL_SLOT) - 1 : 3; // one slot is the ⋯'s
-  const keep = Math.max(1, room); // 🔍 always shows
+  const keep = Math.max(1, width > 0 && width < LIGHT_UNDER ? Math.min(3, room) : room); // 🔍 always shows
   return { shown: tools.slice(0, keep), folded: tools.slice(keep) };
 }
 

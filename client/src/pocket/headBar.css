@@ -1,0 +1,33 @@
+/* Pocket mode's top bar (#588, HeadTools.tsx): no label wraps, and as the bar narrows the secondary buttons fold into
+   one ⋯ (headBar.ts names them), then a long company name gives way to its short form, never "T…" */
+.pk-head {
+  container: pkhead / inline-size;
+}
+.pk-head :is(.pk-update, .pk-switch) {
+  flex: none;
+  white-space: nowrap;
+}
+.pk-head .pk-head-more,
+.pk-title-short {
+  display: none;
+}
+@container pkhead (max-width: 1360px) {
+  .pk-head .pk-fold {
+    display: none;
+  }
+  .pk-head .pk-head-more {
+    display: inline-flex;
+  }
+}
+/* wide, the name keeps its room once the buttons have folded; on a phone its short form from the start */
+@container pkhead (max-width: 720px) {
+  .pk-title-full {
+    display: none;
+  }
+  .pk-title-short {
+    display: inline;
+  }
+}
+.pk-railed .pk-title {
+  flex: none;
+}
