@@ -153,3 +153,15 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+/* a Cloudflare card's before and after (#586) */
+.it-diff {
+  max-height: 14rem;
+  margin: var(--ds-space-2) 0 0;
+  padding: var(--ds-space-2);
+  overflow: auto;
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface-sunken);
+  font-size: var(--ds-text-xs);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
