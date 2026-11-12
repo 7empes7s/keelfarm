@@ -11,6 +11,7 @@ import { drawSign, roundRect, SANS } from './draw';
 import { Elevator } from './Elevator';
 import { ErrandDirector } from './ErrandDirector';
 import { useCanvasTexture, useInteractable, type Pick as AimPick } from './interact';
+import { ItOffice } from './ItOffice';
 import { Jukebox } from './Jukebox';
 import { directoryRowAt, directoryRows, DIRECTORY_PX } from './lobbyDirectory';
 import { MapTable } from './MapTable';
@@ -146,6 +147,7 @@ function Directory() {
       const v = 0.5 - root.worldToLocal(point.clone()).y / LOBBY_SCREENS.directory.h;
       const row = directoryRowAt(rows, v);
       if (!row) return null;
+      if (row.it) return { id: 'directory:it', label: "IT office, by the CEO's: chat with IT", action: { kind: 'manager', tab: 'it-dept' } };
       const label = row.floor === 0 ? "Lobby & manager's office: you're here" : `Go to floor ${row.floor} · ${row.name} (${row.theme})`;
       return { id: `directory:${row.floor}`, label, action: { kind: 'floor', floor: row.floor } };
     },
@@ -402,6 +404,7 @@ export function Lobby() {
 
       <MissionControl />
       <CeoOffice />
+      <ItOffice />
       <MeetingRoom />
       <WaitingRoom />
       <Elevator floorLabel="▲ G · Lobby" accent={ACCENT} />
