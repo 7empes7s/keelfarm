@@ -91,6 +91,7 @@ export interface PersistedRepo {
   preview: PreviewConfig; // how the floor's app runs for the preview monitor
   practices?: PracticeOverrides; // its own version-control practice switches over Every project's (#24)
   theme?: FloorTheme; // how the floor is dressed in the 3D office (#370); missing: the plain office
+  themeByHand?: boolean; // the manager picked the theme, so its use case no longer does (#528); missing: saved before then
   addedAt: number;
   /** The charter besides its mission (#48), the CEO's pending proposal, who changed what, and the drift view's log. */
   charter: CharterRecord;
