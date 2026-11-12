@@ -10,7 +10,7 @@
 
 import { ROOM_SENDS, type Occlusion } from './acoustics';
 import { normalizeAudioPrefs, parseAudioPrefs, SOUND_GROUPS, sliderGain, type AudioPrefs, type SoundGroup } from './audioPrefs';
-import { audible, distance, distanceGain, DROP_NEW, MAX_DISTANCE, panOf, PLAY, REF_DISTANCE, ROLLOFF, type Vec3, voiceToDrop } from './sfxMix';
+import { audible, distance, distanceGain, DROP_NEW, MAX_DISTANCE, needsWake, panOf, PLAY, REF_DISTANCE, ROLLOFF, type Vec3, voiceToDrop } from './sfxMix';
 
 export type { SoundGroup } from './audioPrefs';
 export type { Vec3 } from './sfxMix';
@@ -86,7 +86,7 @@ export function audio(): { ctx: AudioContext; out: GainNode } | null {
       }
       writeListener();
     }
-    if (ctx.state === 'suspended') void ctx.resume().catch(() => undefined);
+    if (needsWake(ctx.state)) void ctx.resume().catch(() => undefined);
     // Don't queue sounds on a stopped clock: they'd all fire at once when it starts.
     return ctx.state === 'running' && master ? { ctx, out: master } : null;
   } catch {

@@ -24,6 +24,7 @@ vi.mock('./voiceCallStore', () => ({
   callOn: () => false, callVoice: (v: unknown) => v, dispatchCall: vi.fn(), useCall: { getState: () => ({ managerSpeaking: false }) },
 }));
 vi.mock('./voiceClaim', () => ({ wonVoice: () => true }));
+vi.mock('./voiceTap', () => ({ elementPrimed: () => false, voiceElement: () => null, useReplay: { getState: () => ({ loading: null }), setState: vi.fn() } }));
 
 interface Utterance {
   text: string;

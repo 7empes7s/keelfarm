@@ -103,9 +103,9 @@ export function TestLabCard() {
   );
 }
 
-/** Settings → Office: the lab on or off, and how many jobs of each kind it runs at once. */
+/** Settings → Office: the lab on or off, and how many jobs of each kind (and in all) it runs at once. */
 export function TestLabFields({ testLab, set }: { testLab: TestLabSettings; set: (p: { testLab: TestLabSettings }) => void }) {
-  const count = (key: 'browserJobs' | 'heavyJobs', label: string) => (
+  const count = (key: 'browserJobs' | 'heavyJobs' | 'totalJobs', label: string) => (
     <label className="field">
       <span>{label}</span>
       <input key={testLab[key]} type="number" min={1} max={4} defaultValue={testLab[key]} onBlur={(e) => Number(e.target.value) !== testLab[key] && set({ testLab: { ...testLab, [key]: Number(e.target.value) } })} />
@@ -118,6 +118,7 @@ export function TestLabFields({ testLab, set }: { testLab: TestLabSettings; set:
       </label>
       {count('browserJobs', 'Lab browser jobs at once')}
       {count('heavyJobs', 'Lab heavy runs at once')}
+      {count('totalJobs', 'Lab jobs at once in all')}
       <p className="muted small">
         Claude Code agents on this computer ask the lab for screenshots, browser checks and full test runs instead of starting their own browser or suite, so memory stays free. Off: each one gets a
         browser of its own again, from their next task.

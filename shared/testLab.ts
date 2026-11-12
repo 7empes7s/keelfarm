@@ -20,9 +20,10 @@ export interface TestLabSettings {
   enabled: boolean; // agents use the lab's tools instead of a browser of their own
   browserJobs: number; // browser jobs at a time
   heavyJobs: number; // heavy commands at a time
+  totalJobs: number; // jobs at a time across both lanes (#560): an e2e run starts a browser too
 }
 
-export const DEFAULT_TEST_LAB: TestLabSettings = { enabled: true, browserJobs: 1, heavyJobs: 1 };
+export const DEFAULT_TEST_LAB: TestLabSettings = { enabled: true, browserJobs: 1, heavyJobs: 1, totalJobs: 1 };
 
 const count = (raw: unknown, base: number) => (Number.isFinite(Number(raw)) ? Math.max(1, Math.min(4, Math.round(Number(raw)))) : base);
 
@@ -33,6 +34,7 @@ export function testLabSettings(base: TestLabSettings, patch: unknown): TestLabS
     enabled: typeof p.enabled === 'boolean' ? p.enabled : base.enabled,
     browserJobs: count(p.browserJobs, base.browserJobs),
     heavyJobs: count(p.heavyJobs, base.heavyJobs),
+    totalJobs: count(p.totalJobs, base.totalJobs),
   };
 }
 
@@ -66,4 +68,16 @@ export interface TestLabView {
   recent: LabResultView[]; // newest first
   usage: { repoId: string; floor: number; jobs: number; ms: number }[]; // per floor since the office started
   held: string | null; // why the next job waits (memory), if it does
+}
+
+/** A job waiting longer than this makes the lab's row on IT → Health need a look (#560). */
+const LONG_WAIT_MS = 5 * 60_000;
+
+/** The lab's row on IT → Health (#560): what runs and waits, the longest wait and why; null without the lab. */
+export function labQueueLine(lab: TestLabView | null, now: number): { level: 'good' | 'warn'; line: string } | null {
+  if (!lab?.enabled) return null;
+  if (!lab.running.length && !lab.queue.length) return { level: 'good', line: 'Idle' };
+  const longest = lab.queue.length ? now - Math.min(...lab.queue.map((j) => j.queuedAt)) : 0;
+  const parts = [`${lab.running.length} running, ${lab.queue.length} waiting`, ...(lab.queue.length ? [`longest wait ${Math.floor(longest / 60_000)} min`] : []), ...(lab.held ? [lab.held] : [])];
+  return { level: longest > LONG_WAIT_MS ? 'warn' : 'good', line: parts.join(' · ') };
 }

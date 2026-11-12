@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { alertDue, alertOnce, canNudge, classifyScreen, forgetTold, NOT_STARTED_MS, NOTIFY_PROMPT_MS, printedResult, requiredKeys, RETRY_WAIT_MS, SessionWatch, stuckNotice, UNREGISTERED_MS, type WatchTick } from './liveState.ts';
+import { alertDue, alertOnce, canNudge, classifyScreen, plainTurnError, forgetTold, NOT_STARTED_MS, NOTIFY_PROMPT_MS, printedResult, requiredKeys, RETRY_WAIT_MS, SessionWatch, stuckNotice, UNREGISTERED_MS, type WatchTick } from './liveState.ts';
 import { QA_SCHEMA } from './qaReport.ts';
 
 // Screens as the office's terminal mirror recorded them (trimmed).
@@ -65,6 +65,13 @@ describe('classifyScreen', () => {
     expect(classifyScreen('Credit balance is too low').reason).toBe('out of credit');
     expect(classifyScreen(`API Error: 429 rate limit · retrying\n${WORKING}`).state).toBe('working'); // retrying, not stuck
     expect(classifyScreen(CODEX_IDLE).state).toBe('idle');
+  });
+
+  it('names a model newer than the bundled Claude Code in plain words (#546)', () => {
+    const screen = '  ⎿ API Error: 400 {"type":"error","error":{"type":"invalid_request_error","message":"Claude Code 2.1.283 does not support this\n    model; version 2.1.290 or newer is required."}}';
+    expect(plainTurnError('invalid_request', screen)).toBe("Claude Code 2.1.283 can't run this model: it needs 2.1.290 or newer. Update the office, or pick another model");
+    expect(plainTurnError('invalid_request', 'prompt is too long')).toBeNull();
+    expect(classifyScreen(screen)).toEqual({ state: 'error', reason: "Claude Code 2.1.283 can't run this model: it needs 2.1.290 or newer. Update the office, or pick another model" });
   });
 
   it('reads sign-in words above a working indicator as work', () => {

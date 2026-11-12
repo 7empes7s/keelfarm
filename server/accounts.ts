@@ -383,6 +383,12 @@ export class Accounts {
     this.replace({ ...a, limitedUntil: until, limitHits: [...recentHits(a.limitHits, now), now], limitSpans: addSpan(a.limitSpans, now, until, now) });
   }
 
+  /** Its limit is over (the demo's "End the limit"): back in the rotation now. */
+  back(id: string) {
+    const a = this.list().find((x) => x.id === id);
+    if (a?.limitedUntil) this.replace({ ...a, limitedUntil: null });
+  }
+
   /** A session on an account found its login expired or its key turned away: out of the rotation until a Test or sign-in says otherwise. */
   signedOut(id: string) {
     this.signedIn.set(id, false);

@@ -76,3 +76,14 @@
   color: var(--ds-text-muted);
   line-height: var(--ds-leading-tight);
 }
+
+/* "From its use case: Video" (#528): the summary's second line, Change opens the cards */
+.floor-theme-from {
+  display: block;
+  margin-top: var(--ds-space-1);
+  color: var(--ds-text-muted);
+}
+
+.floor-theme-change {
+  margin-top: var(--ds-space-1);
+}

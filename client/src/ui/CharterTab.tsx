@@ -390,7 +390,7 @@ export function CharterTab({ initialRepo }: { initialRepo?: string }) {
               </h3>
             </div>
             {!editing && (
-              <button className="btn btn-small" onClick={() => setEditing('charter')}>
+              <button className="btn btn-small" data-tour="charter-edit" onClick={() => setEditing('charter')}>
                 <Icon name="pencil" /> Edit
               </button>
             )}

@@ -99,6 +99,7 @@ Server (`server/`, Node + Express 5 + ws, run by tsx in development; esbuild bun
   | `itDept.ts` | the IT department (#524): the IT lead's own session (Settings → The IT department), chat, Telegram bot (`telegramIt`) and tools (`server/ceoItTools.ts`), the CEO's `ask_it`, a Run's result checked by IT (rules pure in `shared/itDept.ts`, prompts `server/itLead.ts`) |
   | `itWatch.ts` | IT monitoring (#525): health checks every 5 min in plain code (`server/itChecks.ts`), a check getting worse wakes IT (once per level, once an hour), it_recommend's ranked options, the manager's pick re-measured with before/after, Not now, the daily digest (rules pure in `shared/itWatch.ts`) |
   | `itTickets.ts` | IT tickets (#542): agents' and the CEO's it_report, the office's own tickets (lab errors, stuck agents, sign-in screens, previews, CI, disk), IT woken for a blocking ticket or a burst, its it_ticket, "Waiting on IT #N" (rules pure in `shared/itTickets.ts`, the demo's in `server/itTicketSample.ts`) |
+  | `problems.ts` | the problems register (#544): work problems from finished sessions, QA records, agent alarms and blocked issues, IT's tickets as infrastructure, `problems` / `note_problem` (`server/ceoProblemTools.ts`), the daily digest card; Settings → Problems (rules pure in `shared/problems.ts`, the demo's in `server/problemSample.ts`) |
   | `ceoTools.ts` | the CEO's office tools (`officeTools`, `company_status`, mandates, read-only tools) |
   | `voices.ts` | a voice for every agent (#320): picked on hire, or when a key is saved or ElevenLabs turned on |
   | `serverLoad.ts` | the server's load by program (#271): who's who for the grouping, the reading every 15 s, the 24 h trend, "Stop it" for leftovers |
@@ -245,6 +246,10 @@ Client (`client/`, Vite root; React 19, R3F, drei, zustand):
   `bloomMarks.ts` marks it), the other people viewing the office (`presence/`: visitors, pings, the profile),
   holiday themes (`themes/`: which one is on from `shared/themes.ts`, their data and decoration slots in `themes.ts`
   and `layout.ts`, each theme's scene in one lazy chunk loaded only while a theme is on; `?theme=` and `?date=` for QA).
+  The lobby's IT office (#535: `ItOffice.tsx`, its LED and screen rules pure in `itRoom.ts`) uses CC0 models from
+  `client/public/models/` (each listed in its `LICENSES.md` and `models/registry.ts`; `models/Model.tsx` loads them once, instanced, with a shapes fallback).
+  A floor's project props (`projectProps/`, #536): its set (`shared/floorProps.ts`, from its profile or Floor settings) in spots
+  the walkways keep clear (`spots.ts`), live screens (`screens.ts`), desk tools, and models from the same registry.
 - `src/ui/`: HTML overlays: HUD, terminal (`LiveTerminal.tsx`: xterm.js on `/ws/term`), Kanban, manager's console,
   phone (`Phone.tsx`; its chat in `Chat.tsx` / `ChatBubble.tsx`, team changes in `TeamChanges.tsx`, mini-games in `games/`: pure logic in `tetris.ts` / `snake.ts` / `pet.ts`), elevator panel, app
   viewer, sounds (`sfx.ts`), key bindings (`keymap.ts`, pure; `controls.ts` keeps the player's own, and every

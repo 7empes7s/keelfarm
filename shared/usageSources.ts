@@ -241,15 +241,16 @@ export interface UsageAlert {
 }
 
 /**
- * "Notify me when it's back" (#404): the sources watched that aren't limited any more, as notifications, and the
- * watches left (a source gone from the card is dropped without one).
+ * "Notify me when it's back" (#404): the sources watched that are ready again (or only near), as notifications, and
+ * the watches left. A row that's missing (not read yet after a restart) or in error or signed out isn't back: its
+ * watch stays (#538).
  */
 export function backAlerts(list: readonly UsageSource[], watching: readonly string[]): { alerts: Omit<UsageAlert, 'key'>[]; watching: string[] } {
   const alerts: Omit<UsageAlert, 'key'>[] = [];
   const left = watching.filter((id) => {
     const s = list.find((x) => x.id === id);
-    if (s?.status === 'limited') return true;
-    if (s) alerts.push({ title: `${s.label} is back`, text: 'Its limit has reset: agents can work on it again.' });
+    if (!s || (s.status !== 'ready' && s.status !== 'near')) return true;
+    alerts.push({ title: `${s.label} is back`, text: 'Its limit has reset: agents can work on it again.' });
     return false;
   });
   return { alerts, watching: left };

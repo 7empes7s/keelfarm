@@ -1,0 +1,44 @@
+/* the list view's people and floors (ui/FloorList.tsx): design-system rows, stacking at 390 px (#527) */
+.fl-rows {
+  min-width: 0;
+  margin: 0 0 var(--ds-space-3);
+  padding: 0;
+  list-style: none;
+}
+.fl-rows > li + li > .ds-row {
+  border-top: 1px solid var(--ds-line);
+}
+.fl-person-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-1) var(--ds-space-2);
+  min-width: 0;
+}
+.fl-person-head .ds-row-title {
+  min-width: 0;
+  max-width: 100%;
+}
+.fl-person > .btn {
+  flex: none;
+  min-height: var(--ds-target);
+}
+.fl-floor {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: var(--ds-target);
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.fl-floor:hover,
+.fl-floor:focus-visible {
+  background: var(--ds-surface-sunken);
+}
+.fl-floor > .ds-icon {
+  flex: none;
+  color: var(--ds-text-muted);
+}

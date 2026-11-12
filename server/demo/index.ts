@@ -21,3 +21,4 @@ import './disk.ts';
 import './setup.ts';
 import './liveLeases.ts';
 import './itDesk.ts';
+import './problems.ts';

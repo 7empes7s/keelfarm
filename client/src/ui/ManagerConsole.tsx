@@ -30,6 +30,7 @@ import { workerCli } from './floorRows';
 import { EmptyState } from './EmptyState';
 import { CeoMandates, CeoSession } from './CeoFollowups';
 import { FloorPractices } from './PracticesSettings';
+import { FloorPropsPicker } from './FloorPropsPicker';
 import { FloorThemePicker } from './FloorThemePicker';
 import { FloorSetupCard } from './FloorSetup';
 import { OfficePlaybook } from './OfficePlaybook';
@@ -207,6 +208,7 @@ function FloorRow({ repo, all }: { repo: RepoView; all: RepoView[] }) {
         </label>
       </div>
       <FloorThemePicker repo={repo} onPick={(theme) => patch({ theme })} />
+      <FloorPropsPicker repo={repo} onPick={(props) => patch({ props })} />
       {others.length > 0 && (
         <div className="ds-switches links">
           <span className="ds-row-meta">
@@ -326,7 +328,7 @@ function FloorBrief({ repo, focused }: { repo: RepoView; focused: boolean }) {
           )}
         </button>
       </div>
-      <details className="small" open={focused}>
+      <details className="small" open={focused} data-tour="qa-brief">
         <summary>QA brief{repo.qaBrief ? '' : ' (none yet)'}</summary>
         <textarea
           key={repo.qaBrief}

@@ -2,6 +2,8 @@
 import { SAMPLE_LINE } from '../../shared/speech.ts';
 import { DEMO_VOICES } from '../demoVoices.ts';
 import { VoiceApiError, type VoiceApi } from '../voice.ts';
+import { agentHash } from '../voiceAgent.ts';
+import { FAKE_AGENT_PATH } from '../voiceAgentFake.ts';
 import { registerDemo } from './registry.ts';
 
 /**
@@ -68,6 +70,9 @@ const demoVoice: VoiceApi = {
     await new Promise((r) => setTimeout(r, 400));
     return DEMO_TRANSCRIPT;
   },
+  // The Jarvis voice (#534): no ElevenLabs agent; calls talk to the office's own fake agent socket (server/voiceAgentFake.ts).
+  ensureAgent: async (_key, config) => ({ agentId: 'demo-agent', secretId: 'demo-secret', hash: agentHash({ ...config, llmSecretId: 'demo-secret' }) }),
+  agentUrl: async () => FAKE_AGENT_PATH,
 };
 
 registerDemo('voice', () => ({ voice: demoVoice }));

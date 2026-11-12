@@ -1,7 +1,7 @@
 // The demo's coding-agent CLIs (#493): every one installed but those in SWARM_DEMO_MISSING (default OpenCode), which
 // Settings → Providers installs in a few seconds (SWARM_DEMO_INSTALL=fail fails with an npm log), and OpenCode's own
 // sign-in as a fake `opencode auth login`: Enter signs it in to Anthropic.
-import { CLIS } from '../clis.ts';
+import { boxVersions, CLIS } from '../clis.ts';
 import type { BoxSignIn } from '../cliRunner.ts';
 import type { AgentTerminal } from '../terminal.ts';
 import { registerDemo } from './registry.ts';
@@ -39,8 +39,10 @@ registerDemo('clis', () => {
         id: c.id,
         label: c.label,
         installed: !missing.has(c.id),
-        version: missing.has(c.id) ? null : 'demo',
+        // Claude Code: the office's bundled version, or an old one (SWARM_DEMO_CLAUDE_VERSION=2.1.283) to grey out Fable 5.2 (#546)
+        version: missing.has(c.id) ? null : c.id === 'claude' ? `${process.env.SWARM_DEMO_CLAUDE_VERSION || boxVersions().claude} (Claude Code)` : 'demo',
         integrated: c.integrated,
+        ...(c.id === 'claude' && { bundled: true }),
         ...(c.id === 'opencode' && !missing.has(c.id) && { providers: [...providers] }),
       })),
     installCli: async (id) => {

@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { CLIP_MAX_BYTES, CLIP_MAX_MS } from '../shared/clipLimits.ts';
+import { SAMPLE_LINE } from '../shared/speech.ts';
 import type { ListenSettings, PhoneMessage, VoiceCacheView, VoiceSettings } from '../shared/types.ts';
 import { HttpError } from './httpError.ts';
 import {
@@ -262,6 +263,8 @@ describe('Voice', () => {
       if (failWith) throw new VoiceApiError(failWith, `${failWith}: nope`);
       return '  Ship the login page today.  ';
     },
+    ensureAgent: async () => ({ agentId: 'a', secretId: 's', hash: 'h' }),
+    agentUrl: async () => 'wss://example/x',
   };
 
   const make = () =>
@@ -454,6 +457,32 @@ describe('Voice', () => {
     expect(calls.synth).toBe(2);
   });
 
+  it('logs every failed clip and answers it in plain words, never the key or the words (#545)', async () => {
+    const v = make();
+    await v.init();
+    const error = (p: Promise<unknown>) => p.then(() => '', (e: unknown) => (e as Error).message);
+    expect(await error(v.sampleAudio())).toBe('Add an ElevenLabs API key first.');
+    await v.setKey('sk_secret_key');
+    failWith = 500;
+    expect(await error(v.sampleAudio())).toBe("ElevenLabs couldn't speak the message: 500: nope");
+    expect(await error(v.messageAudio(1))).toBe("ElevenLabs couldn't speak the message: 500: nope");
+    settings = { ...settings, provider: 'browser' };
+    expect(await error(v.messageAudio(3))).toBe("Messages aren't read by ElevenLabs right now.");
+    expect(logs).toEqual([
+      "voice: couldn't make clip (the Test line): Add an ElevenLabs API key first.",
+      "voice: couldn't make clip (the Test line): ElevenLabs couldn't speak the message: 500: nope",
+      "voice: couldn't make clip (message 1): ElevenLabs couldn't speak the message: 500: nope",
+      "voice: couldn't make clip (message 3): Messages aren't read by ElevenLabs right now.",
+    ]);
+    expect(logs.join(' ')).not.toContain('sk_secret');
+    expect(logs.join(' ')).not.toContain('Floor 2 shipped');
+    failWith = null;
+    settings = { ...settings, provider: 'elevenlabs' };
+    logs = [];
+    expect((await v.sampleAudio()).toString()).toBe(`mp3:${SAMPLE_LINE}`);
+    expect(logs).toEqual([expect.stringMatching(/^voice: made a new clip sample-/)]);
+  });
+
   it('replays saved clips without ever calling ElevenLabs', async () => {
     const v = make();
     await v.init();
@@ -529,6 +558,54 @@ describe('Voice', () => {
     expect(calls.synth).toBe(1);
     settings = { ...settings, provider: 'browser' };
     expect(await status(v.talkAudio(7))).toBe(404);
+  });
+
+  describe("the ▶'s clip made on a tap (#532)", () => {
+    const msg = (id: number) => messages.find((m) => m.id === id)!;
+    const err = (p: Promise<unknown>) => p.then(() => '', (e: unknown) => (e as Error).message);
+
+    it('makes a clip for a message that has none, caches it under the message and reuses it', async () => {
+      const v = make();
+      await v.setKey('sk_good');
+      settings = { ...settings, provider: 'off' }; // the message arrived, and is replayed, with the voice off
+      expect(await status(v.messageAudio(3))).toBe(404); // never without a tap
+      expect(await status(v.cachedAudio(3))).toBe(404);
+      const made = await v.messageAudio(3, false, true);
+      expect(made.toString()).toBe('mp3:Another one.');
+      expect(await v.cachedAudio(3)).toEqual({ audio: made, parts: 1 });
+      expect(v.cacheInfo()).toMatchObject({ saved: [3], charsToday: 'Another one.'.length });
+      expect(await v.messageAudio(3, false, true)).toEqual(made);
+      expect(calls.synth).toBe(1);
+      expect(await status(v.messageAudio(2, false, true))).toBe(404); // the manager's own message
+    });
+
+    it('makes a deleted clip again, in the current voice', async () => {
+      const v = make();
+      await v.setKey('sk_good');
+      await v.messageAudio(1, false, true);
+      const [file] = clipsFor(JSON.parse(await fs.readFile(path.join(dir, 'voice', 'clips.json'), 'utf8')), msg(1))!;
+      await fs.rm(path.join(dir, 'voice', file));
+      expect(await status(v.cachedAudio(1))).toBe(404);
+      settings = { ...settings, voiceId: 'otherVoice' };
+      expect((await v.messageAudio(1, false, true)).toString()).toBe('mp3:Floor 2 shipped number 12.');
+      expect(calls.synth).toBe(2);
+      expect(await status(v.cachedAudio(1))).toBe(200);
+    });
+
+    it('says clearly why when ElevenLabs refuses', async () => {
+      const v = make();
+      await v.setKey('sk_good');
+      failWith = 401;
+      expect(await err(v.messageAudio(3, false, true))).toBe('ElevenLabs rejected the key.');
+      expect(await err(v.messageAudio(3, false, true))).toBe('ElevenLabs rejected the key. Set a new one in the voice settings.');
+      failWith = 429;
+      await v.setKey('sk_other');
+      expect(await err(v.messageAudio(3, false, true))).toBe("ElevenLabs couldn't speak the message: 429: nope");
+      await v.setKey('');
+      expect(await err(v.messageAudio(3, false, true))).toBe('Add an ElevenLabs API key first.');
+      settings = { ...settings, provider: 'browser' };
+      expect(await status(v.messageAudio(3, false, true))).toBe(404); // the phone's own voice reads it
+    });
   });
 
   it('other ElevenLabs failures are a 502 and keep trying', async () => {

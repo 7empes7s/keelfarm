@@ -28,6 +28,7 @@ const CONTENT: Record<string, string> = {
   'ui/games/pet.ts': "the desk pet's moods and lines",
   'ui/games/petStore.ts': "the desk pet's lines",
   'world/Desk.tsx': "drawn into the 3D scene's canvas textures",
+  'world/ItOffice.tsx': "drawn into the 3D scene's canvas textures",
   'world/Jukebox.tsx': "drawn into the 3D scene's canvas textures",
   'world/Lobby.tsx': "drawn into the 3D scene's canvas textures",
   'world/OfficeFloor.tsx': "drawn into the 3D scene's canvas textures",

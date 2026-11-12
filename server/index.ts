@@ -9,7 +9,8 @@ import { z } from 'zod';
 import { CLIP_MAX_BYTES, CLIP_TOO_BIG } from '../shared/clipLimits.ts';
 import { DAY_PARTS } from '../shared/speech.ts';
 import { BEAT_MS } from '../shared/heartbeat.ts';
-import type { ServerEvent } from '../shared/types.ts';
+import type { Capability, ServerEvent } from '../shared/types.ts';
+import { callbackPath } from '../shared/oauth.ts';
 import { liveLaneRefusal } from './portLanes.ts';
 import { DEFAULT_PROJECTS_DIR, DEMO, DEMO_NO_TOUR, DEMO_SCALE, HOME_DIR, HOST, PORT, PREVIEW_PORT, PUBLIC_DEMO, PUBLIC_DEMO_RESET_H, STATE_FILE, VERSION, WORKSPACE_ROOT, isLoopback, localAddress, networkUrls } from './config.ts';
 import { MACHINES_DIR } from './workspace.ts';
@@ -25,6 +26,8 @@ import { serviceWorkerSource, swVersion } from './pwa.ts';
 import { screenStatus } from './screenReply.ts';
 import { parseSendBackNote } from './sendBack.ts';
 import { handleGateway, upgradeGateway } from './previewGateway.ts';
+import { completionEvents, completionJson } from './voiceAgent.ts';
+import { FAKE_AGENT_PATH, fakeAgent } from './voiceAgentFake.ts';
 import { PresenceHub } from './presence.ts';
 import { PUBLIC_DEMO_FILE_BYTES, RateLimiter, clientIp, demoUploadProblem, filesOverCap, pathScrubber, publicDemoBlock, publicDemoProblem, resetDue, routePath, scrubRoots } from './publicDemo.ts';
 import { HttpError, Swarm } from './swarm.ts';
@@ -328,15 +331,37 @@ app.post('/api/usage/:id/notify-back', route((req) => swarm.watchUsageBack(Strin
 app.post(
   '/api/providers',
   route((req) => {
-    const body = parse(z.object({ provider: z.string().max(40), key: z.string().max(400), label: z.string().max(60).optional() }), req.body);
-    return swarm.providers.add(body.provider, body.key, body.label);
+    const body = parse(z.object({ provider: z.string().max(40), key: z.string().max(400), label: z.string().max(60).optional(), accountId: z.string().max(64).optional() }), req.body);
+    return swarm.providers.add(body.provider, body.key, body.label, '', body.accountId);
   }),
 );
+// Providers by what they do (#533): each capability's default and fallback, and one sign-in per company.
+app.put('/api/providers/defaults/:capability', route((req) => swarm.providers.setDefault(String(req.params.capability) as Capability, parse(z.object({ primary: z.string().max(80).optional(), fallback: z.string().max(80).optional() }), req.body))));
+app.put('/api/providers/oauth/:company/client', route(async (req) => {
+  const body = parse(z.object({ clientId: z.string().max(300), clientSecret: z.string().max(300) }), req.body);
+  await swarm.providers.setClient(String(req.params.company), body.clientId, body.clientSecret);
+  return { saved: true };
+}));
+app.post('/api/providers/oauth/:company/start', route((req) => swarm.providers.oauthStart(String(req.params.company), parse(z.object({ origin: z.string().max(200) }), req.body).origin)));
+// The consent screen sends the browser back here: a small page, the tokens kept on the server.
+app.get(callbackPath, async (req, res) => {
+  const back = '<p><a href="/#settings/providers">Back to the office</a></p>';
+  const page = (title: string, text: string) => `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><body style="font:16px system-ui;margin:2rem auto;max-width:28rem;padding:0 16px"><h1 style="font-size:1.3rem">${title}</h1><p>${text}</p>${back}</body>`;
+  const esc = (t: string) => t.replace(/[&<>"]/g, (ch) => `&#${ch.charCodeAt(0)};`);
+  try {
+    const why = str(req.query.error_description) || str(req.query.error);
+    if (why) throw new HttpError(400, why);
+    const c = await swarm.providers.oauthFinish(str(req.query.state), str(req.query.code));
+    res.type('html').send(page(`Signed in to ${esc(c.label)}`, 'Everything it unlocks is on in Settings → Providers. You can close this tab.'));
+  } catch (err) {
+    res.status(400).type('html').send(page('Sign-in didn’t finish', esc((err as Error).message)));
+  }
+});
 // Keys found on this computer (#367): the scan runs on the server and reports through keyScan events; values never come out.
 app.post('/api/providers/scan', route(() => (void swarm.scanKeys(), swarm.keyScanView())));
 app.post('/api/providers/scan/import', route((req) => swarm.importKeys(parse(z.object({ ids: z.array(z.string().max(20)).max(200) }), req.body).ids)));
 app.delete('/api/providers/scan', route(() => (swarm.dismissKeys(), { dismissed: true })));
-app.patch('/api/providers/:id', route((req) => swarm.providers.update(String(req.params.id), parse(z.object({ label: z.string().max(60).optional(), tags: z.string().max(300).optional(), usedFor: z.enum(['inference', 'operations', 'both']).optional() }), req.body))));
+app.patch('/api/providers/:id', route((req) => swarm.providers.update(String(req.params.id), parse(z.object({ label: z.string().max(60).optional(), tags: z.string().max(300).optional(), usedFor: z.enum(['inference', 'operations', 'both']).optional(), accountId: z.string().max(64).optional() }), req.body))));
 app.post('/api/providers/:id/test', route((req) => swarm.providers.test(String(req.params.id))));
 app.delete('/api/providers/:id', route(async (req) => ({ removed: await swarm.providers.remove(String(req.params.id)).then(() => true) })));
 app.post(
@@ -374,13 +399,14 @@ app.post('/api/accounts/:id/signin/answer', route((req) => swarm.accounts.signIn
 app.delete('/api/accounts/:id', route(async (req) => ({ result: await swarm.accounts.remove(String(req.params.id)) })));
 app.post('/api/accounts/:id/use-now', route((req) => swarm.useAccountNow(String(req.params.id))));
 app.post('/api/accounts/:id/simulate-limit', route((req) => swarm.simulateAccountLimit(String(req.params.id))));
+app.post('/api/accounts/:id/simulate-back', route((req) => swarm.simulateAccountBack(String(req.params.id))));
 app.get('/api/voice/voices', route(() => swarm.voice.voices()));
 app.get(
   '/api/voice/messages/:id',
   route(async (req, res) => {
     const { id } = parse(z.object({ id: z.coerce.number().int().positive() }), req.params);
-    const q = parse(z.object({ cached: z.literal('1').optional(), whole: z.literal('1').optional(), part: z.coerce.number().int().min(0).max(99).default(0) }), req.query);
-    if (!q.cached) return sendAudio(res, await swarm.voice.messageAudio(id, !!q.whole));
+    const q = parse(z.object({ cached: z.literal('1').optional(), whole: z.literal('1').optional(), tap: z.literal('1').optional(), part: z.coerce.number().int().min(0).max(99).default(0) }), req.query);
+    if (!q.cached) return sendAudio(res, await swarm.voice.messageAudio(id, !!q.whole, !!q.tap));
     // The phone's ▶: a saved clip or a 404, never a new synthesis. Not kept by the browser, so "Clear saved clips" holds.
     const { audio, parts } = await swarm.voice.cachedAudio(id, q.part);
     res.setHeader('X-Voice-Parts', String(parts));
@@ -412,6 +438,22 @@ app.get(
   route(async (req, res) => {
     const q = parse(z.object({ n: z.coerce.number().int().min(1).max(99), part: z.enum(DAY_PARTS) }), req.query);
     sendAudio(res, await swarm.voice.standupAudio(q.n, q.part));
+  }),
+);
+// The Jarvis voice (#534): a signed URL for one ElevenLabs conversation (never the key), its end (minutes), and the
+// office as the agent's custom LLM: OpenAI's chat completions, streamed when asked, behind the agent's bearer token.
+app.post('/api/voice/agent/start', route(() => swarm.startVoiceAgent()));
+app.post('/api/voice/agent/:session/end', route((req) => swarm.endVoiceAgent(String(req.params.session))));
+app.post(
+  '/v1/chat/completions',
+  route(async (req, res) => {
+    const text = await swarm.voiceLlm(req.body, req.get('authorization'));
+    const model = typeof req.body?.model === 'string' ? req.body.model : 'cubefarm-voice';
+    if (req.body?.stream !== true) return completionJson(text, model);
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    for (const ev of completionEvents(text, model)) res.write(ev);
+    res.end();
   }),
 );
 // A clicked agent's line (#321): the words (POST, `hour` the manager's local hour), then its clip in their voice (GET).
@@ -587,6 +629,9 @@ server.requestTimeout = 2 * 3600_000;
 // Two sockets: /ws carries the office's state to every tab, /ws/term?agent=<id> one agent's terminal to whoever opened it.
 const wss = new WebSocketServer({ noServer: true });
 const terms = new WebSocketServer({ noServer: true });
+// The demo's ElevenLabs agent (#534, server/voiceAgentFake.ts): the client's Jarvis call with no network.
+const fakeAgents = DEMO ? new WebSocketServer({ noServer: true }) : null;
+fakeAgents?.on('connection', (ws) => fakeAgent(ws, (session, messages) => swarm.voiceLlm({ cubefarm_session: session, messages }, undefined, true), () => swarm.agentGreeting()));
 // The public demo's scrubber sees everything a tab is sent.
 const scrubbed = (ws: WebSocket) => {
   if (!scrub) return ws;
@@ -607,7 +652,7 @@ setInterval(() => {
 terms.on('connection', (ws, req) => swarm.attachTerminal(new URL(req.url ?? '', 'http://localhost').searchParams.get('agent') ?? '', scrubbed(ws)));
 server.on('upgrade', (req, socket, head) => {
   const { pathname } = new URL(req.url ?? '', 'http://localhost');
-  const target = pathname === '/ws' ? wss : pathname === '/ws/term' ? terms : null;
+  const target = pathname === '/ws' ? wss : pathname === '/ws/term' ? terms : pathname === FAKE_AGENT_PATH ? fakeAgents : null;
   if (!target && upgradeGateway(req, socket as Socket, head, proxied, previewUse)) return;
   if (!target) return void socket.destroy();
   if (PUBLIC_DEMO && !wsLimit.take(ipOf(req))) return void socket.end('HTTP/1.1 429 Too Many Requests\r\nConnection: close\r\n\r\n');

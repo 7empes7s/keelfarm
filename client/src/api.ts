@@ -3,7 +3,7 @@ import type { PongResult } from '../../shared/pong';
 import type { Charter } from '../../shared/charter';
 import type { ObjectiveStatus } from '../../shared/charterStats';
 import type { AgentStyle } from '../../shared/looks';
-import type { AccountCli, AccountKind, AgentCli, SignInMode, AgentPromptView, AgentView, CloudView, DoctorFinding, DoctorFix, EffortLevel, GhRepoSummary, MergedPage, NotifyChannel, NotifyChannelsView, NotifyWebhook, OfficeUpdateView, PushTestView, PreviewView, TelegramView, ProjectFolderView, PrPreviewView, RefFileView, RepoView, SwarmSettings, UsageView, VoiceCacheView, VoiceOption, MachineHost, McpServerConfig, ProviderConnection, ProviderUse, KeyScanView, UseCase } from '../../shared/types';
+import type { AccountCli, AccountKind, AgentCli, SignInMode, AgentPromptView, AgentView, CloudView, DoctorFinding, DoctorFix, EffortLevel, GhRepoSummary, MergedPage, NotifyChannel, NotifyChannelsView, NotifyWebhook, OfficeUpdateView, PushTestView, PreviewView, TelegramView, ProjectFolderView, PrPreviewView, RefFileView, RepoView, SwarmSettings, UsageView, VoiceCacheView, VoiceOption, MachineHost, McpServerConfig, ProviderConnection, ProviderUse, KeyScanView, UseCase, Capability, CapabilityChoice, ProvidersView } from '../../shared/types';
 import type { JournalChunk, JournalDayView } from '../../shared/journal';
 import type { CostsView, TaskKind } from '../../shared/costs';
 import type { ServerPoint } from '../../shared/serverLoad';
@@ -12,6 +12,7 @@ import type { TimelineView } from '../../shared/careerTimeline';
 import type { Experiment, ExperimentInput } from '../../shared/experiments';
 import type { PracticeOverrides } from '../../shared/practices';
 import type { FloorTheme } from '../../shared/floorThemes';
+import type { PropSet } from '../../shared/floorProps';
 import type { DecorItem, ProgressView } from '../../shared/progress';
 import type { QuickPicks } from '../../shared/used';
 import type { ConversationHit, ConversationPatch } from '../../shared/conversations';
@@ -41,13 +42,13 @@ async function call<T = unknown>(method: string, url: string, body?: unknown, to
   return data as T;
 }
 
-/** An audio clip from the office (the voice settings' Test line); errors become toasts like the rest. */
-async function clip(url: string): Promise<Blob> {
+/** An audio clip from the office (the voice settings' Test line); errors become toasts like the rest unless `toast` is false. */
+async function clip(url: string, toast = true): Promise<Blob> {
   const res = await fetch(url);
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     const message = (data as { error?: string }).error ?? `${res.status} ${res.statusText}`;
-    useStore.getState().pushToast('error', message);
+    if (toast) useStore.getState().pushToast('error', message);
     throw new Error(message);
   }
   return res.blob();
@@ -89,6 +90,7 @@ export const api = {
       browserTesting?: boolean;
       color?: string;
       theme?: FloorTheme;
+      props?: PropSet | 'auto';
       links?: string[];
       mission?: string;
       summary?: string;
@@ -236,7 +238,11 @@ export const api = {
   demoLabUpdate: () => call<OfficeUpdateView>('POST', '/api/demo/lab-update'),
   /** Saves an Anthropic or OpenAI Admin key for the usage card's organisation spend (#361); '' removes it. */
   // Settings → Providers (#362): keys and MCP servers' secrets go in and never come back out.
-  addProvider: (provider: string, key: string, label?: string) => call<ProviderConnection>('POST', '/api/providers', { provider, key, label }, false),
+  addProvider: (provider: string, key: string, label?: string, accountId?: string) => call<ProviderConnection>('POST', '/api/providers', { provider, key, label, accountId }, false),
+  // Providers by what they do (#533): a capability's default and fallback, and a company's one sign-in.
+  setProviderDefault: (capability: Capability, choice: CapabilityChoice) => call<ProvidersView>('PUT', `/api/providers/defaults/${capability}`, choice),
+  setOAuthClient: (company: string, clientId: string, clientSecret: string) => call('PUT', `/api/providers/oauth/${encodeURIComponent(company)}/client`, { clientId, clientSecret }, false),
+  startOAuth: (company: string) => call<{ url: string }>('POST', `/api/providers/oauth/${encodeURIComponent(company)}/start`, { origin: location.origin }, false),
   updateProvider: (id: string, patch: { label?: string; tags?: string; usedFor?: ProviderUse }) => call<ProviderConnection>('PATCH', `/api/providers/${encodeURIComponent(id)}`, patch),
   testProvider: (id: string) => call<ProviderConnection>('POST', `/api/providers/${encodeURIComponent(id)}/test`),
   removeProvider: (id: string) => call('DELETE', `/api/providers/${encodeURIComponent(id)}`),
@@ -251,8 +257,11 @@ export const api = {
   setUsageAdminKey: (provider: 'anthropic' | 'openai', key: string) => call<{ set: boolean }>('PUT', '/api/usage/admin-key', { provider, key }),
   /** Saves (or with '' removes) the ElevenLabs key. No toast: the settings show why a key was rejected. */
   setVoiceKey: (key: string) => call<{ voiceKeySet: boolean; voiceKeyHint: string }>('PUT', '/api/voice/key', { key }, false),
+  /** The Jarvis voice (#534): a signed URL for one ElevenLabs conversation; errors fall back to today's voice mode quietly. */
+  startVoiceAgent: () => call<{ session: string; url: string }>('POST', '/api/voice/agent/start', undefined, false),
   voices: () => call<VoiceOption[]>('GET', '/api/voice/voices'),
-  voiceSample: (voiceId: string) => clip(`/api/voice/sample?voiceId=${encodeURIComponent(voiceId)}`),
+  /** No toast: Settings → Voice's Test says what went wrong (voiceTest.ts). */
+  voiceSample: (voiceId: string) => clip(`/api/voice/sample?voiceId=${encodeURIComponent(voiceId)}`, false),
   clearVoiceCache: () => call<VoiceCacheView>('DELETE', '/api/voice/cache'),
   journalDays: () => call<JournalDayView[]>('GET', '/api/journal/days'),
   history: (f: HistoryFilter, toast = true) => call<HistoryPage>('GET', `/api/history?${new URLSearchParams(Object.entries(f).flatMap(([k, v]) => (v === undefined || v === '' ? [] : [[k === 'repoId' ? 'repo' : k, String(v)]])))}`, undefined, toast),
@@ -297,6 +306,7 @@ export const api = {
   signInAnswer: (id: string, option: number) => call('POST', `/api/accounts/${encodeURIComponent(id)}/signin/answer`, { option }),
   useAccountNow: (id: string) => call('POST', `/api/accounts/${encodeURIComponent(id)}/use-now`),
   simulateAccountLimit: (id: string) => call('POST', `/api/accounts/${encodeURIComponent(id)}/simulate-limit`),
+  simulateAccountBack: (id: string) => call('POST', `/api/accounts/${encodeURIComponent(id)}/simulate-back`),
   removeAccount: (id: string) => call<{ result: 'removed' | 'waiting' }>('DELETE', `/api/accounts/${encodeURIComponent(id)}`),
   pushKey: () => call<{ publicKey: string }>('GET', '/api/notify/push/key'),
   pushSubscribe: (subscription: PushSubscriptionJSON, name: string) => call<{ id: string }>('POST', '/api/notify/push/devices', { subscription, name }, false),

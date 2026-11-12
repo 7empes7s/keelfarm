@@ -1,11 +1,12 @@
 // Where a floor theme's props stand (#370, #371): in the decoration slots (#210) the floor hasn't filled, sized to fit them,
 // so they never block a desk or a walkway (the slots' rooms are kept clear and planned round, decor.ts). An earned
-// decoration always keeps its slot: the theme's prop there steps aside. Pure; tested in floorThemes.test.ts.
+// decoration always keeps its slot: the theme's prop there steps aside. Its big set pieces (#570) stand in the two
+// aisles between the desks, kept clear on every floor like the slots. Pure; tested in floorThemes.test.ts.
 
 import { DECOR_SLOTS, type DecorItem, type DecorKind } from '../../../../shared/progress';
 import { footprint, spotOf } from '../decor/decor';
-import { HALF_D, type Rect } from '../layout';
-import type { ThemePack, ThemeProp } from './packs';
+import { HALF_D, rect, type Rect } from '../layout';
+import type { SetSpot, ThemePack, ThemeProp } from './packs';
 
 /** A prop's size in its own frame (w across its front, d front to back, h tall), the slot kind it goes in, and its solid part. */
 interface PropSpec {
@@ -66,7 +67,31 @@ export const PROP_SPECS: Record<ThemeProp, PropSpec> = {
   'network-map': { kind: 'wall', w: 2.2, d: 0.06, h: 1.2 },
   runbook: { kind: 'wall', w: 1.8, d: 0.04, h: 1.1 },
   'grid-rug': { kind: 'rug', w: 0, d: 0, h: 0.01 },
+  // #570
+  'arcade-row': { kind: 'big', w: 2.45, d: 0.78, h: 1.85 },
+  'game-lounge': { kind: 'big', w: 2.4, d: 1.3, h: 1.45 },
+  'camera-set': { kind: 'big', w: 2.4, d: 1.3, h: 2.0 },
+  'anchor-desk': { kind: 'big', w: 2.4, d: 1.3, h: 2.3 },
+  'story-board': { kind: 'big', w: 2.3, d: 0.6, h: 1.9 },
+  'paper-stack': { kind: 'floor', w: 0.7, d: 0.5, h: 0.95 },
+  'front-pages': { kind: 'wall', w: 2.2, d: 0.04, h: 1.1 },
+  'news-rug': { kind: 'rug', w: 0, d: 0, h: 0.01 },
 };
+
+// ---------- the set pieces' aisles (#570) ----------
+
+/**
+ * The aisles between the desk columns, between the middle and front rows: in view from the elevator on a desktop,
+ * clear of the sight lines to the app screen and the north-east picture. Each faces the elevator; w x d is the most a
+ * piece there may take.
+ */
+export const SET_SPOTS: Record<SetSpot, { x: number; z: number; w: number; d: number }> = {
+  'aisle-w': { x: -7.3, z: 1.0, w: 2.5, d: 1.4 },
+  'aisle-e': { x: 7.3, z: 1.0, w: 2.5, d: 1.4 },
+};
+
+/** Both aisles' whole room, on every office floor: people and the roomba plan round it, themed or not. */
+export const reservedSetRects = (): Rect[] => Object.values(SET_SPOTS).map((s) => rect(s.x, s.z, s.w, s.d, 2.4));
 
 export interface PlacedProp {
   slot: string;
@@ -102,13 +127,22 @@ export function placeProp(slot: string, prop: ThemeProp): PlacedProp | null {
   };
 }
 
-/** The pack's props on a floor: every slot it names that no earned decoration fills. */
+/** A set piece in its aisle, facing the elevator. */
+function placeSetPiece(spot: SetSpot, prop: ThemeProp): PlacedProp {
+  const s = SET_SPOTS[spot];
+  const spec = PROP_SPECS[prop];
+  return { slot: spot, prop, x: s.x, y: 0, z: s.z, rotY: 0, w: spec.w, d: spec.d };
+}
+
+/** The pack's props on a floor: its set pieces, and every slot it names that no earned decoration fills. */
 export function themeProps(pack: ThemePack | null, placed: Record<string, DecorItem> | undefined): PlacedProp[] {
   if (!pack) return [];
-  return Object.entries(pack.props)
+  const pieces = Object.entries(pack.setPieces).map(([spot, prop]) => placeSetPiece(spot as SetSpot, prop));
+  const slots = Object.entries(pack.props)
     .filter(([slot]) => !placed?.[slot])
     .map(([slot, prop]) => placeProp(slot, prop))
     .filter((p): p is PlacedProp => !!p);
+  return [...pieces, ...slots];
 }
 
 /** What you (and the toys) bump into: the props standing on the floor. */

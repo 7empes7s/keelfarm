@@ -24,6 +24,7 @@ import { CloudToday } from './CloudToday';
 import { TestLabCard } from './TestLab';
 import { WaitTile } from './WaitTile';
 import { WhoRunsCard } from './WhoRunsCard';
+import { ProblemsTile } from './ProblemsPage';
 
 // The manager's console → Mission control: Claude's usage with "Resume full speed", the server and what uses it, what needs you (the alarms the
 // lobby wall's beacon rings for), the office doctor's findings with their one-click fixes, every floor's numbers
@@ -95,7 +96,7 @@ function UsageCard({ hot }: { hot: boolean }) {
         </div>
       )}
       <div className="dp-meta">{why}</div>
-      <div className="row wrap small">
+      <div className="row wrap small" data-tour="usage-warn">
         <span>
           When Claude warns: <b>{USAGE_WARNING_CHOICES.find((c) => c.value === choice)?.label}</b>
         </span>
@@ -404,6 +405,7 @@ export function OpsTab({ card }: { card?: string }) {
         {alarms.map((a) => (
           <AlarmCard key={a.id} alarm={a} repo={repos.find((r) => r.id === a.repoId)} hot={a.id === card} />
         ))}
+        <ProblemsTile />
         <DoctorSection hot={card === 'doctor'} />
         <ManagerChangesCard />
       </div>

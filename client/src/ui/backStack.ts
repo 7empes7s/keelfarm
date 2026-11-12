@@ -25,6 +25,10 @@ let depth = 0;
 let waiting = false; // a history.go() of ours is on its way
 let timer: ReturnType<typeof setTimeout> | null = null;
 let installed = false;
+let lastPopBack = false; // the latest popstate answered our go() or closed layers: a Back, not a link
+
+/** Whether the latest popstate was a Back (ours, or the manager's closing layers), for the hashchange after it. */
+export const lastPopWasBack = () => lastPopBack;
 
 function reconcile() {
   timer = null;
@@ -49,6 +53,7 @@ function install() {
   depth = depthOf(history.state);
   window.addEventListener('popstate', (e) => {
     depth = depthOf(e.state);
+    lastPopBack = waiting || toClose(layers.length, depth) > 0;
     waiting = false;
     for (const layer of layers.slice(layers.length - toClose(layers.length, depth)).reverse()) layer.close();
     schedule();

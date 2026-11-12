@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { createDemoBackend } from './demo.ts';
 import { Swarm } from './swarm.ts';
 
-// A floor's theme (#370): office by default, set through updateRepo (the floor's settings), sent in the snapshot and
-// its repo event, kept in the saved state, and an unknown one refused.
+// A floor's theme (#370): office by default, set through updateRepo (the floor's settings) or its use case (#528), sent
+// in the snapshot and its repo event, kept in the saved state, and an unknown one refused.
 
 describe('floor themes in the office', () => {
   it('starts as the office, re-dresses through the repo event and refuses unknown themes', async () => {
@@ -23,5 +23,18 @@ describe('floor themes in the office', () => {
     // what the state file keeps
     const saved = (swarm as unknown as { state: { repos: { id: string; theme?: string }[] } }).state.repos.find((r) => r.id === repo.id);
     expect(saved?.theme).toBe('game-studio');
+  });
+
+  it("follows the floor's use case until the manager picks a theme by hand (#528)", async () => {
+    const swarm = new Swarm(createDemoBackend());
+    const repo = await swarm.connectRepo('demo-co/pixel-todo');
+    const floor = () => swarm.snapshot().repos.find((r) => r.id === repo.id)!;
+    await vi.waitFor(() => expect(floor().lastSync).not.toBeNull());
+    expect(swarm.setFloorUseCase(repo.id, 'video')).toMatchObject({ theme: 'media-studio' });
+    expect(floor()).not.toHaveProperty('themeByHand');
+    expect(swarm.setFloorUseCase(repo.id, 'design').theme).toBe('design-studio');
+    swarm.updateRepo(repo.id, { theme: 'office' });
+    expect(floor()).toMatchObject({ theme: 'office', themeByHand: true });
+    expect(swarm.setFloorUseCase(repo.id, 'video').theme).toBe('office');
   });
 });

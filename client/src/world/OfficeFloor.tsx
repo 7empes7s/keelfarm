@@ -22,6 +22,7 @@ import { MergeConfetti } from './MergeConfetti';
 import { Beacon, useFloorAlarm } from './MissionControl';
 import { CoinBurst } from './decor/CoinBurst';
 import { FloorThemeLayer } from './floorThemes/FloorThemeLayer';
+import { ProjectPropsLayer } from './projectProps/ProjectPropsLayer';
 import { themePack } from './floorThemes/packs';
 import { Decorations } from './decor/Decorations';
 import { DeskStory, MvpSign } from './desk/DeskStory';
@@ -83,6 +84,7 @@ export const OfficeFloor = memo(function OfficeFloor({ repo }: { repo: RepoView 
     <group>
       <Shell kind="office" accent={repo.color} floorColor={pack?.shell.floor ?? '#d9b48a'} wallColor={pack?.shell.wall} />
       <FloorThemeLayer pack={pack} repo={repo} agents={agents} />
+      <ProjectPropsLayer repo={repo} agents={agents} />
       {DESK_RUGS.map((r) => (
         <Rug key={r.minZ} position={[(r.minX + r.maxX) / 2, 0.004, (r.minZ + r.maxZ) / 2]} size={[r.maxX - r.minX, r.maxZ - r.minZ]} color={rugColor} />
       ))}

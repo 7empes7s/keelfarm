@@ -16,11 +16,13 @@ import { PAUSE_CHOICES } from './micSilence';
 import { cantListen } from './micText';
 import { Key } from './Key';
 import { browserVoices, type BrowserVoice } from './voicePicker';
-import { playClip, speakLine, stopVoice } from './voicePlayback';
+import { speakLine, stopVoice } from './voicePlayback';
+import { testElevenLabs } from './voiceTest';
 import { hintMuted, useVoiceList, VoicePicker, type Playing } from './VoiceChooser';
 import { clampSpeed, modelPrice, SPEED_MAX, SPEED_MIN, SPEED_STEP, speedLabel, VOICE_MODELS } from '../../../shared/voices';
 import { SecretInput } from './SecretInput';
 import { chooseVoicePatch } from './voiceQuickRules';
+import { JarvisSettings } from './JarvisSettings';
 
 const DOCS = 'https://github.com/leonvanzyl/cubefarm/blob/main/docs/voice.md';
 
@@ -296,10 +298,9 @@ export function useVoiceTest(voice: Voice, keySet: boolean) {
     hintMuted();
     setPlaying('test');
     try {
-      const ok = eleven ? await playClip(await api.voiceSample(voice.voiceId)) : await speakLine(SAMPLE_LINE, voice.voiceName, voice.speed);
-      if (!ok) useStore.getState().pushToast('error', eleven ? "Couldn't play the test" : "The browser couldn't speak the test line");
-    } catch {
-      // api already toasted the error
+      // ElevenLabs' line unlocks its <audio> element in this tap, before anything is awaited (#545).
+      const failed = eleven ? await testElevenLabs(voice.voiceId) : (await speakLine(SAMPLE_LINE, voice.voiceName, voice.speed)) ? null : "The browser couldn't speak the test line";
+      if (failed) useStore.getState().pushToast('error', failed);
     } finally {
       setPlaying(null);
     }
@@ -399,6 +400,7 @@ export function VoiceSettings() {
         </span>
       </label>
       {(eleven || cache.clips > 0) && <SavedClips voice={voice} save={save} />}
+      <JarvisSettings />
       <Listening keyShown={eleven} />
     </div>
   );

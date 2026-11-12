@@ -192,6 +192,10 @@ export const USAGE_WARNING_CHOICES: { value: UsageWarningChoice; label: string }
 /** The saved choice, or 'pace' (the default) for anything else. */
 export const usageChoice = (v: unknown): UsageWarningChoice => (v === 'full' || v === 'ask' ? v : 'pace');
 
+/** "Notify me when it's back" watches kept in the state file (#538): usage row ids, the newest USAGE_WATCH_MAX. */
+export const USAGE_WATCH_MAX = 20;
+export const loadUsageWatch = (raw: unknown): string[] => (Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string').slice(-USAGE_WATCH_MAX) : []);
+
 /**
  * Pacing the manager waived with Resume full speed, saved before a restart (server/pacing.ts's Waiver), if it still
  * holds: its window isn't over and the choice isn't "Ask me each time", which asks again after a restart.

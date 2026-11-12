@@ -20,6 +20,7 @@ import { SecretInput } from './SecretInput';
 import { PlanFlag } from './PlanFlag';
 import { LimitTimeline, RotationCard } from './RotationSettings';
 import { CliMissingCard, OpencodeCard } from './CliSetupCard';
+import { bundledLabel } from '../../../shared/claudeCode';
 
 const DOCS = 'https://github.com/7empes7s/keelfarm/blob/main/docs/accounts.md';
 
@@ -166,6 +167,7 @@ function AccountCard({ a, first, last, isDefault, left, edit, signIn, missing }:
             !last && { label: 'Move down', onSelect: () => void api.moveAccount(a.id, 1).catch(() => undefined) },
             { label: a.kind === 'api-key' ? 'Rename, tags, daily cap' : 'Rename and tags', onSelect: edit },
             demo && !a.removing && { label: 'Simulate a limit', hint: 'Demo: its sessions switch to the next account', onSelect: () => void api.simulateAccountLimit(a.id).catch(() => undefined) },
+            demo && a.status === 'limited' && { label: 'End the limit', hint: 'Demo: it comes back, and Notify me fires', onSelect: () => void api.simulateAccountBack(a.id).catch(() => undefined) },
             !!billing && { label: 'Open billing and usage', onSelect: () => void window.open(billing, '_blank', 'noopener') },
             !a.builtIn && !a.removing && { label: 'Remove', danger: true, hint: 'Running sessions finish first', onSelect: () => void remove() },
           ]}
@@ -414,6 +416,7 @@ export function ProvidersSettings() {
             <p className="muted small">
               Signs in with {c.signs}.{users ? ` ${users} of the team run${users === 1 ? 's' : ''} it.` : ''}
             </p>
+            {cli?.bundled && bundledLabel(cli.version) && <p className="muted small">{bundledLabel(cli.version)}</p>}
             {missing && c.id !== 'opencode' && <p className="muted small">Sign in and Add account need {c.name} on this computer: install it first.</p>}
             <CliMissingCard cli={cli} anyInstalling={anyInstalling} />
             {c.id === 'opencode' && <OpencodeCard cli={cli} />}

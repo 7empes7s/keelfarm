@@ -29,6 +29,7 @@ import {
   type SessionResult,
 } from './agentRunner.ts';
 import type { OfficeTools } from './ceo.ts';
+import { progressStream } from './testLabTools.ts';
 import { consultDeny } from './consult.ts';
 import type { AgentTerminal } from './terminal.ts';
 import type { AgentCli } from '../shared/types.ts';
@@ -36,7 +37,7 @@ import { readingOf } from '../shared/usage.ts';
 import { isHarnessText } from '../shared/chat.ts';
 import { transcriptStartup } from './tooling.ts';
 import { ANSWER_AFTER_MS, answerHook, cliEnv, keyHelperCommand, permissionScreen, sessionRoots, STALL_MS, watchdogStep, worktreePermissions, type Waiting } from './unblock.ts';
-import { actOn, requiredKeys, SessionWatch } from './liveState.ts';
+import { actOn, plainTurnError, requiredKeys, SessionWatch } from './liveState.ts';
 import { resumableSession, TranscriptTail } from './transcriptTail.ts';
 import { programStatusStep, ProgramStatusReporter, type ProgramStatus } from './programStatus.ts';
 import { envSecrets } from './journal.ts';
@@ -100,7 +101,7 @@ export async function handleMcp(token: string, req: Request, res: Response) {
   const office = routes.get(token)?.office;
   if (!office) return mcpGone(res, routes.has(token));
   const server = office.serve();
-  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
+  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: !progressStream(req.body) });
   res.on('close', () => {
     void transport.close();
     void server.close();
@@ -767,7 +768,7 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
         const error = String(b.error ?? 'unknown');
         const details = String(b.error_details ?? '').trim();
         if (error === 'rate_limit') cb.limited?.([...usageResets.values()].find((t) => t !== null) ?? null);
-        finish({ ok: false, text: lastText, errors: [`${label} stopped: ${error.replace(/_/g, ' ')}${details ? ` (${clip(details, 160)})` : ''}`] }, true);
+        finish({ ok: false, text: lastText, errors: [plainTurnError(error, details) ?? `${label} stopped: ${error.replace(/_/g, ' ')}${details ? ` (${clip(details, 160)})` : ''}`] }, true);
         return {};
       }
       case 'Notification': {

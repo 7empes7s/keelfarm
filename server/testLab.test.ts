@@ -1,10 +1,12 @@
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_TEST_LAB, testLabSettings, type TestLabView } from '../shared/testLab.ts';
 import type { SessionKind } from '../shared/health.ts';
 import { browsersPath, estimateWaitMs, labArgv, labCommand, labFile, labOutDir, labPattern, labProblem, pickNext, silenceMs, TestLab, type LabRunner, type Requester, type RunResult, type TestLabHost } from './testLab.ts';
-import { createLabTools } from './testLabTools.ts';
+import { expiredResults, requestKey, saveResult } from './testLabResults.ts';
+import { createLabTools, labProgress, progressStream } from './testLabTools.ts';
 import { demoLabRunner, fakeShot } from './demoTestLab.ts';
 import { devSystemPrompt, qaSystemPrompt } from './prompts.ts';
 
@@ -36,6 +38,13 @@ describe('pickNext', () => {
     const q = [job('a', 'run', 'A', 1), job('b', 'run', 'B', 2)];
     expect(pickNext(q, [job('r', 'run', 'A', 0)], { browser: 1, heavy: 2 }, new Map()).map((j) => j.id)).toEqual(['b']);
     expect(pickNext([q[0]], [job('r', 'run', 'A', 0)], { browser: 1, heavy: 2 }, new Map())).toEqual([]);
+  });
+
+  it('caps the whole lab: with a total of one, a browser job waits while a heavy run runs (#560)', () => {
+    const q = [job('a', 'run', 'A', 1), job('b', 'screenshot', 'B', 2), job('c', 'check', 'C', 3)];
+    expect(pickNext(q, [], { ...LIMITS, total: 1 }, new Map()).map((j) => j.id)).toEqual(['a']);
+    expect(pickNext(q.slice(1), [q[0]], { ...LIMITS, total: 1 }, new Map())).toEqual([]);
+    expect(pickNext(q, [], { browser: 2, heavy: 1, total: 2 }, new Map()).map((j) => j.id)).toEqual(['a', 'b']);
   });
 
   it('estimates the wait from the place in the lane', () => {
@@ -145,13 +154,13 @@ function fakeRunner(log: string[], ms = 0, runs: Partial<RunResult>[] = []): Lab
 const who = (agentId: string, repoId = 'r1', floor = 1): Requester => ({ agentId, agent: agentId.toUpperCase(), repoId, floor, fullName: `o/${repoId}`, defaultBranch: 'main', worktree: path.join(os.tmpdir(), 'labdesk', agentId), pr: 7, labCommands: [] });
 const shot = (url: string) => ({ kind: 'screenshot' as const, url, viewports: [375, 390, 1280], profile: 'phone' as const, theme: 'light' as const, actions: [], fullPage: false });
 
-function lab(runner: LabRunner, refusal: (k: SessionKind) => string | null = () => null, updateGate?: () => readonly string[] | null) {
+function lab(runner: LabRunner, refusal: (k: SessionKind) => string | null = () => null, updateGate?: () => readonly string[] | null, settings = DEFAULT_TEST_LAB) {
   const views: TestLabView[] = [];
   const shots: string[] = [];
   const pages: string[] = [];
   const host: TestLabHost = {
     runner: () => runner,
-    settings: () => DEFAULT_TEST_LAB,
+    settings: () => settings,
     refusal,
     forbidden: () => [path.join(os.tmpdir(), 'office')],
     previewUrl: async (repoId, pr) => `http://localhost:6300/${repoId}/${pr}`,
@@ -276,6 +285,63 @@ describe('TestLab', () => {
   });
 });
 
+describe('never silent while queued (#560)', () => {
+  afterEach(() => vi.useRealTimers());
+  const busy = () => {
+    const runner = fakeRunner([], -1);
+    const l = lab(runner, () => null, undefined, { ...DEFAULT_TEST_LAB, totalJobs: 1 }).lab;
+    void l.submit(who('a'), shot('http://localhost:9/'));
+    return { runner, l };
+  };
+
+  it('sends a heartbeat with the place and the reason every 20 s while a job waits, and stops once it starts', async () => {
+    vi.useFakeTimers();
+    const { runner, l } = busy();
+    const beats: { position: number; message: string }[] = [];
+    const ask = l.submit(who('b', 'r2', 2), { kind: 'run', command: 'npm test' }, Date.now(), (b) => beats.push(b));
+    await vi.advanceTimersByTimeAsync(19_000);
+    expect(beats).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(beats).toEqual([{ position: 1, message: expect.stringMatching(/^Lab job \w+ queued: position 1 in the lab's heavy queue \(the lab is busy with screenshot localhost:9\/ × 3\)/) }]);
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(beats).toHaveLength(2);
+    runner.release();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(l.view().recent.map((j) => j.agentId)).toEqual(['b', 'a']); // started, and done
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(beats).toHaveLength(2);
+    expect(await ask).toMatch(/^npm test: exit code 1/);
+  });
+
+  it('answers at once with the place and when to retry when the caller cannot take progress, and queues nothing', () => {
+    const { runner, l } = busy();
+    expect(() => l.submit(who('b', 'r2', 2), { kind: 'run', command: 'npm test' }, Date.now(), null)).toThrow(/^Queued, position 1 in the lab's heavy queue \(the lab is busy with screenshot localhost:9\/ × 3\): nothing ran\. Retry in \d+ s\.$/);
+    expect(l.view().queue).toEqual([]);
+    runner.release();
+  });
+
+  it('runs at once without progress when the lab is free', async () => {
+    const { lab: l } = lab(fakeRunner([]));
+    expect(await l.submit(who('a'), shot('http://localhost:1/'), Date.now(), null)).toMatch(/^3 screenshots/);
+  });
+
+  it("turns the MCP call's progress token into progress notifications, and asks for a stream only when there is one", async () => {
+    const sent: unknown[] = [];
+    const beat = labProgress({ _meta: { progressToken: 'p1' }, sendNotification: async (n: unknown) => void sent.push(n) });
+    beat!({ position: 2, message: 'Queued: position 2' });
+    beat!({ position: 1, message: 'Queued: position 1' });
+    expect(sent).toEqual([
+      { method: 'notifications/progress', params: { progressToken: 'p1', progress: 1, message: 'Queued: position 2' } },
+      { method: 'notifications/progress', params: { progressToken: 'p1', progress: 2, message: 'Queued: position 1' } },
+    ]);
+    expect(labProgress({ _meta: {}, sendNotification: async () => undefined })).toBeNull();
+    expect(labProgress(undefined)).toBeNull();
+    expect(progressStream({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'lab_run', _meta: { progressToken: 3 } } })).toBe(true);
+    expect(progressStream({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'lab_run' } })).toBe(false);
+    expect(progressStream({ jsonrpc: '2.0', id: 1, method: 'tools/list' })).toBe(false);
+  });
+});
+
 describe('lab problems (#189)', () => {
   it('runs Playwright with the line reporter, and gives it longer to be quiet', () => {
     expect(labArgv(['npx', 'playwright', 'test', 'e2e/overflow.spec.ts'])).toEqual(['npx', 'playwright', 'test', 'e2e/overflow.spec.ts', '--reporter=line']);
@@ -331,16 +397,98 @@ describe('lab problems (#189)', () => {
   });
 });
 
+describe("a finished job's kept result (#562)", () => {
+  const home = (agentId: string) => ({ ...who(agentId), worktree: path.join(os.tmpdir(), `labkeep-${process.pid}-${Math.random().toString(36).slice(2)}`, agentId) });
+
+  it('is readable through lab_result after the caller disconnected before the job ended', async () => {
+    const runner = fakeRunner([], -1);
+    const { lab: l } = lab(runner);
+    const me = home('a');
+    const call = new AbortController();
+    void l.submit(me, shot('http://localhost:1/'), Date.now(), undefined, call.signal);
+    await Promise.resolve();
+    const id = l.view().running[0].id;
+    expect(l.result(me, id)).toMatch(/is running/);
+    call.abort(); // the MCP client gave up after 300 s of silence
+    runner.release();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(l.view().running).toHaveLength(0);
+    expect(l.result(me, id)).toContain(`Lab job ${id}: screenshot localhost:1/ × 3, ended 0 min ago (passed: 3 shots, 0 errors).\n3 screenshots`);
+    const kept = JSON.parse(fs.readFileSync(path.join(me.worktree, '.lab', id, 'result.json'), 'utf8'));
+    expect(kept).toMatchObject({ id, callerGone: true, ok: true, artifacts: [path.join(me.worktree, '.lab', id, '375.png'), expect.any(String), expect.any(String)] });
+    expect(fs.readFileSync(path.join(me.worktree, '.lab', '.gitignore'), 'utf8')).toBe('*\n');
+    expect(l.status('a', me.worktree)).toMatch(new RegExp(`Your finished jobs.*\n {2}${id}: screenshot localhost:1/ × 3, passed`));
+    expect(() => l.result(home('b'), id)).toThrow(/No result for lab job/); // another agent's worktree has none
+  });
+
+  it("answers a retry of the same request after a cut-off call with the kept result, once, instead of running it again", async () => {
+    const log: string[] = [];
+    const { lab: l } = lab(fakeRunner(log));
+    const me = home('a');
+    const call = new AbortController();
+    call.abort();
+    await l.submit(me, { kind: 'run', command: 'npm test' }, Date.now(), undefined, call.signal);
+    const again = await l.submit(me, { kind: 'run', command: 'npm test' });
+    expect(again).toMatch(/^Your earlier call was cut off; this is its job's result, not run again/);
+    expect(again).toMatch(/npm test: exit code 1/);
+    expect(log).toHaveLength(1);
+    await l.submit(me, { kind: 'run', command: 'npm test' }); // asked again: runs afresh
+    await l.submit(me, { kind: 'run', command: 'npm run build' }); // another request never reuses
+    expect(log).toHaveLength(3);
+    // Not after 30 minutes, and not when the first answer was delivered.
+    await l.submit(me, { kind: 'run', command: 'npm run lint' }, Date.now(), undefined, call.signal);
+    await l.submit(me, { kind: 'run', command: 'npm run lint' }, Date.now() + 31 * 60_000);
+    expect(log).toHaveLength(5);
+  });
+
+  it('joins a retry to the same job while it still runs for a caller that is gone', async () => {
+    const runner = fakeRunner([], -1);
+    const { lab: l } = lab(runner);
+    const me = home('a');
+    const call = new AbortController();
+    void l.submit(me, shot('http://localhost:1/'), Date.now(), undefined, call.signal);
+    call.abort();
+    const again = l.submit(me, shot('http://localhost:1/'));
+    expect(l.view().running.length + l.view().queue.length).toBe(1);
+    await Promise.resolve();
+    runner.release();
+    expect(await again).toMatch(/^3 screenshots/);
+  });
+
+  it('keeps a day of results, the newest 20, and leaves other folders alone', () => {
+    const now = 100 * 3600_000;
+    const rs = Array.from({ length: 23 }, (_, i) => ({ id: `j${i}`, endedAt: now - i * 60_000 }));
+    expect(expiredResults([...rs, { id: 'old', endedAt: now - 25 * 3600_000 }], now)).toEqual(['j20', 'j21', 'j22', 'old']);
+    const wt = home('a').worktree;
+    fs.mkdirSync(path.join(wt, '.lab', 'notours'), { recursive: true });
+    const base = { kind: 'run' as const, title: 't', key: 'k', ok: true, summary: 's', report: 'r', artifacts: [], queuedAt: 0, startedAt: 0, callerGone: false };
+    for (const r of rs) saveResult(wt, { ...base, ...r }, [], now);
+    expect(fs.readdirSync(path.join(wt, '.lab')).sort()).toEqual(['.gitignore', 'notours', ...rs.slice(0, 20).map((r) => r.id)].sort());
+  });
+
+  it('treats the same arguments in any order as the same request', () => {
+    expect(requestKey({ kind: 'run', command: 'npm test', branch: undefined })).toBe(requestKey({ command: 'npm test', kind: 'run' }));
+    expect(requestKey({ kind: 'run', command: 'npm test' })).not.toBe(requestKey({ kind: 'run', command: 'npm run build' }));
+  });
+});
+
 describe('the lab tools', () => {
   it('validate their input and answer in plain text', async () => {
     const asked: unknown[] = [];
-    const tools = createLabTools({ submit: async (i) => (asked.push(i), 'ok'), status: () => 'Lab: 0 running, 0 waiting' });
+    const tools = createLabTools({ submit: async (i) => (asked.push(i), 'ok'), status: () => 'Lab: 0 running, 0 waiting', result: (id) => `job ${id}` });
     expect(await tools.call('lab_status', {})).toBe('Lab: 0 running, 0 waiting');
+    expect(await tools.call('lab_result', { job_id: 'mw1' })).toBe('job mw1');
+    for (const d of tools.defs.filter((x) => x.name !== 'lab_status' && x.name !== 'lab_result')) expect(d.description).toMatch(/cut off.*lab_result.*instead of asking again/);
     expect(await tools.call('lab_screenshot', { url: 'http://localhost:5678/', viewports: [390, 1280], theme: 'dark' })).toBe('ok');
     expect(asked[0]).toEqual({ kind: 'screenshot', url: 'http://localhost:5678/', preview: undefined, viewports: [390, 1280], profile: 'desktop', theme: 'dark', graphics: undefined, waitFor: undefined, actions: [], fullPage: false });
     expect(await tools.call('lab_run', { command: 'npm test' })).toBe('ok');
-    const refused = createLabTools({ submit: () => Promise.reject(new Error('the queue is full')), status: () => '' });
+    const refused = createLabTools({ submit: () => Promise.reject(new Error('the queue is full')), status: () => '', result: () => '' });
     expect(await refused.call('lab_run', { command: 'npm test' })).toBe('Refused: the queue is full');
+    const signals: (AbortSignal | undefined)[] = [];
+    const call = new AbortController();
+    const bound = createLabTools({ submit: async (_i, _p, signal) => (signals.push(signal), 'ok'), status: () => '', result: () => '' });
+    await bound.defs.find((d) => d.name === 'lab_run')!.handler({ command: 'npm test' } as never, { signal: call.signal } as never);
+    expect(signals).toEqual([call.signal]); // the call's own, so the lab knows when its caller is gone (#562)
   });
 });
 
@@ -355,7 +503,8 @@ describe('the demo lab', () => {
 
 describe('settings and prompts', () => {
   it('keeps valid settings and clamps counts', () => {
-    expect(testLabSettings(DEFAULT_TEST_LAB, { enabled: false, browserJobs: 9, heavyJobs: 'x' })).toEqual({ enabled: false, browserJobs: 4, heavyJobs: 1 });
+    expect(testLabSettings(DEFAULT_TEST_LAB, { enabled: false, browserJobs: 9, heavyJobs: 'x' })).toEqual({ enabled: false, browserJobs: 4, heavyJobs: 1, totalJobs: 1 });
+    expect(testLabSettings(DEFAULT_TEST_LAB, { totalJobs: 3 }).totalJobs).toBe(3);
   });
 
   it('tells lab sessions to use the lab tools instead of their own browser', () => {

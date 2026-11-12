@@ -16,6 +16,7 @@ import { lobbyColliders, officeColliders, ROOF, roofColliders } from './layout';
 import { decorRects } from './decor/decor';
 import { themePack } from './floorThemes/packs';
 import { themePropRects, themeWallRects } from './floorThemes/placement';
+import { projectRects, repoPropSet } from './projectProps/spots';
 import { LAB_GFX, LAB_GFX_LIMITS } from './gfx/device';
 import { Graphics } from './gfx/Graphics';
 import { Lobby } from './Lobby';
@@ -105,12 +106,16 @@ export function Game() {
   const placed = useStore((s) => (repoId ? s.progress.floors[repoId]?.placed : undefined));
   const theme = useTheme((s) => s.id);
   const pack = useStore((s) => (repoId ? themePack(s.repos.find((r) => r.id === repoId)?.theme) : null));
+  const propSet = useStore((s) => {
+    const r = repoId ? s.repos.find((x) => x.id === repoId) : undefined;
+    return r ? repoPropSet(r) : null;
+  });
   const colliders = useMemo(
     () =>
       onRoof
         ? roofColliders()
-        : [...(isOffice ? [...officeColliders(), ...decorRects(placed ?? {}), ...themePropRects(pack, placed), ...themeWallRects(pack)] : lobbyColliders()), ...decorColliders(theme, isOffice ? 'office' : 'lobby')],
-    [onRoof, isOffice, placed, theme, pack],
+        : [...(isOffice ? [...officeColliders(), ...decorRects(placed ?? {}), ...themePropRects(pack, placed), ...themeWallRects(pack), ...(propSet ? projectRects(propSet) : [])] : lobbyColliders()), ...decorColliders(theme, isOffice ? 'office' : 'lobby')],
+    [onRoof, isOffice, placed, theme, pack, propSet],
   );
   const toRoof = useStore((s) => s.travel?.to === ROOF);
   useEffect(() => {

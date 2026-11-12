@@ -40,6 +40,7 @@ export const CATEGORIES: { id: ProviderCategory; label: string }[] = [
   { id: 'video', label: 'Video' },
   { id: 'image', label: 'Image' },
   { id: 'cloud', label: 'Cloud' },
+  { id: 'signin', label: 'Company sign-ins' },
   { id: 'mcp', label: 'MCP servers' },
 ];
 
@@ -69,6 +70,11 @@ export const PROVIDERS: ProviderDef[] = [
   { id: 'cloudflare', name: 'Cloudflare', category: 'cloud', auth: 'api-key', home: 'providers', keyEnv: 'CLOUDFLARE_API_TOKEN', placeholder: 'API token', docsUrl: 'https://developers.cloudflare.com/fundamentals/api/', blurb: 'DNS, tunnels and Workers' },
   { id: 'github', name: 'GitHub token', category: 'cloud', auth: 'api-key', home: 'providers', keyEnv: 'GITHUB_TOKEN', placeholder: 'ghp_… or github_pat_…', docsUrl: 'https://docs.github.com/en/rest', blurb: 'A personal access token for the GitHub API' },
   { id: 'hetzner', name: 'Hetzner Cloud', category: 'cloud', auth: 'api-key', home: 'providers', keyEnv: 'HCLOUD_TOKEN', placeholder: 'API token', docsUrl: 'https://docs.hetzner.cloud', usage: 'hetzner', blurb: 'Servers on Hetzner Cloud' },
+  // One sign-in per company (#533): every scope the office needs in one consent (shared/oauth.ts).
+  { id: 'google', name: 'Google', category: 'signin', auth: 'oauth', home: 'providers', docsUrl: 'https://developers.google.com/youtube/v3/guides/auth/server-side-web-apps', icon: 'id-card', blurb: 'Gemini, Imagen, Veo, YouTube upload and analytics, Drive read: one sign-in' },
+  { id: 'meta', name: 'Meta', category: 'signin', auth: 'oauth', home: 'providers', docsUrl: 'https://developers.facebook.com/docs/instagram-platform/content-publishing', icon: 'id-card', blurb: 'Instagram publishing and insights: one sign-in' },
+  { id: 'tiktok', name: 'TikTok', category: 'signin', auth: 'oauth', home: 'providers', docsUrl: 'https://developers.tiktok.com/doc/content-posting-api-get-started', icon: 'id-card', blurb: 'TikTok uploads and posts: one sign-in' },
+  { id: 'microsoft', name: 'Microsoft', category: 'signin', auth: 'oauth', home: 'providers', docsUrl: 'https://learn.microsoft.com/en-us/graph/auth-v2-user', icon: 'id-card', blurb: 'OneDrive files read: one sign-in' },
 ];
 
 export const providerDef = (id: string) => PROVIDERS.find((p) => p.id === id);
@@ -83,8 +89,8 @@ export const USES: { id: ProviderUse; label: string; blurb: string }[] = [
 
 export const isProviderUse = (v: unknown): v is ProviderUse => USES.some((u) => u.id === v);
 
-/** A key's default: cloud keys and MCP servers run things, every other category is a model. */
-export const defaultUse = (category: ProviderCategory): ProviderUse => (category === 'cloud' || category === 'mcp' ? 'operations' : 'inference');
+/** A key's default: cloud keys and MCP servers run things, a company sign-in does both, every other category is a model. */
+export const defaultUse = (category: ProviderCategory): ProviderUse => (category === 'cloud' || category === 'mcp' ? 'operations' : category === 'signin' ? 'both' : 'inference');
 
 /** Whether a card shows under the Used for filter: "Both" shows under either. */
 export const usedForMatches = (use: ProviderUse | undefined, filter: ProviderUse | 'all') => filter === 'all' || use === filter || (use === 'both' && filter !== 'both');
@@ -112,11 +118,16 @@ export const IMAGE_MODELS: Record<string, string[]> = {
   'openai-images': ['gpt-image-2.6-sunburst', 'gpt-image-2.6-flare', 'gpt-image-2.5-sunburst', 'gpt-image-2.5-flare', 'gpt-image-2'],
 };
 
-/** One cheap read-only call: an HTTP GET with the key in a header, or a command looked up on the PATH. */
-export type ProbeRequest = { kind: 'http'; url: string; headers: Record<string, string> } | { kind: 'command'; command: string };
+/**
+ * One cheap read-only call: an HTTP GET with the key in a header, or a command looked up on the PATH; or a sign-in's
+ * token exchange (#533), the one POST, to the company's token URL only.
+ */
+export type ProbeRequest = { kind: 'http'; url: string; headers: Record<string, string> } | { kind: 'command'; command: string } | { kind: 'form'; url: string; form: Record<string, string> };
 export interface ProbeResult {
   status: number; // HTTP status; 0 unreachable; 200 a command found
   body?: unknown;
+  /** The answer's permission headers (GitHub's x-oauth-scopes and x-accepted-github-permissions), lower-cased. */
+  headers?: Record<string, string>;
 }
 
 const RUNWAY_VERSION = '2024-11-06';
@@ -162,6 +173,15 @@ export function testRequest(provider: string, key: string, now = Date.now()): Pr
       return { kind: 'http', url: 'https://api.cloudflare.com/client/v4/user/tokens/verify', headers: bearer };
     case 'github':
       return { kind: 'http', url: 'https://api.github.com/user', headers: { ...bearer, Accept: 'application/vnd.github+json', 'User-Agent': 'cubefarm' } };
+    // a company sign-in's `key` is its access token, refreshed on the server first
+    case 'google':
+      return { kind: 'http', url: 'https://openidconnect.googleapis.com/v1/userinfo', headers: bearer };
+    case 'meta':
+      return { kind: 'http', url: 'https://graph.facebook.com/v21.0/me?fields=name', headers: bearer };
+    case 'tiktok':
+      return { kind: 'http', url: 'https://open.tiktokapis.com/v2/user/info/?fields=open_id,display_name', headers: bearer };
+    case 'microsoft':
+      return { kind: 'http', url: 'https://graph.microsoft.com/v1.0/me', headers: bearer };
     default:
       return null;
   }
@@ -253,7 +273,10 @@ export function testPlan(provider: string, body: unknown): string | undefined {
     const models = geminiVideoModels(body);
     return models.length ? models.slice(0, 3).join(', ') : 'No video models on this key';
   }
-  return undefined;
+  // a sign-in's account
+  const b = obj(body);
+  const who = provider === 'google' ? b.email : provider === 'meta' ? b.name : provider === 'tiktok' ? obj(obj(b.data).user).display_name : provider === 'microsoft' ? (b.userPrincipalName ?? b.mail) : undefined;
+  return typeof who === 'string' && who ? who : undefined;
 }
 
 /** Why a pasted key can't be saved for `provider`, or null. */
@@ -261,6 +284,7 @@ export function keyProblem(provider: string, raw: string): string | null {
   const key = raw.trim();
   const def = providerDef(provider);
   if (!def || def.home !== 'providers') return 'Pick a provider from the list.';
+  if (def.auth === 'oauth') return `${def.name} connects with Sign in with ${def.name}, not a key.`;
   if (!key) return 'Paste the key first.';
   if (provider === 'kling' && key.split(':').length > 2) return 'Paste the access key, a colon, then the secret key (or one API key).';
   if (key.length > 400 || /\s/.test(key)) return "That doesn't look like a key.";
@@ -295,6 +319,8 @@ export interface ProviderCard {
   tags?: string[];
   source?: string; // where an imported key came from
   testedAt?: number;
+  scopes?: string[]; // a company sign-in's granted scopes (#533)
+  missing?: string[]; // permissions its last test found missing (#533)
   /** Where it's changed: its old settings section, or here. */
   settings: 'accounts' | 'voice' | 'cloud-agents' | 'tools' | null;
 }
@@ -389,7 +415,7 @@ export function providerCards(i: CardInput): ProviderCard[] {
       name: def.name,
       label: c.label,
       category: def.category,
-      status: CHECK_STATUS[testCheck(c.test)] ?? (!c.test ? 'untested' : c.test.ok ? 'ready' : 'error'),
+      status: c.test?.missing?.length && c.test.ok ? 'near' : (CHECK_STATUS[testCheck(c.test)] ?? (!c.test ? 'untested' : c.test.ok ? 'ready' : 'error')),
       note: c.test?.note ?? 'Not tested yet',
       plan: c.test?.plan ?? 'API',
       keyHint: c.keyHint,
@@ -401,6 +427,8 @@ export function providerCards(i: CardInput): ProviderCard[] {
       tags: c.tags,
       ...(c.source ? { source: c.source } : {}),
       ...(c.test ? { testedAt: c.test.at } : {}),
+      ...(c.scopes ? { scopes: c.scopes } : {}),
+      ...(c.test?.missing?.length ? { missing: c.test.missing } : {}),
     });
   }
   for (const m of i.providers.mcp) {

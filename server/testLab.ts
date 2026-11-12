@@ -5,6 +5,7 @@
 // commands themselves are a LabRunner (server/testLabRunner.ts; the demo fakes it).
 import path from 'node:path';
 import type { SessionKind } from '../shared/health.ts';
+import { listResults, readResult, requestKey, resultText, REUSE_MS, saveResult, type LabStored } from './testLabResults.ts';
 import { laneOf, type LabGraphics, type LabJobKind, type LabJobView, type LabLane, type LabProfile, type LabResultView, type TestLabSettings, type TestLabView } from '../shared/testLab.ts';
 
 // ---------- rules ----------
@@ -28,9 +29,9 @@ interface Queued {
  * The jobs to start now. Each lane runs up to its limit; among the waiting jobs the floor with the fewest running jobs
  * goes first, then the floor served longest ago, then the oldest request. Two heavy jobs of one floor never run at once:
  * they share the floor's lab checkout. A job that runs alone goes first once the lab is empty, and nothing new starts
- * while it waits for that or runs.
+ * while it waits for that or runs. `total` caps both lanes together (#560).
  */
-export function pickNext<J extends Queued>(queue: readonly J[], running: readonly J[], limits: Record<LabLane, number>, servedAt: ReadonlyMap<string, number>): J[] {
+export function pickNext<J extends Queued>(queue: readonly J[], running: readonly J[], limits: Record<LabLane, number> & { total?: number }, servedAt: ReadonlyMap<string, number>): J[] {
   if (running.some((j) => j.alone)) return [];
   const solo = queue.filter((j) => j.alone).sort((a, b) => a.queuedAt - b.queuedAt)[0];
   if (solo) return running.length ? [] : [solo];
@@ -39,7 +40,7 @@ export function pickNext<J extends Queued>(queue: readonly J[], running: readonl
   const picked: J[] = [];
   for (const lane of ['heavy', 'browser'] as const) {
     for (;;) {
-      if (now.filter((j) => laneOf(j.kind) === lane).length >= limits[lane]) break;
+      if (now.length >= (limits.total ?? Infinity) || now.filter((j) => laneOf(j.kind) === lane).length >= limits[lane]) break;
       const busy = (repoId: string) => now.filter((j) => j.repoId === repoId).length;
       const next = queue
         .filter((j) => laneOf(j.kind) === lane && !picked.includes(j) && !(lane === 'heavy' && now.some((r) => r.kind === 'run' && r.repoId === j.repoId)))
@@ -56,6 +57,16 @@ export function pickNext<J extends Queued>(queue: readonly J[], running: readonl
 /** Roughly how long a job `ahead` places back in its lane waits, from how long that lane's jobs take. */
 export function estimateWaitMs(ahead: number, limit: number, avgMs: number): number {
   return (Math.floor(ahead / Math.max(1, limit)) + 1) * avgMs;
+}
+
+/** A queued job's place and why it waits: the heartbeat's words (#560). */
+function queueNote(x: { id: string; position: number; lane: LabLane; reason: string; waitMs: number }): string {
+  return `Lab job ${x.id} queued: position ${x.position} in the lab's ${x.lane} queue (${x.reason}), about ${Math.max(1, Math.ceil(x.waitMs / 60_000))} min. Keep waiting: it starts by itself.`;
+}
+
+/** The answer to a caller that can't take progress notifications while its job would wait (#560): nothing queued. */
+function queuedRefusal(x: { position: number; lane: LabLane; reason: string; waitMs: number }): string {
+  return `Queued, position ${x.position} in the lab's ${x.lane} queue (${x.reason}): nothing ran. Retry in ${Math.max(10, Math.round(x.waitMs / 1000))} s.`;
 }
 
 /** Commands every floor may run in the lab. `<args>` stands for any further plain arguments. */
@@ -368,19 +379,27 @@ type JobInput =
 
 interface Job extends Queued {
   input: JobInput;
+  key: string; // requestKey(input): a retry of the same request (#562)
   who: Requester;
   title: string;
   startedAt: number | null;
   done: (text: string) => void;
+  answer: Promise<string>;
+  /** The call that asked was aborted (MCP client gave up): the result waits on disk for lab_result (#562). */
+  gone: () => boolean;
+  beat?: ReturnType<typeof setInterval>; // the heartbeat while it waits (#560)
 }
+
+/** A heartbeat while a job waits (#560): its place in its lane's queue and the words to show. */
+export type LabProgress = (beat: { position: number; message: string }) => void;
 
 // ---------- the lab ----------
 
 export interface TestLabHost {
   runner(): LabRunner;
   settings(): TestLabSettings;
-  /** Why a job of this kind can't start for memory now (#55's admission), or null. */
-  refusal(kind: SessionKind): string | null;
+  /** Why a job of this kind can't start for memory now (#560's labAdmission), or null. */
+  refusal(kind: 'labBrowser' | 'labRun'): string | null;
   /** Folders the lab never writes to: the office's own and every floor's checkout. */
   forbidden(): string[];
   /** The address of the requester's floor's app: their PR's preview (started on demand), else the floor's; held for agentId while they work. */
@@ -396,6 +415,8 @@ export interface TestLabHost {
 }
 
 const BROWSER_IDLE_MS = 5 * 60_000;
+/** A waiting job's heartbeat: well inside the 300 s of silence after which an MCP client gives up on the call. */
+const BEAT_MS = 20_000;
 const RETRY_MS = 5_000;
 const DEFAULT_RUN_MIN = 15;
 const UPDATE_WAIT = 'Waiting for the office update: queued jobs start once the office has restarted.';
@@ -413,28 +434,75 @@ export class TestLab {
   private retry: ReturnType<typeof setTimeout> | null = null;
   private idle: ReturnType<typeof setTimeout> | null = null;
   private lastLab = new Map<string, number>(); // agent → when their last job ended (#333)
+  private unread = new Map<string, LabStored[]>(); // agent → results whose caller was gone, for a retry (#562)
 
   constructor(private host: TestLabHost) {}
 
-  /** Queue a request; resolves with the report the agent reads (refusals included: they're tool errors upstream). */
-  submit(who: Requester, input: JobInput, now = Date.now()): Promise<string> {
+  /**
+   * Queue a request; resolves with the report the agent reads (refusals included: they're tool errors upstream).
+   * `progress`: called every BEAT_MS while the job waits; null: the caller can't take progress (an MCP call without a
+   * progressToken), so a job that can't start at once is refused with its place instead of waiting in silence.
+   * `signal`: the call's; aborted when the caller is gone. A retry of the same request after that gets the job's result
+   * (still running: its answer; ended within REUSE_MS: the kept one) instead of a second run (#562).
+   */
+  submit(who: Requester, input: JobInput, now = Date.now(), progress?: LabProgress | null, signal?: AbortSignal): Promise<string> {
+    const key = requestKey(input);
+    const gone = () => !!signal?.aborted;
+    const same = [...this.running, ...this.queue].find((j) => j.who.agentId === who.agentId && j.key === key && j.gone());
+    if (same) {
+      same.gone = gone;
+      if (!same.startedAt && progress) this.heartbeat(same, progress);
+      return same.answer;
+    }
+    const kept = this.unread.get(who.agentId)?.find((r) => r.key === key && now - r.endedAt <= REUSE_MS);
+    if (kept) {
+      this.unread.set(who.agentId, this.unread.get(who.agentId)!.filter((r) => r !== kept));
+      return Promise.resolve(`Your earlier call was cut off; this is its job's result, not run again (call again to run it afresh).\n${resultText(kept, now)}`);
+    }
     if (this.queue.length >= QUEUE_MAX) throw new Error(`The lab's queue is full (${QUEUE_MAX} jobs): try again in a few minutes.`);
     if ([...this.queue, ...this.running].filter((j) => j.who.agentId === who.agentId).length >= PER_AGENT_MAX) throw new Error(`You already have ${PER_AGENT_MAX} lab jobs waiting or running: wait for them first.`);
     if (input.kind === 'run') labCommand(input.command, who.labCommands); // refused before it queues
     if (input.kind !== 'run' && !input.url && !input.preview) throw new Error('Give a url, or preview: true for your floor\'s app.');
     if (input.kind !== 'run' && input.url) labUrl(input.url);
     labOutDir(who.worktree, 'x', this.host.forbidden());
-    return new Promise((done) => {
-      const id = `${now.toString(36)}${(++seq).toString(36)}`;
-      this.queue.push({ id, kind: input.kind, repoId: who.repoId, queuedAt: now, alone: input.kind !== 'run' && input.graphics === 'full', input, who, title: titleOf(input), startedAt: null, done });
-      this.pump();
-    });
+    let done!: (text: string) => void;
+    const answer = new Promise<string>((r) => (done = r));
+    const id = `${now.toString(36)}${(++seq).toString(36)}`;
+    const job: Job = { id, kind: input.kind, repoId: who.repoId, queuedAt: now, alone: input.kind !== 'run' && input.graphics === 'full', input, key, who, title: titleOf(input), startedAt: null, done, answer, gone };
+    this.queue.push(job);
+    this.pump();
+    if (!this.queue.includes(job)) return answer;
+    if (progress === null) {
+      const place = this.place(job);
+      this.queue = this.queue.filter((q) => q !== job);
+      this.emit();
+      throw new Error(queuedRefusal(place));
+    }
+    if (progress) this.heartbeat(job, progress);
+    return answer;
   }
 
-  /** lab_status: where the requester's jobs stand, what runs, and the wait. */
-  status(agentId: string | null): string {
+  private heartbeat(job: Job, progress: LabProgress) {
+    clearInterval(job.beat);
+    job.beat = setInterval(() => {
+      const place = this.place(job);
+      progress({ position: place.position, message: queueNote(place) });
+    }, BEAT_MS);
+  }
+
+  /** A waiting job's place in its lane, why it waits and roughly how long. */
+  private place(j: Job): { id: string; position: number; lane: LabLane; reason: string; waitMs: number } {
+    const lane = laneOf(j.kind);
+    const ahead = this.queue.filter((q) => laneOf(q.kind) === lane).indexOf(j);
     const s = this.host.settings();
-    const lines = [`Lab: ${this.running.length} running, ${this.queue.length} waiting (at most ${s.browserJobs} browser job${s.browserJobs === 1 ? '' : 's'} and ${s.heavyJobs} heavy command${s.heavyJobs === 1 ? '' : 's'} at a time).`];
+    const reason = this.held ?? (this.running.length ? `the lab is busy with ${this.running.map((r) => r.title).join(', ')}` : 'the lab is busy');
+    return { id: j.id, position: ahead + 1, lane, reason, waitMs: estimateWaitMs(ahead, Math.min(lane === 'browser' ? s.browserJobs : s.heavyJobs, s.totalJobs), this.avg(lane)) };
+  }
+
+  /** lab_status: where the requester's jobs stand, what runs, the wait, and their finished jobs kept in `worktree` (#562). */
+  status(agentId: string | null, worktree?: string): string {
+    const s = this.host.settings();
+    const lines = [`Lab: ${this.running.length} running, ${this.queue.length} waiting (at most ${s.browserJobs} browser job${s.browserJobs === 1 ? '' : 's'} and ${s.heavyJobs} heavy command${s.heavyJobs === 1 ? '' : 's'} at a time, ${s.totalJobs} in all).`];
     for (const j of this.running) lines.push(`Running: ${j.title} for ${j.who.agent} (floor ${j.who.floor}), ${Math.round((Date.now() - (j.startedAt ?? Date.now())) / 1000)} s so far.`);
     for (const lane of ['browser', 'heavy'] as const) {
       const waiting = this.queue.filter((j) => laneOf(j.kind) === lane);
@@ -443,7 +511,21 @@ export class TestLab {
       });
     }
     if (this.held) lines.push(this.held);
+    const done = worktree ? listResults(worktree, this.host.forbidden()).slice(0, 8) : [];
+    if (done.length) lines.push('Your finished jobs (lab_result with the id reads one):', ...done.map((r) => `  ${r.id}: ${r.title}, ${r.ok ? 'passed' : 'failed'} (${clip(r.summary, 80)}), ${Math.round((Date.now() - r.endedAt) / 60_000)} min ago`));
     return lines.join('\n');
+  }
+
+  /** lab_result: a job's kept report from the requester's worktree, or where it stands when it hasn't ended (#562). */
+  result(who: Requester, id: string, now = Date.now()): string {
+    const r = readResult(who.worktree, id, this.host.forbidden());
+    if (r) {
+      this.unread.set(who.agentId, (this.unread.get(who.agentId) ?? []).filter((u) => u.id !== id));
+      return resultText(r, now);
+    }
+    const live = [...this.running, ...this.queue].find((j) => j.id === id && j.who.agentId === who.agentId);
+    if (live) return `Lab job ${id} (${live.title}) ${live.startedAt ? `is running, ${Math.round((now - live.startedAt) / 1000)} s so far` : 'is still queued'}: call lab_result again in a minute.`;
+    throw new Error(`No result for lab job ${id} in your .lab/ folder: it isn't yours, or ended over a day ago. lab_status lists your finished jobs.`);
   }
 
   view(): TestLabView {
@@ -484,7 +566,10 @@ export class TestLab {
     if (this.retry) clearTimeout(this.retry);
     if (this.idle) clearTimeout(this.idle);
     const again = restart ? 'the office is restarting. Make the same lab call again in a minute, once it is back: that is not a finding.' : 'the office is stopping; ask the lab again once it is back.';
-    for (const j of this.queue) j.done(`Not run: ${again}`);
+    for (const j of this.queue) {
+      clearInterval(j.beat);
+      j.done(`Not run: ${again}`);
+    }
     for (const j of this.running) j.done(`Cut off: ${again}`);
     this.queue = [];
     this.running = [];
@@ -504,7 +589,7 @@ export class TestLab {
     const gate = this.host.updateGate?.() ?? null;
     const open = gate ? this.queue.filter((j) => gate.includes(j.who.agentId)) : this.queue;
     const gated = this.queue.length > open.length;
-    const next = pickNext(open, this.running, { browser: s.browserJobs, heavy: s.heavyJobs }, this.served);
+    const next = pickNext(open, this.running, { browser: s.browserJobs, heavy: s.heavyJobs, total: s.totalJobs }, this.served);
     let held: string | null = null;
     for (const j of next) {
       const why = this.host.refusal(laneOf(j.kind) === 'browser' ? 'labBrowser' : 'labRun');
@@ -512,6 +597,7 @@ export class TestLab {
         held = why; // already reads "Waiting for memory: …" (#313)
         continue;
       }
+      clearInterval(j.beat);
       this.queue = this.queue.filter((q) => q !== j);
       this.running.push(j);
       j.startedAt = Date.now();
@@ -532,6 +618,7 @@ export class TestLab {
     let ok = false;
     let summary: string;
     let file: string | undefined;
+    let artifacts: string[] = [];
     try {
       const outDir = labOutDir(j.who.worktree, j.id, this.host.forbidden());
       const input = j.input;
@@ -546,6 +633,7 @@ export class TestLab {
         const problem = labProblem(r);
         summary = problem ? `lab error: ${problem}` : r.timedOut ? 'timed out' : `exit ${r.code}`;
         if (problem) this.host.trouble?.({ agent: j.who.agent, job: j.id, problem, detail: `${argv.join(' ')}: ${r.silent ? 'went silent' : r.timedOut ? 'timed out' : `exit code ${r.code}`}` });
+        artifacts = r.artifacts;
         text = runReport(argv.join(' '), r);
       } else {
         const url = input.url ? labUrl(input.url) : await this.host.previewUrl(j.repoId, j.who.pr, j.who.agentId);
@@ -564,6 +652,7 @@ export class TestLab {
           ok = !r.pageErrors.length && !r.consoleErrors.length;
           summary = `${r.shots.length} shots${graphics === 'full' ? ' (full quality)' : ''}, ${r.consoleErrors.length + r.pageErrors.length} errors`;
           file = r.shots[0]?.file;
+          artifacts = r.shots.map((s) => s.file);
           for (const s of r.shots) this.host.shot(j.who.agentId, s.file, url);
           text = shotReport(r, graphics);
         } else {
@@ -572,6 +661,7 @@ export class TestLab {
           ok = !failed.length;
           summary = ok ? `pass, ${r.steps.length} steps` : `${failed.length} of ${r.steps.length} steps failed`;
           file = failed.find((s) => s.shot)?.shot;
+          artifacts = r.steps.flatMap((s) => s.shot ?? []);
           if (file) this.host.shot(j.who.agentId, file, url);
           text = checkReport(r, graphics);
         }
@@ -587,11 +677,23 @@ export class TestLab {
     const u = this.usage.get(j.repoId) ?? { floor: j.who.floor, jobs: 0, ms: 0 };
     this.usage.set(j.repoId, { floor: j.who.floor, jobs: u.jobs + 1, ms: u.ms + ms });
     this.recent = [{ id: j.id, kind: j.kind, repoId: j.repoId, floor: j.who.floor, agentId: j.who.agentId, agent: j.who.agent, pr: j.who.pr, title: j.title, queuedAt: j.queuedAt, startedAt: j.startedAt, endedAt, ok, summary, shot: !!file, file }, ...this.recent].slice(0, RECENT_MAX);
+    this.keep(j, { ok, summary, report: text, artifacts, endedAt });
     if (!this.running.includes(j)) return; // answered by close()
     this.running = this.running.filter((r) => r !== j);
     this.lastLab.set(j.who.agentId, endedAt);
     j.done(text);
     this.pump();
+  }
+
+  /** Write a finished job's result to its folder whoever still waits for it, and remember it for a retry (#562). */
+  private keep(j: Job, x: Pick<LabStored, 'ok' | 'summary' | 'report' | 'artifacts' | 'endedAt'>) {
+    const r: LabStored = { id: j.id, kind: j.kind, title: j.title, key: j.key, queuedAt: j.queuedAt, startedAt: j.startedAt, callerGone: j.gone(), ...x };
+    try {
+      saveResult(j.who.worktree, r, this.host.forbidden(), x.endedAt);
+    } catch (err) {
+      console.warn(`[lab] couldn't keep job ${j.id}'s result: ${(err as Error).message}`);
+    }
+    if (r.callerGone) this.unread.set(j.who.agentId, [r, ...(this.unread.get(j.who.agentId) ?? [])].filter((u) => x.endedAt - u.endedAt <= REUSE_MS));
   }
 
   /** After a browser job, before the next starts: restart the shared browser when restartBrowser says so. */

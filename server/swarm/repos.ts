@@ -10,6 +10,7 @@ import { managerCloseComment } from '../../shared/issues.ts';
 import { unblockedIssues } from '../../shared/followups.ts';
 import { floorOverrides } from '../../shared/practices.ts';
 import { cleanFloorTheme } from '../../shared/floorThemes.ts';
+import { cleanPropSet } from '../../shared/floorProps.ts';
 import { charterMarkdown, charterOf, cleanCharter, isEmptyCharter, isObjectiveStatus, MISSION_MAX, newRecord, noteObjectives, withChange, withNote, type Charter } from '../../shared/charter.ts';
 import { STATUS_LABELS } from '../../shared/charterStats.ts';
 import { PLAYBOOK_MAX } from '../../shared/types.ts';
@@ -59,6 +60,7 @@ export abstract class SwarmRepos extends SwarmCore {
       qaBrief: '',
       playbook: '',
       preview: { ...DEFAULT_PREVIEW, env: {} },
+      themeByHand: false,
       addedAt: Date.now(),
       charter: newRecord(),
     };
@@ -160,12 +162,20 @@ export abstract class SwarmRepos extends SwarmCore {
 
   updateRepo(
     id: string,
-    patch: Partial<Pick<PersistedRepo, 'autoAssign' | 'autoMerge' | 'browserTesting' | 'color' | 'links' | 'mission' | 'summary' | 'qaBrief' | 'playbook'>> & { previewCommand?: unknown; previewEnv?: unknown; practices?: unknown; trustedAuthors?: unknown; theme?: unknown },
+    patch: Partial<Pick<PersistedRepo, 'autoAssign' | 'autoMerge' | 'browserTesting' | 'color' | 'links' | 'mission' | 'summary' | 'qaBrief' | 'playbook'>> & { previewCommand?: unknown; previewEnv?: unknown; practices?: unknown; trustedAuthors?: unknown; theme?: unknown; props?: unknown },
   ) {
     const repo = this.repo(id);
     if (patch.theme !== undefined) {
       try {
         repo.theme = cleanFloorTheme(patch.theme);
+        repo.themeByHand = true; // a hand pick always wins over the use case (#528)
+      } catch (err) {
+        throw new HttpError(400, (err as Error).message);
+      }
+    }
+    if (patch.props !== undefined) {
+      try {
+        repo.props = cleanPropSet(patch.props); // 'auto' or null: the profile picks again
       } catch (err) {
         throw new HttpError(400, (err as Error).message);
       }

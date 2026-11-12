@@ -61,3 +61,9 @@ export function voiceToDrop(alive: readonly { loud: number }[], loud: number, ca
   for (let i = 0; i < alive.length; i++) if (quietest < 0 || alive[i].loud < alive[quietest].loud) quietest = i;
   return quietest < 0 || loud <= alive[quietest].loud ? DROP_NEW : quietest;
 }
+
+/**
+ * Whether the shared AudioContext needs waking: 'suspended' before a tap or in a background tab, and 'interrupted', where
+ * iOS Safari leaves it after the app was in the background, a call or Siri (#532).
+ */
+export const needsWake = (state: string) => state === 'suspended' || state === 'interrupted';

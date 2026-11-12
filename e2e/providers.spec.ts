@@ -56,3 +56,45 @@ for (const width of [390, 1280]) {
     }
   });
 }
+
+// Providers by what they do (#533): the capability tiles with their defaults and gaps, Cloudflare's guided add with the
+// pre-filled token link and the Account ID, and the demo's fake Google sign-in lighting up four capabilities at once.
+for (const width of [390, 1280]) {
+  test(`the page opens on capabilities, guides a Cloudflare token and signs in with Google at ${width}px`, async ({ page }) => {
+    const section = await providers(page, width);
+    const caps = section.getByRole('region', { name: 'What the office can do' });
+    await expect(caps.getByRole('region', { name: 'Text capability' })).toContainText('Default');
+    await expect(caps.getByRole('region', { name: 'Text capability' })).toContainText('Fallback');
+    await expect(caps.getByRole('region', { name: 'Publishing capability' })).toContainText('No publishing provider: add one');
+    expect(await overflowProblems(section)).toEqual([]);
+
+    // Cloudflare: the key kind in one line, the token page with its permissions, and the Account ID
+    await section.getByRole('button', { name: 'Add provider' }).click();
+    const sheet = page.getByRole('dialog', { name: 'Add provider' });
+    await sheet.getByRole('button', { name: /^Cloudflare/ }).click();
+    const cf = page.getByRole('dialog', { name: 'Add Cloudflare' });
+    await expect(cf).toContainText('not the Global API Key');
+    const link = cf.getByRole('link', { name: /permissions filled in/ });
+    expect(await link.getAttribute('href')).toContain('permissionGroupKeys');
+    await cf.getByLabel('Account ID').fill('0123456789abcdef0123456789abcdef');
+    expect(await link.getAttribute('href')).toContain('/0123456789abcdef0123456789abcdef/api-tokens');
+    expect(await overflowProblems(cf)).toEqual([]);
+    await cf.getByRole('button', { name: 'Close' }).click();
+
+    // Google: the scopes in plain words, then the fake consent, and Text, Image, Video and Publishing light up together
+    await caps.getByRole('region', { name: 'Publishing capability' }).getByRole('button', { name: 'Add publishing' }).click();
+    await page.getByRole('dialog', { name: 'Add publishing' }).getByRole('button', { name: /Sign in with Google/ }).click();
+    const google = page.getByRole('dialog', { name: 'Add Google' });
+    await expect(google.getByRole('group', { name: 'What Google is asked for' })).toContainText('Upload videos to your YouTube channel');
+    const popup = page.waitForEvent('popup');
+    await google.getByRole('button', { name: 'Sign in with Google' }).click();
+    await expect((await popup).getByRole('heading', { name: 'Signed in to Google' })).toBeVisible();
+    for (const cap of ['Text', 'Image', 'Video', 'Publishing']) await expect(caps.getByRole('region', { name: `${cap} capability` })).toContainText('Google');
+    await expect(caps.getByRole('region', { name: 'Publishing capability' })).not.toContainText('No publishing provider');
+
+    await section.getByRole('button', { name: 'More for Google' }).click();
+    await page.getByRole('menuitem', { name: 'Remove' }).click();
+    await page.getByRole('alertdialog', { name: 'Remove Google?' }).getByRole('button', { name: 'Remove' }).click();
+    await expect(caps.getByRole('region', { name: 'Publishing capability' })).toContainText('No publishing provider: add one');
+  });
+}

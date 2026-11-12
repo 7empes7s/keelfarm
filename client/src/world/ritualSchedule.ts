@@ -266,14 +266,14 @@ export const KITCHEN_SPOTS: readonly Spot[] = [
 /** Where the courier puts the pizza down: the table's east side. */
 export const COURIER_DROP: Spot = { id: 'courier', x: COFFEE_TABLE.x + 1.1, z: 6.5, facing: WEST };
 
-/** Along the aisles between the rows of desks: where the CEO strolls on a walk round a floor. */
+/** Along the aisles between the rows of desks: where the CEO strolls on a walk round a floor (past the themes' set pieces, #570). */
 export const AISLES: readonly Pt[] = [
   { x: -7, z: -3.6 },
   { x: 0, z: -3.6 },
   { x: 7, z: -3.6 },
-  { x: -7, z: 1 },
+  { x: -5.2, z: 1 },
   { x: 0, z: 1 },
-  { x: 7, z: 1 },
+  { x: 5.2, z: 1 },
 ];
 
 /** Where someone gone home waits, out of sight: the back of the elevator cabin, beyond where its doors open for people. */

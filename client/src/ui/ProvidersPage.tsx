@@ -4,11 +4,17 @@
 // changed in their own sections (linked from their cards); keys added here and MCP servers are changed here.
 // "Keys found on this computer" (#367): Scan, then a review sheet of what the server found and tested, last 4 only.
 // Rename and tags (#523): a key's name, tags and Used for (AI inference or Operations); filters by Used for and status.
+// By capability (#533): the page opens on what the office can do (ProviderCapabilities.tsx); Add is guided, with a
+// company's one sign-in and pre-filled create-token links (ProviderSignIn.tsx).
 import { useMemo, useState, type FormEvent } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
 import { CATEGORIES, PROVIDERS, USES, providerCards, usedForMatches, type CardStatus, type ProviderCard, type ProviderDef } from '../../../shared/providers';
-import { CEO_ID, type FoundKeyView, type KeyCheck, type ProviderCategory, type ProviderConnection, type ProviderUse } from '../../../shared/types';
+import { CEO_ID, type Capability, type FoundKeyView, type KeyCheck, type ProviderCategory, type ProviderConnection, type ProviderUse } from '../../../shared/types';
+import { CAPABILITIES, providerCaps } from '../../../shared/capabilities';
+import { createKeyUrl, setupGuide } from '../../../shared/keySetup';
+import { CAPABILITY_ICON, ProviderCapabilities } from './ProviderCapabilities';
+import { SetupSteps, SignInForm } from './ProviderSignIn';
 import { ago } from '../../../shared/usage';
 import { scanSummary } from '../../../shared/keyScan';
 import { useKeyReview } from './keyReview';
@@ -23,7 +29,7 @@ import { confirmDialog } from './Confirm';
 import { WindowBar } from './UsageSources';
 import './providersPage.css';
 
-const CATEGORY_ICON: Record<ProviderCategory, IconName> = { coding: 'terminal', text: 'message-circle', audio: 'mic', video: 'video', image: 'image', cloud: 'cloud', mcp: 'plug' };
+const CATEGORY_ICON: Record<ProviderCategory, IconName> = { coding: 'terminal', text: 'message-circle', audio: 'mic', video: 'video', image: 'image', cloud: 'cloud', signin: 'id-card', mcp: 'plug' };
 const STATUS: Record<CardStatus, [string, ChipTone]> = {
   ready: ['Ready', 'good'],
   near: ['Near limit', 'warn'],
@@ -78,7 +84,7 @@ const STATUS_FILTERS: [KeyCheck | 'all', string][] = [
 
 export function ProvidersPage() {
   const all = useCards();
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState<Capability | 'all' | null>(null);
   const [who, setWho] = useState<string | null>(null); // an MCP server's "Who gets it"
   const [editing, setEditing] = useState<string | null>(null); // a key's "Rename and tags"
   const [use, setUse] = useState<ProviderUse | 'all'>('all');
@@ -93,11 +99,11 @@ export function ProvidersPage() {
           <h3>
             <Icon name="plug" /> Providers
           </h3>
-          <button className="btn btn-primary" onClick={() => setAdding(true)}>
+          <button className="btn btn-primary" onClick={() => setAdding('all')}>
             <Icon name="plus" /> Add provider
           </button>
         </div>
-        <p className="muted small">Everything the office runs on: coding agents' accounts, text, audio and cloud APIs, and the MCP servers agents get. Keys go in and never come back out: only their last 4 characters.</p>
+        <p className="muted small">Everything the office runs on, by what it does: text, image, video, audio, operations and publishing, then coding agents' accounts and the MCP servers agents get. Keys go in and never come back out: only their last 4 characters.</p>
         <div className="pv-stats" role="list" aria-label="Providers at a glance">
           <span role="listitem">
             <b>{all.filter((c) => c.category !== 'mcp').length}</b> connected
@@ -133,6 +139,7 @@ export function ProvidersPage() {
         </div>
         {filtered && !cards.length && <p className="muted small">Nothing matches these filters.</p>}
       </div>
+      {!filtered && <ProviderCapabilities cards={all} onAdd={setAdding} />}
       <FoundKeysCard />
       {CATEGORIES.map((cat) => {
         const list = cards.filter((c) => c.category === cat.id);
@@ -152,7 +159,7 @@ export function ProvidersPage() {
       <p className="muted small">
         Accounts' rotation, tags and sign-ins are in <a href="#settings/accounts">Providers & accounts</a>; voices in <a href="#settings/voice">Voice</a>; cloud machines in <a href="#settings/cloud-agents">Cloud agents</a>; plugins and skills in <a href="#settings/tools">Tools & skills</a>.
       </p>
-      {adding && <AddSheet onClose={() => setAdding(false)} />}
+      {adding && <AddSheet cap={adding === 'all' ? null : adding} onClose={() => setAdding(null)} />}
       {who && <WhoSheet id={who} onClose={() => setWho(null)} />}
       {editing && <EditSheet id={editing} onClose={() => setEditing(null)} />}
     </div>
@@ -186,7 +193,7 @@ function CardRow({ c, twins, onWho, onEdit }: { c: ProviderCard; twins: Provider
   const source = useStore((s) => (c.usageId ? s.accounts.sources?.find((x) => x.id === c.usageId) : undefined));
   const [busy, setBusy] = useState(false);
   const [kind, id] = [c.key.slice(0, c.key.indexOf(':')), c.key.slice(c.key.indexOf(':') + 1)];
-  const [word, tone] = kind === 'connection' ? [checkWord(c), CHECK_TONE[c.check]] : STATUS[c.status];
+  const [word, tone] = kind === 'connection' ? (c.missing ? ['Needs permissions', 'warn' as ChipTone] : [checkWord(c), CHECK_TONE[c.check]]) : STATUS[c.status];
   const now = Date.now();
   const test = async () => {
     setBusy(true);
@@ -302,12 +309,28 @@ function EditForm({ c, onClose }: { c: ProviderConnection; onClose: () => void }
   );
 }
 
-/** "+ Add provider": the catalogue by category, then the key, a sign-in, or an MCP server's form. */
-function AddSheet({ onClose }: { onClose: () => void }) {
+/** "+ Add provider": the catalogue by category (or the ones covering a capability), then a key, a sign-in or an MCP server. */
+function AddSheet({ cap, onClose }: { cap: Capability | null; onClose: () => void }) {
   const [pick, setPick] = useState<ProviderDef | 'mcp' | null>(null);
+  const capLabel = CAPABILITIES.find((c) => c.id === cap)?.label;
+  const pickButton = (p: ProviderDef) => (
+    <button key={p.id} className="pv-pick" onClick={() => setPick(p)}>
+      <b>
+        {p.icon && <Icon name={p.icon as IconName} />} {p.auth === 'oauth' ? `Sign in with ${p.name}` : p.name}
+      </b>
+      <span className="muted small">{p.blurb}</span>
+    </button>
+  );
   return (
-    <Sheet title={pick === null ? 'Add provider' : pick === 'mcp' ? 'Add an MCP server' : `Add ${pick.name}`} onClose={onClose} className="pv-sheet">
-      {pick === null ? (
+    <Sheet title={pick === null ? (capLabel ? `Add ${capLabel.toLowerCase()}` : 'Add provider') : pick === 'mcp' ? 'Add an MCP server' : `Add ${pick.name}`} onClose={onClose} className="pv-sheet">
+      {pick === null && cap ? (
+        <div className="pv-cat">
+          <h4>
+            <Icon name={CAPABILITY_ICON[cap]} /> {capLabel}
+          </h4>
+          {PROVIDERS.filter((p) => providerCaps(p.id).includes(cap)).map(pickButton)}
+        </div>
+      ) : pick === null ? (
         <>
           {CATEGORIES.map((cat) => {
             const list = PROVIDERS.filter((p) => p.category === cat.id);
@@ -322,14 +345,7 @@ function AddSheet({ onClose }: { onClose: () => void }) {
                     <span className="muted small">A command or a URL, for agents' sessions</span>
                   </button>
                 ) : list.length ? (
-                  list.map((p) => (
-                    <button key={p.id} className="pv-pick" onClick={() => setPick(p)}>
-                      <b>
-                        {p.icon && <Icon name={p.icon as IconName} />} {p.name}
-                      </b>
-                      <span className="muted small">{p.blurb}</span>
-                    </button>
-                  ))
+                  list.map(pickButton)
                 ) : (
                   <p className="muted small">None in the catalogue yet: tell the CEO which one you'd like.</p>
                 )}
@@ -342,7 +358,7 @@ function AddSheet({ onClose }: { onClose: () => void }) {
           <button className="btn btn-small" onClick={() => setPick(null)}>
             <Icon name="chevron-left" /> All providers
           </button>
-          {pick === 'mcp' ? <McpForm onDone={onClose} /> : <KeyForm def={pick} onDone={onClose} />}
+          {pick === 'mcp' ? <McpForm onDone={onClose} /> : pick.auth === 'oauth' ? <SignInForm def={pick} onDone={onClose} /> : <KeyForm def={pick} onDone={onClose} />}
         </>
       )}
     </Sheet>
@@ -352,8 +368,10 @@ function AddSheet({ onClose }: { onClose: () => void }) {
 function KeyForm({ def, onDone }: { def: ProviderDef; onDone: () => void }) {
   const [key, setKey] = useState('');
   const [label, setLabel] = useState('');
+  const [accountId, setAccountId] = useState('');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
+  const owner = useStore((s) => s.repos[0]?.fullName.split('/')[0] ?? '');
   const reuses = useStore((s) => (def.sharesKeyWith ? s.providers.connections.find((c) => c.provider === def.sharesKeyWith) : undefined));
   if (def.home === 'accounts' || def.home === 'own-setup') {
     return (
@@ -381,7 +399,7 @@ function KeyForm({ def, onDone }: { def: ProviderDef; onDone: () => void }) {
       if (def.home === 'voice') await api.setVoiceKey(key);
       else if (def.home === 'cloud') await api.setCloudKey(key);
       else {
-        const c = await api.addProvider(def.id, key, label);
+        const c = await api.addProvider(def.id, key, label, accountId);
         if (c.test && !c.test.ok) {
           setNote(`Saved, but its test said: ${c.test.note}`);
           return;
@@ -394,12 +412,20 @@ function KeyForm({ def, onDone }: { def: ProviderDef; onDone: () => void }) {
       setBusy(false);
     }
   };
+  const guide = setupGuide(def.id);
+  const create = createKeyUrl(def.id, { accountId, owner });
   return (
     <form className="acc-form" onSubmit={(e) => void save(e)}>
       <p className="muted small">
-        {def.blurb}. <a href={def.docsUrl} target="_blank" rel="noopener noreferrer">Where to get a key</a>
+        {def.blurb}. <a href={def.docsUrl} target="_blank" rel="noopener noreferrer">Docs</a>
       </p>
       {def.note && <p className="muted small">{def.note}</p>}
+      <SetupSteps guide={guide} />
+      {create && (
+        <a className="btn" href={create} target="_blank" rel="noopener noreferrer">
+          <Icon name="external-link" /> {def.id === 'cloudflare' || def.id === 'github' ? 'Create the token, permissions filled in' : 'Create a key'}
+        </a>
+      )}
       {def.home === 'providers' && (
         <label className="field">
           <span>Name</span>
@@ -410,6 +436,12 @@ function KeyForm({ def, onDone }: { def: ProviderDef; onDone: () => void }) {
         <span>API key</span>
         <SecretInput name={`provider-${def.id}`} value={key} placeholder={def.placeholder} onChange={(e) => setKey(e.target.value)} />
       </label>
+      {guide.accountId && (
+        <label className="field">
+          <span>{guide.accountId.label}</span>
+          <input value={accountId} maxLength={64} spellCheck={false} autoCapitalize="off" placeholder={guide.accountId.hint} onChange={(e) => setAccountId(e.target.value)} />
+        </label>
+      )}
       {reuses && !key.trim() && <p className="muted small">Leave it empty to use {reuses.label} (••••{reuses.keyHint}).</p>}
       <button className="btn btn-primary" disabled={busy || (!key.trim() && !reuses)}>
         {busy ? 'Testing…' : 'Save and test'}

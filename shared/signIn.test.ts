@@ -42,6 +42,15 @@ describe('signInEnd', () => {
   it('a CLI that isn’t installed says to install it, not to try again (#493)', () => {
     expect(signInEnd('login', -1, ['── Signing Gemini CLI in ──', "Couldn't start signing in: Gemini CLI isn't installed"])).toEqual({ ok: false, note: "Gemini CLI isn't installed. Tap Install." });
   });
+
+  it('a Gemini CLI that refused a non-interactive sign-in says so in plain words, not its stack (#540)', () => {
+    const tail = [
+      '── Signing Gemini CLI in ──',
+      'Error authenticating: FatalAuthenticationError: Manual authorization is required but the current session is non-interactive. Please run the Gemini CLI in an interactive terminal to log in, provide a GEMINI_API_KEY, or ensure Application Default Credentials are configured.',
+      '    at initOauthClient (file:///usr/lib/node_modules/@google/gemini-cli/dist/index.js:1:1)',
+    ];
+    expect(signInEnd('login', 41, tail)).toEqual({ ok: false, note: 'Gemini CLI needs an interactive sign-in. Tap Try again to sign in that way.' });
+  });
 });
 
 // Real output, from `claude auth login` (Claude Code 2.x) and `codex login --device-auth` (codex-cli 0.166.0) in

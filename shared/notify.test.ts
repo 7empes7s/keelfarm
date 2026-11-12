@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_NOTIFY, noteTab, notifySettings, officeUrl } from './notify.ts';
+import { DEFAULT_NOTIFY, noteTab, notifySettings, officeUrl, phoneReach } from './notify.ts';
 
 describe('notification settings', () => {
   it('start with every event but merges on, on every channel', () => {
@@ -15,6 +15,8 @@ describe('notification settings', () => {
     expect(s.officeUrl).toBe('https://office.tail1234.ts.net/');
     expect(notifySettings(s, { officeUrl: 'javascript:alert(1)' }).officeUrl).toBe('https://office.tail1234.ts.net/');
     expect(notifySettings(s, { officeUrl: '' }).officeUrl).toBe('');
+    expect(notifySettings(s, { problemsDigestHour: -1 }).problemsDigestHour).toBe(-1); // the problems digest's hour (#544): off
+    expect(notifySettings({ ...s, problemsDigestHour: 7 }, { problemsDigestHour: 40 }).problemsDigestHour).toBe(9);
     // An older saved state without the newer fields gets their defaults.
     expect(notifySettings(DEFAULT_NOTIFY, { events: { needsHuman: false } }).events.usage).toBe(true);
   });
@@ -33,5 +35,15 @@ describe('notification settings', () => {
     expect(noteTab('ceoMessage')).toBe('chat');
     expect(noteTab('agentError')).toBe('team');
     expect(noteTab('merge')).toBe('company');
+  });
+});
+
+describe('what reaches the phone with the office closed (#538)', () => {
+  const none = { pushDevices: 0, telegram: { linked: false }, webhooks: { ntfy: { set: false } } } as Parameters<typeof phoneReach>[0];
+  it('counts push devices, a linked Telegram and ntfy, each only while it is on, and never desktop', () => {
+    expect(phoneReach(none, DEFAULT_NOTIFY)).toEqual([]);
+    const all = { pushDevices: 1, telegram: { linked: true }, webhooks: { ntfy: { set: true } } } as Parameters<typeof phoneReach>[0];
+    expect(phoneReach(all, DEFAULT_NOTIFY)).toEqual(['push', 'Telegram', 'ntfy']);
+    expect(phoneReach(all, notifySettings(DEFAULT_NOTIFY, { channels: { push: false, ntfy: false } }))).toEqual(['Telegram']);
   });
 });

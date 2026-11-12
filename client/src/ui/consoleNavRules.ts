@@ -10,6 +10,7 @@ export type SectionId =
   | 'issues'
   | 'team'
   | 'ops'
+  | 'problems'
   | 'charter'
   | 'map'
   | 'ceo'
@@ -62,10 +63,11 @@ export const GROUPS: Group[] = [
 ];
 
 export const SECTIONS: Section[] = [
-  { id: 'floors', group: 'work', icon: 'building-2', label: 'Floors & repos', find: ['Office update', 'Update automatically', 'Floor colour', 'Auto-assign issues', 'Auto-merge', 'Browser testing', 'App preview', 'Add a project', 'Sync the folder', 'Disconnect', 'Practices', 'Setup', 'Not now', 'Kind of project'] },
+  { id: 'floors', group: 'work', icon: 'building-2', label: 'Floors & repos', find: ['Office update', 'Update automatically', 'Floor colour', 'Auto-assign issues', 'Auto-merge', 'Browser testing', 'App preview', 'Add a project', 'Sync the folder', 'Disconnect', 'Practices', 'Setup', 'Not now', 'Kind of project', 'Project props'] },
   { id: 'issues', group: 'work', icon: 'notebook-pen', label: 'Issues', find: ['File a new issue', 'Open issues', 'Assign', 'Close as not planned'] },
   { id: 'team', group: 'work', icon: 'laptop', label: 'Team', find: ['Add an agent', 'Model', 'Effort', 'Coding agent', 'Look', 'Terminal', 'Let go', 'Team stats'] },
-  { id: 'ops', group: 'company', icon: 'satellite', label: 'Mission control', find: ['Claude usage', 'Needs you', 'Office doctor', 'The numbers', 'Where the plan goes', 'Costs', 'Experiments', 'Server health', 'IT desk', 'Disk', 'Free up space', 'Test lab', 'Who runs on what'] },
+  { id: 'ops', group: 'company', icon: 'satellite', label: 'Mission control', find: ['Claude usage', 'Needs you', 'Office doctor', 'The numbers', 'Where the plan goes', 'Costs', 'Experiments', 'Server health', 'IT desk', 'Disk', 'Free up space', 'Test lab', 'Who runs on what', 'Problems'] },
+  { id: 'problems', group: 'company', icon: 'clipboard-list', label: 'Problems', find: ['Problems', 'Problems register', 'Needs your decision', 'Trends per cause', 'Daily digest', 'Recurring'] },
   { id: 'charter', group: 'company', icon: 'target', label: 'Charter', find: ['Mission', 'Objectives', 'Standards', 'Non-goals', 'Current focus', 'Proposal'] },
   { id: 'map', group: 'company', icon: 'map', label: 'Memory map', find: ['Search the map', 'Local graph', 'Colour by', 'Replay how the map grew', 'Hottest files', 'No objective'] },
   { id: 'ceo', group: 'ceo', icon: 'brain', label: 'The CEO', find: ['Message the CEO', 'CEO coding agent', 'CEO runs on', 'CEO model', 'CEO effort', 'Review the company now', 'Standing mandates', 'Team changes', 'Project briefs', 'QA brief', 'Playbook'] },
@@ -75,10 +77,10 @@ export const SECTIONS: Section[] = [
   { id: 'history', group: 'history', icon: 'scroll-text', label: 'Sessions', find: ['Session history', 'Transcripts', 'Daily log entries', 'CEO jobs', 'Redo on Opus'] },
   { id: 'daily-log', group: 'history', icon: 'archive', label: 'Daily log', find: ['Daily log folder', 'Keep transcripts for', 'History storage'] },
   { id: 'timelapse', group: 'history', icon: 'film', label: 'Time-lapse', only: 'office', find: ['Replay the day', 'Since I was last here'] },
-  { id: 'agents', group: 'settings', icon: 'laptop', label: 'Agents', find: ['Default coding agent', 'Default model', 'Default effort', 'Effort per kind of task', 'Session limit', 'Memory kept free', 'Most memory per session', 'Disk warning', 'Store agents’ working copies on', 'Lab browser jobs at once', 'Lab heavy runs at once', 'Sessions while pacing', 'When Claude warns that usage is high', 'Most agents per floor'] },
+  { id: 'agents', group: 'settings', icon: 'laptop', label: 'Agents', find: ['Default coding agent', 'Default model', 'Default effort', 'Effort per kind of task', 'Session limit', 'Memory kept free', 'Most memory per session', 'Disk warning', 'Store agents’ working copies on', 'Lab browser jobs at once', 'Lab heavy runs at once', 'Lab jobs at once in all', 'Sessions while pacing', 'When Claude warns that usage is high', 'Most agents per floor'] },
   { id: 'projects', group: 'settings', icon: 'hard-hat', label: 'Every project', find: ['Version control', "Every project's playbook"] },
   { id: 'runtime', group: 'settings', icon: 'keyboard', label: 'How agents run', find: ['Real terminals', 'Agent SDK', 'Chat mode'] },
-  { id: 'office', group: 'settings', icon: 'store', label: 'Company', find: ['Your name', 'Company name', "The office dog's name", 'Projects folder', 'Free idle desks after', 'Previews', 'Stop a PR preview after no use', 'Max lifetime', 'Update the office after merges settle', 'Replay the tour', "What's new"] },
+  { id: 'office', group: 'settings', icon: 'store', label: 'Company', find: ['Your name', 'Company name', "The office dog's name", 'Projects folder', 'Free idle desks after', 'Previews', 'Stop a PR preview after no use', 'Max lifetime', 'Update the office after merges settle', 'Replay the tour', "What's new", 'Tutorials', 'Get started', 'Your first feature', 'When something needs you', 'Keep it running'] },
   { id: 'profile', group: 'settings', icon: 'user', label: 'Profile', find: ['Your name', 'Your colour', 'Appear to others'] },
   { id: 'providers', group: 'settings', icon: 'plug', label: 'Providers', find: ['Add provider', 'MCP servers', 'What uses it', 'Keys found on this computer', 'Scan', 'OpenAI API', 'Anthropic API', 'Gemini', 'OpenRouter', 'Hetzner', 'ElevenLabs', 'Upstash', 'Runway', 'Luma', 'Kling', 'Video', 'Nano Banana', 'OpenAI Images', 'Image', 'Test'] },
   { id: 'guides', group: 'settings', icon: 'book-open', label: 'Guides', find: ['Guides', 'Use case', 'What the company mainly makes', 'Recommended setup', 'Web app', 'API', '3D / browser game', 'Static site', 'CLI or library', 'Mobile app', 'What each coding agent is good at'] },

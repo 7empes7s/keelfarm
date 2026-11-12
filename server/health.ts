@@ -57,6 +57,22 @@ export function admission(x: { kind: SessionKind; memory: MemoryReading | null; 
   return `Waiting for memory: ${gb(free)} free${x.reservedMb > 0 ? ' once running sessions grow' : ''}, a ${x.kind} session needs about ${gb(x.estimateMb)} and ${gb(x.headroomMb)} stays free.${browserNote(x.browserMb) && ` Of what's used, ${browserNote(x.browserMb)}.`}`;
 }
 
+/** The least memory a lab job leaves available when it starts (#560), whatever the headroom setting. */
+const LAB_FLOOR_MB = 512;
+
+/**
+ * Why a test lab job can't start now (#560), or null. Gated on MemAvailable alone (free memory plus the reclaimable
+ * cache), with no reservation for agent sessions that might still grow: lab jobs are short, and the per-session ceiling
+ * and memoryVictim still guard. Swap doesn't count, and half the headroom (at least LAB_FLOOR_MB) stays available after
+ * its estimate, so starting one never lands in memoryVictim's range.
+ */
+export function labAdmission(x: { kind: 'labRun' | 'labBrowser'; memory: MemoryReading | null; estimateMb: number; headroomMb: number; browserMb?: number | null }): string | null {
+  if (!x.memory) return null;
+  const floorMb = Math.max(LAB_FLOOR_MB, x.headroomMb / 2);
+  if (x.memory.availableMb >= x.estimateMb + floorMb) return null;
+  return `Waiting for memory: ${gb(x.memory.availableMb)} available, a lab ${x.kind === 'labRun' ? 'run' : 'browser job'} needs about ${gb(x.estimateMb)} and ${gb(floorMb)} stays free.${browserNote(x.browserMb) && ` Of what's used, ${browserNote(x.browserMb)}.`}`;
+}
+
 /** A kind's next estimate after one of its sessions peaked at `peakMb`: quick to grow, slow to shrink. */
 export function learnEstimate(prevMb: number, peakMb: number): number {
   if (!(peakMb > 0)) return prevMb;
@@ -337,6 +353,11 @@ export class OfficeHealth {
     if (disk) return disk;
     const sessions = this.host.sessions().map((s) => ({ kind: s.kind, rssMb: this.rss.get(s.id) ?? null, ageMs: now - s.startedAt }));
     return admission({ kind, memory: this.memory, estimateMb: this.estimate(kind), headroomMb: this.host.settings().headroomMb, reservedMb: reservedMb(sessions, this.estimate), browserMb: this.browserMb });
+  }
+
+  /** Why a test lab job of `kind` can't start now (labAdmission), or null. */
+  labRefusal(kind: 'labRun' | 'labBrowser'): string | null {
+    return this.diskHeld(kind) ?? labAdmission({ kind, memory: this.memory, estimateMb: this.estimate(kind), headroomMb: this.host.settings().headroomMb, browserMb: this.browserMb });
   }
 
   /** What's free for a new session of `kind` and what one needs (null: memory not read yet): Hybrid's room (#260). */

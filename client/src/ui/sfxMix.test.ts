@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { audible, distance, distanceGain, DROP_NEW, MAX_DISTANCE, panOf, PLAY, REF_DISTANCE, voiceToDrop } from './sfxMix';
+import { audible, distance, distanceGain, DROP_NEW, MAX_DISTANCE, needsWake, panOf, PLAY, REF_DISTANCE, voiceToDrop } from './sfxMix';
 
 describe('distanceGain', () => {
   it('is full volume up close and falls off with distance', () => {
@@ -59,5 +59,14 @@ describe('voiceToDrop', () => {
 
   it('drops everything with a cap of zero', () => {
     expect(voiceToDrop([], 1, 0)).toBe(DROP_NEW);
+  });
+});
+
+describe('needsWake', () => {
+  it("wakes a context iOS left 'interrupted' after the background, as well as a suspended one (#532)", () => {
+    expect(needsWake('interrupted')).toBe(true);
+    expect(needsWake('suspended')).toBe(true);
+    expect(needsWake('running')).toBe(false);
+    expect(needsWake('closed')).toBe(false);
   });
 });

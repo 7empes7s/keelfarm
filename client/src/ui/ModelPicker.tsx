@@ -24,7 +24,8 @@ interface Props {
 export function ModelPicker({ cli, value, onChange, resolvedDefault, id, label = 'Model', disabled, defaultLabel }: Props) {
   const catalog = useStore((s) => s.models);
   const pocket = useMode((s) => s.mode) === 'pocket';
-  const options = pickerOptions(cli, catalog, resolvedDefault).map((o) => (o.value === '' && defaultLabel ? { ...o, label: defaultLabel } : o));
+  const claudeVersion = useStore((s) => s.clis.find((c) => c.id === 'claude')?.version);
+  const options = pickerOptions(cli, catalog, resolvedDefault, claudeVersion).map((o) => (o.value === '' && defaultLabel ? { ...o, label: defaultLabel } : o));
   const listed = options.some((o) => o.value === value.trim() && o.value !== OTHER_MODEL);
   const [typing, setTyping] = useState(false);
   const [sheet, setSheet] = useState(false);
@@ -48,7 +49,7 @@ export function ModelPicker({ cli, value, onChange, resolvedDefault, id, label =
       ) : (
         <select id={id} value={selected} disabled={disabled} aria-label={id ? undefined : label} onChange={(e) => pick(e.target.value)}>
           {options.map((o) => (
-            <option key={o.value} value={o.value}>
+            <option key={o.value} value={o.value} disabled={o.disabled}>
               {o.label}
             </option>
           ))}
@@ -73,8 +74,8 @@ export function ModelPicker({ cli, value, onChange, resolvedDefault, id, label =
         <Sheet title={label} onClose={() => setSheet(false)}>
           <div className="model-options" role="radiogroup" aria-label={label}>
             {options.map((o) => (
-              <label key={o.value} className="model-option">
-                <input type="radio" name={`${inputId}-pick`} checked={o.value === selected} onChange={() => pick(o.value)} />
+              <label key={o.value} className="model-option" aria-disabled={o.disabled || undefined}>
+                <input type="radio" name={`${inputId}-pick`} checked={o.value === selected} disabled={o.disabled} onChange={() => pick(o.value)} />
                 <span className="model-option-text">{o.label}</span>
                 <span className="model-option-check" aria-hidden="true">
                   {o.value === selected ? <Icon name="check" /> : ''}

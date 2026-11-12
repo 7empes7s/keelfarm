@@ -14,6 +14,8 @@ import type { ItDeskView } from '../../shared/itDesk';
 import { IT_DEPT_DEFAULTS, type ItView } from '../../shared/itDept';
 import type { ItWatchView } from '../../shared/itWatch';
 import type { ItTicket } from '../../shared/itTickets';
+import type { VoiceAgentView } from '../../shared/voiceAgent';
+import type { Problem } from '../../shared/problems';
 import { DEFAULT_CEO_AWAKE } from '../../shared/ceoAwake';
 import { DEFAULT_CLOUD, EMPTY_CLOUD } from '../../shared/cloud';
 import { DEFAULT_TOOL_SETTINGS, EMPTY_INVENTORY, type ToolInventory } from '../../shared/tooling';
@@ -164,6 +166,7 @@ export interface State {
   it: ItView | null; // the IT department's chat (#524); null: a server without it, or a replay
   itWatch: ItWatchView | null; // IT monitoring (#525): the health checks and recommendations; null until the first check
   itTickets: ItTicket[]; // office problems reported to IT (#542), newest first
+  problems: Problem[]; // the problems register's own entries (#544), newest first; IT's tickets join them on the page
   claudeUsage: UsageReading[]; // Claude's latest reading per usage limit (empty until a session reports)
   claudeUsageCheck: UsageCheckError | null; // why the office's idle check couldn't read it (#89), null when it could
   claudeUsageShares: UsageShares[]; // each usage bar's floor shares of the office's spend in its window (#334)
@@ -172,6 +175,7 @@ export interface State {
   voiceKeySet: boolean; // an ElevenLabs key is saved on the server
   voiceKeyHint: string; // its last 4 characters
   voiceCache: VoiceCacheView; // the voice's saved clips: Settings → Voice, and which messages the phone's ▶ replays
+  voiceAgent: VoiceAgentView; // the Jarvis voice's minutes today and this month (#534)
   progress: ProgressView; // coins, decorations and achievements (#210)
   pastCareers: PastCareer[]; // careers of people let go (#205): the Team tab's Past agents
   voiceSpeaking: number | null; // the phone message being read aloud in this tab (ui/voiceMessages.ts)
@@ -340,6 +344,7 @@ export const useStore = create<State>((set, get) => ({
   it: null,
   itWatch: null,
   itTickets: [],
+  problems: [],
   claudeUsage: [],
   claudeUsageCheck: null,
   claudeUsageShares: [],
@@ -348,6 +353,7 @@ export const useStore = create<State>((set, get) => ({
   voiceKeySet: false,
   voiceKeyHint: '',
   voiceCache: { clips: 0, bytes: 0, saved: [], charsToday: 0 },
+  voiceAgent: { minutesToday: 0, minutesMonth: 0, fake: false },
   progress: { floors: {}, achievements: [], coffees: 0, merges: 0 },
   pastCareers: [],
   voiceSpeaking: null,

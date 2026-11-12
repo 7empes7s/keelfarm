@@ -11,7 +11,7 @@ export const openTeam = () => useStore.getState().openOverlay({ kind: 'manager',
 export function SettingsButton() {
   const key = useKeyName('settings');
   return (
-    <button type="button" className="pill pill-switch xbtn" onClick={openSettings} aria-label={`Settings (${key})`}>
+    <button type="button" data-tour="console" className="pill pill-switch xbtn" onClick={openSettings} aria-label={`Settings (${key})`}>
       <Icon name="settings" />
       <XLabel text="Settings" keys={key} />
     </button>
