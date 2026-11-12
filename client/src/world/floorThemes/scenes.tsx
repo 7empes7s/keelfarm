@@ -32,7 +32,7 @@ import { NEWS_TICKER, PlayingLevel, SetProps, ThemeSign, TvWall } from './setSce
 import { Calendar, Gallery, LossCurve, NocWall, OnAirSign, Pendants, StudioProps } from './studioScenes';
 import * as D from './themeDraw';
 import * as M from './themeModels';
-import { buildProgress, candles, marketOpen, tickerQuotes, worldClocks, type QuoteValues } from './ticker';
+import { buildProgress, candles, headlines, marketOpen, tickerQuotes, worldClocks, type QuoteValues } from './ticker';
 
 export interface SceneProps {
   pack: ThemePack;
@@ -417,7 +417,7 @@ export function ThemeScene({ pack, repo, agents, office }: SceneProps) {
       {pack.wallScreen === 'tv-wall' && (
         <>
           <TvWall repo={repo} />
-          <Ticker repo={repo} at={NEWS_TICKER} label={`BREAKING NEWS · FLOOR ${repo.floor}`} wall />
+          <Ticker repo={repo} at={NEWS_TICKER} label={`BREAKING · ${headlines(repo.pulls, repo.issues, 1)[0].toUpperCase()}`} wall />
         </>
       )}
       {pack.id === 'trading' && <Ticker repo={repo} />}
