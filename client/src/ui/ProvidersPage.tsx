@@ -13,6 +13,7 @@ import { CATEGORIES, PROVIDERS, USES, providerCards, usedForMatches, type CardSt
 import { CEO_ID, type Capability, type FoundKeyView, type KeyCheck, type ProviderCategory, type ProviderConnection, type ProviderUse } from '../../../shared/types';
 import { CAPABILITIES, providerCaps } from '../../../shared/capabilities';
 import { createKeyUrl, setupGuide } from '../../../shared/keySetup';
+import { keyAbilities } from '../../../shared/providerActions';
 import { CAPABILITY_ICON, ProviderCapabilities } from './ProviderCapabilities';
 import { SetupSteps, SignInForm } from './ProviderSignIn';
 import { ago } from '../../../shared/usage';
@@ -207,6 +208,7 @@ function CardRow({ c, twins, onWho, onEdit }: { c: ProviderCard; twins: Provider
   const own = kind === 'connection' || kind === 'mcp';
   const docs = PROVIDERS.find((p) => p.id === c.provider)?.docsUrl;
   const on = c.status !== 'off';
+  const abilities = c.check === 'dead' ? null : keyAbilities(c.provider, c.missing); // #602: what IT and the CEO can do with it
   return (
     <div id={c.usageId && `pv-usage-${c.usageId}`} className="pv-card">
       <div className="ds-card-head">
@@ -248,6 +250,12 @@ function CardRow({ c, twins, onWho, onEdit }: { c: ProviderCard; twins: Provider
       {own && <div className="ds-row-meta">Last test: {c.testedAt ? `${checkWord(c)}, ${ago(c.testedAt, now)} · ${c.note}` : 'not tested yet'}</div>}
       {c.usedFor && <div className="ds-row-meta">Used for: {USE_WORD[c.usedFor]}</div>}
       <div className="ds-row-meta">Used by: {c.uses.length ? c.uses.join(', ') : 'Nothing uses it yet'}</div>
+      {abilities && abilities.can.length > 0 && <div className="ds-row-meta">The office can: {abilities.can.join(', ')}</div>}
+      {abilities?.fix && (
+        <div className="pv-warning" role="status">
+          <Icon name="triangle-alert" /> {abilities.fix}
+        </div>
+      )}
       {kind === 'connection' && <Twins c={c} twins={twins} onRemove={() => void remove()} />}
     </div>
   );

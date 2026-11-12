@@ -16,9 +16,12 @@ import { CHANGE_TIMEOUT_MS, LOG_OUT_MAX, neverRefusal, parseCommand, readOnlyPla
 import { AUTO_STEPS_MAX, autoVerdict, type AutoPlan } from '../itAuto.ts';
 import type { ItJob } from '../../shared/itDept.ts';
 import { OFFICE_DIR } from '../officeUpdate.ts';
-import { applyWrite, CfError, ingressGet, planWrite, tokenScopes } from '../cloudflare.ts';
+import { CfError } from '../cloudflare.ts';
 import { envPathRefusal, envSecretFile } from '../cfSecretFile.ts';
-import type { CloudflareArgs } from '../ceoItTools.ts';
+import type { CloudflareArgs, ProviderActionArgs } from '../ceoItTools.ts';
+import { ActionError, applyAction, MODULES, runAction, type ActionCtx } from '../providerActions/index.ts';
+import { actionOp, autoApplies, type ActionRisk, type ProviderChange } from '../../shared/providerActions.ts';
+import type { CfChange } from '../../shared/cloudflare.ts';
 import { SwarmManagerAsks } from './managerAsks.ts';
 import { parseRunbook, projectForeign, projectProblem, runbookSummary, runbookVerdict, runRunbook, stepLabel, stepNever, undoRunbook, type RunbookHost } from '../itRunbook.ts';
 import { RUNBOOKS_KEPT, runbookView, type ItRunbookJob } from '../../shared/itRunbook.ts';
@@ -48,6 +51,13 @@ const DEPT_OFF = 'The IT department is off (Settings → The IT department).';
 const WAITING_MAX = 12;
 /** The live office's own systemd units: auto-approve never touches them. */
 const OFFICE_UNITS = ['cubefarm.service'];
+/** A provider write's card risk, and why auto-approve left it on a card (#602). */
+const ACTION_RISK: Record<Exclude<ActionRisk, 'read'>, ItRisk> = { routine: 'low', change: 'medium', destructive: 'high' };
+const ACTION_HELD: Record<Exclude<ActionRisk, 'read'>, string> = {
+  routine: '',
+  change: 'a change waits for "everything except dangerous"',
+  destructive: 'destructive changes are never automatic',
+};
 
 export abstract class SwarmItDesk extends SwarmManagerAsks {
   private itSeq = 0;
@@ -140,13 +150,13 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
   private itQueue(c: Omit<ItProposal, 'id' | 'at'>): string {
     if (this.state.itDesk.waiting.length >= WAITING_MAX) throw new HttpError(409, `${WAITING_MAX} changes already wait for the manager: let them decide on those first.`);
     const line = argvLine(c.argv);
-    if (this.state.itDesk.waiting.some((p) => argvLine(p.argv) === line)) throw new HttpError(409, `\`${line}\` already waits for the manager's ${c.cf ? 'Approve' : 'Run'}.`);
+    if (this.state.itDesk.waiting.some((p) => argvLine(p.argv) === line)) throw new HttpError(409, `\`${line}\` already waits for the manager's ${c.cf || c.pa ? 'Approve' : 'Run'}.`);
     const at = Date.now();
     const p: ItProposal = { ...c, id: `it-${at.toString(36)}-${++this.itSeq}`, why: this.itMask(c.why.trim()), affects: this.itMask(c.affects.trim()), undo: this.itMask(c.undo.trim()), ...(c.diff && { diff: this.itMask(c.diff) }), at };
     this.state.itDesk.waiting.push(p);
     this.itDeskChanged();
     this.itProposed(p); // its card in IT's chat and on Telegram, with Run / Not now
-    this.notifier.notify('decisions', `${p.by} asks to ${c.cf ? 'change Cloudflare' : 'run a command'}`, `${line}\n${p.why}`);
+    this.notifier.notify('decisions', `${p.by} asks to ${c.cf ? 'change Cloudflare' : c.pa ? `change ${MODULES[c.pa.provider]?.name ?? c.pa.provider}` : 'run a command'}`, `${line}\n${p.why}`);
     return line;
   }
 
@@ -204,9 +214,13 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
     }
   }
 
-  // ---------- the Cloudflare action (#586) ----------
+  // ---------- provider actions (#602; Cloudflare's since #586) ----------
 
-  private cfKeys = () => this.providers.keysFor('cloudflare');
+  /** A provider's keys (ElevenLabs' is Voice's), the one network call, and the Box API: the keys stay on the server. */
+  private actionCtx(provider: string): ActionCtx {
+    const voice = provider === 'elevenlabs' && this.voice.secret() ? [{ id: 'voice', label: 'ElevenLabs (Voice)', key: this.voice.secret(), ok: true }] : [];
+    return { keys: [...voice, ...this.providers.keysFor(provider)], http: this.backend.providerHttp, cloudflareApi: this.backend.cloudflareApi, boxes: this.cloud.boxApi(), repo: this.state.repos[0]?.fullName, secretFile: (envFile, name) => envSecretFile(this.cfSecretPath(envFile, name)) };
+  }
 
   /** Where a service token's secret goes (#607): the env file asked for, else one under the office's home (the demo's always is). */
   private cfSecretPath(envFile: string | undefined, name: string) {
@@ -218,26 +232,49 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
     return path.resolve(envFile);
   }
 
-  /** cloudflare: a read now, or a write on a diff card for the manager's Approve. The key stays on the server. */
-  protected async cloudflareAct(a: CloudflareArgs, by: string): Promise<string> {
+  /** cloudflare (#586): provider_action's Cloudflare ops. */
+  protected cloudflareAct(a: CloudflareArgs, by: string): Promise<string> {
+    const { op, why, ...args } = a;
+    return this.providerAct({ provider: 'cloudflare', op, args, ...(why && { why }) }, by);
+  }
+
+  /** provider_action: a read now; a write planned, then applied under auto-approve's rules or put on a card with its diff. */
+  protected async providerAct(a: ProviderActionArgs, by: string): Promise<string> {
     if (!this.itOn) throw new HttpError(403, OFF);
-    const api = this.backend.cloudflareApi;
     try {
-      if (a.op === 'token_scopes') return this.itMask(await tokenScopes(this.cfKeys(), api, a));
-      if (a.op === 'tunnel_ingress_get') return this.itMask(await ingressGet(this.cfKeys(), api, a.tunnel));
-      if (!a.hostname) throw new CfError('Give the hostname, e.g. clip.example.com.');
-      const secretFile = a.op === 'access_service_token_ensure' ? envSecretFile(this.cfSecretPath(a.env_file, a.name ?? '')) : undefined;
-      const plan = await planWrite(this.cfKeys(), api, { ...a, op: a.op, hostname: a.hostname, secretFile });
-      if (plan.already) return `${plan.already} Nothing to approve.`;
-      const c = plan.change;
-      const argv = ['cloudflare', c.op, c.hostname, ...(c.op === 'tunnel_ingress_add' ? [c.service] : c.op === 'access_service_token_ensure' ? [c.name] : [])];
-      const undo = c.op === 'tunnel_ingress_add' ? 'remove the rule in Zero Trust → Networks → Tunnels' : c.op === 'dns_cname_ensure' ? 'delete the record in DNS' : c.op === 'access_service_token_ensure' ? "delete its policy on the app, then the token in Zero Trust → Access → Service auth, and its two lines in the env file" : 'delete the app in Zero Trust → Access → Applications';
-      const line = this.itQueue({ argv, why: a.why ?? `Cloudflare: ${plan.summary}.`, affects: plan.summary, undo, risk: c.op === 'access_app_ensure' || c.op === 'access_service_token_ensure' ? 'medium' : 'low', by, cf: c, diff: plan.diff });
-      return `On the manager's card with its diff: \`${line}\`. Nothing is written until they tap Approve; then it's applied and read back.\n${this.itMask(plan.diff)}`;
+      const out = await runAction(this.actionCtx(a.provider), a);
+      if ('text' in out) return this.itMask(out.text);
+      const { plan } = out;
+      if (plan.already) return `${this.itMask(plan.already)} Nothing to approve.`;
+      const risk = actionOp(a.provider, a.op)!.risk as Exclude<ActionRisk, 'read'>;
+      const level = this.state.settings.itDept.autoApprove;
+      const why = (a.why ?? '').trim();
+      if (autoApplies(risk, level)) {
+        if (this.itAuto.job !== this.state.it.job) this.itAuto = { job: this.state.it.job, steps: 0 };
+        if (this.itAuto.steps < AUTO_STEPS_MAX) return await this.actionAutoApply(plan.change, plan.argv, plan.undo, why, by);
+      }
+      const held = level === 'off' ? '' : ` (auto-approve: ${autoApplies(risk, level) ? `${AUTO_STEPS_MAX} automatic steps in this change already` : ACTION_HELD[risk]})`;
+      const name = MODULES[a.provider].name;
+      const change = a.provider === 'cloudflare' ? { cf: plan.change.data as unknown as CfChange } : { pa: plan.change };
+      const line = this.itQueue({ argv: plan.argv, why: why || `${name}: ${plan.summary}.`, affects: plan.summary, undo: plan.undo, risk: ACTION_RISK[risk], by, diff: plan.diff, ...change });
+      return `On the manager's card with its diff${held}: \`${line}\`. Nothing is written until they tap Approve; then it's applied and read back.\n${this.itMask(plan.diff)}`;
     } catch (err) {
-      if (err instanceof CfError) throw new HttpError(400, this.itMask(err.message));
+      if (err instanceof ActionError || err instanceof CfError) throw new HttpError(400, this.itMask(err.message));
       throw err;
     }
+  }
+
+  /** An auto-approved provider write: applied, read back, logged and posted as done automatically (its undo in words). */
+  private async actionAutoApply(c: ProviderChange, argv: string[], undo: string, why: string, by: string): Promise<string> {
+    this.itAuto.steps++;
+    const r = await applyAction(this.actionCtx(c.provider), c);
+    const code = r.ok ? 0 : 1;
+    const out = shapeOutput({ out: r.text, err: '', mask: this.itMask, max: 8_000 });
+    const entry = this.itLog({ kind: 'change', auto: true, by: `${by} (auto-approve)`, argv, code, out, why: this.itMask(why) });
+    this.itDeskChanged();
+    const line = argvLine(argv);
+    this.itAutoPosted(`🤖 ${r.ok ? 'Done automatically' : "Couldn't do automatically"}: \`${line}\``, `Auto-approve: a routine ${MODULES[c.provider].name} change.${why ? ` ${why}` : ''}\n\n${out.trim()}\nTo undo: ${undo}.`, { log: entry.id, undo: false });
+    return `${r.ok ? 'Done automatically' : "Couldn't do it automatically"} (auto-approve): \`${line}\`\n${out}\nTo undo: ${this.itMask(undo)}.`;
   }
 
   /** POST /api/it/run: the manager's Run on these cards, one after another; the never-list is checked again first. */
@@ -258,12 +295,12 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
           results.push({ id: p.id, code: null });
           continue;
         }
-        const ran = p.cf ? await this.cfApply(p) : await this.backend.itExec(p.argv, CHANGE_TIMEOUT_MS);
+        const ran = p.cf || p.pa ? await this.actionApply(p) : await this.backend.itExec(p.argv, CHANGE_TIMEOUT_MS);
         const out = shapeOutput({ ...ran, mask: this.itMask, max: 8_000 });
         this.itLog({ kind: 'change', by, argv: p.argv, code: ran.code, out, why: p.why });
-        const how = ran.code === 0 ? (p.cf ? 'Applied' : 'Ran') : ran.code === null ? "Couldn't finish" : `Exit ${ran.code} for`;
+        const how = ran.code === 0 ? (p.cf || p.pa ? 'Applied' : 'Ran') : ran.code === null ? "Couldn't finish" : `Exit ${ran.code} for`;
         this.itRan(p, `🖥️ ${how} \`${line}\` for ${p.by ?? this.ceo().name}`, out, { code: ran.code });
-        if (p.cf) this.postMessage('office', `☁️ ${ran.code === 0 ? 'Applied' : "Couldn't apply"} \`${line}\``, undefined, { notice: { details: out } }); // the CEO's chat too
+        if (p.cf || p.pa) this.postMessage('office', `${p.cf ? '☁️' : '🔑'} ${ran.code === 0 ? 'Applied' : "Couldn't apply"} \`${line}\``, undefined, { notice: { details: out } }); // the CEO's chat too
         results.push({ id: p.id, code: ran.code });
       } finally {
         this.itRunning.delete(p.id);
@@ -274,9 +311,10 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
     return { results };
   }
 
-  /** Approve on a Cloudflare card: written and read back, as a command's result (code 0 when the read-back matches). */
-  private async cfApply(p: ItProposal) {
-    const r = await applyWrite(this.cfKeys(), this.backend.cloudflareApi, p.cf!, p.cf?.op === 'access_service_token_ensure' ? envSecretFile(p.cf.envFile) : undefined);
+  /** Approve on a provider's card: written and read back, as a command's result (code 0 when the read-back matches). */
+  private async actionApply(p: ItProposal) {
+    const c: ProviderChange = p.pa ?? { provider: 'cloudflare', op: p.cf!.op, keyId: p.cf!.keyId, data: { ...p.cf! } };
+    const r = await applyAction(this.actionCtx(c.provider), c);
     return { code: r.ok ? 0 : 1, out: r.text, err: '' };
   }
 

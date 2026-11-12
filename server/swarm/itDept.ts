@@ -207,7 +207,7 @@ export abstract class SwarmItDept extends SwarmSetup {
 
   /** IT's office tools: it_run, it_propose, it_recommend (itWatch.ts), it_health, it_ticket, it_review and it_improve (itImprove.ts; server/ceoItTools.ts). */
   protected itTools(): OfficeTools {
-    return itOfficeTools({ itRun: (a) => this.itRun(a), itPropose: (a) => this.itPropose(a), itRunbook: (a) => this.itRunbook(a), itRecommend: (a) => this.itRecommend(a), itHealth: () => this.itHealth(), itTicket: (a) => this.itTicket(a), itReview: (a) => this.itReview(a), itImprove: (a) => this.itImprove(a), cloudflare: (a) => this.cloudflareAct(a, this.itName), problemsList: (a) => this.problemsList(a), noteProblem: (a) => this.noteProblem(a) });
+    return itOfficeTools({ itRun: (a) => this.itRun(a), itPropose: (a) => this.itPropose(a), itRunbook: (a) => this.itRunbook(a), itRecommend: (a) => this.itRecommend(a), itHealth: () => this.itHealth(), itTicket: (a) => this.itTicket(a), itReview: (a) => this.itReview(a), itImprove: (a) => this.itImprove(a), cloudflare: (a) => this.cloudflareAct(a, this.itName), providerAction: (a) => this.providerAct(a, this.itName), problemsList: (a) => this.problemsList(a), noteProblem: (a) => this.noteProblem(a) });
   }
 
   /** it_health: the office's readings, compact. */
@@ -294,7 +294,7 @@ export abstract class SwarmItDept extends SwarmSetup {
 
   /** A card it_propose made: IT's alert, with Run / Not now on Telegram (the chat shows its card). */
   protected itProposed(p: ItProposal) {
-    void this.itTelegram(`🖥️ ${p.by ?? this.state.settings.itDept.name} asks to ${p.cf ? 'change' : 'run'} \`${argvLine(p.argv)}\`\n${p.why}\n${p.diff ? `${p.diff}\n` : ''}Frees or changes: ${p.affects}\nUndo: ${p.undo}\nRisk: ${p.risk}`.slice(0, 3500), runKeyboard(p.id));
+    void this.itTelegram(`🖥️ ${p.by ?? this.state.settings.itDept.name} asks to ${p.cf || p.pa ? 'change' : 'run'} \`${argvLine(p.argv)}\`\n${p.why}\n${p.diff ? `${p.diff}\n` : ''}Frees or changes: ${p.affects}\nUndo: ${p.undo}\nRisk: ${p.risk}`.slice(0, 3500), runKeyboard(p.id));
   }
 
   /** The manager's Run went through (or was refused at Run): into IT's chat and Telegram, and IT checks a run's result. */

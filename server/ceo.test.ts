@@ -172,7 +172,7 @@ describe('office tools', () => {
       sessionHistory: (a) => (calls.push(['session_history', a]), 'history'),
       react: (a) => (calls.push(['react', a]), 'reacted'),
       reply: (a) => (calls.push(['reply', a]), 'answered'),
-      runExperiment: () => '', setFloorSwitches: () => '', setIssuePriority: async () => '', setCeoSetup: () => '', applyCharter: () => '', mergePull: async () => '', applyUpdate: () => '', askIt: () => '', cloudflare: async () => '', itReport: () => '', problemsList: () => '', noteProblem: () => '',
+      runExperiment: () => '', setFloorSwitches: () => '', setIssuePriority: async () => '', setCeoSetup: () => '', applyCharter: () => '', mergePull: async () => '', applyUpdate: () => '', askIt: () => '', cloudflare: async () => '', providerAction: async () => '', itReport: () => '', problemsList: () => '', noteProblem: () => '',
     });
     const [serverSide, clientSide] = InMemoryTransport.createLinkedPair();
     await office.server.instance.connect(serverSide);
@@ -212,7 +212,7 @@ describe('office tools', () => {
       'message_agent',
       'note_problem', 'pr_diff', 'problems',
       'propose_charter',
-      'propose_design',
+      'propose_design', 'provider_action',
       'qa_report',
       'react',
       'reply',
@@ -291,7 +291,7 @@ describe('office tools', () => {
       set_ceo_setup: { model: 'claude-sonnet-5', asked_in: 4 },
       apply_charter: { ...f, reason: 'r', asked_in: 4 },
       merge_pull: { ...f, pr: 7, asked_in: 4 }, apply_update: { asked_in: 4 },
-      ask_it: { question: 'Why is the disk full?' }, cloudflare: { op: 'tunnel_ingress_add', hostname: 'clip.example.com', service: 'http://localhost:80' },
+      ask_it: { question: 'Why is the disk full?' }, cloudflare: { op: 'tunnel_ingress_add', hostname: 'clip.example.com', service: 'http://localhost:80' }, provider_action: { provider: 'github', op: 'repo_get' },
       it_report: { what: 'CI is down', where: 'ci', evidence: 'checks never started', blocking: false },
       note_problem: { title: 'Issue #4 had no acceptance criteria', cause: 'vague-brief' },
     };
@@ -719,7 +719,7 @@ describe('follow-ups (#27)', () => {
           closePull: async () => 'ok', escalate: async () => 'ok', attachFile: async () => 'ok', worktreeFile: async () => 'ok', prDiff: async () => 'ok', sendTelegram: async () => 'ok', scanKeys: async () => 'ok', makeDefaultAccount: () => 'ok', editMessage: async () => 'ok',
           restartAgent: ok, stopAgent: ok, messageAgent: async () => 'ok', assignIssue: async () => 'ok', answerAgent: async () => 'ok', askManagerChoice: ok, defineExperiment: ok, sessionHistory: ok, proposeCharter: ok, resolveDecision: ok, proposeDesign: async () => 'ok',
           waitFor: async () => 'ok', askManager: async () => 'ok', consult: async () => 'ok', react: ok, reply: ok, problemsList: ok, noteProblem: ok,
-          runExperiment: ok, setFloorSwitches: ok, setIssuePriority: async () => 'ok', setCeoSetup: ok, applyCharter: ok, mergePull: async () => 'ok', applyUpdate: ok, askIt: ok, cloudflare: async () => 'ok', itReport: ok,
+          runExperiment: ok, setFloorSwitches: ok, setIssuePriority: async () => 'ok', setCeoSetup: ok, applyCharter: ok, mergePull: async () => 'ok', applyUpdate: ok, askIt: ok, cloudflare: async () => 'ok', providerAction: async () => 'ok', itReport: ok,
         },
         () => researching,
       ),
