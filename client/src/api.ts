@@ -41,13 +41,13 @@ async function call<T = unknown>(method: string, url: string, body?: unknown, to
   return data as T;
 }
 
-/** An audio clip from the office (the voice settings' Test line); errors become toasts like the rest. */
-async function clip(url: string): Promise<Blob> {
+/** An audio clip from the office (the voice settings' Test line); errors become toasts like the rest unless `toast` is false. */
+async function clip(url: string, toast = true): Promise<Blob> {
   const res = await fetch(url);
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     const message = (data as { error?: string }).error ?? `${res.status} ${res.statusText}`;
-    useStore.getState().pushToast('error', message);
+    if (toast) useStore.getState().pushToast('error', message);
     throw new Error(message);
   }
   return res.blob();
@@ -256,7 +256,8 @@ export const api = {
   /** Saves (or with '' removes) the ElevenLabs key. No toast: the settings show why a key was rejected. */
   setVoiceKey: (key: string) => call<{ voiceKeySet: boolean; voiceKeyHint: string }>('PUT', '/api/voice/key', { key }, false),
   voices: () => call<VoiceOption[]>('GET', '/api/voice/voices'),
-  voiceSample: (voiceId: string) => clip(`/api/voice/sample?voiceId=${encodeURIComponent(voiceId)}`),
+  /** No toast: Settings → Voice's Test says what went wrong (voiceTest.ts). */
+  voiceSample: (voiceId: string) => clip(`/api/voice/sample?voiceId=${encodeURIComponent(voiceId)}`, false),
   clearVoiceCache: () => call<VoiceCacheView>('DELETE', '/api/voice/cache'),
   journalDays: () => call<JournalDayView[]>('GET', '/api/journal/days'),
   history: (f: HistoryFilter, toast = true) => call<HistoryPage>('GET', `/api/history?${new URLSearchParams(Object.entries(f).flatMap(([k, v]) => (v === undefined || v === '' ? [] : [[k === 'repoId' ? 'repo' : k, String(v)]])))}`, undefined, toast),
