@@ -12,10 +12,10 @@ const { createDemoBackend } = await import('./demo.ts');
 const { Swarm } = await import('./swarm.ts');
 
 // The scale budget (#228): the demo's big company, 10 floors of 15 busy people, run for a few minutes of fake time,
-// must fit the snapshot a tab loads and the traffic one tab gets into budgets, so a change that makes either grow with
-// the company (terminal lines in the snapshot, every agent change sent in full) fails here, not in someone's office.
+// must keep terminal lines out of the snapshot a tab loads and fit the traffic one tab gets into a budget, so a change
+// that sends every agent change in full fails here, not in someone's office. The snapshot's own growth, build and
+// apply times and its lists' caps are snapshotScale.test.ts' (#595), measured against a smaller office in the same run.
 
-const SNAPSHOT_BUDGET = 646_000; // bytes; it was 2 MB and growing with every log line before #228; +15 KB for what each busy agent's session runs on (#376); +5 KB for who spent each account's window (#409); +1 KB: main sat within CI's run-to-run noise when the disk settings gained rearmGb (#502); +5 KB for every floor's theme and 7-day QA curve (#371), Windows' longer paths at the edge; +20 KB for the problems register (#544), capped at its 80 entries however big the company
 const TRAFFIC_BUDGET = 70_000; // bytes per second to a tab on one floor with the workers list out; 124 KB/s before #228, 78-85 before #491
 
 afterAll(() => {
@@ -24,7 +24,7 @@ afterAll(() => {
 });
 
 describe('a big company', () => {
-  it('fits the snapshot and websocket budgets', { timeout: 120_000 }, async () => {
+  it('keeps terminal lines out of the snapshot and fits the websocket budget', { timeout: 120_000 }, async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
     for (const m of ['log', 'warn', 'info'] as const) vi.spyOn(console, m).mockImplementation(() => undefined);
     const swarm = new Swarm(createDemoBackend({ floors: 10, agents: 15 }));
@@ -42,7 +42,6 @@ describe('a big company', () => {
     expect(snapshot.data.agents).toHaveLength(151);
     expect(snapshot.data.agents.filter((a) => a.status === 'working').length).toBeGreaterThan(60);
     expect(snapshot.data.agents.every((a) => a.log.length === 0)).toBe(true);
-    expect(sent[0].length).toBeLessThan(SNAPSHOT_BUDGET);
 
     sent.length = 0;
     await vi.advanceTimersByTimeAsync(60_000);
