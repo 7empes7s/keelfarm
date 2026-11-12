@@ -223,10 +223,8 @@ export default function AgentCamTile({ id, label, initial }: { id: string; label
           const now = performance.now();
           if (!camDue(now, last, { hidden: document.visibilityState === 'hidden', onScreen }, cost)) return;
           last = now;
-          const { advance, gl } = store.getState();
-          advance(now);
-          gl.getContext().finish(); // the frame's GPU work too (a moment on a GPU, the bulk in software WebGL), so camFps sees it
-          cost = performance.now() - now;
+          store.getState().advance(now);
+          cost = performance.now() - now; // the main thread's share; never gl.finish(), which would wait on the office's own frame too
         }, 1000 / CAM_FPS);
       },
       (err) => {
