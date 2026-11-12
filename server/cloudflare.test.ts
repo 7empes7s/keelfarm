@@ -52,12 +52,12 @@ describe('the Cloudflare action against a faked API', () => {
   it('names the missing scope on a 1001 or a 403', async () => {
     const cf = fakeCloudflare();
     const noTunnel: CfKey = { id: 'x', label: 'Old token', key: 'cf-notunnel-1' };
-    await expect(planWrite([noTunnel], cf.api, { op: 'tunnel_ingress_add', hostname: 'clip.techinsiderbytes.com', service: 'http://localhost:80' })).rejects.toThrow('"Old token" lacks Account › Cloudflare Tunnel › Edit');
+    await expect(planWrite([noTunnel], cf.api, { op: 'tunnel_ingress_add', hostname: 'clip.techinsiderbytes.com', service: 'http://localhost:80' })).rejects.toThrow('the key needs Account › Cloudflare Tunnel › Edit ("Old token")');
     const noDns: CfKey = { id: 'y', label: 'DNS-less', key: 'cf-nodns-1' };
-    await expect(planWrite([noDns], cf.api, { op: 'dns_cname_ensure', hostname: 'clip.techinsiderbytes.com' })).rejects.toThrow('"DNS-less" lacks Zone › DNS › Edit');
+    await expect(planWrite([noDns], cf.api, { op: 'dns_cname_ensure', hostname: 'clip.techinsiderbytes.com' })).rejects.toThrow('the key needs Zone › DNS › Edit ("DNS-less")');
     const scopes = await tokenScopes([noTunnel, good], cf.api, { hostname: 'clip.techinsiderbytes.com' });
-    expect(scopes).toContain('✗ tunnels: missing Account › Cloudflare Tunnel › Edit');
-    expect(scopes).toMatch(/"Cloudflare \(LiteLLM litellm.env\)":\n {2}✓ token is active\n {2}✓ account\n {2}✓ tunnels\n {2}✓ tunnel main's ingress\n {2}✓ zone\n {2}✓ DNS records in techinsiderbytes.com\n {2}✓ Access apps/);
+    expect(scopes).toContain('✗ tunnels: the key needs Account › Cloudflare Tunnel › Edit');
+    expect(scopes).toMatch(/"Cloudflare \(LiteLLM litellm.env\)":\n {2}✓ token is active\n {2}✓ account\n {2}✓ tunnels\n {2}✓ tunnel main's ingress\n {2}✓ zone\n {2}✓ DNS records in techinsiderbytes.com\n {2}✓ Access apps\n {2}✓ Access service tokens/);
   });
 
   it('ensures a proxied CNAME to the tunnel and the Access apps, idempotently', async () => {
@@ -75,7 +75,7 @@ describe('the Cloudflare action against a faked API', () => {
   });
 
   it('says what every key lacks when none can do it', async () => {
-    await expect(withKey([dead], fakeCloudflare().api, async () => Promise.reject(new CfError('x', 'Zone › DNS › Edit')))).rejects.toThrow('No Cloudflare key can do this: "Cloudflare" lacks Zone › DNS › Edit');
+    await expect(withKey([dead], fakeCloudflare().api, async () => Promise.reject(new CfError('x', 'Zone › DNS › Edit')))).rejects.toThrow('No Cloudflare key can do this: the key needs Zone › DNS › Edit ("Cloudflare")');
     await expect(withKey([], fakeCloudflare().api, async () => 1)).rejects.toThrow(/Settings → Providers/);
   });
 });
