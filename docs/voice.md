@@ -351,7 +351,7 @@ works on an answer. Drag the tile anywhere; × or "turn off your camera" hides i
 nothing is sent: it's off by default, uses no camera or mic of yours, and a busy agent (a merge conflict, a fix, a
 test) may refuse playfully once, from a template; ask again and they turn it on. The tile is its own small renderer
 (`world/AgentCamTile.tsx`, 360 px square, 15 frames a second at most, none while the tab is hidden or the tile off
-screen). The rules are pure and tested in `client/src/ui/agentCamera.ts`; `window.__swarmCamera` is its probe
+screen). The rules are pure and tested in `client/src/ui/agentCamera.ts`; `window.__swarmAgentCam` is its probe
 (`state`, `mouth`, `frames`, `on(id)`, `off()`, `level(v)` for fake audio). The demo opens with one on via
 `?camera=ceo` (or an agent's id); `e2e/agentCamera.spec.ts` walks it through.
 

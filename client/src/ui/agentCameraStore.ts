@@ -1,5 +1,5 @@
 // An agent's camera (#539): who's on camera, since when, what they say as it comes on, and the voice level a fake or
-// demo voice feeds the mouth (QA's `__swarmCamera.level`). Off by default; one camera at a time; nothing here is sent
+// demo voice feeds the mouth (QA's `__swarmAgentCam.level`). Off by default; one camera at a time; nothing here is sent
 // anywhere: turning it on or off, or a refusal, never reaches the agent or costs a token. The rules are agentCamera.ts.
 import { create } from 'zustand';
 import { CEO_ID } from '../../../shared/types';
@@ -66,7 +66,7 @@ if (typeof window !== 'undefined') {
     });
   }
 
-  (window as unknown as Record<string, unknown>).__swarmCamera = {
+  (window as unknown as Record<string, unknown>).__swarmAgentCam = {
     get state() {
       return useCamera.getState();
     },

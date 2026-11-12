@@ -5,13 +5,13 @@ import { enterOffice, expect, test } from './helpers';
 // character live in a picture-in-picture tile; the mouth follows the voice's level (QA's fake one here), × closes it.
 
 type CamWindow = {
-  __swarmCamera: { state: { agent: string | null }; mouth: number; frames: number; on(id: string): void; level(v: number | null): void };
+  __swarmAgentCam: { state: { agent: string | null }; mouth: number; frames: number; on(id: string): void; level(v: number | null): void };
   __swarmCall: { phase: string };
   __swarmMic: { fake(): void; say(text: string, final?: boolean): boolean };
   __swarmStats: { fps: number };
 };
-const cam = (page: Page) => page.evaluate(() => (window as unknown as CamWindow).__swarmCamera.state.agent);
-const mouth = (page: Page) => page.evaluate(() => (window as unknown as CamWindow).__swarmCamera.mouth);
+const cam = (page: Page) => page.evaluate(() => (window as unknown as CamWindow).__swarmAgentCam.state.agent);
+const mouth = (page: Page) => page.evaluate(() => (window as unknown as CamWindow).__swarmAgentCam.mouth);
 
 /** How many distinct colours the tile's canvas has: an empty or black canvas has one. */
 const colours = (page: Page) =>
@@ -31,15 +31,15 @@ const colours = (page: Page) =>
 async function mouthFollowsAudio(page: Page) {
   await page.evaluate(() => {
     let t = 0;
-    (window as unknown as { __fakeVoice: number }).__fakeVoice = window.setInterval(() => (window as unknown as CamWindow).__swarmCamera.level(Math.abs(Math.sin((t += 0.4))) * 0.6), 50);
+    (window as unknown as { __fakeVoice: number }).__fakeVoice = window.setInterval(() => (window as unknown as CamWindow).__swarmAgentCam.level(Math.abs(Math.sin((t += 0.4))) * 0.6), 50);
   });
   await expect.poll(() => mouth(page), { timeout: 15_000, message: 'the mouth opens while the voice plays' }).toBeGreaterThan(0.3);
   await page.evaluate(() => {
     clearInterval((window as unknown as { __fakeVoice: number }).__fakeVoice);
-    (window as unknown as CamWindow).__swarmCamera.level(0);
+    (window as unknown as CamWindow).__swarmAgentCam.level(0);
   });
   await expect.poll(() => mouth(page), { timeout: 15_000, message: 'and shuts in silence' }).toBeLessThan(0.05);
-  await page.evaluate(() => (window as unknown as CamWindow).__swarmCamera.level(null));
+  await page.evaluate(() => (window as unknown as CamWindow).__swarmAgentCam.level(null));
 }
 
 async function tileWorks(page: Page, width: number) {
@@ -60,7 +60,7 @@ for (const width of [390, 1280]) {
   test(`on a call, "turn on your camera" shows the CEO live, at ${width}px`, async ({ page, request }) => {
     await page.setViewportSize({ width, height: 800 });
     await page.goto('/?pocket=1&tab=chat');
-    await page.waitForFunction(() => '__swarmMic' in window && '__swarmCamera' in window);
+    await page.waitForFunction(() => '__swarmMic' in window && '__swarmAgentCam' in window);
     await page.evaluate(() => (window as unknown as CamWindow).__swarmMic.fake());
     await page.getByRole('button', { name: /^Call / }).first().click();
     await expect.poll(() => page.evaluate(() => (window as unknown as CamWindow).__swarmCall.phase)).toBe('listening');
@@ -78,6 +78,8 @@ for (const width of [390, 1280]) {
     await page.goto('/?pocket=1#agent/linus/chat');
     const ask = page.getByRole('button', { name: /^Camera$/ });
     await expect(ask).toBeVisible({ timeout: 30_000 });
+    const details = page.getByRole('button', { name: 'Close the details' }); // beside the docked CEO chat it sheets over the chat
+    if (await details.isVisible()) await details.click();
     await ask.click();
     // busy with a fix or a test, they're camera shy once; the second ask turns it on
     if (!(await page.locator('.cam-tile').isVisible())) await ask.click();
@@ -95,10 +97,10 @@ test('the 3D office keeps its frame rate with the camera tile open', async ({ pa
   await expect.poll(fps, { timeout: 60_000 }).toBeGreaterThan(0);
   await page.waitForTimeout(3000);
   const without = await fps();
-  await page.evaluate(() => (window as unknown as CamWindow).__swarmCamera.on('ceo'));
+  await page.evaluate(() => (window as unknown as CamWindow).__swarmAgentCam.on('ceo'));
   await expect(page.locator('.cam-tile canvas')).toBeVisible({ timeout: 30_000 });
   await page.waitForTimeout(4000);
-  const frames = await page.evaluate(() => (window as unknown as CamWindow).__swarmCamera.frames);
+  const frames = await page.evaluate(() => (window as unknown as CamWindow).__swarmAgentCam.frames);
   expect(frames, 'the tile draws').toBeGreaterThan(5);
   expect(await fps(), `office fps with the tile vs ${without} without`).toBeGreaterThanOrEqual(without * 0.75);
 });
