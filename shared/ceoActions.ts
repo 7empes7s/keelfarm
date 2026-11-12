@@ -75,6 +75,7 @@ const ACTS: Record<string, string> = {
   it_propose: '🖥️',
   ask_it: '🖥️',
   cloudflare: '☁️',
+  provider_action: '🔑',
   it_report: '🖥️',
   note_problem: '📋',
 };
@@ -99,6 +100,7 @@ const SECTIONS: Partial<Record<string, ActionSection>> = {
   it_propose: 'ops',
   ask_it: 'it-dept',
   cloudflare: 'ops',
+  provider_action: 'providers',
   it_report: 'it-dept',
   note_problem: 'problems',
   make_default_account: 'accounts',
