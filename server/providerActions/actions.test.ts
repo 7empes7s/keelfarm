@@ -1,4 +1,8 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { envSecretFile } from '../cfSecretFile.ts';
 import { ACTION_PROVIDERS, autoApplies, keyAbilities, PROVIDER_ACTIONS } from '../../shared/providerActions.ts';
 import { DEMO_REPO, fakeBoxes, fakeProviderHttp } from '../demo/providerActions.ts';
 import { fakeCloudflare } from '../demo/cloudflare.ts';
@@ -16,6 +20,7 @@ const SAMPLE: Record<string, Record<string, Record<string, unknown>>> = {
     tunnel_ingress_add: { hostname: 'clip.techinsiderbytes.com', service: 'http://localhost:80' },
     dns_cname_ensure: { hostname: 'clip.techinsiderbytes.com' },
     access_app_ensure: { hostname: 'clip.techinsiderbytes.com', emails: ['manager@example.com'] },
+    access_service_token_ensure: { hostname: 'keel.techinsiderbytes.com', name: 'clipfarm e2e' },
   },
   github: {
     key_scopes: {},
@@ -34,9 +39,10 @@ const sample = (provider: string, op: string) => SAMPLE[provider]?.[op] ?? {};
 
 function ctxFor(provider: string, keys: ActionKey[] = [{ id: 'dead', label: 'Old key', key: DEAD, ok: false }, { id: 'live', label: 'Live key', key: SECRET, ok: true }]) {
   const net = fakeProviderHttp();
-  const cf = fakeCloudflare();
+  const cf = fakeCloudflare({ access: true });
   const boxes = fakeBoxes();
-  const ctx: ActionCtx = { keys, http: net.http, cloudflareApi: cf.api, boxes, repo: DEMO_REPO };
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cubefarm-actions-'));
+  const ctx: ActionCtx = { keys, http: net.http, cloudflareApi: cf.api, boxes, repo: DEMO_REPO, secretFile: (_f, name) => envSecretFile(path.join(dir, `${name.replace(/\W+/g, '-')}.env`)) };
   return { ctx, net, cf, boxes, provider };
 }
 

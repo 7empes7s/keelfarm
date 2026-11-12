@@ -31,6 +31,8 @@ export const PROVIDER_ACTIONS: Record<string, ActionOp[]> = {
     { op: 'tunnel_ingress_add', risk: 'change', does: 'publish a hostname on the tunnel', args: '{ hostname, service, tunnel? }', needs: 'Cloudflare Tunnel edit' },
     { op: 'dns_cname_ensure', risk: 'change', does: 'point DNS at the tunnel', args: '{ hostname, tunnel? }', needs: 'Zone DNS edit' },
     { op: 'access_app_ensure', risk: 'change', does: 'put a hostname behind Access', args: '{ hostname, emails, bypass? }' },
+    // it can rotate a secret a service runs on, so it always asks
+    { op: 'access_service_token_ensure', risk: 'destructive', does: 'make an Access service token', args: '{ hostname, name, duration?, env_file? }' },
   ],
   github: [
     { op: 'key_scopes', risk: 'read', does: 'check its repo permissions', args: '{ repo? }' },

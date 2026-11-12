@@ -4,6 +4,7 @@
 import type { z } from 'zod';
 import type { BoxApi } from '../box.ts';
 import type { CfApi } from '../cloudflare.ts';
+import type { CfSecretFile } from '../cfSecretFile.ts';
 import type { ProviderChange } from '../../shared/providerActions.ts';
 
 /** How the key goes on a request: a bearer token, ElevenLabs' header, or GitHub's bearer with its API headers. */
@@ -42,6 +43,8 @@ export interface ActionCtx {
   boxes: BoxApi | null;
   /** The first floor's repo ("owner/name"), GitHub's default. */
   repo?: string;
+  /** Where a Cloudflare service token's secret is written (#607): the env file asked for (checked), else the office's own. Throws when refused. */
+  secretFile?: (envFile: string | undefined, name: string) => CfSecretFile;
 }
 
 /** A write's plan: the change for its card (no key in it), a one-line summary, its before and after. */

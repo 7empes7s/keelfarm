@@ -17,7 +17,7 @@ export async function readSecrets(file: string): Promise<Record<string, unknown>
 }
 
 /** Windows refuses a rename onto a file another process is renaming or reading (EPERM/EBUSY/EACCES): try again shortly. */
-async function renameRetrying(from: string, to: string) {
+export async function renameRetrying(from: string, to: string) {
   for (let i = 0; ; i++) {
     try {
       return await fs.rename(from, to);

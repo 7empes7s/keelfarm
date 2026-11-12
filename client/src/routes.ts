@@ -240,7 +240,7 @@ export function routeTarget(r: Route, w: World, mode: Mode): Target | null {
     case 'agent': {
       const a = agentNamed(w, r.name);
       if (!a) return null;
-      if (!office && a.id === CEO_ID) return { overlay: null, tab: 'chat', ready: CHAT };
+      if (!office && a.id === CEO_ID && r.tab !== 'terminal') return { overlay: null, tab: 'chat', ready: CHAT };
       const view = r.tab === 'chat' || r.tab === 'terminal' ? r.tab : undefined;
       const details = view ? undefined : (r.tab as 'now' | 'profile' | 'setup');
       return { overlay: { kind: 'terminal', agentId: a.id, view, details }, stand: office ? deskStand(w, a) : undefined, ready: PANEL };
@@ -318,7 +318,7 @@ function overlayToRoute(o: Overlay | null, w: World): Route | null {
   switch (o.kind) {
     case 'terminal': {
       const a = w.agents[o.agentId];
-      return a ? { to: 'agent', name: a.id === CEO_ID ? CEO_ID : a.name, tab: o.details ?? o.view ?? 'terminal' } : null;
+      return a ? { to: 'agent', name: a.id === CEO_ID ? CEO_ID : a.name, tab: o.details ?? o.view ?? (a.id === CEO_ID ? 'chat' : 'terminal') } : null; // the CEO's console, not its terminal (#596)
     }
     case 'kanban':
     case 'app':

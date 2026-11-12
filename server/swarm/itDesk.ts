@@ -17,6 +17,7 @@ import { AUTO_STEPS_MAX, autoVerdict, type AutoPlan } from '../itAuto.ts';
 import type { ItJob } from '../../shared/itDept.ts';
 import { OFFICE_DIR } from '../officeUpdate.ts';
 import { CfError } from '../cloudflare.ts';
+import { envPathRefusal, envSecretFile } from '../cfSecretFile.ts';
 import type { CloudflareArgs, ProviderActionArgs } from '../ceoItTools.ts';
 import { ActionError, applyAction, MODULES, runAction, type ActionCtx } from '../providerActions/index.ts';
 import { actionOp, autoApplies, type ActionRisk, type ProviderChange } from '../../shared/providerActions.ts';
@@ -209,7 +210,17 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
   /** A provider's keys (ElevenLabs' is Voice's), the one network call, and the Box API: the keys stay on the server. */
   private actionCtx(provider: string): ActionCtx {
     const voice = provider === 'elevenlabs' && this.voice.secret() ? [{ id: 'voice', label: 'ElevenLabs (Voice)', key: this.voice.secret(), ok: true }] : [];
-    return { keys: [...voice, ...this.providers.keysFor(provider)], http: this.backend.providerHttp, cloudflareApi: this.backend.cloudflareApi, boxes: this.cloud.boxApi(), repo: this.state.repos[0]?.fullName };
+    return { keys: [...voice, ...this.providers.keysFor(provider)], http: this.backend.providerHttp, cloudflareApi: this.backend.cloudflareApi, boxes: this.cloud.boxApi(), repo: this.state.repos[0]?.fullName, secretFile: (envFile, name) => envSecretFile(this.cfSecretPath(envFile, name)) };
+  }
+
+  /** Where a service token's secret goes (#607): the env file asked for, else one under the office's home (the demo's always is). */
+  private cfSecretPath(envFile: string | undefined, name: string) {
+    const own = path.join(HOME_DIR, 'secrets', `cf-access-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'token'}.env`);
+    if (!envFile) return own;
+    if (this.backend.demo) return path.join(HOME_DIR, 'secrets', path.basename(envFile));
+    const no = envPathRefusal(envFile, this.itProtected);
+    if (no) throw new CfError(no);
+    return path.resolve(envFile);
   }
 
   /** cloudflare (#586): provider_action's Cloudflare ops. */
