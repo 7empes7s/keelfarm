@@ -8,6 +8,7 @@ import type { HealthView } from '../health.ts';
 import type { ServerNow } from '../serverLoad.ts';
 import type { ItDeskView } from '../itDesk.ts';
 import type { ItView } from '../itDept.ts';
+import type { ItWatchView } from '../itWatch.ts';
 import type { ItTicket } from '../itTickets.ts';
 import type { HistoryEntry } from '../history.ts';
 import type { OpsView } from '../ops.ts';
@@ -26,7 +27,7 @@ import type { SwarmSettings } from './settings.ts';
 import type { AccountsView } from './accounts.ts';
 import type { KeyScanView, ProvidersView } from './providers.ts';
 import type { UsageSource } from './usage.ts';
-import type { VoiceCacheView } from './voice.ts';
+import type { VoiceCacheView, VoiceLine } from './voice.ts';
 
 export interface WorldSnapshot {
   user: string | null; // gh login
@@ -56,6 +57,7 @@ export interface WorldSnapshot {
   serverLoad?: ServerNow | null; // the server's latest reading by program (#271); absent in a replay
   itDesk?: ItDeskView; // the IT desk (#506): changes waiting for the manager's Run, and its log; absent in a replay
   it?: ItView; // the IT department's chat (#524); absent until it has a message or a bot, and in a replay
+  itWatch?: ItWatchView; // IT monitoring (#525): the health checks and open recommendations; absent until the first check
   itTickets?: ItTicket[]; // IT tickets (#542): office problems reported to IT, newest first; absent while there are none, and in a replay
   claudeUsage: UsageReading[]; // the latest reading per limit, for the usage meter (none until a session reports)
   claudeUsageCheck?: UsageCheckError | null; // the office's last idle check failed (#89), null once one reads
@@ -133,6 +135,7 @@ export type ServerEvent =
   | { type: 'itDesk'; itDesk: ItDeskView }
   /** The IT department (#524): its view without the messages, and `message` added or replaced in its chat. */
   | { type: 'it'; it: Omit<ItView, 'messages'>; message?: PhoneMessage }
+  | { type: 'itWatch'; itWatch: ItWatchView }
   | { type: 'itTickets'; tickets: ItTicket[] }
   | { type: 'testLab'; testLab: TestLabView }
   | { type: 'claudeUsage'; readings: UsageReading[]; check?: UsageCheckError | null; shares?: UsageShares[] }
@@ -142,6 +145,8 @@ export type ServerEvent =
   | { type: 'models'; models: ModelCatalogView }
   | { type: 'voiceKey'; voiceKeySet: boolean; voiceKeyHint: string }
   | { type: 'voiceCache'; voiceCache: VoiceCacheView }
+  /** The CEO says something while it works (#286): never saved, nor in the snapshot. */
+  | { type: 'voiceLine'; line: VoiceLine }
   | { type: 'weather'; weather: WeatherView }
   | { type: 'ticker'; item: TickerItem }
   | { type: 'notifyChannels'; notifyChannels: NotifyChannelsView }

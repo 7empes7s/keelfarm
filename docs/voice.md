@@ -143,6 +143,26 @@ speak when clicked** turns it off; muted, during a time-lapse or without a key t
 the line. Settings → Voice shows the characters sent to ElevenLabs today next to the model's price. The demo, without
 a key, uses the browser's voice. `window.__swarmLines` says who would speak (`voice`) and `speak(id)` tries one.
 
+## While the CEO works
+
+When you send a message (typed or spoken) while the CEO is in the middle of a job, the office says a short ack in the
+CEO's voice within about a second when the speaker is free: "Got it, I'll fold that in.", "Heard you, one moment." and so on, from a fixed list,
+so it costs no model call, and never two within 20 s. The CEO is asked to answer you right away with a sentence or two
+and carry on, so you hear it mid-job rather than at the end. If another message is being read, the ack waits briefly
+for it to finish, ahead of the next reply; a reply arriving while the ack loads or plays waits for the ack to finish.
+Acks waiting longer than twenty seconds are dropped, and barge-in clears both playing and waiting lines.
+
+**Talk while working** (Settings → Voice) adds short spoken progress from the CEO's step log: **Milestones** (an issue
+filed, waiting on QA or a merge, a PR sent back) or **Regular** (also a line about once a minute, e.g. "Still reading a
+pull request's changes."). It's Off by default; during a call Off means Milestones. Lines never carry issue numbers,
+paths or markdown, never start while your mic is open or something else is being said, and stop when a message
+arrives or you talk over them. Acks and progress show as a small chip under the CEO's live reply, never as chat
+messages. With ElevenLabs each is a short clip: an ack is about 25 characters and made once ever (cached by its
+words), a progress line about 40, so an hour of Regular at fifty-second intervals is roughly 72 × 40 = 2,880
+characters, plus milestones. Actual cost depends on the ElevenLabs plan and cache hits.
+`window.__swarmVoiceLines` lists the lines a tab said (`id`, `kind`, `text`, `provider`). The demo office talks after
+seconds rather than a minute, so its short jobs can be heard.
+
 ## Replaying a message
 
 Every CEO message that was read aloud has a ▶ in the phone chat. It plays the clip saved when the message first
@@ -316,12 +336,13 @@ for after the call so nothing talks over the CEO.
 | `DELETE /api/voice/cache` | deletes every saved clip |
 | `GET /api/voice/sample?voiceId=…` | the Test line in that voice (default: the chosen one) |
 | `POST /api/voice/transcribe` | the 🎙️ with ElevenLabs: the recorded clip as the body (`Content-Type` its audio type, `X-Clip-Ms` its length) → `{ text }`. 409 when ElevenLabs isn't the provider or there's no key, 413 over 60 s or 5 MB, 415 for anything but WebM, Ogg, MP4, MP3 or WAV, 502 when ElevenLabs fails |
+| `GET /api/voice/talk/:id` | an ack or progress line the office just sent in a `voiceLine` event (the latest 20), made once per wording and cached; 404 when the voice isn't ElevenLabs or the line is gone |
 | `POST /api/voice/lines/:agent` `{ hour }` | a clicked agent's line (`hour`: the manager's local hour) → `{ text, clip }`; `clip` says ElevenLabs will say it. The same line within 20 s |
 | `GET /api/voice/lines/:agent` | that line as `audio/mpeg` in their voice (the CEO's: the office voice), cached; 404 when agents aren't voiced by ElevenLabs or nothing was said yet |
 | `GET /api/voice/standup?n=3&part=morning` | the CEO's line at a stand-up in the 3D office ("Morning team, three new features today!"; `part` is `morning`, `afternoon` or `evening`), made once per wording and cached; 404 when the voice isn't ElevenLabs |
 
 Settings travel in `settings.voice` (`PATCH /api/settings`): `{ provider: 'off' | 'browser' | 'elevenlabs', voiceId,
-voiceName, model, speakOffice, keepDays, speed, favourites, agentsSpeak }`, and listening in `settings.listen`: `{ provider: 'off' | 'browser' |
+voiceName, model, speakOffice, keepDays, speed, favourites, agentsSpeak, talk: 'off' | 'milestones' | 'regular' }`, and listening in `settings.listen`: `{ provider: 'off' | 'browser' |
 'elevenlabs', autoSend, handsFree }`. The snapshot has `voiceKeySet`, `voiceKeyHint` and `voiceCache`
 (`{ clips, bytes, saved, charsToday }`, `saved` being the message ids the ▶ can replay, `charsToday` the characters sent to ElevenLabs today); a `voiceKey` event follows every key change
 and a `voiceCache` event every change to the cache. A phone message's `voice` says who read it when it arrived. One clip is made at a time (20 s timeout); requests for a clip that's being made share that call.

@@ -7,6 +7,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { IT_ID, IT_MESSAGES_KEPT, IT_MESSAGES_SHOWN, itDeptSettings, loadIt, nextItJob, queueItJob, viaCeoBot, type ItJob, type ItView } from '../../shared/itDept.ts';
 import { argvLine, IT_LOG_SHOWN, type ItProposal } from '../../shared/itDesk.ts';
+import { itWatchSettings } from '../../shared/itWatch.ts';
 import { makeArtifacts, parseMessage } from '../../shared/chatParts.ts';
 import { ceoModelOn } from '../../shared/ceoRunsOn.ts';
 import { forwardText, isHarnessText, stripHarness } from '../../shared/chat.ts';
@@ -75,9 +76,10 @@ export abstract class SwarmItDept extends SwarmSetup {
     await this.itBot.stop();
   }
 
-  /** updateSettings' part: Settings → The IT department (the lead's next job starts on it), and the Telegram switch for IT's bot. */
-  protected itSettings(patch: { itDept?: unknown; notify?: unknown }) {
+  /** updateSettings' part: Settings → The IT department (the lead's next job starts on it), its Health thresholds, and the Telegram switch for IT's bot. */
+  protected itSettings(patch: { itDept?: unknown; notify?: unknown; itWatch?: unknown }) {
     if (patch.notify !== undefined) this.itBot.refresh();
+    if (patch.itWatch !== undefined) this.state.settings.itWatch = itWatchSettings(this.state.settings.itWatch, patch.itWatch);
     if (patch.itDept === undefined) return;
     this.state.settings.itDept = itDeptSettings(this.state.settings.itDept, patch.itDept);
     this.itChanged();
@@ -187,13 +189,13 @@ export abstract class SwarmItDept extends SwarmSetup {
     return (this.itBot as TelegramBot | undefined)?.secret() ?? null;
   }
 
-  /** IT's office tools: it_run, it_propose, it_health and it_ticket (server/ceoItTools.ts). */
+  /** IT's office tools: it_run, it_propose, it_recommend (itWatch.ts), it_health and it_ticket (server/ceoItTools.ts). */
   protected itTools(): OfficeTools {
-    return itOfficeTools({ itRun: (a) => this.itRun(a), itPropose: (a) => this.itPropose(a), itHealth: () => this.itHealth(), itTicket: (a) => this.itTicket(a) });
+    return itOfficeTools({ itRun: (a) => this.itRun(a), itPropose: (a) => this.itPropose(a), itRecommend: (a) => this.itRecommend(a), itHealth: () => this.itHealth(), itTicket: (a) => this.itTicket(a) });
   }
 
   /** it_health: the office's readings, compact. */
-  private itHealth(): string {
+  protected itHealth(): string {
     const d = this.state.itDesk;
     return JSON.stringify({ health: this.health.view(), watchdog: this.doctorView().slice(0, 10), waiting: d.waiting.map((p) => argvLine(p.argv)), recent: d.log.slice(0, Math.min(5, IT_LOG_SHOWN)).map((e) => ({ kind: e.kind, cmd: argvLine(e.argv), code: e.code, at: e.at })), tickets: this.state.itTickets.list.filter((t) => t.status === 'open').slice(0, 10).map((t) => ({ id: t.id, where: t.where, what: t.what, count: t.count, blocking: t.blocking })) }).slice(0, 8000);
   }
@@ -206,7 +208,7 @@ export abstract class SwarmItDept extends SwarmSetup {
     // A session carries on only on the coding agent that made it.
     const resume = this.state.it.sessionId && (this.state.it.sessionCli ?? 'claude') === cli ? this.state.it.sessionId : undefined;
     const how = this.sessionRuntime(a, resume);
-    Object.assign(a, { status: 'working' as AgentStatus, issueTitle: job.kind === 'chat' ? 'Answering the manager' : job.kind === 'ask' ? `${job.from}'s question` : job.kind === 'ticket' ? `Ticket #${job.id}` : `Checking ${job.line}`, startedAt: Date.now(), endedAt: null, lastError: null });
+    Object.assign(a, { status: 'working' as AgentStatus, issueTitle: job.kind === 'chat' ? 'Answering the manager' : job.kind === 'ask' ? `${job.from}'s question` : job.kind === 'ticket' ? `Ticket #${job.id}` : job.kind === 'watch' ? 'Looking at a health check' : `Checking ${job.line}`, startedAt: Date.now(), endedAt: null, lastError: null });
     if (job.kind === 'chat') this.itDelivery(job.messageIds, 'read');
     this.itChanged();
     await fs.mkdir(IT_DIR, { recursive: true }).catch(() => undefined);
@@ -268,7 +270,7 @@ export abstract class SwarmItDept extends SwarmSetup {
   // ---------- the IT desk's cards, and Telegram ----------
 
   /** To the manager's Telegram: IT's own bot, else the CEO's, labelled "IT:". Null when it went out, else why not. */
-  private async itTelegram(text: string, keyboard?: TgButton[][]): Promise<string | null> {
+  protected async itTelegram(text: string, keyboard?: TgButton[][]): Promise<string | null> {
     if (this.itBot.active()) return this.itBot.send(text, keyboard);
     if (this.telegram.active()) return this.telegram.send(viaCeoBot(text), keyboard);
     return 'Telegram isn\'t linked';
@@ -283,7 +285,7 @@ export abstract class SwarmItDept extends SwarmSetup {
   protected itRan(p: ItProposal, text: string, out: string, ran: { code: number | null } | null) {
     this.postIt('office', text, { notice: { details: out.trim() || '(no output)' } });
     void this.itTelegram(`${text}\n${out.trim().split('\n').slice(0, 8).join('\n')}`.slice(0, 1500));
-    if (ran && this.state.settings.itDept.on) this.enqueueIt({ kind: 'ran', line: argvLine(p.argv), code: ran.code, out, at: Date.now() });
+    if (ran && this.state.settings.itDept.on && !p.rec) this.enqueueIt({ kind: 'ran', line: argvLine(p.argv), code: ran.code, out, at: Date.now() });
   }
 
   /** A Run / Not now button on Telegram (IT's bot, or IT's card on the CEO's). */

@@ -343,8 +343,8 @@ export function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionH
       const kit = { text, s, use, detail, scale: (f: DemoFloor, call: { size: number; reason: string }) => scale(s, f, call) };
       const early = await ceoReply(kit, true); // "assign #3 to Ada" (#265): a command, even with the seeded chat's attachment
       if (early !== null) return early;
-      // "look into …": the step log (#150), before the files: the session's prompt may list the seeded chat's attachments
-      const round = await demoRound(text, s.floors, use, async (tool, line, out, error, ms) => (await step([{ kind: 'tool', tool, text: `⏺ ${line}` }], ms), step([{ kind: error ? 'error' : 'result', text: `  ⎿ ${out}` }], 300)), async (floor) => objectiveIds((await detail(floor)).charter)[0]);
+      // "look into …": the step log, long enough to hear two progress windows (#150, #286), before the files: the session's prompt may list the seeded chat's attachments
+      const round = await demoRound(text, s.floors, use, async (tool, line, out, error, ms = 3500) => (await step([{ kind: 'tool', tool, text: `⏺ ${line}` }], ms), step([{ kind: error ? 'error' : 'result', text: `  ⎿ ${out}` }], 300)), async (floor) => objectiveIds((await detail(floor)).charter)[0]);
       if (round) return round;
       const sent = sentFiles(opts.prompt); // files from the manager, or a document asked for: the demo makes one
       if (sent.length || wantsFile(text)) return demoMakeFiles({ step, read, use, cwd: opts.cwd }, s.floors, sent);

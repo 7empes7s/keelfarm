@@ -88,7 +88,7 @@ export async function demoRound(text: string, floors: (Floor & { pullRequests: {
   await step('WebFetch', 'Fetch https://example.com/joystick-study', '403 Forbidden', true);
   // "… thoroughly": a dozen more reads and a minute's test run, so the open live log outgrows the chat on a phone (#526)
   if (/\bthoroughly\b/i.test(text)) {
-    for (let i = 1; i <= 12; i++) await step('Read', `Read client/src/pocket/touch/part${i}.ts`, `Read ${20 * i} lines`);
+    for (let i = 1; i <= 12; i++) await step('Read', `Read client/src/pocket/touch/part${i}.ts`, `Read ${20 * i} lines`, false, 500);
     await step('Bash', 'Bash npm test -- joystick', 'All 48 tests passed', false, 60_000);
   }
   const withPr = floors.find((x) => x.pullRequests[0]?.number); // floor 1 may have none
