@@ -8,7 +8,7 @@ import { tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 import { runTool, toolServer, type OfficeTools } from './ceo.ts';
 import { TICKET_WHERE } from '../shared/itTickets.ts';
-import type { ItProposeArgs, ItRunArgs } from './swarm/itDesk.ts';
+import type { ItProposeArgs, ItRunArgs, ItRunbookArgs } from './swarm/itDesk.ts';
 import type { ItRecommendArgs } from './swarm/itWatch.ts';
 import type { ItImproveArgs } from './swarm/itImprove.ts';
 import { IMPROVE_KINDS } from '../shared/itImprove.ts';
@@ -33,6 +33,7 @@ export interface CloudflareHandlers {
 export interface ItHandlers extends CloudflareHandlers {
   itRun(a: ItRunArgs): Promise<string>;
   itPropose(a: ItProposeArgs): Promise<string>;
+  itRunbook(a: ItRunbookArgs): Promise<string>;
   itRecommend(a: ItRecommendArgs): string;
   itHealth(): string;
   itTicket(a: ItTicketArgs): Promise<string>;
@@ -82,6 +83,16 @@ function itTools(h: ItHandlers, run: Run) {
         risk: z.enum(['low', 'medium', 'high']),
       },
       (a) => run(() => h.itPropose(a)),
+    ),
+    tool(
+      'it_runbook',
+      "Run a floor's install runbook (markdown: ```bash lines, ```env <file> [from <template>] with NAME=generate or NAME=provider:<id>, ```caddy <host>, a Health check section) as ONE job: one card, progress per step, stop at the first failure, the check last, an Undo for all of it. Inside auto-approve (the project's /opt/<project>, /etc/<project>, <project>* units, its compose file, its clone, its Caddy block) it runs with no tap; else one Approve. Secrets are generated or come from Providers and never shown. Use it instead of it_propose for installs.",
+      {
+        floor: z.number().int().min(1).describe('The floor whose repo has the runbook'),
+        path: z.string().min(1).max(300).describe('Its path in the repo, e.g. "ops/postiz/RUNBOOK.md"'),
+        project: z.string().min(2).max(31).describe('What it installs, lower case: its scope is /opt/<project>, /etc/<project> and <project>* units, e.g. "postiz"'),
+      },
+      (a) => run(() => h.itRunbook(a)),
     ),
     tool(
       'it_recommend',

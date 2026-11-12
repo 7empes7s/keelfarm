@@ -11,6 +11,7 @@ import { localMachines, type MachineProvider } from './machines.ts';
 import { detectClis } from './clis.ts';
 import { npmInstall } from './cliInstall.ts';
 import { itExec, type ItExecResult } from './itExec.ts';
+import { machineFiles, type RunbookFiles } from './itFiles.ts';
 import { realCloudflareApi, type CfApi } from './cloudflare.ts';
 import { certExpiry } from './itChecks.ts';
 import { readPicks } from './picks.ts';
@@ -164,7 +165,9 @@ export interface Backend {
   /** Install a missing CLI's pinned npm package into `prefix` (#493). Never throws: how it went and its log's tail. */
   installCli(id: AgentCli, prefix: string): Promise<{ ok: boolean; tail: string[] }>;
   /** The IT desk (#506): one command on this machine, as argv without a shell. Never throws. */
-  itExec(argv: string[], timeoutMs: number): Promise<ItExecResult>;
+  itExec(argv: string[], timeoutMs: number, cwd?: string): Promise<ItExecResult>;
+  /** Runbook jobs (#611): the files their steps write (env files, the Caddyfile), backups and Undo; never through argv. */
+  itFiles: RunbookFiles;
   /** IT monitoring (#525): when a public hostname's TLS certificate expires (ms); throws when it can't be reached. */
   certExpiry(host: string): Promise<number>;
   /** OpenCode's own sign-in, `opencode auth login`, in `term` (#493). */
@@ -386,6 +389,7 @@ export const realBackend: Backend = {
   detectClis,
   installCli: (id, prefix) => npmInstall(id, { prefix }),
   itExec,
+  itFiles: machineFiles,
   certExpiry,
   opencodeSignIn: (term, exited) => startLocalSignIn({ cli: 'opencode', env: {}, term }, exited),
   quickPicks: () => readPicks(),
