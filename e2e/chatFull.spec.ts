@@ -1,4 +1,4 @@
-import { expect, test } from './helpers';
+import { expect, fullScreenChat, test } from './helpers';
 
 // The CEO chat full screen (#201): ⛶ covers the pages beside the rail (#242; or hides a phone's tab bar), and Esc or Back puts the
 // same layout back, the chat's scroll where it was.
@@ -12,7 +12,7 @@ for (const width of [390, 1280]) {
     await chat.evaluate((el) => (el.scrollTop = el.scrollHeight / 2));
     const top = await chat.evaluate((el) => el.scrollTop);
     for (const leave of [() => page.keyboard.press('Escape'), () => page.goBack()]) {
-      await root.getByRole('button', { name: 'Full screen chat', exact: true }).click();
+      await fullScreenChat(root);
       if (width > 1000) {
         await expect(root.locator('.pk-tabs')).toBeVisible();
         expect((await root.locator('.pk-dock').boundingBox())!.width).toBeGreaterThan(width * 0.85);

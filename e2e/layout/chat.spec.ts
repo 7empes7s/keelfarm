@@ -1,5 +1,5 @@
 import type { Locator, Page } from '@playwright/test';
-import { expect, test } from '../helpers';
+import { chatTool, expect, fullScreenChat, test } from '../helpers';
 import { checkScreens, dialog, MODES, PHONES, png, pocket, POCKET, type Screen } from './helpers';
 
 // The chat with the CEO: its screens, the message box on an iPhone (#73), the decisions tray (#114) and ref chips (#100).
@@ -12,7 +12,7 @@ const SCREENS: Screen[] = [
     widths: [390, 1280],
     open: async (page) => {
       const root = await pocket(page, 'chat');
-      await root.getByRole('button', { name: 'Full screen chat', exact: true }).click();
+      await fullScreenChat(root);
       await expect(root).toHaveClass(/pk-chat-full/);
       return root;
     },
@@ -109,7 +109,7 @@ const SCREENS: Screen[] = [
       if ((page.viewportSize()?.width ?? 0) >= 1200) await expect(root.locator('.pk-dock .chat-head')).toHaveCount(0);
       return root;
     },
-    tabs: ['', { name: 'charts', go: (root) => root.getByRole('button', { name: 'Charts', exact: true }).click() }, { name: 'more', go: (root) => root.getByRole('button', { name: /^More for the chat/ }).click() }],
+    tabs: ['', { name: 'charts', go: (root) => chatTool(root, 'Charts') }, { name: 'more', go: (root) => root.getByRole('button', { name: /^More for the chat/ }).click() }],
   },
 ];
 
@@ -255,7 +255,7 @@ for (const width of [1024, 1280, 1440, 1920]) {
     await page.goto('/?pocket=1&tab=chat');
     const root = page.locator('.pocket');
     if (!(await root.locator('.pk-dock').isVisible())) await root.locator('.pk-chat-btn').click();
-    await root.locator('.pk-dock').getByRole('button', { name: 'Full screen chat', exact: true }).click();
+    await fullScreenChat(root.locator('.pk-dock'));
     await expect(root).toHaveClass(/pk-chat-full/);
     const rail = root.locator('.pk-tabs');
     await expect(rail).toBeVisible();
@@ -267,7 +267,7 @@ for (const width of [1024, 1280, 1440, 1920]) {
     await rail.getByRole('button', { name: /Team/ }).click();
     await expect(root).not.toHaveClass(/pk-chat-full/);
     await expect(rail.getByRole('button', { name: /Team/ })).toHaveAttribute('aria-current', 'page');
-    await root.locator('.pk-dock').getByRole('button', { name: 'Full screen chat', exact: true }).click();
+    await fullScreenChat(root.locator('.pk-dock'));
     await expect(root).toHaveClass(/pk-chat-full/);
     await rail.getByRole('button', { name: /Console/ }).click();
     await expect(root).not.toHaveClass(/pk-chat-full/);
