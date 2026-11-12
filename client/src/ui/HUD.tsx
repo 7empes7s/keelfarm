@@ -314,7 +314,7 @@ export function HUD() {
       {started && !overlay && onFoot && (focus || sip) && !(isTouch && !sip && focus?.action.kind === 'terminal') && (
         <div className="hud-hint">
           {isTouch ? <kbd>Tap</kbd> : <Key action="interact" />} {!held && !isTouch && <>/ <kbd>Click</kbd> </>}
-          {sip ? sipLabel(held) : (dropLabel ?? focus?.label)}
+          <span className="hint-label">{sip ? sipLabel(held) : (dropLabel ?? focus?.label)}</span>
           {!held && focus?.action.kind === 'card' && focus.action.peel && (
             <>
               {' '}

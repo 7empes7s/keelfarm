@@ -184,6 +184,7 @@
   background: var(--paper);
   border-radius: 26px 26px 12px 12px;
   overflow: hidden;
+  overflow: clip; /* never scrolled, not even by the browser to show a focused field (#507): the thread scrolls in its log */
   display: flex;
   flex-direction: column;
 }
