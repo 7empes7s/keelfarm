@@ -3,7 +3,7 @@ import type { PongResult } from '../../shared/pong';
 import type { Charter } from '../../shared/charter';
 import type { ObjectiveStatus } from '../../shared/charterStats';
 import type { AgentStyle } from '../../shared/looks';
-import type { AccountCli, AccountKind, AgentCli, SignInMode, AgentPromptView, AgentView, CloudView, DoctorFinding, DoctorFix, EffortLevel, GhRepoSummary, MergedPage, NotifyChannel, NotifyChannelsView, NotifyWebhook, OfficeUpdateView, PushTestView, PreviewView, TelegramView, ProjectFolderView, PrPreviewView, RefFileView, RepoView, SwarmSettings, UsageView, VoiceCacheView, VoiceOption, MachineHost, McpServerConfig, ProviderConnection, ProviderUse, KeyScanView, UseCase } from '../../shared/types';
+import type { AccountCli, AccountKind, AgentCli, SignInMode, AgentPromptView, AgentView, CloudView, DoctorFinding, DoctorFix, EffortLevel, GhRepoSummary, MergedPage, NotifyChannel, NotifyChannelsView, NotifyWebhook, OfficeUpdateView, PushTestView, PreviewView, TelegramView, ProjectFolderView, PrPreviewView, RefFileView, RepoView, SwarmSettings, UsageView, VoiceCacheView, VoiceOption, MachineHost, McpServerConfig, ProviderConnection, ProviderUse, KeyScanView, UseCase, Capability, CapabilityChoice, ProvidersView } from '../../shared/types';
 import type { JournalChunk, JournalDayView } from '../../shared/journal';
 import type { CostsView, TaskKind } from '../../shared/costs';
 import type { ServerPoint } from '../../shared/serverLoad';
@@ -236,7 +236,11 @@ export const api = {
   demoLabUpdate: () => call<OfficeUpdateView>('POST', '/api/demo/lab-update'),
   /** Saves an Anthropic or OpenAI Admin key for the usage card's organisation spend (#361); '' removes it. */
   // Settings → Providers (#362): keys and MCP servers' secrets go in and never come back out.
-  addProvider: (provider: string, key: string, label?: string) => call<ProviderConnection>('POST', '/api/providers', { provider, key, label }, false),
+  addProvider: (provider: string, key: string, label?: string, accountId?: string) => call<ProviderConnection>('POST', '/api/providers', { provider, key, label, accountId }, false),
+  // Providers by what they do (#533): a capability's default and fallback, and a company's one sign-in.
+  setProviderDefault: (capability: Capability, choice: CapabilityChoice) => call<ProvidersView>('PUT', `/api/providers/defaults/${capability}`, choice),
+  setOAuthClient: (company: string, clientId: string, clientSecret: string) => call('PUT', `/api/providers/oauth/${encodeURIComponent(company)}/client`, { clientId, clientSecret }, false),
+  startOAuth: (company: string) => call<{ url: string }>('POST', `/api/providers/oauth/${encodeURIComponent(company)}/start`, { origin: location.origin }, false),
   updateProvider: (id: string, patch: { label?: string; tags?: string; usedFor?: ProviderUse }) => call<ProviderConnection>('PATCH', `/api/providers/${encodeURIComponent(id)}`, patch),
   testProvider: (id: string) => call<ProviderConnection>('POST', `/api/providers/${encodeURIComponent(id)}/test`),
   removeProvider: (id: string) => call('DELETE', `/api/providers/${encodeURIComponent(id)}`),

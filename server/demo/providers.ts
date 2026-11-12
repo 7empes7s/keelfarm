@@ -2,6 +2,8 @@
 // away, "offline" unreachable; OpenRouter, Runway, Luma and Kling tell a made-up credit, none for "nocredit"; Gemini and
 // OpenAI list their video and image models), a made-up key or server in every category for a fresh demo office (a dead
 // duplicate Cloudflare key among them, #523), and the keys found on this computer from a made-up archive (#367).
+// Company sign-ins (#533): the token exchange answers with made-up tokens, and each account's profile; a Cloudflare
+// token with "nodns" in it can't read DNS records, a GitHub token with "nopr" can't read pull requests.
 import type { ProbeRequest, ProbeResult } from '../../shared/providers.ts';
 import type { RawKey } from '../../shared/keyScan.ts';
 import { registerCeoReply, registerDemo } from './registry.ts';
@@ -26,6 +28,15 @@ export const DEMO_FOUND_KEYS: RawKey[] = [
 
 async function demoProbe(req: ProbeRequest): Promise<ProbeResult> {
   if (req.kind === 'command') return { status: /^(npx|node|uvx|docker)$/.test(req.command) ? 200 : 404 };
+  if (req.kind === 'form') return { status: 200, body: { access_token: `demo-access-${Date.now().toString(36)}`, refresh_token: req.form.refresh_token ?? 'demo-refresh-token', expires_in: 3600 } };
+  const auth = Object.values(req.headers).join(' ');
+  if (/\/dns_records/.test(req.url) && /nodns/i.test(auth)) return { status: 403, body: { success: false, errors: [{ code: 10000, message: 'Authentication error' }] } };
+  if (req.url.includes('api.cloudflare.com') && req.url.includes('/zones?')) return { status: 200, body: { result: [{ id: 'demo-zone-0001', name: 'example.com' }] } };
+  if (/api\.github\.com\/repos\/.+\/pulls/.test(req.url) && /nopr/i.test(auth)) return { status: 403, headers: { 'x-accepted-github-permissions': 'pull_requests=read' }, body: { message: 'Resource not accessible by personal access token' } };
+  if (req.url.includes('openidconnect.googleapis.com')) return { status: 200, body: { email: 'manager@example.com' } };
+  if (req.url.includes('graph.facebook.com')) return { status: 200, body: { name: 'Demo Studio' } };
+  if (req.url.includes('open.tiktokapis.com')) return { status: 200, body: { data: { user: { display_name: 'demo.studio' } } } };
+  if (req.url.includes('graph.microsoft.com')) return { status: 200, body: { userPrincipalName: 'manager@example.com' } };
   if (Object.values(req.headers).some((v) => /bad/i.test(v))) return { status: 401 };
   if (Object.values(req.headers).some((v) => /offline/i.test(v))) return { status: 0 };
   if (req.url.includes('openrouter.ai')) return { status: 200, body: { data: { label: 'demo', usage: 3.4, limit: 10, limit_remaining: Object.values(req.headers).some((v) => /nocredit/i.test(v)) ? 0 : 6.6 } } };

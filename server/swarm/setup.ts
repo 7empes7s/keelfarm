@@ -5,6 +5,7 @@ import { HttpError } from '../httpError.ts';
 import { resolveAccount } from '../../shared/accounts.ts';
 import { rotationSettings } from '../../shared/accountRotation.ts';
 import { modelProvider, providerDef } from '../../shared/providers.ts';
+import { connectionCategories } from '../../shared/capabilities.ts';
 import { blockedAgents, openGaps, setupGaps, setupLine, snooze, toTell, type SetupAgent, type SetupInput } from '../../shared/setup.ts';
 import { itemState } from '../../shared/tooling.ts';
 import { themeAfterUseCase } from '../../shared/floorThemes.ts';
@@ -140,7 +141,7 @@ export abstract class SwarmSetup extends SwarmDisk {
   /** Every floor's gaps again: changed floors go out, new gaps are told once, blocked agents are known. */
   protected refreshFloorSetup() {
     const accounts = this.accounts.view().accounts;
-    const providers = new Set<ProviderCategory>(this.providers.view().connections.filter((c) => c.test?.ok !== false).flatMap((c) => providerDef(c.provider)?.category ?? []));
+    const providers = new Set<ProviderCategory>(this.providers.view().connections.filter((c) => c.test?.ok !== false).flatMap(connectionCategories));
     if (this.voice.keyView().voiceKeySet) providers.add('audio');
     if (this.cloud.view().keySet) providers.add('cloud');
     const now = Date.now();

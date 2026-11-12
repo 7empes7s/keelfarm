@@ -33,7 +33,7 @@ export interface SetupInput {
 /** A label inside a sentence: "web app", but "API" and "3D / browser game" keep their capitals. */
 const lower = (label: string) => (label[1] === label[1].toLowerCase() ? label[0].toLowerCase() + label.slice(1) : label);
 
-const CATEGORY: Record<ProviderCategory, string> = { coding: 'coding agent', text: 'text model', audio: 'voice', video: 'video', image: 'image', cloud: 'cloud', mcp: 'MCP server' };
+const CATEGORY: Record<ProviderCategory, string> = { coding: 'coding agent', text: 'text model', audio: 'voice', video: 'video', image: 'image', cloud: 'cloud', signin: 'company sign-in', mcp: 'MCP server' };
 
 /** Every gap between a floor's setup and its use case's recommendation, most blocking first. */
 export function setupGaps(x: SetupInput): SetupGap[] {

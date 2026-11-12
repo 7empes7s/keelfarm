@@ -9,6 +9,7 @@ import { Providers } from '../providers.ts';
 import { CliSetup, cliBinDir, cliPrefix } from '../cliInstall.ts';
 import { useOfficeCliBin } from '../clis.ts';
 import { providerCards, providerDef, providersLine, type McpInput } from '../../shared/providers.ts';
+import { capabilitiesLine, capabilityRoutes } from '../../shared/capabilities.ts';
 import { checkRequest, checkResult, foundView, importName, importSource, keyScanText, mergeFound, scanSummary, type FoundKey } from '../../shared/keyScan.ts';
 import { redact } from '../../shared/journal.ts';
 import type { KeyScanView, ProvidersView, WorldSnapshot } from '../../shared/types.ts';
@@ -20,6 +21,8 @@ export abstract class SwarmProviders extends SwarmCloudCredit {
     secretsFile: path.join(HOME_DIR, this.backend.demo ? 'demo-providers-secrets.json' : 'secrets.json'),
     probe: (req) => this.backend.providerProbe(req),
     changed: (view) => this.providersChanged(view),
+    fakeConsent: this.backend.demo,
+    repo: () => this.state.repos[0]?.fullName,
   });
 
   /** Coding-agent CLIs installed from Settings (#493): looked for at startup and again after an install or "Check again". */
@@ -60,21 +63,20 @@ export abstract class SwarmProviders extends SwarmCloudCredit {
     for (const m of seed.mcp) await this.providers.addMcp(m);
   }
 
-  /** The CEO's company_status line: every connection, whatever stores it. */
+  /** The CEO's company_status line: every connection, whatever stores it, then where each capability goes (#533). */
   protected providersLine(): string {
     const names = new Map(this.state.agents.map((a) => [a.id, a.name]));
-    return providersLine(
-      providerCards({
-        accounts: this.accounts.view().accounts,
-        voiceKeySet: this.voice.keyView().voiceKeySet,
-        voiceKeyHint: '',
-        cloud: this.cloud.view(),
-        providers: this.providers.view(),
-        clis: this.clis,
-        agentName: (id) => names.get(id) ?? id,
-        cloudAgents: this.state.agents.filter((a) => a.host === 'box').length,
-      }),
-    );
+    const cards = providerCards({
+      accounts: this.accounts.view().accounts,
+      voiceKeySet: this.voice.keyView().voiceKeySet,
+      voiceKeyHint: '',
+      cloud: this.cloud.view(),
+      providers: this.providers.view(),
+      clis: this.clis,
+      agentName: (id) => names.get(id) ?? id,
+      cloudAgents: this.state.agents.filter((a) => a.host === 'box').length,
+    });
+    return `${providersLine(cards)}\n${capabilitiesLine(capabilityRoutes(cards, this.providers.view().defaults))}`;
   }
 
   addMcpServer(input: McpInput & { secrets?: Record<string, string> }) {
