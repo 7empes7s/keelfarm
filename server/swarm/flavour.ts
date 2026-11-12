@@ -1,7 +1,7 @@
 // Flavour for new floors and agents: colours, names and looks.
 import { HAIR_COLORS, SKIN_TONES } from '../../shared/looks.ts';
 import type { AgentLook } from '../../shared/types.ts';
-export { FLOOR_THEMES } from '../../shared/floorThemes.ts'; // the demo's floor N, the Nth floor theme (#370, #371)
+export { FLOOR_THEMES, upgradeFloorTheme } from '../../shared/floorThemes.ts'; // the demo's floor N, the Nth floor theme (#370, #371)
 
 // ---------- flavour ----------
 
