@@ -90,6 +90,19 @@
 }
 .it-imp-acts {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: var(--ds-space-2);
   margin-left: auto;
+}
+/* Approve couldn't apply it (#580): said plainly, not as an error */
+.it-imp-full {
+  display: flex;
+  gap: var(--ds-space-2);
+  align-items: flex-start;
+  margin: 0;
+  padding: var(--ds-space-2);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-sunken);
+  overflow-wrap: anywhere;
 }

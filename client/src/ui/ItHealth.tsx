@@ -23,7 +23,7 @@ const LEVEL: Record<ItCheckLevel, { icon: IconName; word: string }> = {
 const RISK: Record<ItRisk, string> = { low: 'Low risk', medium: 'Medium risk', high: 'High risk' };
 const clock = (at: number) => new Date(at).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' });
 
-function RecCard({ r }: { r: ItRecommendation }) {
+export function RecCard({ r }: { r: ItRecommendation }) {
   const [busy, setBusy] = useState(false);
   const act = (fn: () => Promise<unknown>) => {
     setBusy(true);

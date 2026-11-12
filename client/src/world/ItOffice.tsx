@@ -272,9 +272,13 @@ export function ItOffice() {
   const r = IT_ROOM;
   const { level, rows } = useItReadings();
   const door = (r.doorMinZ + r.doorMaxZ) / 2;
+  // the whole room opens the IT department (#580); the lead's desk inside keeps its own label
+  const room = useInteractable<THREE.Group>({ id: 'it-office', label: 'The IT office: open the IT department', action: { kind: 'manager', tab: 'it-dept' } }, 5);
   return (
-    <group>
+    <>
+      {/* the rug stays out of the click: tapping the floor still walks there */}
       <Rug position={[(r.minX + r.maxX) / 2, 0.005, (r.minZ + r.maxZ) / 2]} size={[r.maxX - r.minX, r.maxZ - r.minZ]} color="#d8f3dc" />
+      <group ref={room}>
       <GlassWall from={[r.minX, r.minZ]} to={[r.minX, r.doorMinZ]} />
       <GlassWall from={[r.minX, r.doorMaxZ]} to={[r.minX, r.maxZ]} />
       <Box size={[0.1, 0.5, r.doorMaxZ - r.doorMinZ]} position={[r.minX, 2.55, door]} color="#8d99ae" />
@@ -296,6 +300,7 @@ export function ItOffice() {
       />
       <Model name="plant" at={[IT_PLANT]} size={[0.6, 1.2, 0.6]} fallback={(p) => <Plant position={[p.x, 0, p.z]} pot={IT_ACCENT} />} />
       <Model name="bin" at={[IT_BIN]} size={[0.34, 0.5, 0.34]} fallback={(p) => <Cyl r={0.16} h={0.45} position={[p.x, 0.225, p.z]} color="#adb5bd" outline />} />
-    </group>
+      </group>
+    </>
   );
 }

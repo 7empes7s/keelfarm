@@ -65,7 +65,7 @@ describe("IT's records and the weekly review's cards", () => {
     expect(x.itImprove({ proposals: [{ cause: 'lab:test lab oom', kind: 'issue', floor: 2, title: 'Run the lab suite with 2 workers', why: '1 ticket', body: 'What, where, acceptance.' }] })).toMatch(/^1 card for the manager/);
     const card = x.state.itImprove.cards[0];
     expect(filed).toEqual([]); // nothing changes without a tap
-    const { change } = await swarm.improveApprove(card.id);
+    const { change } = (await swarm.improveApprove(card.id)) as Extract<Awaited<ReturnType<Swarm['improveApprove']>>, { change: unknown }>;
     expect(filed).toEqual([expect.objectContaining({ fullName: floor2.fullName, title: 'Run the lab suite with 2 workers', body: expect.stringContaining('What, where, acceptance.') })]);
     expect(change).toMatchObject({ floor: 2, issue: expect.any(Number), url: `https://github.com/${floor2.fullName}/issues/${change.issue}` });
     expect(x.state.itImprove.cards).toEqual([]);
@@ -96,6 +96,25 @@ describe("IT's records and the weekly review's cards", () => {
     expect(await x.itDecide('decline', skip.id)).toBe('✋ Not now.');
     expect(x.state.itImprove.cards).toEqual([]);
     expect(x.state.itImprove.changes.map((c) => c.kind).sort()).toEqual(['office_playbook', 'qa_brief']);
+  });
+
+  it('an Approve that would put a QA brief over its limit says so on the card, no error; Ask the CEO to fit it messages the CEO (#580)', async () => {
+    const { swarm, x, dennis } = await office();
+    const profile = vi.spyOn(x, 'setFloorProfile');
+    const floor1 = x.state.repos.find((r) => r.floor === 1)!;
+    floor1.qaBrief = 'x'.repeat(2490);
+    x.itReport(oom, dennis);
+    await x.itTicket({ id: 1, close: 'ok' });
+    x.itImprove({ proposals: [{ cause: 'lab:test lab oom', kind: 'qa_brief', floor: 1, title: 'QA', why: '', line: 'Check the lab ran with 2 workers.' }] });
+    const card = x.state.itImprove.cards[0];
+    await expect(swarm.improveApprove(card.id)).resolves.toEqual({ full: "Floor 1's QA brief is full: with this line it would be 2526 characters, over its 2500. Ask the CEO to make room for it." });
+    expect(profile).not.toHaveBeenCalled();
+    expect(x.state.itImprove.cards).toEqual([expect.objectContaining({ id: card.id, full: expect.stringMatching(/is full/) })]);
+    expect(await x.itDecide('approve', card.id)).toMatch(/^✋ Floor 1's QA brief is full/); // Telegram's Approve says the same
+    const messageCeo = vi.spyOn(swarm, 'messageCeo').mockResolvedValue({ id: 7 });
+    await expect(swarm.improveFit(card.id)).resolves.toEqual({ message: 7 });
+    expect(messageCeo).toHaveBeenCalledWith(expect.stringMatching(/floor 1's QA brief, but it's full \(2490 of 2500 characters\)[\s\S]*set_floor_profile \(qa_brief\):\nCheck the lab ran with 2 workers\.$/));
+    expect(x.state.itImprove.cards).toEqual([]);
   });
 
   it("the CEO bot's Approve / Not now reach IT's cards when IT has no bot of its own; two taps at once file one issue", async () => {

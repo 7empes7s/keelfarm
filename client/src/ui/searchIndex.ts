@@ -61,6 +61,7 @@ export function buildIndex(s: IndexInput): Item[] {
     { id: 'act:mandate', kind: 'action', icon: 'scroll-text', label: 'Add a standing mandate', sub: 'CEO · The CEO', target: { kind: 'section', section: 'ceo' } },
     { id: 'act:guide', kind: 'action', icon: 'circle-check', label: 'Get the most out of the office', sub: 'The setup checklist', target: { kind: 'guide' } },
     { id: 'act:previews', kind: 'action', icon: 'monitor', label: 'Previews', sub: 'Every live app and PR preview', target: { kind: 'overlay', overlay: { kind: 'previews' } } },
+    { id: 'act:it', kind: 'action', icon: 'wrench', label: 'IT department', sub: "This machine's health and IT's cards", target: { kind: 'section', section: 'it-dept' } }, // #580
   );
   if (s.fullscreen) items.push({ id: 'act:browser-full', kind: 'action', icon: 'maximize', label: 'Full screen (browser)', sub: 'Top bar · F11', target: { kind: 'fullscreen' } });
   // the 3D office's Options: what a phone's top bar leaves out (#406); the browser's full screen is the action above

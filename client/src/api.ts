@@ -192,6 +192,7 @@ export const api = {
   itSnooze: (id: string) => call('POST', `/api/it/recs/${encodeURIComponent(id)}/snooze`, {}),
   itReviewNow: () => call('POST', '/api/it/improve/review', {}),
   itImproveApprove: (id: string) => call('POST', `/api/it/improve/${encodeURIComponent(id)}/approve`, {}),
+  itImproveFit: (id: string) => call('POST', `/api/it/improve/${encodeURIComponent(id)}/fit`, {}),
   itImproveDismiss: (id: string) => call('POST', `/api/it/improve/${encodeURIComponent(id)}/dismiss`, {}),
   itTelegramDemo: (kind: 'start' | 'message' | 'approve' | 'decline', text = '') => call('POST', '/api/it/telegram/demo', { kind, text }),
   diskSettings: (patch: Partial<DiskSettings>) => call<DiskSettings>('PATCH', '/api/disk/settings', patch),

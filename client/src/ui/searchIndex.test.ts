@@ -39,6 +39,7 @@ describe('search everything', () => {
     expect(first('two seconds', 'objective')?.target).toEqual({ kind: 'section', section: 'charter', repoId: 'acme/shop' });
     expect(first('roadmap', 'message')?.target).toEqual({ kind: 'ceo' });
     expect(first('q4', 'artifact')?.label).toBe('Q4 roadmap');
+    expect(searchAll('IT', items, [])[0]?.items[0]).toMatchObject({ label: 'IT department', target: { kind: 'section', section: 'it-dept' } }); // #580
   });
 
   it('runs the actions', () => {

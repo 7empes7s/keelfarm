@@ -60,6 +60,8 @@ export interface ItImproveCard {
   line?: string; // the playbooks' and QA brief's added line
   at: number;
   by: string;
+  /** Approve couldn't apply it (the text would go over its limit): said plainly on the card, with Ask the CEO to fit it. */
+  full?: string;
 }
 
 /** An approved card: what changed, and where. */
@@ -261,6 +263,24 @@ export function withLine(text: string, line: string): string | null {
   const bullet = line.startsWith('- ') ? line : `- ${line}`;
   if (text.includes(line.replace(/^- /, ''))) return null;
   return text.trim() ? `${text.trimEnd()}\n${bullet}` : bullet;
+}
+
+/** Where a line card adds its line, in words: "the office playbook", "floor 3's QA brief". */
+export const cardPlace = (c: Pick<ItImproveCard, 'kind' | 'floor'>) => (c.kind === 'office_playbook' ? 'the office playbook' : `floor ${c.floor}'s ${c.kind === 'qa_brief' ? 'QA brief' : 'playbook'}`);
+
+/** A card's line added to a text of at most `max` characters: the next text (null: it's there already), or the card's plain words when it won't fit. */
+export function fitLine(c: Pick<ItImproveCard, 'kind' | 'floor' | 'line'>, text: string, max: number): { next: string | null } | { full: string } {
+  const next = withLine(text, c.line ?? '');
+  if (next === null || next.length <= max) return { next };
+  const place = cardPlace(c);
+  return { full: `${place[0].toUpperCase()}${place.slice(1)} is full: with this line it would be ${next.length} characters, over its ${max}. Ask the CEO to make room for it.` };
+}
+
+/** The manager's message to the CEO from Ask the CEO to fit it: shorten the text, then add the line. */
+export function fitAsk(c: Pick<ItImproveCard, 'kind' | 'floor' | 'line' | 'by'>, length: number, max: number): string {
+  const place = cardPlace(c);
+  const tool = c.kind === 'office_playbook' ? 'set_office_playbook' : `set_floor_profile (${c.kind === 'qa_brief' ? 'qa_brief' : 'playbook'})`;
+  return `${c.by} (IT) proposed adding this line to ${place}, but it's full (${length} of ${max} characters). Please shorten ${place} so it fits, keeping what matters, then add the line with ${tool}:\n${c.line}`;
 }
 
 /** An approved card: off the list, into the changes, and its cause's records link to it. */

@@ -14,6 +14,9 @@ export type NoticeStep =
   | { kind: 'call'; call: 'reset' | 'ceoRetry'; agentId: string }
   | null;
 
+/** IT's cards (#580): the IT department's page. */
+const OPEN_IT: NoticeStep = { kind: 'overlay', overlay: { kind: 'manager', tab: 'it-dept' } };
+
 /** Tapping the notice itself: its target, else the chat (the CEO) or the approvals (a team change). */
 export function noticeJump(n: Pick<NoticeView, 'kind' | 'target' | 'requestId'>, mode: 'office' | 'pocket', w: RefWorld): NoticeStep {
   if (n.kind === 'setup') return noticeStep('setup', n, mode, w);
@@ -22,6 +25,7 @@ export function noticeJump(n: Pick<NoticeView, 'kind' | 'target' | 'requestId'>,
   if (n.kind === 'ceo') return { kind: 'chat' };
   if (n.kind === 'approval') return { kind: 'approvals', ...(n.requestId && { requestId: n.requestId }) };
   if (n.kind === 'keys') return { kind: 'keys' };
+  if (n.kind === 'it') return OPEN_IT;
   return n.target ? jumpFor({ ...n.target, start: 0, end: 0 }, mode, w) : null;
 }
 
@@ -58,5 +62,7 @@ export function noticeStep(a: NoticeAction, n: Pick<NoticeView, 'target' | 'requ
       return t?.kind === 'floor' && w.repos.some((r) => r.id === t.repoId) ? { kind: 'overlay', overlay: { kind: 'manager', tab: 'floors', repoId: t.repoId } } : null;
     case 'reviewKeys':
       return { kind: 'keys' };
+    case 'openIt':
+      return OPEN_IT;
   }
 }
