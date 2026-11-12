@@ -16,6 +16,7 @@ import { cloudflareVerify, missingClassicScopes, missingNote, permissionSteps, r
 import { CAPABILITIES } from '../shared/capabilities.ts';
 import type { Capability, CapabilityChoice, KeyMint, McpServerConfig, ProviderConnection, ProvidersView, ProviderTest, ProviderUse } from '../shared/types.ts';
 import type { KeyInstall } from '../shared/keyInstall.ts';
+import { gcloudProbe } from './gcloudAuth.ts';
 
 const keyOf = (id: string) => `provider:${id}`; // a sign-in's refresh token (Meta's long-lived token)
 const accessOf = (id: string) => `oauth-access:${id}`; // a sign-in's access token
@@ -196,7 +197,19 @@ export class Providers {
     this.keys.set(keyOf(c.id), key);
     this.data.connections.push(c);
     await this.save();
-    return testRequest(provider, key) || provider === 'cloudflare' ? this.test(c.id) : { ...c }; // Postiz and Other keys have no test call
+    return testRequest(provider, key) || provider === 'cloudflare' || provider === 'gcloud' ? this.test(c.id) : { ...c }; // Postiz and Other keys have no test call
+  }
+
+  /** A key the office got from a provider (#622): saved, or the one of that provider and name given the new value. */
+  async saveByName(provider: string, value: string, label: string, usedBy: string): Promise<string> {
+    const c = this.data.connections.find((x) => x.provider === provider && x.label === label);
+    if (!c) return (await this.add(provider, value, label, '', '', { usedBy })).label;
+    if (this.keys.get(keyOf(c.id)) === value) return c.label;
+    await mergeSecrets(this.deps.secretsFile, { [keyOf(c.id)]: value });
+    this.keys.set(keyOf(c.id), value);
+    c.keyHint = keyHint(value);
+    await this.test(c.id).catch(() => this.save());
+    return c.label;
   }
 
   /** Rename and tags (#523): its name (empty: the provider's), tags and what it's for. A name set here stays. */
@@ -252,8 +265,8 @@ export class Providers {
       }
     }
     const req = c.provider === 'cloudflare' && c.accountId ? cloudflareVerify(key, c.accountId) : testRequest(c.provider, c.provider === 'kling' ? klingToken(key) : key);
-    if (!req) throw new HttpError(400, `${c.label} is tested in its own settings.`);
-    let r = await this.deps.probe(req);
+    if (!req && c.provider !== 'gcloud') throw new HttpError(400, `${c.label} is tested in its own settings.`);
+    let r = req ? await this.deps.probe(req) : await gcloudProbe(key, this.deps.probe); // a service account: a token, then its project
     // an Account ID beside a user token: the user's verify call is the right one
     if (c.provider === 'cloudflare' && c.accountId && r.status >= 400 && r.status < 500) r = await this.deps.probe(cloudflareVerify(key));
     const ok = r.status >= 200 && r.status < 300;

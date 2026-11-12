@@ -15,7 +15,7 @@ import { IMPROVE_KINDS } from '../shared/itImprove.ts';
 import { problemTools, type ProblemHandlers } from './ceoProblemTools.ts';
 import { CF_OPS } from '../shared/cloudflare.ts';
 import { ACTION_PROVIDERS, PROVIDER_ACTIONS } from '../shared/providerActions.ts';
-import { INSTALL_TARGETS, type KeyPart } from '../shared/keyInstall.ts';
+import { APP_TARGETS, INSTALL_TARGETS, type KeyPart } from '../shared/keyInstall.ts';
 import { PROVIDERS } from '../shared/providers.ts';
 
 /** The cloudflare action's arguments (#586). */
@@ -51,7 +51,9 @@ export interface InstallKeyArgs {
 export interface SaveKeyArgs {
   provider: string;
   label?: string;
-  value: string;
+  value?: string;
+  /** #622: a file sent in chat holding the key (a service account's JSON), deleted once saved. */
+  file?: string;
   uses?: string;
 }
 
@@ -221,10 +223,10 @@ export function cloudflareTools(h: CloudflareHandlers, run: Run) {
     ),
     tool(
       'install_key',
-      `Install a Settings → Providers key into a service's env file as VAR=value (the value never reaches you, a card or a log): a card with Approve / Not now, or at once with the manager's IT auto-approve; the file keeps its other lines, mode 600, a backup kept, then its unit restarts. The only way to write a credential file. Targets: ${INSTALL_TARGETS.map((t) => `${t.file} (${t.name})`).join(', ')}.`,
+      `Install a Settings → Providers key into a service's env file as VAR=value (the value never reaches you, a card or a log): a card with Approve / Not now, or at once with the manager's IT auto-approve; the file keeps its other lines, mode 600, a backup kept, then its unit restarts. The only way to write a credential file. Targets: ${INSTALL_TARGETS.map((t) => `${t.file} (${t.name})`).join(', ')}; or an app's own Settings, then its Test: ${APP_TARGETS.map((t) => `"${t.id}"`).join(', ')}.`,
       {
         key: z.string().min(1).max(80).describe('The Providers key: its id, name, or provider when it has one key, e.g. "openai"'),
-        target: z.string().min(2).max(300).describe('One of the env files above, e.g. "/etc/clipfarm/clipfarm.env"'),
+        target: z.string().min(2).max(300).describe('One of the targets above, e.g. "/etc/clipfarm/clipfarm.env" or "clipfarm app"'),
         var_name: z.string().min(1).max(64).describe('e.g. "OPENAI_API_KEY"'),
         part: z.enum(['id', 'secret']).optional().describe('For an "id:secret" pair (Twitch): which half, e.g. TWITCH_CLIENT_ID → id'),
         why: z.string().min(1).max(300).optional().describe('For the card: why, in a sentence'),
@@ -233,10 +235,11 @@ export function cloudflareTools(h: CloudflareHandlers, run: Run) {
     ),
     tool(
       'save_provider_key',
-      'The manager pasted a key in chat: save it in Settings → Providers right away (tested where the provider allows), and the chat shows "•••• (saved to Providers as …)" instead of it. Then install_key puts it where it is used. Never repeat the value in your reply.',
+      'The manager pasted a key in chat (value), or sent it as a file (file: its id; a Google Cloud service account JSON): save it in Settings → Providers right away (tested where the provider allows); the chat shows "•••• (saved to Providers as …)" instead of a pasted one, and a file is deleted. Then install_key puts it where it is used. Never repeat the value in your reply.',
       {
         provider: z.enum(PROVIDERS.filter((p) => p.home === 'providers' && p.auth === 'api-key').map((p) => p.id) as [string, ...string[]]).describe('e.g. "openai", "twitch", "youtube", "postiz", or "other-key" for anything else'),
-        value: z.string().min(1).max(400).describe('The key exactly as pasted; Twitch: "client_id:client_secret"'),
+        value: z.string().min(1).max(400).optional().describe('The key exactly as pasted; Twitch: "client_id:client_secret"'),
+        file: z.string().regex(/^[a-f0-9]{24}$/).optional().describe('Instead of value: the file id of a key file sent in chat'),
         label: z.string().min(1).max(60).optional().describe('Its name, e.g. "Twitch (clipfarm)"'),
         uses: z.string().min(1).max(200).optional().describe('What uses it, e.g. "clipfarm transcription"'),
       },

@@ -4,6 +4,7 @@
 // the manager's card) and applied under IT auto-approve's levels (#585): routine writes apply by themselves from
 // "routine", ordinary changes only at "all", destructive ones always ask. The modules are in server/providerActions/.
 import type { ItAutoLevel } from './itDept';
+import { GCLOUD_SERVICES } from './gcloud.ts';
 
 export type ActionRisk = 'read' | 'routine' | 'change' | 'destructive';
 
@@ -53,6 +54,13 @@ export const PROVIDER_ACTIONS: Record<string, ActionOp[]> = {
   cerebras: INFERENCE,
   nvidia: INFERENCE,
   elevenlabs: [KEY_TEST, { op: 'voices', risk: 'read', does: 'list voices' }, { op: 'usage', risk: 'read', does: 'read character usage' }],
+  // #622: the office's service account; enabling an allow-listed API is routine, a key is a change
+  gcloud: [
+    { op: 'key_test', risk: 'read', does: 'test the service account' },
+    { op: 'services_enable', risk: 'routine', does: 'enable Google APIs', args: `{ services: [${GCLOUD_SERVICES.map((s) => `"${s}"`).join(', ')}] }`, needs: 'Service Usage Admin' },
+    { op: 'api_key_ensure', risk: 'change', does: 'make API keys restricted to an API', args: '{ name, apis: ["youtube.googleapis.com"] }', needs: 'API Keys Admin' },
+    { op: 'api_key_delete', risk: 'destructive', does: 'delete an API key', args: '{ name }', needs: 'API Keys Admin' },
+  ],
   upstash: [
     { op: 'boxes', risk: 'read', does: 'list boxes' },
     { op: 'box_resume', risk: 'routine', does: 'resume a box', args: '{ id }' },

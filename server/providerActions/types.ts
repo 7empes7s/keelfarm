@@ -8,8 +8,11 @@ import type { CfSecretFile } from '../cfSecretFile.ts';
 import type { ProviderChange } from '../../shared/providerActions.ts';
 import type { KeyMint } from '../../shared/types.ts';
 
-/** How the key goes on a request: a bearer token, ElevenLabs' header, or GitHub's bearer with its API headers. */
-type ActionAuth = 'bearer' | 'xi-api-key' | 'github';
+/**
+ * How the key goes on a request: a bearer token, ElevenLabs' header, GitHub's bearer with its API headers, a Google
+ * service account's JSON (an access token minted from it, #622) or a Cloudflare Access service token "id:secret".
+ */
+type ActionAuth = 'bearer' | 'xi-api-key' | 'github' | 'google-sa' | 'cf-access';
 
 export interface ActionRequest {
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -48,6 +51,10 @@ export interface ActionCtx {
   secretFile?: (envFile: string | undefined, name: string) => CfSecretFile;
   /** Saves a key the office made (#609) as its own Providers key; returns its name. */
   saveMinted?: (k: { provider: string; value: string; label: string; expiresAt: number; mint: KeyMint }) => Promise<string>;
+  /** Saves (or replaces by name) a key the office got from a provider (#622: a Google API key); returns its name. */
+  saveKey?: (k: { provider: string; label: string; value: string; usedBy: string }) => Promise<string>;
+  /** Whether Providers has a key of that provider by that name. */
+  savedKey?: (provider: string, label: string) => boolean;
 }
 
 /** A write's plan: the change for its card (no key in it), a one-line summary, its before and after. */

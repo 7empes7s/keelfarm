@@ -16,12 +16,43 @@ export const INSTALL_TARGETS: readonly InstallTarget[] = [
   { file: '/opt/postiz/.env', unit: 'postiz.service', name: 'Postiz' },
 ];
 
+/**
+ * An app the office sets a key in through its own Settings API (#622), over a Cloudflare Access service token: each
+ * variable's settings group, and the token's env file (what access_service_token_ensure writes for `access` by default).
+ */
+export interface AppTarget {
+  id: string;
+  name: string;
+  url: string;
+  groups: Record<string, string>;
+  access: string;
+}
+
+export const APP_TARGETS: readonly AppTarget[] = [
+  {
+    id: 'clipfarm app',
+    name: 'clipfarm',
+    url: 'https://clip.techinsiderbytes.com',
+    groups: { OPENAI_API_KEY: 'openai', TWITCH_CLIENT_ID: 'twitch', TWITCH_CLIENT_SECRET: 'twitch', YOUTUBE_API_KEY: 'youtube', POSTIZ_API_KEY: 'postiz', UPLOAD_POST_API_KEY: 'upload-post' },
+    access: 'clipfarm',
+  },
+];
+
+export const appTarget = (id: string) => APP_TARGETS.find((t) => t.id === id);
+
+/** Why setting this variable in that app is refused, or null. */
+export function appInstallRefusal(t: AppTarget, varName: string): string | null {
+  return t.groups[varName] ? null : `${t.name}'s Settings have no ${varName} (it takes ${Object.keys(t.groups).join(', ')}).`;
+}
+
 /** One key installed into a target, kept on its Providers connection (no value): renewals install into the same. */
 export interface KeyInstall {
   file: string;
   var: string;
   unit?: string;
   part?: KeyPart;
+  /** An app install's value's last 4 characters: the same key again changes nothing. */
+  hint?: string;
 }
 
 /** Which half of a paired key ("client id:secret", Twitch's and Kling's): the whole value when absent. */
