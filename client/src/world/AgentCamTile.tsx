@@ -36,7 +36,7 @@ function camRoot() {
     await root.configure({
       size: { width: CAM_CSS, height: CAM_CSS, top: 0, left: 0 },
       dpr: CAM_PX / CAM_CSS,
-      gl: { antialias: true, preserveDrawingBuffer: true },
+      gl: { antialias: false, preserveDrawingBuffer: true }, // drawn at 2× its size already: no MSAA, which software WebGL pays dearly for
       camera: { fov: 34, near: 0.1, far: 20, position: [0.05, 1.52, 2.05] },
       frameloop: 'never',
       onCreated: ({ camera }) => camera.lookAt(LOOK_AT),

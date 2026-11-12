@@ -74,9 +74,9 @@ describe('camDue', () => {
   it('draws fewer frames when they are dear, so the office keeps its frame rate', () => {
     expect(camFps(0)).toBe(CAM_FPS);
     expect(camFps(5)).toBe(CAM_FPS);
-    expect(camFps(100)).toBeCloseTo(2);
-    expect(camDue(1100, 1000, shown, 100)).toBe(false); // 100 ms frames: one every 500 ms
-    expect(camDue(1500, 1000, shown, 100)).toBe(true);
+    expect(camFps(100)).toBeCloseTo(1);
+    expect(camDue(1500, 1000, shown, 100)).toBe(false); // 100 ms frames: one a second
+    expect(camDue(2000, 1000, shown, 100)).toBe(true);
   });
   it('pauses while the tab is hidden or the tile is off screen', () => {
     expect(camDue(5000, 0, { ...shown, hidden: true })).toBe(false);
