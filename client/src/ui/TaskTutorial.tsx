@@ -88,8 +88,16 @@ function useBringIntoView(selectors: readonly string[], key: string) {
       const el = selectors.map((s) => document.querySelector(s)).find(Boolean);
       if (el) {
         const r = el.getBoundingClientRect();
-        // one taller than the screen (a Kanban column) shows its top, where its header and first card are
-        if (r.top < 0 || r.bottom > innerHeight || r.left < 0 || r.right > innerWidth) el.scrollIntoView({ block: r.height > innerHeight * 0.8 ? 'start' : 'center', inline: 'nearest', behavior: 'auto' });
+        // into the upper half, clear of the card below it; one taller than that (a Kanban column) shows its top,
+        // where its header and first card are
+        const tall = r.height > innerHeight * 0.5;
+        const clear = r.top >= 0 && (tall ? r.top < innerHeight * 0.4 : r.bottom <= innerHeight * 0.55) && r.left >= 0 && r.right <= innerWidth;
+        if (!clear && el instanceof HTMLElement) {
+          const was = el.style.scrollMarginTop;
+          el.style.scrollMarginTop = tall ? '64px' : '20vh';
+          el.scrollIntoView({ block: 'start', inline: 'nearest', behavior: 'auto' });
+          el.style.scrollMarginTop = was;
+        }
         clearInterval(t);
       } else if (++tries > 40) clearInterval(t);
     }, 250);
@@ -272,7 +280,8 @@ export function TutorialsHub({ onStart }: { onStart?: () => void }) {
       <ul className="tut-list">
         {TUTORIALS.map((t) => {
           const p = doneOf(progress, t.id);
-          const started = p.done > 0 && !p.finished;
+          const on = progress.running === t.id;
+          const started = (p.done > 0 || on) && !p.finished;
           return (
             <li key={t.id} className="tut-row" data-tutorial-row={t.id}>
               <span className="tut-icon" aria-hidden>
@@ -287,7 +296,7 @@ export function TutorialsHub({ onStart }: { onStart?: () => void }) {
               </div>
               <span className="tut-count small">
                 {p.finished ? <Icon name="check" /> : null}
-                {p.done}/{p.total}
+                {on ? `On step ${p.done + 1} of ${p.total}` : `${p.done}/${p.total}`}
               </span>
               <div className="tut-actions">
                 {(started || p.finished) && (

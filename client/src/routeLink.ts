@@ -6,7 +6,8 @@ import { useEffect } from 'react';
 import { useStore, type State } from './store';
 import { useTour } from './ui/tour';
 import { useTourGate } from './ui/tourGate';
-import { ownsHash, overlayRoute, parseRoute, routeHash, routeTarget, ROUTES, sampleLinks, type Mode, type Stand, type World } from './routes';
+import { lastPopWasBack } from './ui/backStack';
+import { followsBack, ownsHash, overlayRoute, parseRoute, routeHash, routeTarget, ROUTES, sampleLinks, type Mode, type Stand, type World } from './routes';
 
 const READY_MS = 15_000;
 
@@ -103,10 +104,16 @@ export function useRouteLink(mode: Mode, stand?: (s: Stand) => boolean) {
     if (!ready) return;
     here = { mode, stand };
     void open(mode, location.hash, true, stand);
-    let popped = 0;
-    const onPop = () => void (popped = performance.now());
-    // Back to an entry with another hash fires hashchange after popstate: that's Back closing a panel, not a link.
-    const onHash = () => void (performance.now() - popped > 50 && open(mode, location.hash, false, stand));
+    let popped: string | null = null;
+    const onPop = () => void (popped = location.hash);
+    // Back to an entry with another hash fires hashchange after popstate: that's Back closing a panel, not a link, however
+    // late a busy 3D frame lets it arrive (#517: closing Help went back to its #help/office entry and opened it again).
+    const onHash = () => {
+      const back = followsBack(popped, location.hash, lastPopWasBack());
+      popped = null;
+      if (back) write(mode); // the address says what's open now
+      else void open(mode, location.hash, false, stand);
+    };
     window.addEventListener('popstate', onPop);
     window.addEventListener('hashchange', onHash);
     const unsubscribe = useStore.subscribe((s, prev) => {

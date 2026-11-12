@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { linkedSection, overlayRoute, parseRoute, routeHash, routeKind, routeTarget, ROUTES, sampleLinks, type Mode, type World } from './routes';
+import { followsBack, linkedSection, overlayRoute, parseRoute, routeHash, routeKind, routeTarget, ROUTES, sampleLinks, type Mode, type World } from './routes';
 import { standPose, yawFor } from './world/routeStand';
 
 const world: World = {
@@ -90,6 +90,15 @@ describe('the route table (#413)', () => {
     }
     expect(linkedSection('#settings/timelapse', 'pocket')).toBeNull(); // the 3D office's only
     expect(linkedSection('#tab/chat', 'pocket')).toBeNull();
+  });
+});
+
+describe('Back and links', () => {
+  it("takes the hashchange after a Back as Back, however late it comes, and any other as a link", () => {
+    expect(followsBack('#help/office', '#help/office', true)).toBe(true); // closing Help went back to its entry: don't reopen it
+    expect(followsBack('#help/office', '#help/office', false)).toBe(false); // a hash link fires popstate too: open it
+    expect(followsBack(null, '#help/office', true)).toBe(false);
+    expect(followsBack('#help/office', '#notices', true)).toBe(false);
   });
 });
 
