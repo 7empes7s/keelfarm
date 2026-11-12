@@ -122,7 +122,7 @@ with **Back**, **Skip step** and **Close** (Resume picks it up at the same step,
 - **When something needs you**: the bell, the approvals, Retry QA / Send back / Merge anyway, and the agent carrying on.
 - **Keep it running**: usage and accounts, pacing, team size, disk and memory, Telegram alerts.
 
-The guide (✅), every ⓘ sheet and Settings → Company list them with their progress (3/6), **Start**, **Resume** and
+The guide (✅), every ⓘ sheet, the 3D office's Help and Settings → Company list them with their progress (3/6), **Start**, **Resume** and
 **Restart**; this device remembers where each one is. The first launch offers **Get started**. They're in
 `client/src/ui/tutorials.ts`; the demo office runs every one end to end on its own data.
 
