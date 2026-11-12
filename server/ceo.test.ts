@@ -172,7 +172,7 @@ describe('office tools', () => {
       sessionHistory: (a) => (calls.push(['session_history', a]), 'history'),
       react: (a) => (calls.push(['react', a]), 'reacted'),
       reply: (a) => (calls.push(['reply', a]), 'answered'),
-      runExperiment: () => '', setFloorSwitches: () => '', setIssuePriority: async () => '', setCeoSetup: () => '', applyCharter: () => '', mergePull: async () => '', applyUpdate: () => '', askIt: () => '', cloudflare: async () => '', providerAction: async () => '', itReport: () => '', problemsList: () => '', noteProblem: () => '',
+      runExperiment: () => '', setFloorSwitches: () => '', setIssuePriority: async () => '', setCeoSetup: () => '', applyCharter: () => '', mergePull: async () => '', applyUpdate: () => '', askIt: () => '', cloudflare: async () => '', providerAction: async () => '', installKey: async () => '', saveProviderKey: async () => '', itReport: () => '', problemsList: () => '', noteProblem: () => '',
     });
     const [serverSide, clientSide] = InMemoryTransport.createLinkedPair();
     await office.server.instance.connect(serverSide);
@@ -204,7 +204,7 @@ describe('office tools', () => {
       'edit_message',
       'escalate',
       'file_issue',
-      'floor_detail',
+      'floor_detail', 'install_key',
       'it_report',
       'keep_file',
       'make_default_account',
@@ -220,7 +220,7 @@ describe('office tools', () => {
       'resolve_decision',
       'restart_agent',
       'retry_qa',
-      'run_experiment',
+      'run_experiment', 'save_provider_key',
       'scale_team',
       'scan_keys',
       'send_back',
@@ -291,7 +291,7 @@ describe('office tools', () => {
       set_ceo_setup: { model: 'claude-sonnet-5', asked_in: 4 },
       apply_charter: { ...f, reason: 'r', asked_in: 4 },
       merge_pull: { ...f, pr: 7, asked_in: 4 }, apply_update: { asked_in: 4 },
-      ask_it: { question: 'Why is the disk full?' }, cloudflare: { op: 'tunnel_ingress_add', hostname: 'clip.example.com', service: 'http://localhost:80' }, provider_action: { provider: 'github', op: 'repo_get' },
+      ask_it: { question: 'Why is the disk full?' }, cloudflare: { op: 'tunnel_ingress_add', hostname: 'clip.example.com', service: 'http://localhost:80' }, provider_action: { provider: 'github', op: 'repo_get' }, install_key: { key: 'openai', target: '/etc/clipfarm/clipfarm.env', var_name: 'OPENAI_API_KEY' }, save_provider_key: { provider: 'twitch', value: 'id:secret' },
       it_report: { what: 'CI is down', where: 'ci', evidence: 'checks never started', blocking: false },
       note_problem: { title: 'Issue #4 had no acceptance criteria', cause: 'vague-brief' },
     };
@@ -719,7 +719,7 @@ describe('follow-ups (#27)', () => {
           closePull: async () => 'ok', escalate: async () => 'ok', attachFile: async () => 'ok', worktreeFile: async () => 'ok', prDiff: async () => 'ok', sendTelegram: async () => 'ok', scanKeys: async () => 'ok', makeDefaultAccount: () => 'ok', editMessage: async () => 'ok',
           restartAgent: ok, stopAgent: ok, messageAgent: async () => 'ok', assignIssue: async () => 'ok', answerAgent: async () => 'ok', askManagerChoice: ok, defineExperiment: ok, sessionHistory: ok, proposeCharter: ok, resolveDecision: ok, proposeDesign: async () => 'ok',
           waitFor: async () => 'ok', askManager: async () => 'ok', consult: async () => 'ok', react: ok, reply: ok, problemsList: ok, noteProblem: ok,
-          runExperiment: ok, setFloorSwitches: ok, setIssuePriority: async () => 'ok', setCeoSetup: ok, applyCharter: ok, mergePull: async () => 'ok', applyUpdate: ok, askIt: ok, cloudflare: async () => 'ok', providerAction: async () => 'ok', itReport: ok,
+          runExperiment: ok, setFloorSwitches: ok, setIssuePriority: async () => 'ok', setCeoSetup: ok, applyCharter: ok, mergePull: async () => 'ok', applyUpdate: ok, askIt: ok, cloudflare: async () => 'ok', providerAction: async () => 'ok', installKey: async () => 'ok', saveProviderKey: async () => 'ok', itReport: ok,
         },
         () => researching,
       ),

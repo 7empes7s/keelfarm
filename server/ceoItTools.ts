@@ -15,6 +15,8 @@ import { IMPROVE_KINDS } from '../shared/itImprove.ts';
 import { problemTools, type ProblemHandlers } from './ceoProblemTools.ts';
 import { CF_OPS } from '../shared/cloudflare.ts';
 import { ACTION_PROVIDERS, PROVIDER_ACTIONS } from '../shared/providerActions.ts';
+import { INSTALL_TARGETS, type KeyPart } from '../shared/keyInstall.ts';
+import { PROVIDERS } from '../shared/providers.ts';
 
 /** The cloudflare action's arguments (#586). */
 export interface CloudflareArgs {
@@ -38,9 +40,26 @@ export interface ProviderActionArgs {
   why?: string;
 }
 
+/** install_key's and save_provider_key's arguments (#609). */
+export interface InstallKeyArgs {
+  key: string;
+  target: string;
+  var_name: string;
+  part?: KeyPart;
+  why?: string;
+}
+export interface SaveKeyArgs {
+  provider: string;
+  label?: string;
+  value: string;
+  uses?: string;
+}
+
 export interface CloudflareHandlers {
   cloudflare(a: CloudflareArgs): Promise<string>;
   providerAction(a: ProviderActionArgs): Promise<string>;
+  installKey(a: InstallKeyArgs): Promise<string>;
+  saveProviderKey(a: SaveKeyArgs): Promise<string>;
 }
 
 export interface ItHandlers extends CloudflareHandlers {
@@ -188,6 +207,29 @@ export function cloudflareTools(h: CloudflareHandlers, run: Run) {
         why: z.string().min(1).max(300).optional().describe('For the card: why, in a sentence'),
       },
       (a) => run(() => h.providerAction(a)),
+    ),
+    tool(
+      'install_key',
+      `Install a Settings → Providers key into a service's env file as VAR=value (the value never reaches you, a card or a log): a card with Approve / Not now, or at once with the manager's IT auto-approve; the file keeps its other lines, mode 600, a backup kept, then its unit restarts. The only way to write a credential file. Targets: ${INSTALL_TARGETS.map((t) => `${t.file} (${t.name})`).join(', ')}.`,
+      {
+        key: z.string().min(1).max(80).describe('The Providers key: its id, name, or provider when it has one key, e.g. "openai"'),
+        target: z.string().min(2).max(300).describe('One of the env files above, e.g. "/etc/clipfarm/clipfarm.env"'),
+        var_name: z.string().min(1).max(64).describe('e.g. "OPENAI_API_KEY"'),
+        part: z.enum(['id', 'secret']).optional().describe('For an "id:secret" pair (Twitch): which half, e.g. TWITCH_CLIENT_ID → id'),
+        why: z.string().min(1).max(300).optional().describe('For the card: why, in a sentence'),
+      },
+      (a) => run(() => h.installKey(a)),
+    ),
+    tool(
+      'save_provider_key',
+      'The manager pasted a key in chat: save it in Settings → Providers right away (tested where the provider allows), and the chat shows "•••• (saved to Providers as …)" instead of it. Then install_key puts it where it is used. Never repeat the value in your reply.',
+      {
+        provider: z.enum(PROVIDERS.filter((p) => p.home === 'providers' && p.auth === 'api-key').map((p) => p.id) as [string, ...string[]]).describe('e.g. "openai", "twitch", "youtube", "postiz", or "other-key" for anything else'),
+        value: z.string().min(1).max(400).describe('The key exactly as pasted; Twitch: "client_id:client_secret"'),
+        label: z.string().min(1).max(60).optional().describe('Its name, e.g. "Twitch (clipfarm)"'),
+        uses: z.string().min(1).max(200).optional().describe('What uses it, e.g. "clipfarm transcription"'),
+      },
+      (a) => run(() => h.saveProviderKey(a)),
     ),
     tool(
       'cloudflare',

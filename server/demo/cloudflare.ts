@@ -9,12 +9,21 @@ import { registerDemo } from './registry.ts';
 
 type Policy = { id: string; name?: string; decision?: string; include?: Record<string, unknown>[] };
 
+/** A few of Cloudflare's permission groups, as GET /user/tokens/permission_groups names them. */
+const CF_GROUPS = [
+  { id: 'g-dns-edit', name: 'DNS Write', scopes: ['com.cloudflare.api.account.zone'] },
+  { id: 'g-zone-read', name: 'Zone Read', scopes: ['com.cloudflare.api.account.zone'] },
+  { id: 'g-tunnel-edit', name: 'Cloudflare Tunnel Write', scopes: ['com.cloudflare.api.account'] },
+  { id: 'g-r2-edit', name: 'Workers R2 Storage Write', scopes: ['com.cloudflare.api.account'] },
+  { id: 'g-tokens', name: 'API Tokens Write', scopes: ['com.cloudflare.api.user'] },
+];
+
 export const DEMO_CF = { account: '0123456789abcdef0123456789abcdef', tunnel: 'c0ffee00-1111-4222-8333-444455556666', zone: 'demo-zone-tib' };
 
 /** A fake Cloudflare API; `calls` records every request (without its key). */
 export function fakeCloudflare(o: { ingress?: IngressRule[]; access?: boolean } = {}) {
   const ingress: IngressRule[] = o.ingress ?? [{ hostname: 'keel.techinsiderbytes.com', service: 'http://localhost:80' }, { service: 'http_status:404' }];
-  const world = { config: { ingress, 'warp-routing': { enabled: false } } as Record<string, unknown>, dns: [{ id: 'r1', type: 'CNAME', name: 'keel.techinsiderbytes.com', content: `${DEMO_CF.tunnel}.cfargotunnel.com`, proxied: true }], apps: [] as { id: string; domain: string; name: string }[], policies: {} as Record<string, Policy[]>, tokens: [] as { id: string; name: string; client_id: string; duration?: string }[], secrets: [] as string[] };
+  const world = { config: { ingress, 'warp-routing': { enabled: false } } as Record<string, unknown>, dns: [{ id: 'r1', type: 'CNAME', name: 'keel.techinsiderbytes.com', content: `${DEMO_CF.tunnel}.cfargotunnel.com`, proxied: true }], apps: [] as { id: string; domain: string; name: string }[], policies: {} as Record<string, Policy[]>, tokens: [] as { id: string; name: string; client_id: string; duration?: string }[], secrets: [] as string[], apiTokens: [] as { id: string; name: string; value: string; expires_on: string; policies: unknown[] }[] };
   let seq = 0;
   if (o.access) {
     // the demo office: KEEL already behind Access with an email allow-list
@@ -30,6 +39,25 @@ export function fakeCloudflare(o: { ingress?: IngressRule[]; access?: boolean } 
     if (/bad/i.test(key)) return no(401, 10000, 'Authentication error');
     const p = req.path;
     if (p.endsWith('/tokens/verify')) return ok({ id: 'tok', status: 'active' });
+    // API tokens (#609): "noapitoken" lacks User › API Tokens › Edit
+    if (p.startsWith('/user/tokens')) {
+      if (/noapitoken/i.test(key)) return no(403, 9109, 'Unauthorized to access requested resource');
+      if (p === '/user/tokens/permission_groups') return ok(CF_GROUPS);
+      if (req.method === 'POST' && p === '/user/tokens') {
+        const b = req.body as { name: string; expires_on: string; policies: unknown[] };
+        const value = `cf-made-${randomUUID().replace(/-/g, '')}`;
+        world.secrets.push(value);
+        world.apiTokens.push({ id: `apitok${++seq}`, name: b.name, value, expires_on: b.expires_on, policies: b.policies });
+        return ok({ id: world.apiTokens.at(-1)!.id, name: b.name, value, expires_on: b.expires_on });
+      }
+      const id = p.slice('/user/tokens/'.length);
+      if (req.method === 'DELETE') {
+        if (!world.apiTokens.some((t) => t.id === id)) return no(404, 1003, 'Token not found');
+        world.apiTokens = world.apiTokens.filter((t) => t.id !== id);
+        return ok({ id });
+      }
+      return ok(world.apiTokens.map((t) => ({ id: t.id, name: t.name, expires_on: t.expires_on, policies: t.policies })));
+    }
     if (p.startsWith('/accounts?')) return ok([{ id: DEMO_CF.account, name: 'Tech Insider Bytes' }]);
     if (p.includes('/cfd_tunnel') && /notunnel/i.test(key)) return no(403, 1001, 'Not authorized');
     if (p.startsWith(`/accounts/${DEMO_CF.account}/cfd_tunnel?`)) return ok([{ id: DEMO_CF.tunnel, name: 'main' }]);

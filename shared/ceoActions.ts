@@ -77,6 +77,8 @@ const ACTS: Record<string, string> = {
   ask_it: '🖥️',
   cloudflare: '☁️',
   provider_action: '🔑',
+  install_key: '🔑',
+  save_provider_key: '🔑',
   it_report: '🖥️',
   note_problem: '📋',
 };
@@ -102,6 +104,8 @@ const SECTIONS: Partial<Record<string, ActionSection>> = {
   ask_it: 'it-dept',
   cloudflare: 'ops',
   provider_action: 'providers',
+  install_key: 'ops',
+  save_provider_key: 'providers',
   it_report: 'it-dept',
   note_problem: 'problems',
   make_default_account: 'accounts',

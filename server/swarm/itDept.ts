@@ -206,7 +206,7 @@ export abstract class SwarmItDept extends SwarmSetup {
 
   /** IT's office tools: it_run, it_propose, it_recommend (itWatch.ts), it_health, it_ticket, it_review and it_improve (itImprove.ts; server/ceoItTools.ts). */
   protected itTools(): OfficeTools {
-    return itOfficeTools({ itRun: (a) => this.itRun(a), itPropose: (a) => this.itPropose(a), itRecommend: (a) => this.itRecommend(a), itHealth: () => this.itHealth(), itTicket: (a) => this.itTicket(a), itReview: (a) => this.itReview(a), itImprove: (a) => this.itImprove(a), cloudflare: (a) => this.cloudflareAct(a, this.itName), providerAction: (a) => this.providerAct(a, this.itName), problemsList: (a) => this.problemsList(a), noteProblem: (a) => this.noteProblem(a) });
+    return itOfficeTools({ itRun: (a) => this.itRun(a), itPropose: (a) => this.itPropose(a), itRecommend: (a) => this.itRecommend(a), itHealth: () => this.itHealth(), itTicket: (a) => this.itTicket(a), itReview: (a) => this.itReview(a), itImprove: (a) => this.itImprove(a), cloudflare: (a) => this.cloudflareAct(a, this.itName), providerAction: (a) => this.providerAct(a, this.itName), installKey: (a) => this.installKey(a, this.itName), saveProviderKey: (a) => this.saveProviderKey(a), problemsList: (a) => this.problemsList(a), noteProblem: (a) => this.noteProblem(a) });
   }
 
   /** it_health: the office's readings, compact. */
@@ -293,7 +293,7 @@ export abstract class SwarmItDept extends SwarmSetup {
 
   /** A card it_propose made: IT's alert, with Run / Not now on Telegram (the chat shows its card). */
   protected itProposed(p: ItProposal) {
-    void this.itTelegram(`🖥️ ${p.by ?? this.state.settings.itDept.name} asks to ${p.cf || p.pa ? 'change' : 'run'} \`${argvLine(p.argv)}\`\n${p.why}\n${p.diff ? `${p.diff}\n` : ''}Frees or changes: ${p.affects}\nUndo: ${p.undo}\nRisk: ${p.risk}`.slice(0, 3500), runKeyboard(p.id));
+    void this.itTelegram(`🖥️ ${p.by ?? this.state.settings.itDept.name} asks to ${p.cf || p.pa || p.ki ? 'change' : 'run'} \`${argvLine(p.argv)}\`\n${p.why}\n${p.diff ? `${p.diff}\n` : ''}Frees or changes: ${p.affects}\nUndo: ${p.undo}\nRisk: ${p.risk}`.slice(0, 3500), runKeyboard(p.id));
   }
 
   /** The manager's Run went through (or was refused at Run): into IT's chat and Telegram, and IT checks a run's result. */
@@ -307,6 +307,20 @@ export abstract class SwarmItDept extends SwarmSetup {
   protected itAutoPosted(text: string, out: string, itAuto?: PhoneMessage['itAuto']) {
     this.postIt('office', text, { notice: { details: out.trim() || '(no output)' }, ...(itAuto && { itAuto }) });
     void this.itTelegram(`${text}\n${out.trim().split('\n').slice(0, 8).join('\n')}`.slice(0, 1500));
+  }
+
+  /** save_provider_key (#609): a pasted key masked in IT's stored chat and queued jobs. Returns the messages changed. */
+  protected itMaskPasted(mask: (text: string) => string | null): number {
+    let n = 0;
+    for (const m of this.state.it.messages) {
+      const text = mask(m.text);
+      if (text === null) continue;
+      m.text = text;
+      n++;
+      this.broadcast({ type: 'it', it: this.itHead(), message: m });
+    }
+    for (const j of this.state.it.queue) if ('text' in j) j.text = mask(j.text) ?? j.text;
+    return n;
   }
 
   /** An auto step's card after its Undo: the button goes. */

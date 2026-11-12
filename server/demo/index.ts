@@ -24,4 +24,5 @@ import './agentSdk.ts';
 import './itDesk.ts';
 import './cloudflare.ts';
 import './providerActions.ts';
+import './keys.ts';
 import './problems.ts';
