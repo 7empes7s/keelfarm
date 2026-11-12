@@ -60,7 +60,7 @@ export default defineConfig({
     // The phone app back from the background (#93) on Safari's engine too.
     ...(installed.webkit ? [{ name: 'iphone-resume', testMatch: 'resume.spec.ts', dependencies: ['smoke'], use: { ...devices['iPhone 15'], headless: true } }] : []),
     // The Jarvis voice's call (#534) on Safari's engine too: its audio and the fake agent socket.
-    ...(installed.webkit ? [{ name: 'iphone-voice', testMatch: 'voiceAgent.spec.ts', dependencies: ['smoke'], use: { ...devices['iPhone 15'], headless: true } }] : []),
+    ...(installed.webkit ? [{ name: 'iphone-jarvis', testMatch: 'voiceAgent.spec.ts', dependencies: ['smoke'], use: { ...devices['iPhone 15'], headless: true } }] : []),
   ],
   webServer: {
     command: webServerCommand(process.env),

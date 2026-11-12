@@ -100,6 +100,16 @@ export function level(samples: Float32Array): number {
   return Math.min(1, Math.sqrt(sum / Math.max(1, samples.length)) * 4);
 }
 
+/**
+ * The backstop for the end of a reply: ms until it's checked again, or 0 when it's over. An audio context that isn't
+ * running (no output device, a headless browser, an interrupted iPhone session) never moves its clock or fires onended,
+ * so its reply ends on the wall clock; a paused call waits, and a running one waits for the audio still queued (`left`, s).
+ */
+export function replyLeftMs(o: { paused: boolean; running: boolean; left: number }): number {
+  if (o.paused) return 500;
+  return o.running && o.left > 0.05 ? Math.ceil(o.left * 1000) + 250 : 0;
+}
+
 // ---------- the orb ----------
 
 /** The conversation on the call: dialling, talking, ended by "that's all" (tap the orb to talk again), or not the Jarvis voice. */

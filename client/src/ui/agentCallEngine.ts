@@ -7,7 +7,7 @@
 import { marker, wantsToEnd } from '../../../shared/voiceBrain';
 import { api } from '../api';
 import { useStore } from '../store';
-import { agentEvent, downsample, floatToPcm, initMessage, level, pcmToFloat, type AgentMode } from './agentCall';
+import { agentEvent, downsample, floatToPcm, initMessage, level, pcmToFloat, replyLeftMs, type AgentMode } from './agentCall';
 import { callAudio, onAgentRelay, releaseCallAudio, useAgentCall } from './agentCallStore';
 import { wantsMic } from './voiceCall';
 import { callOn, dispatchCall, useCall } from './voiceCallStore';
@@ -31,6 +31,9 @@ let playing: { src: AudioBufferSourceNode; event: number }[] = [];
 let droppedUpTo = -1; // audio events interrupted or skipped
 let lastEvent = 0;
 let doneTimer: ReturnType<typeof setTimeout> | null = null;
+let backstop: ReturnType<typeof setTimeout> | null = null; // ends the reply when onended never comes
+let wallEnd = 0; // when the queued audio ends, on the wall clock
+let clockAt = 0; // the audio clock at the last look: one that stands still isn't playing
 let endAfterReply = false;
 let markers: string[] = []; // the CEO's replies and progress lines, said when the voice is free
 let mic: { stream: MediaStream; node: AudioWorkletNode; src: MediaStreamAudioSourceNode; buf: Float32Array[]; len: number } | null = null;
@@ -199,7 +202,27 @@ function play(event: number, pcm: string) {
   };
   if (doneTimer) clearTimeout(doneTimer);
   doneTimer = null;
+  const now = performance.now();
+  clockAt = ctx.currentTime;
+  wallEnd = Math.max(wallEnd, now + 20) + buf.duration * 1000;
+  armBackstop(wallEnd - now + DONE_MS);
   if (useCall.getState().call.phase !== 'speaking') dispatchCall({ type: 'reply', id: -event, sentences: 1 });
+}
+
+/** If the call's audio context isn't running its clock stands still and onended never fires: the reply ends on time anyway. */
+function armBackstop(ms: number) {
+  if (backstop) clearTimeout(backstop);
+  backstop = setTimeout(() => {
+    backstop = null;
+    const ctx = out?.context;
+    const running = !!ctx && ctx.state === 'running' && ctx.currentTime > clockAt;
+    if (ctx) clockAt = ctx.currentTime;
+    const wait = replyLeftMs({ paused: useCall.getState().call.paused, running, left: ctx ? playHead - ctx.currentTime : 0 });
+    if (wait) return armBackstop(wait);
+    if (!playing.length) return;
+    stopPlayback();
+    finishSoon();
+  }, ms);
 }
 
 /** The voice went quiet: the turn is the manager's again (and "that's all" ends the conversation). */
@@ -226,8 +249,11 @@ function stopPlayback() {
   }
   playing = [];
   playHead = 0;
+  wallEnd = 0;
   if (doneTimer) clearTimeout(doneTimer);
   doneTimer = null;
+  if (backstop) clearTimeout(backstop);
+  backstop = null;
   useAgentCall.setState({ output: 0 });
 }
 

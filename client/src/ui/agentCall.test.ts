@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { agentEvent, downsample, floatToPcm, formatRate, initMessage, level, orbState, pcmToFloat } from './agentCall';
+import { agentEvent, downsample, floatToPcm, formatRate, initMessage, level, orbState, pcmToFloat, replyLeftMs } from './agentCall';
 
 describe("the Jarvis voice: ElevenLabs' conversation protocol", () => {
   it('reads the agent socket messages the call needs', () => {
@@ -32,5 +32,12 @@ describe("the Jarvis voice: ElevenLabs' conversation protocol", () => {
     expect(orbState('speaking', true, 'live')).toBeNull();
     expect(orbState('listening', false, 'idle')).toBeNull();
     expect(orbState('connecting', false, 'connecting')).toBeNull();
+  });
+
+  it("ends a reply without onended when the audio clock isn't running, and waits while paused or still playing", () => {
+    expect(replyLeftMs({ paused: false, running: false, left: 2 })).toBe(0); // no output device, headless, interrupted iPhone audio
+    expect(replyLeftMs({ paused: false, running: true, left: 0 })).toBe(0);
+    expect(replyLeftMs({ paused: false, running: true, left: 1.5 })).toBe(1750);
+    expect(replyLeftMs({ paused: true, running: false, left: 2 })).toBeGreaterThan(0);
   });
 });
