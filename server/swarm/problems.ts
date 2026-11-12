@@ -7,7 +7,7 @@
 // needs-human PRs, so the register adds no job of its own. Rules pure in shared/problems.ts.
 import { blockers } from '../../shared/issues.ts';
 import type { CostSession } from '../../shared/costs.ts';
-import { agentErrorProblem, BLOCKED_MS, blockedProblem, CAUSE_LABELS, digest, digestDue, digestHour, fmtLost, isOpen, loadProblems, needsHumanProblem, noteInput, problemsView, pruneProblems, qaRepeatProblem, recordProblem, recurring, register, resolveProblems, sessionProblem, STATE_LABELS, updateProblem, worstFirst, type Problem, type ProblemInput } from '../../shared/problems.ts';
+import { agentErrorProblem, BLOCKED_MS, blockedProblem, CAUSE_LABELS, digest, digestDue, digestHour, fmtLost, isOpen, loadProblems, needsHumanProblem, noteInput, problemsView, pruneProblems, qaRepeatProblem, recordProblem, recurring, register, resolveProblems, sessionProblem, signedOutProblem, STATE_LABELS, updateProblem, worstFirst, type Problem, type ProblemInput } from '../../shared/problems.ts';
 import type { PullInfo, WorldSnapshot } from '../../shared/types.ts';
 import type { NoteProblemArgs, ProblemsArgs } from '../ceoProblemTools.ts';
 import { HttpError } from '../httpError.ts';
@@ -63,6 +63,12 @@ export abstract class SwarmProblems extends SwarmLiveLeases {
   protected problemSession(line: CostSession) {
     const p = sessionProblem(line, this.floorAt(line.repoId));
     if (p) this.record([p]);
+  }
+
+  /** A login read signed out (#579): one open entry for the manager until it's signed in again (the tick resolves it). */
+  protected override accountSignedOut(id: string, label: string) {
+    super.accountSignedOut(id, label);
+    if (!this.state.problems.list.some((p) => isOpen(p) && p.key === `signed-out:${id}`)) this.record([signedOutProblem({ id, label })]);
   }
 
   /** Every QA change: needs-human in and out, a third failed round. */
@@ -126,6 +132,8 @@ export abstract class SwarmProblems extends SwarmLiveLeases {
       }
     }
     resolveProblems(s, (p) => p.cause === 'blocked' && !blocked.has(p.key ?? ''), 'Its dependencies closed.', now);
+    const out = new Set(this.accounts.view(now).accounts.filter((a) => a.status === 'signed-out').map((a) => `signed-out:${a.id}`));
+    resolveProblems(s, (p) => !!p.key?.startsWith('signed-out:') && !out.has(p.key), 'Signed in again.', now);
     pruneProblems(s, now);
     if (JSON.stringify(s.list.map((p) => [p.id, p.state, p.count])) !== before) this.problemsChanged();
     const day = digestDue(now, digestHour(this.state.settings.notify.problemsDigestHour), s.digestDay);

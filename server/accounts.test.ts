@@ -67,6 +67,24 @@ describe('Accounts', () => {
     expect(card().tokenRefresh).toBeUndefined();
   });
 
+  it("polls the built-in Claude login's file (#579): signed out after a session's sign-in screen until the file changes", async () => {
+    let file: { state: 'in' | 'out' | 'refresh'; changedAt: number } | null = { state: 'in', changedAt: 1 };
+    const { accounts } = await office({ poll: true, login: async () => ({ plan: 'Pro', who: null, file }) });
+    const poll = () => (accounts as unknown as { pollAll(): Promise<void> }).pollAll();
+    const status = () => accounts.view().accounts.find((a) => a.id === 'claude-login')!.status;
+    await poll();
+    expect(status()).toBe('ready');
+    accounts.signedOut('claude-login'); // a session showed its sign-in screen
+    await poll();
+    expect(status()).toBe('signed-out'); // the same file: still out, not back on the next poll
+    file = { state: 'in', changedAt: Date.now() + 1000 }; // signed in again in a terminal
+    await poll();
+    expect(status()).toBe('ready');
+    file = { state: 'out', changedAt: Date.now() + 2000 }; // expired, nothing to refresh it
+    await poll();
+    expect(status()).toBe('signed-out');
+  });
+
   it('notes two logins on the same subscription, never sending who owns them (#460)', async () => {
     const { accounts } = await office({ check: async () => ({ signedIn: true, readings: [], plan: 'Pro', who: 'me@example.com', note: 'ok' }) });
     const main = await accounts.add({ cli: 'claude', kind: 'subscription-login', label: 'Main login' });

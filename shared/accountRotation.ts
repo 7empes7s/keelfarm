@@ -89,6 +89,39 @@ export function detectLimit(text: string, now: number): LimitHit | null {
   return null;
 }
 
+/**
+ * How a session that didn't finish ended for its account (#579): a sign-in screen it showed (`signedOut`) is signed out,
+ * never a limit, whichever login it was; else what its errors and terminal's last lines say.
+ */
+export function sessionEnd(r: { signedOut?: boolean; errors: readonly string[] }, tail: readonly string[], now: number): LimitHit | null {
+  if (r.signedOut) return { kind: 'signed-out' };
+  return detectLimit(endedText(r.errors, tail), now);
+}
+
+// ---------- a pinned agent's own account is out (#579) ----------
+
+type PinAccount = { id: string; label: string; status: string };
+export type PinOut = { id: string; label: string; why: 'signed-out' | 'limited' };
+
+/** The one account an agent is pinned to, when it's signed out or limited; null: not pinned to one account, or it's usable. */
+export function pinOut(pin: string | undefined, accounts: readonly PinAccount[]): PinOut | null {
+  const a = pin ? accounts.find((x) => x.id === pin) : undefined;
+  return a && (a.status === 'signed-out' || a.status === 'limited') ? { id: a.id, label: a.label, why: a.status } : null;
+}
+
+/**
+ * Whether a pinned agent waits for its account instead of taking work: it said not to fall back (`fallback` false), or
+ * rotation is off and the account is signed out (a sign-in screen per task otherwise). A limit with rotation off is the
+ * office's own pause.
+ */
+export const pinnedWaits = (out: PinOut | null, fallback: boolean | undefined, rotationOn: boolean) => !!out && (fallback === false || (!rotationOn && out.why === 'signed-out'));
+
+/** On a waiting agent's card: "Waiting for Claude Pro sign-in". */
+export const waitText = (out: PinOut) => (out.why === 'signed-out' ? `Waiting for ${out.label} sign-in` : `Waiting for ${out.label}'s limit to reset`);
+
+/** A pinned agent running elsewhere, for their log and the CEO: "Fable is running on Claude Ultra because Claude Pro is signed out." */
+export const fallbackText = (agentName: string, to: string, out: Pick<PinOut, 'label' | 'why'>) => `${agentName} is running on ${to} because ${out.label} is ${out.why === 'signed-out' ? 'signed out' : 'limited'}.`;
+
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 
 /** A wall-clock time in an IANA time zone ("UTC", "Europe/Berlin") as epoch ms; the computer's own zone when it's unknown. */
@@ -230,7 +263,7 @@ export function allOutText(cliName: string, first: number | null, clock: (t: num
 }
 
 /** What the CEO's next job hears about agents' switches. */
-export const switchesForCeo = (list: readonly AccountSwitch[], clock: (t: number) => string) => list.map((s) => `${s.agentName}'s session moved from ${s.from} to ${s.to} (${outLine(s.from, s.why, s.until, clock).replace(`${s.from} `, '')}).`);
+export const switchesForCeo = (list: readonly AccountSwitch[], clock: (t: number) => string) => list.map((s) => `${s.agentName} is running on ${s.to} because ${outLine(s.from, s.why, s.until, clock)}.`);
 
 // ---------- numbers ----------
 

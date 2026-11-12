@@ -144,6 +144,7 @@ export interface PersistedAgent {
   ownLogin?: KeyTrouble; // a cloud agent off the office's API key, which stopped working: their CLI uses its own login (#258)
   tools?: ToolSwitches; // their own Tools & skills switches on top of Everyone's
   account?: string; // the account (id) or tag they're pinned to (#247, shared/accounts.ts); absent: the rotation
+  accountFallback?: false; // pinned to one account: false waits while it's signed out or limited (#579); absent: runs on another and says why
   voiceId?: string; // their ElevenLabs voice (#320, shared/voices.ts); absent: none yet
   voiceName?: string;
   declared?: string[] | null; // the files they declared for their current task (file leases, #24); cleared with the task

@@ -5,7 +5,7 @@ import { refused, type DemoFloor } from './ceo.ts';
 import { registerCeoReply, registerDemo } from './registry.ts';
 
 registerDemo('setup', () => ({
-  demoSetup: () => ({ company: ['web-app', 'api'], spare: ['demo-co/star-hopper'], signedOut: { floor: 2, model: 'google/gemini-2.5-pro' } }),
+  demoSetup: () => ({ company: ['web-app', 'api'], spare: ['demo-co/star-hopper'], signedOut: { floor: 2, model: 'google/gemini-2.5-pro' }, accountOut: 'claude-pro' }),
 }));
 
 // "apply the setup recommendation on floor 4": the first gap the office can fix by itself there.

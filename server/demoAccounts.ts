@@ -1,5 +1,5 @@
 // The demo's Providers & accounts (#247): made-up accounts (a second Max subscription, an Ultra login whose token
-// expired after its week reset, an Anthropic API key, an OpenAI key, a ChatGPT Pro login never signed in, a Google AI Plus login), a Test that never leaves the computer, and
+// expired after its week reset, a Claude Pro login signed out, an Anthropic API key, an OpenAI key, a ChatGPT Pro login never signed in, a Google AI Plus login), a Test that never leaves the computer, and
 // sign-ins drawn as the CLIs' own (demoSignIn.ts).
 import fs from 'node:fs';
 import path from 'node:path';
@@ -23,6 +23,7 @@ const SEED: ProviderAccount[] = [
   { id: 'claude-apikey', cli: 'claude', kind: 'api-key', label: 'Anthropic API', tags: ['api'], priority: 2, enabled: true, plan: 'API', dailyCostCap: 20 },
   { id: 'codex-apikey', cli: 'codex', kind: 'api-key', label: 'OpenAI API', tags: ['api'], priority: 1, enabled: false, plan: 'API' },
   { id: 'codex-pro', cli: 'codex', kind: 'subscription-login', label: 'ChatGPT Pro', tags: ['pro'], priority: 2, enabled: true, plan: 'Pro' }, // never signed in: the usage card's Sign in (#404)
+  { id: 'claude-pro', cli: 'claude', kind: 'subscription-login', label: 'Claude Pro', tags: ['pro'], priority: 4, enabled: true, plan: 'Pro' }, // its sign-in expired (#579): signed out, with a card and a pinned agent
   { id: 'gemini-plus', cli: 'gemini', kind: 'subscription-login', label: 'Google AI Plus', tags: ['gemini'], priority: 0, enabled: true, plan: 'Plus' }, // the demo's Gemini CLI agent runs on it (#365)
 ];
 
@@ -70,7 +71,7 @@ export function demoAccounts(signIn: AccountsDeps['signIn']): AccountsBackend {
       if (a.id === 'claude-keelop') return { signedIn: true, plan: 'Pro', who: DEMO_OWNER, readings: [reading('five_hour', 18, 3 * HOUR, now), reading('seven_day', 63, 50 * HOUR, now)], note: '✓ Signed in; usage read (demo).' };
       return { signedIn: true, readings: a.cli === 'claude' ? [reading('five_hour', 42, 3 * HOUR, now), reading('seven_day', 63, 50 * HOUR, now)] : [], note: '✓ Signed in; usage read (demo).' };
     },
-    login: async (a) => (a.cli === 'claude' ? { plan: 'Pro', who: DEMO_OWNER } : { plan: null, who: null }),
+    login: async (a) => (a.cli === 'claude' ? { plan: 'Pro', who: DEMO_OWNER, file: { state: 'in', changedAt: 0 } } : { plan: null, who: null }),
     signIn: (o, exited) => {
       const id = /accounts[\\/]([^\\/]+)[\\/]/.exec(Object.values(o.env)[0] ?? '')?.[1];
       return signIn(o, (code) => {
