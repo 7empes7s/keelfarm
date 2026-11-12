@@ -209,6 +209,7 @@ export default function AgentCamTile({ id, label }: { id: string; label: string 
     let timer: ReturnType<typeof setInterval> | undefined;
     let onScreen = true;
     let last = -Infinity;
+    let cost = 0; // how long the last frame took to draw
     const seen = new IntersectionObserver(([e]) => (onScreen = e.isIntersecting));
     camRoot().then(
       ({ canvas, root }) => {
@@ -219,9 +220,10 @@ export default function AgentCamTile({ id, label }: { id: string; label: string 
         shown = { root, canvas };
         timer = setInterval(() => {
           const now = performance.now();
-          if (!camDue(now, last, { hidden: document.visibilityState === 'hidden', onScreen })) return;
+          if (!camDue(now, last, { hidden: document.visibilityState === 'hidden', onScreen }, cost)) return;
           last = now;
           store.getState().advance(now);
+          cost = performance.now() - now;
         }, 1000 / CAM_FPS);
       },
       (err) => console.warn('No agent camera:', err),

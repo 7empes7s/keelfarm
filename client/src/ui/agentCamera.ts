@@ -130,5 +130,11 @@ export interface CamShown {
   onScreen: boolean;
 }
 
+/** The tile's frames take at most this share of the time, so a slow device's office view keeps its frame rate. */
+export const CAM_SHARE = 0.2;
+
+/** Frames a second the tile draws at, its last frame having taken `costMs` to draw: CAM_FPS, fewer when frames are dear. */
+export const camFps = (costMs: number) => Math.min(CAM_FPS, (1000 * CAM_SHARE) / Math.max(costMs, 1e-3));
+
 /** Whether the tile draws a frame at `now`: never while the tab is in the background or the tile is off screen (closed, it's gone). */
-export const camDue = (now: number, last: number, s: CamShown): boolean => tileDue(now, last, { folded: false, hidden: s.hidden, onScreen: s.onScreen } satisfies TileShown, CAM_FPS);
+export const camDue = (now: number, last: number, s: CamShown, costMs = 0): boolean => tileDue(now, last, { folded: false, hidden: s.hidden, onScreen: s.onScreen } satisfies TileShown, camFps(costMs));

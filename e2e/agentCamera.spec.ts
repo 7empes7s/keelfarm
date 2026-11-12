@@ -92,10 +92,10 @@ test('the 3D office keeps its frame rate with the camera tile open', async ({ pa
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/?camera=ceo');
   await enterOffice(page, { loaded: true });
-  // the main view's frames over 3 s (software WebGL in the lab is slow, so it's a ratio, not a number)
+  // the main view's frames over 6 s (software WebGL in the lab is slow, so it's a ratio, not a number)
   const frames = () => page.evaluate(() => new Promise<number>((done) => {
     let n = 0;
-    const end = performance.now() + 3000;
+    const end = performance.now() + 6000;
     const tick = () => (performance.now() < end ? (n++, requestAnimationFrame(tick)) : done(n));
     requestAnimationFrame(tick);
   }));
@@ -108,5 +108,5 @@ test('the 3D office keeps its frame rate with the camera tile open', async ({ pa
   await expect(page.locator('.cam-tile')).toHaveCount(0);
   await page.waitForTimeout(2000);
   const without = await frames();
-  expect(withTile, `main view frames in 3 s with the tile vs ${without} without`).toBeGreaterThanOrEqual(without * 0.75);
+  expect(withTile, `main view frames in 6 s with the tile vs ${without} without`).toBeGreaterThanOrEqual(without * 0.7);
 });

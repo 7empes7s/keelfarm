@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { camDue, cameraCommand, demoCamera, camPose, CAM_FPS, MOUTH_GATE, mouthOpen, shyLine, shyReason, SHY_GRACE_MS, speechLevel, WAVE_MS, type CamWho } from './agentCamera';
+import { camDue, camFps, cameraCommand, demoCamera, camPose, CAM_FPS, MOUTH_GATE, mouthOpen, shyLine, shyReason, SHY_GRACE_MS, speechLevel, WAVE_MS, type CamWho } from './agentCamera';
 
 describe('cameraCommand', () => {
   it.each(['Turn on your camera', 'turn your camera on please!', 'Can you switch on your cam?', 'camera on', 'Show yourself', 'show me your face 😄', 'let me see you', 'enable your video', "Turn on your camera — let's see"])('turns it on for "%s"', (t) => {
@@ -70,6 +70,13 @@ describe('camDue', () => {
     expect(camDue(1000, -Infinity, shown)).toBe(true);
     expect(camDue(1000 + 1000 / CAM_FPS, 1000, shown)).toBe(true);
     expect(camDue(1010, 1000, shown)).toBe(false);
+  });
+  it('draws fewer frames when they are dear, so the office keeps its frame rate', () => {
+    expect(camFps(0)).toBe(CAM_FPS);
+    expect(camFps(5)).toBe(CAM_FPS);
+    expect(camFps(100)).toBeCloseTo(2);
+    expect(camDue(1100, 1000, shown, 100)).toBe(false); // 100 ms frames: one every 500 ms
+    expect(camDue(1500, 1000, shown, 100)).toBe(true);
   });
   it('pauses while the tab is hidden or the tile is off screen', () => {
     expect(camDue(5000, 0, { ...shown, hidden: true })).toBe(false);
