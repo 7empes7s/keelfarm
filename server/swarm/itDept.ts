@@ -11,6 +11,7 @@ import { itWatchSettings } from '../../shared/itWatch.ts';
 import { makeArtifacts, parseMessage } from '../../shared/chatParts.ts';
 import { ceoModelOn } from '../../shared/ceoRunsOn.ts';
 import { forwardText, isHarnessText, stripHarness } from '../../shared/chat.ts';
+import { isReaction, react } from '../../shared/reactions.ts';
 import type { AgentStatus, PhoneMessage, WorldSnapshot } from '../../shared/types.ts';
 import { HOME_DIR } from '../config.ts';
 import { HttpError } from '../httpError.ts';
@@ -153,6 +154,20 @@ export abstract class SwarmItDept extends SwarmSetup {
     }
     this.enqueueIt({ kind: 'chat', text: forward, messageIds: [m.id], at: Date.now() });
     return { id: m.id };
+  }
+
+  /** POST /api/it/messages/:id/react: the manager adds or removes a reaction on IT's message (#589), kept on it and shown in the chat. */
+  reactToItMessage(id: number, emoji: string) {
+    const m = this.state.it.messages.find((x) => x.id === id);
+    if (!m) throw new HttpError(404, 'That message is no longer saved');
+    if (m.from !== 'ceo') throw new HttpError(400, `Only ${this.state.settings.itDept.name}'s messages take reactions.`);
+    if (!isReaction(emoji)) throw new HttpError(400, 'Pick a reaction from the bar.');
+    const next = react(m.reactions, 'manager', emoji);
+    if (next.length) m.reactions = next;
+    else delete m.reactions;
+    this.broadcast({ type: 'it', it: this.itHead(), message: m });
+    this.save();
+    return { reactions: m.reactions ?? [] };
   }
 
   /** The CEO's ask_it: the question opens in IT's chat, and IT's answer reaches the CEO in their next job. */
