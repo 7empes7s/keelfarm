@@ -139,6 +139,14 @@ export class Providers {
     });
   }
 
+  /** A provider's keys for the office's own calls (#586: Cloudflare), with their last test. Server memory only. */
+  keysFor(provider: string): { id: string; label: string; key: string; accountId?: string; ok?: boolean }[] {
+    return this.data.connections.flatMap((c) => {
+      const key = c.provider === provider ? this.keys.get(keyOf(c.id)) : undefined;
+      return key ? [{ id: c.id, label: c.label, key, ...(c.accountId && { accountId: c.accountId }), ...(c.test && { ok: c.test.ok }) }] : [];
+    });
+  }
+
   /** The MCP servers an agent's session gets (its own mcp.json). */
   mcpFor(agentId: string): Record<string, Record<string, unknown>> {
     return sessionMcpServers(this.data.mcp, agentId, (id, name) => this.keys.get(mcpKeyOf(id, name)) ?? '');

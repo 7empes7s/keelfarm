@@ -120,3 +120,14 @@ export async function overflowProblems(root: Locator): Promise<string[]> {
     return out;
   });
 }
+
+/** A chat header tool (`name`: its button's exact name), or its ⋯ item where the header folded it (#588). */
+export async function chatTool(root: Locator, name: string) {
+  const button = root.getByRole('button', { name, exact: true });
+  if (await button.isVisible()) return button.click();
+  await root.getByRole('button', { name: /^More for the chat/ }).click();
+  await root.page().getByRole('menuitem', { name: new RegExp(`^${name}`) }).click();
+}
+
+/** The chat's ⛶ (#201). */
+export const fullScreenChat = (root: Locator) => chatTool(root, 'Full screen chat');

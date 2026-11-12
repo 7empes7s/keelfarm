@@ -131,6 +131,7 @@ const OFFICE: Record<string, [string, Words]> = {
   it_propose: ['🖥️', () => 'Asking you to run a command'],
   it_health: ['🖥️', () => "Reading the office's health"],
   ask_it: ['🖥️', () => 'Asking IT'],
+  cloudflare: ['☁️', () => 'Working on Cloudflare'],
   it_report: ['🖥️', () => 'Reporting a problem to IT'],
   it_ticket: ['🖥️', () => 'Answering an IT ticket'],
   problems: ['📋', () => 'Reading the problems register'],

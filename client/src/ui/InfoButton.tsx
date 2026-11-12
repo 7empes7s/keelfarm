@@ -17,40 +17,46 @@ export function InfoButton({ screen, className = 'info-btn' }: { screen: ScreenI
         <Icon name="info" />
         <XLabel text="What can I do here?" />
       </button>
-      {open && (
-        <Sheet
-          title={
-            <>
-              <Icon name="info" /> {h.title}
-            </>
-          }
-          onClose={() => setOpen(false)}
-          className="info-sheet"
-        >
-          <p>{h.shows}</p>
-          <h3 className="info-h">What you can do</h3>
-          <ol className="info-list">
-            {h.actions.map((a) => (
-              <li key={a}>{a}</li>
-            ))}
-          </ol>
-          <div className="row wrap">
-            <a className="btn btn-small" href={h.docs} target="_blank" rel="noreferrer">
-              <Icon name="book-open" /> Read more in the docs <Icon name="external-link" />
-            </a>
-            <button
-              className="btn btn-small"
-              onClick={() => {
-                setOpen(false);
-                openWhatsNew();
-              }}
-            >
-              <Icon name="sparkles" /> What's new
-            </button>
-          </div>
-          <TutorialsHub onStart={() => setOpen(false)} />
-        </Sheet>
-      )}
+      {open && <InfoSheet screen={screen} onClose={() => setOpen(false)} />}
     </>
+  );
+}
+
+/** "What can I do here?" for `screen`: also opened from pocket mode's ⋯ (#588). */
+export function InfoSheet({ screen, onClose }: { screen: ScreenId; onClose: () => void }) {
+  const h = SCREEN_HELP[screen];
+  return (
+    <Sheet
+      title={
+        <>
+          <Icon name="info" /> {h.title}
+        </>
+      }
+      onClose={onClose}
+      className="info-sheet"
+    >
+      <p>{h.shows}</p>
+      <h3 className="info-h">What you can do</h3>
+      <ol className="info-list">
+        {h.actions.map((a) => (
+          <li key={a}>{a}</li>
+        ))}
+      </ol>
+      <div className="row wrap">
+        <a className="btn btn-small" href={h.docs} target="_blank" rel="noreferrer">
+          <Icon name="book-open" /> Read more in the docs <Icon name="external-link" />
+        </a>
+        <button
+          className="btn btn-small"
+          onClick={() => {
+            onClose();
+            openWhatsNew();
+          }}
+        >
+          <Icon name="sparkles" /> What's new
+        </button>
+      </div>
+      <TutorialsHub onStart={() => onClose()} />
+    </Sheet>
   );
 }
