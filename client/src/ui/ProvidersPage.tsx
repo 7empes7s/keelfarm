@@ -206,7 +206,7 @@ function CardRow({ c, twins, onWho, onEdit }: { c: ProviderCard; twins: Provider
         <div className="ds-row-main">
           <div className="ds-row-title">{c.label}</div>
           {c.source && <div className="ds-row-meta pv-source">From {c.source}</div>}
-          <div className="ds-row-meta">{[c.label !== c.name ? c.name : '', c.note, c.plan, c.keyHint ? `••••${c.keyHint}` : ''].filter(Boolean).join(' · ')}</div>
+          <div className="ds-row-meta">{[c.label !== c.name ? c.name : '', kind === 'connection' ? '' : c.note, c.plan, c.keyHint ? `••••${c.keyHint}` : ''].filter(Boolean).join(' · ')}</div>
           <Chip tone={tone}>{busy ? 'Testing…' : word}</Chip>
         </div>
         <Menu

@@ -1,20 +1,21 @@
 import type { Page } from '@playwright/test';
 import { expect, overflowProblems, test } from './helpers';
-import { dialog, pocketSection } from './layout/helpers';
 
 // Settings → Providers' Rename and tags (#523): a key's name and tags saved on the server, the Used for filter, and
 // each row's last test and Used by, on a phone and a desktop.
 
 const OLD_NAME = 'Cerebras (CEREBRAS_API_KEY_PAID, LiteLLM litellm.env)';
 
+/** Settings → Providers by its deep link (docs/deep-links.md), at a phone's or a desktop's width. */
 async function providers(page: Page, width: number) {
   await page.setViewportSize({ width, height: 844 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('/?pocket=1');
-  await page.getByRole('button', { name: 'Settings and notifications' }).click();
-  const root = dialog(page, /Settings/);
-  await pocketSection(root, 'Providers');
-  return root.getByRole('region', { name: 'Providers' });
+  await page.goto('/?pocket=1#settings/providers');
+  await page.waitForSelector('html[data-route-ready]');
+  const section = page.locator('.pv-page');
+  await expect(section).toBeVisible();
+  await page.waitForLoadState('networkidle'); // lazy chunks in before the reload
+  return section;
 }
 
 for (const width of [390, 1280]) {
@@ -49,7 +50,7 @@ for (const width of [390, 1280]) {
       for (const row of await section.locator('.pv-card').all()) await expect(row).toContainText(/Used for: (Operations|Both)/);
       // the dead old Cloudflare key beside the live one, removable in one tap (after a confirm)
       await expect(section.locator('.pv-card').filter({ hasText: 'Cloudflare (old)' }).getByRole('button', { name: 'Remove this dead one' })).toBeVisible();
-      expect(await overflowProblems(dialog(page, /Settings/))).toEqual([]);
+      expect(await overflowProblems(section)).toEqual([]);
     } finally {
       await page.request.delete(`/api/providers/${added.id}`);
     }
