@@ -14,6 +14,7 @@ import { Bubble } from './ChatBubble';
 import { DaySeparator } from './ChatCards';
 import { ItDeskCards } from './ItDeskCards';
 import { ItHealth, ItRecCards } from './ItHealth';
+import { ItTickets } from './ItTickets';
 import { MessageBox } from './MessageBox';
 import { MicButton } from './MicButton';
 import { ModelPicker } from './ModelPicker';
@@ -254,7 +255,7 @@ function ItTelegram() {
   );
 }
 
-/** Console → The CEO → IT department: the chat beside its health checks and setup (stacked when narrow). */
+/** Console → The CEO → IT department: the chat beside its health checks and setup (stacked when narrow), and its tickets (#542) under them. */
 export function ItDept() {
   return (
     <div className="it-dept">
@@ -265,6 +266,7 @@ export function ItDept() {
           <ItSetup />
         </div>
       </div>
+      <ItTickets />
     </div>
   );
 }

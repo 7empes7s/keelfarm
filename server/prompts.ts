@@ -39,6 +39,8 @@ interface PromptBase {
   officePlaybook?: string;
   /** Browser checks and heavy runs go to the office's test lab (#56): its lab_* tools instead of a browser of their own. */
   lab?: boolean;
+  /** They have it_report (#542): office problems go to the IT department. */
+  it?: boolean;
 }
 
 export interface DevPromptInput extends PromptBase {
@@ -104,10 +106,13 @@ const selfReviewStep = (n: number, repo: PromptFloor) =>
 /** Sessions that use the test lab (#56): it runs the browser and the heavy suites for everyone. */
 const LAB_RULE = "For full test suites, builds or e2e runs that need a lot of memory, use lab_run. Don't start a browser or a full e2e run of your own.";
 
+/** Sessions with it_report (#542): the office's own problems go to IT instead of loops and blind retries. */
+const IT_LINE = 'Office problems (test lab, preview, ports, disk, sign-in, CI): report them with it_report and carry on or wait as it says; never sleep-loop or retry blindly.';
+
 export const devBranch = (issue: number | string, slug: string) => `swarm/issue-${issue}-${slug}`;
 export const qaBranch = (pr: number | string, slug: string) => `qa/pr-${pr}-${slug}`;
 
-export function devSystemPrompt({ agent: a, repo, port, cwd, branch, linked, fixing, depsLine, officePlaybook, lab }: DevPromptInput) {
+export function devSystemPrompt({ agent: a, repo, port, cwd, branch, linked, fixing, depsLine, officePlaybook, lab, it }: DevPromptInput) {
   const push = fixing ? `git push origin HEAD:${fixing.headRef}` : `git push -u origin ${branch}`;
   const links = linked.map((r) => `- ${r.fullName}: read-only reference clone at ${r.dir}`);
   return [
@@ -140,13 +145,14 @@ export function devSystemPrompt({ agent: a, repo, port, cwd, branch, linked, fix
     fixing ? '' : '8. End your final message with the pull request URL on its own line.',
     '',
     'Rules: never push to the default branch, never force-push, never merge pull requests yourself (the office merges them once QA and the checks pass), and never edit files outside your worktree. If you cannot finish, open a draft PR (gh pr create --draft) explaining what is left and why.',
+    it ? IT_LINE : '',
     ONE_TURN,
   ]
     .filter((l) => l !== '')
     .join('\n');
 }
 
-export function qaSystemPrompt({ agent: a, repo, port, cwd, branch, pr, depsLine, testStep, officePlaybook, lab }: QaPromptInput) {
+export function qaSystemPrompt({ agent: a, repo, port, cwd, branch, pr, depsLine, testStep, officePlaybook, lab, it }: QaPromptInput) {
   return [
     floorContext(repo, officePlaybook),
     '',
@@ -171,6 +177,7 @@ export function qaSystemPrompt({ agent: a, repo, port, cwd, branch, pr, depsLine
     "A merge conflict with the default branch is not a fail, nor is a red check unrelated to this change (a flake or an outage: say why): judge the change itself (on a throwaway merge if you need newer work) and pass it if it's good. The office sends conflicting PRs back for a merge fix, then you re-test, and re-runs a failed check before anyone fixes it.",
     '',
     'Rules: do not modify the code under test, do not commit, push, comment on, review or merge anything on GitHub. The office posts your report on the pull request. Finish with the structured QA report: verdict, summary, the checks you performed, the commands you ran, one caption per screenshot naming its page and, on a fail, its cause.',
+    ...(it ? [IT_LINE] : []),
     ONE_TURN,
   ].join('\n');
 }

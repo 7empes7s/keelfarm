@@ -27,7 +27,10 @@ export abstract class SwarmDisk extends SwarmServerLoad {
     this.health.useDisk({
       read: () => this.backend.disk.read(this.diskDirs()),
       settings: () => this.disk,
-      alert: (title, body) => this.notifier.notify('disk', title, body),
+      alert: (title, body) => {
+        this.notifier.notify('disk', title, body);
+        this.autoTicket({ kind: 'disk', title, body });
+      },
       lastClean: () => this.lastClean,
       lastAlert: () => this.state.diskAlert ?? null,
       setLastAlert: (mark) => {

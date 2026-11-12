@@ -14,6 +14,7 @@ import { forwardText, isHarnessText, stripHarness } from '../../shared/chat.ts';
 import type { AgentStatus, PhoneMessage, WorldSnapshot } from '../../shared/types.ts';
 import { HOME_DIR } from '../config.ts';
 import { HttpError } from '../httpError.ts';
+import { itOfficeTools } from '../ceoItTools.ts';
 import type { OfficeTools } from '../ceo.ts';
 import { itJobPrompt, itSystemPrompt } from '../itLead.ts';
 import { recordCost } from '../metrics.ts';
@@ -188,13 +189,15 @@ export abstract class SwarmItDept extends SwarmSetup {
     return (this.itBot as TelegramBot | undefined)?.secret() ?? null;
   }
 
-  /** IT's office tools (server/ceoItTools.ts), with it_recommend's monitoring (server/swarm/itWatch.ts). */
-  protected abstract itTools(): OfficeTools;
+  /** IT's office tools: it_run, it_propose, it_recommend (itWatch.ts), it_health and it_ticket (server/ceoItTools.ts). */
+  protected itTools(): OfficeTools {
+    return itOfficeTools({ itRun: (a) => this.itRun(a), itPropose: (a) => this.itPropose(a), itRecommend: (a) => this.itRecommend(a), itHealth: () => this.itHealth(), itTicket: (a) => this.itTicket(a) });
+  }
 
   /** it_health: the office's readings, compact. */
   protected itHealth(): string {
     const d = this.state.itDesk;
-    return JSON.stringify({ health: this.health.view(), watchdog: this.doctorView().slice(0, 10), waiting: d.waiting.map((p) => argvLine(p.argv)), recent: d.log.slice(0, Math.min(5, IT_LOG_SHOWN)).map((e) => ({ kind: e.kind, cmd: argvLine(e.argv), code: e.code, at: e.at })) }).slice(0, 8000);
+    return JSON.stringify({ health: this.health.view(), watchdog: this.doctorView().slice(0, 10), waiting: d.waiting.map((p) => argvLine(p.argv)), recent: d.log.slice(0, Math.min(5, IT_LOG_SHOWN)).map((e) => ({ kind: e.kind, cmd: argvLine(e.argv), code: e.code, at: e.at })), tickets: this.state.itTickets.list.filter((t) => t.status === 'open').slice(0, 10).map((t) => ({ id: t.id, where: t.where, what: t.what, count: t.count, blocking: t.blocking })) }).slice(0, 8000);
   }
 
   private async runItJob(job: ItJob) {
@@ -205,7 +208,7 @@ export abstract class SwarmItDept extends SwarmSetup {
     // A session carries on only on the coding agent that made it.
     const resume = this.state.it.sessionId && (this.state.it.sessionCli ?? 'claude') === cli ? this.state.it.sessionId : undefined;
     const how = this.sessionRuntime(a, resume);
-    Object.assign(a, { status: 'working' as AgentStatus, issueTitle: job.kind === 'chat' ? 'Answering the manager' : job.kind === 'ask' ? `${job.from}'s question` : job.kind === 'watch' ? 'Looking at a health check' : `Checking ${job.line}`, startedAt: Date.now(), endedAt: null, lastError: null });
+    Object.assign(a, { status: 'working' as AgentStatus, issueTitle: job.kind === 'chat' ? 'Answering the manager' : job.kind === 'ask' ? `${job.from}'s question` : job.kind === 'ticket' ? `Ticket #${job.id}` : job.kind === 'watch' ? 'Looking at a health check' : `Checking ${job.line}`, startedAt: Date.now(), endedAt: null, lastError: null });
     if (job.kind === 'chat') this.itDelivery(job.messageIds, 'read');
     this.itChanged();
     await fs.mkdir(IT_DIR, { recursive: true }).catch(() => undefined);

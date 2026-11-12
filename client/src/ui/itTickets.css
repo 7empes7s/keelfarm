@@ -1,0 +1,95 @@
+/* IT tickets (ui/ItTickets.tsx, #542): the list with its filter, and a ticket's sheet. */
+.it-tickets {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  min-width: 0;
+}
+.it-tickets-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--ds-space-2);
+}
+.it-tickets-head h3 {
+  margin: 0;
+}
+.it-tickets-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-2);
+}
+.it-tickets-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.it-tickets-list li + li {
+  border-top: 1px solid var(--ds-line);
+}
+.it-ticket-row {
+  width: 100%;
+  min-height: var(--ds-target);
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.it-ticket-row:hover {
+  background: var(--ds-surface-hover);
+}
+.it-ticket-row .ds-row-title,
+.it-ticket-row .ds-row-meta {
+  display: block;
+}
+.it-ticket-badge {
+  flex: none;
+  min-width: 2.75rem;
+  padding: 2px var(--ds-space-2);
+  border-radius: var(--ds-radius-sm);
+  font-weight: 700;
+  font-size: var(--ds-text-sm);
+  text-align: center;
+  color: var(--ds-on-color);
+}
+.it-ticket-open {
+  background: var(--ds-warn-fill);
+}
+.it-ticket-blocking {
+  background: var(--ds-bad-fill);
+}
+.it-ticket-closed {
+  background: var(--ds-good-fill);
+}
+.it-ticket-state {
+  flex: none;
+  font-weight: 600;
+}
+.it-ticket-what {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.it-ticket-h {
+  margin: var(--ds-space-3) 0 var(--ds-space-1);
+  font-size: var(--ds-text-sm);
+  text-transform: uppercase;
+  color: var(--ds-text-muted);
+}
+.it-ticket-evidence {
+  margin: 0 0 var(--ds-space-2);
+  padding: var(--ds-space-2);
+  max-height: 12rem;
+  overflow: auto;
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface-sunken);
+  font-size: var(--ds-text-sm);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.it-ticket-done {
+  margin: 0;
+  overflow-wrap: anywhere;
+}

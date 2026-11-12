@@ -21,7 +21,7 @@ import { waitTools, type WaitHandlers } from './ceoWaitTools.ts';
 import { reactTools, type ReactHandlers } from './ceoReactTools.ts';
 import { setupTools, type SetupHandlers } from './ceoSetupTool.ts';
 import { ASKED_IN, askTools, type AskHandlers } from './ceoAskTools.ts';
-import { askItTools, type AskItHandlers } from './ceoItTools.ts';
+import { askItTools, reportTools, type AskItHandlers, type ReportHandlers } from './ceoItTools.ts';
 
 // The CEO: a Claude Code session in the lobby that runs the company instead of writing code.
 // It studies each floor's repo, sizes its team of interchangeable agents from its throughput (team changes the
@@ -159,7 +159,7 @@ export function qaReportText(
   return JSON.stringify(report, null, 1);
 }
 
-export interface OfficeHandlers extends WaitHandlers, ReactHandlers, SetupHandlers, AskHandlers, AskItHandlers {
+export interface OfficeHandlers extends WaitHandlers, ReactHandlers, SetupHandlers, AskHandlers, AskItHandlers, ReportHandlers {
   companyStatus(a: { full?: boolean }): string;
   floorDetail(a: { floor: number }): string;
   agentDetail(a: { agent_id: string }): string;
@@ -228,8 +228,12 @@ export function experimentInput(a: ExperimentToolInput, floorId: (floor: number)
   };
 }
 
+type ToolDefs = NonNullable<Parameters<typeof createSdkMcpServer>[0]['tools']>;
+
 export interface OfficeTools {
   server: McpSdkServerConfigWithInstance;
+  /** Its tools, for joining several into one server (joinTools). */
+  defs: ToolDefs;
   /** A fresh MCP server with the same tools, for one request from a CEO running in a terminal (served over HTTP). */
   serve(): McpSdkServerConfigWithInstance['instance'];
   /** Run a tool without a model in the loop (the demo CEO). */
@@ -251,10 +255,11 @@ export const runTool = async (fn: () => string | Promise<string>) => {
 };
 
 /** These tools as the "office" MCP server (the CEO's, or the IT department's, server/ceoItTools.ts). */
-export function toolServer(defs: NonNullable<Parameters<typeof createSdkMcpServer>[0]['tools']>): OfficeTools {
+export function toolServer(defs: ToolDefs): OfficeTools {
   const server = createSdkMcpServer({ name: 'office', version: '1.0.0', tools: defs });
   return {
     server,
+    defs,
     serve: () => createSdkMcpServer({ name: 'office', version: '1.0.0', tools: defs }).instance,
     async call(name, args) {
       const def = defs.find((d) => d.name === name);
@@ -264,6 +269,9 @@ export function toolServer(defs: NonNullable<Parameters<typeof createSdkMcpServe
     },
   };
 }
+
+/** One session's office server with the tools of each part (an agent's lab, lease and IT tools). */
+export const joinTools = (...parts: (OfficeTools | undefined)[]): OfficeTools => toolServer(parts.flatMap((p) => p?.defs ?? []));
 
 export function createOfficeTools(h: OfficeHandlers): OfficeTools {
   const run = runTool;
@@ -535,6 +543,7 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
     ...setupTools(h, run),
     ...askTools(h, run),
     ...askItTools(h, run),
+    ...reportTools(h, run),
   ];
   return toolServer(defs);
 }

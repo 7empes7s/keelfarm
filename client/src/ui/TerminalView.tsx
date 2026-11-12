@@ -232,6 +232,11 @@ export function TerminalView({ agentId, view, jump, details: requestedDetails, p
           <Icon name="ban" /> Blocked: {agent.blocked}. Answer it in the terminal.
         </div>
       )}
+      {agent.itWait != null && (
+        <div className="small">
+          <Icon name="clipboard-list" /> Waiting on IT #{agent.itWait}
+        </div>
+      )}
       {agent.nudge && agent.status === 'working' && (
         <div className="small muted">
           <Icon name="git-merge" /> {agent.nudge}

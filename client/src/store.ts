@@ -13,6 +13,7 @@ import { DEFAULT_TEST_LAB, type TestLabView } from '../../shared/testLab';
 import type { ItDeskView } from '../../shared/itDesk';
 import { IT_DEPT_DEFAULTS, type ItView } from '../../shared/itDept';
 import type { ItWatchView } from '../../shared/itWatch';
+import type { ItTicket } from '../../shared/itTickets';
 import { DEFAULT_CEO_AWAKE } from '../../shared/ceoAwake';
 import { DEFAULT_CLOUD, EMPTY_CLOUD } from '../../shared/cloud';
 import { DEFAULT_TOOL_SETTINGS, EMPTY_INVENTORY, type ToolInventory } from '../../shared/tooling';
@@ -162,6 +163,7 @@ export interface State {
   itDesk: ItDeskView | null; // the CEO's IT desk (#506); null: a server without it, or a replay
   it: ItView | null; // the IT department's chat (#524); null: a server without it, or a replay
   itWatch: ItWatchView | null; // IT monitoring (#525): the health checks and recommendations; null until the first check
+  itTickets: ItTicket[]; // office problems reported to IT (#542), newest first
   claudeUsage: UsageReading[]; // Claude's latest reading per usage limit (empty until a session reports)
   claudeUsageCheck: UsageCheckError | null; // why the office's idle check couldn't read it (#89), null when it could
   claudeUsageShares: UsageShares[]; // each usage bar's floor shares of the office's spend in its window (#334)
@@ -336,6 +338,7 @@ export const useStore = create<State>((set, get) => ({
   itDesk: null,
   it: null,
   itWatch: null,
+  itTickets: [],
   claudeUsage: [],
   claudeUsageCheck: null,
   claudeUsageShares: [],

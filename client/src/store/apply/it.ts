@@ -1,5 +1,5 @@
-// The IT department (#524): its chat, a message at a time, and its view (on, name, working, its Telegram bot); its
-// health checks and recommendations (#525).
+// The IT department (#524): its chat, a message at a time, and its view (on, name, working, its Telegram bot); its tickets
+// (#542), health checks and recommendations (#525).
 import type { ApplyHandlers, SnapshotPart } from './types';
 
 export const handlers = {
@@ -10,6 +10,7 @@ export const handlers = {
     set({ it: { ...ev.it, messages } });
   },
   itWatch: (ev, { set }) => set({ itWatch: ev.itWatch }),
+  itTickets: (ev, { set }) => set({ itTickets: ev.tickets }),
 } satisfies ApplyHandlers;
 
-export const snapshot: SnapshotPart = (d) => ({ it: d.it ?? null, itWatch: d.itWatch ?? null });
+export const snapshot: SnapshotPart = (d) => ({ it: d.it ?? null, itWatch: d.itWatch ?? null, itTickets: d.itTickets ?? [] });

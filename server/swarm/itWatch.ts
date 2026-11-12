@@ -9,14 +9,12 @@ import { addDiskSample, beforeAfter, digestDay, digestLine, IT_OPTIONS_MAX, IT_W
 import type { ItRisk } from '../../shared/itDesk.ts';
 import { uniqueDisks } from '../../shared/disk.ts';
 import type { WorldSnapshot } from '../../shared/types.ts';
-import { itOfficeTools } from '../ceoItTools.ts';
-import type { OfficeTools } from '../ceo.ts';
 import { HttpError } from '../httpError.ts';
 import { neverRefusal } from '../itDesk.ts';
 import { readItChecks } from '../itChecks.ts';
 import { recKeyboard } from '../telegram.ts';
 import { FILES_DIR, oneLine, QA_SHOTS_DIR } from './model.ts';
-import { SwarmItDept } from './itDept.ts';
+import { SwarmItTickets } from './itTickets.ts';
 
 /** it_recommend's arguments (server/ceoItTools.ts). */
 export interface ItRecommendArgs {
@@ -33,7 +31,7 @@ const CHECK_IDS: readonly ItCheckId[] = ['disk', 'memory', 'load', 'units', 'fai
 const RISKS: readonly ItRisk[] = ['low', 'medium', 'high'];
 const REC_ID = /^(r-[a-z0-9]+-\d+)(?:_(\d))?$/; // a Telegram button's id: <rec> (Not now) or <rec>_<option> (telegram.ts recKeyboard)
 
-export abstract class SwarmItWatch extends SwarmItDept {
+export abstract class SwarmItWatch extends SwarmItTickets {
   private watchChain: Promise<void> = Promise.resolve();
   private watching = false;
   private recSeq = 0;
@@ -69,11 +67,6 @@ export abstract class SwarmItWatch extends SwarmItDept {
   private itWatchChanged() {
     this.save();
     this.broadcast({ type: 'itWatch', itWatch: this.itWatchView() });
-  }
-
-  /** IT's office tools: it_run, it_propose, it_recommend and it_health. */
-  protected itTools(): OfficeTools {
-    return itOfficeTools({ itRun: (a) => this.itRun(a), itPropose: (a) => this.itPropose(a), itRecommend: (a) => this.itRecommend(a), itHealth: () => this.itHealth() });
   }
 
   /** it_health with the checks' latest levels. */
