@@ -81,13 +81,17 @@ export interface TelegramDeps {
   on(): boolean;
   /** A message from the manager's chat, for the CEO (as from the phone, marked "via Telegram"), with its Telegram id. */
   message(text: string, messageId: number): Promise<void>;
-  /** A team-change button: approves or declines it through the office's own paths. Returns what to show; throws why not. */
-  decide(verdict: 'approve' | 'decline', id: string): string;
+  /** A team-change button (or an IT card's Run / Not now): decided through the office's own paths. Returns what to show; throws why not. */
+  decide(verdict: 'approve' | 'decline', id: string): string | Promise<string>;
   /** The view changed (linked, polling, a send): the settings redraw. */
   changed(): void;
   /** Server log lines, never the token or the chat. */
   log(line: string): void;
   now?(): number;
+  /** Where in the secrets file it lives: the CEO's bot under "telegram", the IT department's (#524) under "telegramIt". */
+  key?: 'telegram' | 'telegramIt';
+  /** Who the chat reaches, for the linked and already-linked replies; default "the CEO". */
+  who?: () => string;
 }
 
 const sleep = (ms: number, signal: AbortSignal) =>
@@ -117,8 +121,16 @@ export class TelegramBot {
 
   constructor(private deps: TelegramDeps) {}
 
+  private get key() {
+    return this.deps.key ?? 'telegram';
+  }
+
+  private get who() {
+    return this.deps.who?.() ?? 'the CEO';
+  }
+
   async init() {
-    this.secrets = loadTelegram((await readSecrets(this.deps.secretsFile)).telegram);
+    this.secrets = loadTelegram((await readSecrets(this.deps.secretsFile))[this.key]);
     this.start();
   }
 
@@ -210,7 +222,7 @@ export class TelegramBot {
     this.last = null;
     this.pollError = '';
     this.secrets = null;
-    await mergeSecrets(this.deps.secretsFile, { telegram: undefined });
+    await mergeSecrets(this.deps.secretsFile, { [this.key]: undefined });
     this.deps.changed();
     return this.view();
   }
@@ -372,7 +384,7 @@ export class TelegramBot {
       this.pending = null;
       await this.save({ ...s, chatId: link.chatId, chatName: link.name || undefined });
       this.deps.log('telegram: the manager\'s chat is linked');
-      await this.send('✅ Linked to your cubefarm office. Notifications come here, and you can write to the CEO right in this chat.');
+      await this.send(this.key === 'telegram' ? '✅ Linked to your cubefarm office. Notifications come here, and you can write to the CEO right in this chat.' : `✅ Linked to your cubefarm office's IT department. ${this.who}'s alerts and recommendations come here, and you can write to them right in this chat.`);
       return;
     }
     if (!fromManager(s.chatId, u)) {
@@ -382,7 +394,7 @@ export class TelegramBot {
     }
     if (u.kind === 'text') {
       if (startCommand(u.text) !== null) {
-        await this.send('This chat is already linked to the office. Write here to reach the CEO.');
+        await this.send(`This chat is already linked to the office. Write here to reach ${this.who}.`);
         return;
       }
       await this.deps.message(ceoText(u), u.messageId);
@@ -392,7 +404,7 @@ export class TelegramBot {
     let answer: string;
     let alert = false;
     try {
-      answer = d ? this.deps.decide(d.verdict, d.id) : 'That button is from an older office.';
+      answer = d ? await this.deps.decide(d.verdict, d.id) : 'That button is from an older office.';
     } catch (err) {
       answer = err instanceof Error ? err.message : 'That didn\'t work.';
       alert = true;
@@ -404,7 +416,7 @@ export class TelegramBot {
   }
 
   private async save(next: TelegramSecrets) {
-    await mergeSecrets(this.deps.secretsFile, { telegram: next });
+    await mergeSecrets(this.deps.secretsFile, { [this.key]: next });
     this.secrets = next;
     this.deps.changed();
   }

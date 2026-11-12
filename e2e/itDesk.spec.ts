@@ -1,8 +1,8 @@
 import type { Locator, Page } from '@playwright/test';
 import { expect, overflowProblems, test } from './helpers';
 
-// The IT desk (#506) on a phone: the demo CEO checks the machine and puts two clean-ups on cards; in the chat they wait
-// behind one row's Review, in a sheet. Run runs one and its output comes to the chat, Not now drops the other.
+// The IT desk (#506) on a phone: the demo CEO hands the machine to IT (#524), who puts two clean-ups on cards; in the CEO
+// chat they wait behind one row's Review, in a sheet. Run runs one and its output goes to IT's chat, Not now drops the other.
 
 const ask = async (page: Page) =>
   expect((await page.request.post('/api/ceo/message', { data: { text: 'Check the machine and tell me where to gain space' } })).ok()).toBe(true);
@@ -30,11 +30,10 @@ test('IT desk cards: Run executes and posts the output, Not now dismisses, at 39
   await expect(sheet).toHaveCount(0);
   await expect(strip).toHaveCount(0);
 
-  const posted = page.locator('.notice-card').filter({ hasText: 'Ran `journalctl --vacuum-size=500M`' }).last();
-  await expect(posted).toBeVisible();
-  await posted.locator('summary').click();
-  await expect(posted.locator('pre')).toContainText('freed 3.4G');
+  // Since #524 the output goes to the IT department's chat, whose lead the CEO asked.
   const state = await (await page.request.get('/api/state')).json();
+  const posted = state.it.messages.find((m: { text: string }) => m.text.includes('Ran `journalctl --vacuum-size=500M`'));
+  expect(posted?.notice?.details).toContain('freed 3.4G');
   expect(state.itDesk?.waiting ?? []).toEqual([]);
   expect(state.itDesk.log.slice(0, 2).map((e: { argv: string[]; code: number | null }) => [e.argv[0], e.code])).toEqual([['docker', null], ['journalctl', 0]]);
 });

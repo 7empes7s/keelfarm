@@ -4,7 +4,7 @@
 import type { OfficeCall } from './ceoStream.ts';
 
 /** A console section an action card opens (ids from client/src/ui/consoleNavRules.ts). */
-type ActionSection = 'team' | 'ceo' | 'charter' | 'ops' | 'projects' | 'notifications' | 'providers' | 'accounts';
+type ActionSection = 'team' | 'ceo' | 'charter' | 'ops' | 'projects' | 'notifications' | 'providers' | 'accounts' | 'it-dept';
 
 /** What an action card opens, and whose live status it shows. */
 export type ActionRef =
@@ -73,6 +73,7 @@ const ACTS: Record<string, string> = {
   apply_charter: '🧭',
   merge_pull: '🔀',
   it_propose: '🖥️',
+  ask_it: '🖥️',
 };
 
 /** The office tools that aren't cards: reads, and what shows in the chat itself (files, edits, reactions, questions). */
@@ -93,6 +94,7 @@ const SECTIONS: Partial<Record<string, ActionSection>> = {
   send_telegram: 'notifications',
   scan_keys: 'providers',
   it_propose: 'ops',
+  ask_it: 'it-dept',
   make_default_account: 'accounts',
 };
 const DETAILS: Partial<Record<string, 'now' | 'setup'>> = { restart_agent: 'now', stop_agent: 'now', configure_agent: 'setup' };
