@@ -15,7 +15,7 @@ test('Settings → Voice → Test plays the line on the element the tap unlocked
   // Every play(): which element and what it played (data: is the tap's moment of silence, blob: the Test line).
   await page.addInitScript(() => {
     const plays: { el: number; src: string }[] = [];
-    const ids = new WeakMap<HTMLMediaElement, number>();
+    const ids = new Map<HTMLMediaElement, number>();
     const play = HTMLMediaElement.prototype.play;
     HTMLMediaElement.prototype.play = function (this: HTMLMediaElement) {
       if (!ids.has(this)) ids.set(this, ids.size + 1);
