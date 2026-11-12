@@ -1,6 +1,6 @@
 import { devices, type Locator, type Page } from '@playwright/test';
 import { expect, test } from './helpers';
-import { dialog, pocketSection } from './layout/helpers';
+import { dialog, office, pocketSection } from './layout/helpers';
 
 // Every text field stays above the phone's keyboard (#494), however iOS reports it: a resize that comes before the
 // keyboard has settled, none at all, or focus moving to another field with the keyboard already up. The field and its
@@ -122,3 +122,69 @@ test('after the keyboard closes the layout goes back, with no stray scroll', asy
   const box = (await page.locator('.pocket').boundingBox())!;
   expect(box.y + box.height).toBeCloseTo(844, 0);
 });
+
+// More fields (#507), in both offices: sheets centred on, or pinned to the bottom of, the whole page used to put their
+// fields and buttons under the keyboard.
+const MORE: { name: string; open: (page: Page) => Promise<{ field: Locator; send: Locator }> }[] = [
+  {
+    name: "pocket: the + Agent sheet's name and its Add",
+    open: async (page) => {
+      await page.goto('/?pocket=1&tab=team');
+      await page.getByRole('button', { name: /^Add an agent to floor/ }).first().click();
+      const sheet = page.getByRole('dialog', { name: /New agent on floor/ });
+      return { field: sheet.getByRole('textbox', { name: /New agent's name/ }), send: sheet.getByRole('button', { name: 'Add', exact: true }) };
+    },
+  },
+  {
+    name: "pocket: the terminal's paste sheet and its Send + Enter",
+    open: async (page) => {
+      const { field } = await signIn(page);
+      await field.page().locator('.acc-signin').getByRole('button', { name: 'Show terminal' }).tap();
+      await page.evaluate(() => Object.defineProperty(navigator, 'clipboard', { value: { readText: () => Promise.reject(new DOMException('denied', 'NotAllowedError')) } }));
+      await page.locator('.acc-signin .term-keys-row').getByRole('button', { name: /^Paste/ }).tap();
+      const sheet = dialog(page, /Paste the sign-in code/);
+      await sheet.getByRole('textbox', { name: 'Sign-in code' }).fill('demo-code');
+      return { field: sheet.getByRole('textbox', { name: 'Sign-in code' }), send: sheet.getByRole('button', { name: 'Send + Enter' }) };
+    },
+  },
+  {
+    name: 'pocket: the search box',
+    open: async (page) => {
+      await page.goto('/?pocket=1');
+      await page.getByRole('button', { name: /Search everything/ }).click();
+      const field = page.getByRole('combobox', { name: 'Search everything' });
+      return { field, send: field };
+    },
+  },
+  {
+    name: '3D office: a Settings field low in its section',
+    open: async (page) => {
+      await office(page);
+      await expect(page.locator('.hud-hint')).toContainText("Open the manager's console"); // nobody walking past in between
+      await page.keyboard.press('e');
+      const root = dialog(page, /Manager's console/);
+      await pocketSection(root, 'Company');
+      const field = root.getByRole('textbox', { name: /Projects folder/ });
+      await field.evaluate((el) => el.scrollIntoView({ block: 'end' }));
+      return { field, send: field };
+    },
+  },
+  {
+    name: '3D office: the search box',
+    open: async (page) => {
+      await office(page);
+      await page.keyboard.press('Control+k');
+      const field = page.getByRole('combobox', { name: 'Search everything' });
+      return { field, send: field };
+    },
+  },
+];
+
+for (const f of MORE) {
+  test(`${f.name} stay above the keyboard`, async ({ page }) => {
+    const { field, send } = await f.open(page);
+    await expect(field).toBeVisible();
+    await typeIn(page, field, 'late resize');
+    await onScreen(page, [field, send]);
+  });
+}
