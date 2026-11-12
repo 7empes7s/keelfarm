@@ -53,6 +53,13 @@ function primeSpeech() {
   speechSynthesis.speak(u);
 }
 
+/** Inside a tap (Settings → Voice's Test, #545): wakes the audio and unlocks the element a clip fetched later plays on. */
+export function primeVoice(): HTMLAudioElement | null {
+  unlockAudio();
+  primeElement();
+  return voiceElement();
+}
+
 /** Inside the tap: wakes the audio for `kind`, then plays message `m` (voiceMessages.ts). */
 export function tapReplay(m: PhoneMessage, kind: Replay, browser: boolean) {
   unlockAudio();

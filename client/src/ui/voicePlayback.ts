@@ -11,11 +11,15 @@ export function stopVoice() {
   stopCurrent?.();
 }
 
-/** Plays a clip (a URL, or audio fetched from the office). Resolves false when it couldn't play. */
-export function playClip(src: string | Blob): Promise<boolean> {
+/**
+ * Plays a clip (a URL, or audio fetched from the office), on `on` when given: an element a tap unlocked (voiceTap.ts),
+ * as iOS plays a new one only from inside the tap. Resolves false when it couldn't play.
+ */
+export function playClip(src: string | Blob, on?: HTMLAudioElement | null): Promise<boolean> {
   stopVoice();
   const url = typeof src === 'string' ? src : URL.createObjectURL(src);
-  const el = new Audio(url);
+  const el = on ?? new Audio();
+  el.src = url;
   const level = () => {
     el.volume = playbackVolume(getAudioPrefs());
   };
@@ -30,6 +34,7 @@ export function playClip(src: string | Blob): Promise<boolean> {
       unsubscribe();
       unduck();
       el.pause();
+      el.onended = el.onerror = null;
       if (typeof src !== 'string') URL.revokeObjectURL(url);
       if (stopCurrent === stop) stopCurrent = null;
       resolve(ok);
