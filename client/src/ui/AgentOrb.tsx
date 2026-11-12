@@ -154,7 +154,9 @@ export default function AgentOrb({ state }: { state: OrbState }) {
   stateRef.current = state;
   const [failed, setFailed] = useState(false);
   const redraw = useRef<() => void>(() => undefined);
-  useEffect(() => redraw.current(), [state]); // a still orb (reduced motion) draws again when the state changes
+  useEffect(() => {
+    redraw.current();
+  }, [state]); // a still orb (reduced motion) draws again when the state changes
 
   useEffect(() => {
     const el = canvas.current;
@@ -238,7 +240,9 @@ export default function AgentOrb({ state }: { state: OrbState }) {
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     };
     frame = requestAnimationFrame(draw);
-    redraw.current = () => still && requestAnimationFrame(draw);
+    redraw.current = () => {
+      if (still) requestAnimationFrame(draw);
+    };
     return () => {
       cancelAnimationFrame(frame);
       el.removeEventListener('webglcontextlost', lost);
