@@ -111,7 +111,7 @@ export abstract class SwarmItDept extends SwarmSetup {
 
   // ---------- the chat ----------
 
-  private postIt(from: PhoneMessage['from'], text: string, extra: Partial<PhoneMessage> = {}): PhoneMessage {
+  protected postIt(from: PhoneMessage['from'], text: string, extra: Partial<PhoneMessage> = {}): PhoneMessage {
     const parts = parseMessage(from, text);
     const id = this.messageSeq++;
     const artifacts = makeArtifacts(id, parts.artifacts);
@@ -165,7 +165,7 @@ export abstract class SwarmItDept extends SwarmSetup {
     return `Asked ${s.name} in the IT chat (message ${m.id}). Their answer comes back to you in your next job; any change goes to the manager on a card.`;
   }
 
-  private enqueueIt(job: ItJob) {
+  protected enqueueIt(job: ItJob) {
     queueItJob(this.state.it.queue, job);
     this.save();
     setTimeout(() => this.startItWork(), 50);
@@ -187,15 +187,15 @@ export abstract class SwarmItDept extends SwarmSetup {
     return (this.itBot as TelegramBot | undefined)?.secret() ?? null;
   }
 
-  /** IT's office tools: it_run, it_propose and it_health (server/ceoItTools.ts). */
+  /** IT's office tools: it_run, it_propose, it_health and it_ticket (server/ceoItTools.ts). */
   protected itTools(): OfficeTools {
-    return itOfficeTools({ itRun: (a) => this.itRun(a), itPropose: (a) => this.itPropose(a), itHealth: () => this.itHealth() });
+    return itOfficeTools({ itRun: (a) => this.itRun(a), itPropose: (a) => this.itPropose(a), itHealth: () => this.itHealth(), itTicket: (a) => this.itTicket(a) });
   }
 
   /** it_health: the office's readings, compact. */
   private itHealth(): string {
     const d = this.state.itDesk;
-    return JSON.stringify({ health: this.health.view(), watchdog: this.doctorView().slice(0, 10), waiting: d.waiting.map((p) => argvLine(p.argv)), recent: d.log.slice(0, Math.min(5, IT_LOG_SHOWN)).map((e) => ({ kind: e.kind, cmd: argvLine(e.argv), code: e.code, at: e.at })) }).slice(0, 8000);
+    return JSON.stringify({ health: this.health.view(), watchdog: this.doctorView().slice(0, 10), waiting: d.waiting.map((p) => argvLine(p.argv)), recent: d.log.slice(0, Math.min(5, IT_LOG_SHOWN)).map((e) => ({ kind: e.kind, cmd: argvLine(e.argv), code: e.code, at: e.at })), tickets: this.state.itTickets.list.filter((t) => t.status === 'open').slice(0, 10).map((t) => ({ id: t.id, where: t.where, what: t.what, count: t.count, blocking: t.blocking })) }).slice(0, 8000);
   }
 
   private async runItJob(job: ItJob) {
@@ -206,7 +206,7 @@ export abstract class SwarmItDept extends SwarmSetup {
     // A session carries on only on the coding agent that made it.
     const resume = this.state.it.sessionId && (this.state.it.sessionCli ?? 'claude') === cli ? this.state.it.sessionId : undefined;
     const how = this.sessionRuntime(a, resume);
-    Object.assign(a, { status: 'working' as AgentStatus, issueTitle: job.kind === 'chat' ? 'Answering the manager' : job.kind === 'ask' ? `${job.from}'s question` : `Checking ${job.line}`, startedAt: Date.now(), endedAt: null, lastError: null });
+    Object.assign(a, { status: 'working' as AgentStatus, issueTitle: job.kind === 'chat' ? 'Answering the manager' : job.kind === 'ask' ? `${job.from}'s question` : job.kind === 'ticket' ? `Ticket #${job.id}` : `Checking ${job.line}`, startedAt: Date.now(), endedAt: null, lastError: null });
     if (job.kind === 'chat') this.itDelivery(job.messageIds, 'read');
     this.itChanged();
     await fs.mkdir(IT_DIR, { recursive: true }).catch(() => undefined);

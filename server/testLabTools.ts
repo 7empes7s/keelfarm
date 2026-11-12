@@ -89,6 +89,7 @@ export function createLabTools(h: LabHandlers): OfficeTools {
   ];
   return {
     server: createSdkMcpServer({ name: 'office', version: '1.0.0', tools: defs }),
+    defs,
     serve: () => createSdkMcpServer({ name: 'office', version: '1.0.0', tools: defs }).instance,
     async call(name, args) {
       const def = defs.find((d) => d.name === name);

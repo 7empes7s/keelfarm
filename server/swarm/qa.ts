@@ -189,7 +189,7 @@ export abstract class SwarmQa extends SwarmSessions {
   }
 
   protected buildQaSystemAppend(a: PersistedAgent, repo: PersistedRepo, cwd: string, branch: string, pr: PrDetails, testStep: string, deps?: DepsOutcome) {
-    return qaSystemPrompt({ agent: a, repo, port: this.port(a), cwd, branch, pr, testStep, depsLine: depsPromptLine(deps), officePlaybook: this.state.settings.officePlaybook, lab: this.usesTestLab(a, repo) });
+    return qaSystemPrompt({ agent: a, repo, port: this.port(a), cwd, branch, pr, testStep, depsLine: depsPromptLine(deps), officePlaybook: this.state.settings.officePlaybook, lab: this.usesTestLab(a, repo), it: a.host !== 'box' });
   }
 
   protected async runQa(a: PersistedAgent, repo: PersistedRepo, rec: QaRecord) {

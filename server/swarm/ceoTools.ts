@@ -116,6 +116,7 @@ export abstract class SwarmCeoTools extends SwarmItDesk {
       applyCharter: acts((a) => this.askApplyCharter(a)),
       mergePull: acts((a) => this.askMergePull(a)),
       askIt: (a) => this.askIt(a),
+      itReport: (a) => this.itReport(a, { id: 'ceo', name: this.ceo().name }),
     }, () => this.state.ceo.job?.kind === 'research')));
   }
 

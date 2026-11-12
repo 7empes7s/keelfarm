@@ -120,6 +120,11 @@ function AgentCard({ agent, repo, fresh }: { agent: Agent; repo: RepoView; fresh
           <Icon name="git-merge" /> {agent.nudge}
         </div>
       )}
+      {agent.itWait != null && (
+        <div className="small pk-sign-in">
+          <Icon name="clipboard-list" /> Waiting on IT #{agent.itWait}
+        </div>
+      )}
       {agent.waiting && !working && (
         <div className="small pk-sign-in">
           <Icon name="circle-help" /> {agent.waiting === 'ceo' ? 'Asked a question: waiting for the CEO.' : 'Waiting for your answer in the Chat tab.'}

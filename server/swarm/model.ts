@@ -24,6 +24,7 @@ import type { PracticeOverrides } from '../../shared/practices.ts';
 import type { FloorTheme } from '../../shared/floorThemes.ts';
 import type { FollowupState } from '../../shared/followups.ts';
 import type { ItDeskState } from '../../shared/itDesk.ts';
+import type { TicketsState } from '../../shared/itTickets.ts';
 import type { ItState } from '../../shared/itDept.ts';
 import type { ChatsState } from '../../shared/conversations.ts';
 import type { MemoryNote } from '../../shared/ceoMemory.ts';
@@ -246,6 +247,7 @@ export interface Persisted {
   claudeUsage: UsageReading[]; // Claude's latest reading per usage limit, so a restart doesn't show none
   itDesk: ItDeskState; // the IT desk's waiting changes and its log (#506)
   it: ItState; // the IT department's chat, queue and the session it resumes (#524)
+  itTickets: TicketsState; // office problems reported to IT, and their outcomes (#542)
   diskAlert?: DiskAlertMark | null; // the last disk notification, so a restart doesn't repeat it (#502)
   usageWaiver?: Waiver | null; // pacing the manager cleared with Resume full speed, kept for its window across restarts (#323)
   experiments: LabState; // the lab's experiments and the issues in them (experiments.ts)

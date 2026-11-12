@@ -7,7 +7,8 @@ import type { BoxTarget } from '../boxCli.ts';
 import { boxLinkedDir } from '../boxScripts.ts';
 import { CloudError } from '../box.ts';
 import { redact } from '../cloud.ts';
-import { ceoSystemPrompt } from '../ceo.ts';
+import { ceoSystemPrompt, joinTools } from '../ceo.ts';
+import { reportOfficeTools } from '../ceoItTools.ts';
 import { stillOpen } from '../closeCleanup.ts';
 import { depsPromptLine, type DepsOutcome } from '../deps.ts';
 import { setUpDesk } from '../deskSetup.ts';
@@ -104,7 +105,7 @@ export abstract class SwarmSessions extends SwarmRotation {
   }
 
   protected buildSystemAppend(a: PersistedAgent, repo: PersistedRepo, cwd: string, branch: string, fixing?: { pr: number; headRef: string }, deps?: DepsOutcome) {
-    return devSystemPrompt({ agent: a, repo, port: this.port(a), cwd, branch, linked: this.linkedDirs(repo, a), fixing, depsLine: depsPromptLine(deps), officePlaybook: this.state.settings.officePlaybook, lab: this.usesTestLab(a, repo) });
+    return devSystemPrompt({ agent: a, repo, port: this.port(a), cwd, branch, linked: this.linkedDirs(repo, a), fixing, depsLine: depsPromptLine(deps), officePlaybook: this.state.settings.officePlaybook, lab: this.usesTestLab(a, repo), it: a.host !== 'box' });
   }
 
   /**
@@ -360,6 +361,7 @@ export abstract class SwarmSessions extends SwarmRotation {
     shot: (agentId, file, page) => this.labShot(agentId, file, page),
     emit: (testLab) => this.broadcast({ type: 'testLab', testLab }),
     updateGate: () => this.labGateNow(),
+    trouble: (t) => this.autoTicket({ kind: 'lab', ...t }),
   });
 
   /** Running lab jobs, for #55's admission (health.ts). */
@@ -509,7 +511,8 @@ export abstract class SwarmSessions extends SwarmRotation {
         effort: run.effort,
         // A session on the test lab (#56) gets its lab_* tools instead of a browser of its own.
         browserTesting: repo.browserTesting && !testLab,
-        ...(testLab ? { office: this.labTools(a, repo, cwd) } : {}),
+        // Its office server: the lab's tools, declare_files, and it_report to the IT department (#542).
+        office: joinTools(testLab ? this.labTools(a, repo, cwd) : undefined, practice.office, reportOfficeTools({ itReport: (x) => this.itReport(x, { id: a.id, name: a.name }) })),
         additionalDirectories: linked ?? (a.host === 'box' ? [] : this.linkedRepos(repo).map((r) => this.backend.mainDir(r.fullName))),
         role: a.role,
         task: a.task,
@@ -523,7 +526,6 @@ export abstract class SwarmSessions extends SwarmRotation {
         typed: mode === 'typed',
         reattach: mode === 'reattach',
         agentId: a.id,
-        ...(practice.office ? { office: practice.office } : {}),
         tools: this.sessionToolsFor(a, how.cli, lab.toolsOff),
         mcpServers: this.providers.mcpFor(a.id),
         ...how,

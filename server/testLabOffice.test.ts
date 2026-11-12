@@ -50,7 +50,7 @@ describe('a demo office with the test lab', () => {
   it('keeps the Playwright browser when the lab is off', async () => {
     const { opts } = await firstSession(false);
     expect(opts.browserTesting).toBe(true);
-    expect(opts.office).toBeUndefined();
+    expect(opts.office?.defs.map((d) => d.name)).toEqual(['it_report']); // no lab tools: only IT's (#542)
     expect(opts.systemAppend).toMatch(/mcp__playwright__browser_navigate/);
   }, 20_000);
 });
