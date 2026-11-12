@@ -391,12 +391,13 @@ export class Voice {
   /**
    * GET /api/voice/messages/:id: a phone message's spoken summary as mp3, made once and cached. `whole` (?whole=1, the
    * ⋯ menu's "Read the whole message"): its whole text, cached by its words but never the clip the ▶ replays.
+   * `tapped` (?tap=1, #532): the manager asked for it, so any CEO message is made, also with the voice off.
    */
-  async messageAudio(id: number, whole = false): Promise<Buffer> {
+  async messageAudio(id: number, whole = false, tapped = false): Promise<Buffer> {
     const s = this.deps.settings();
-    if (s.provider !== 'elevenlabs') throw new HttpError(404, "Messages aren't read by ElevenLabs right now.");
+    if (s.provider !== 'elevenlabs' && !(tapped && s.provider === 'off')) throw new HttpError(404, "Messages aren't read by ElevenLabs right now.");
     const m = this.message(id);
-    if (!m || !speaks(m, s)) throw new HttpError(404, `No spoken message ${id}`);
+    if (!m || !(speaks(m, s) || (tapped && m.from === 'ceo'))) throw new HttpError(404, `No spoken message ${id}`);
     if (whole) {
       const all = messageSpeech(m, { whole: true });
       if (!all) throw new HttpError(404, `Message ${id} has nothing to say aloud`);
