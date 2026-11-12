@@ -408,8 +408,9 @@ export class Providers {
     const text = JSON.stringify(this.data, null, 2);
     this.writing = this.writing.catch(() => undefined).then(async () => {
       await fs.mkdir(path.dirname(this.deps.file), { recursive: true });
-      await fs.writeFile(`${this.deps.file}.tmp`, text);
-      await fs.rename(`${this.deps.file}.tmp`, this.deps.file);
+      const tmp = `${this.deps.file}.${process.pid}.${randomUUID().slice(0, 8)}.tmp`; // its own name: another writer of the file never renames it away
+      await fs.writeFile(tmp, text);
+      await fs.rename(tmp, this.deps.file);
     });
     this.deps.changed(this.view());
     return this.writing;
