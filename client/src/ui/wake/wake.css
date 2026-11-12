@@ -1,0 +1,55 @@
+/* The wake word's mic light in the header (#537): the mic with a dot, like the system's own "the mic is on" light. */
+.wake-light {
+  position: relative;
+  color: var(--ds-warn-text);
+}
+.wake-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-warn-text);
+  animation: wake-breathe 2.4s var(--ds-ease) infinite;
+}
+.wake-light[data-wake='tap'] .wake-dot,
+.wake-light[data-wake='starting'] .wake-dot {
+  background: var(--ds-text-muted);
+  animation: none;
+}
+@keyframes wake-breathe {
+  50% {
+    opacity: 0.45;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wake-dot {
+    animation: none;
+  }
+}
+
+/* Settings → Voice → Wake word */
+.wake-settings {
+  display: grid;
+  gap: var(--ds-space-2);
+  margin-top: var(--ds-space-4);
+}
+.wake-status {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+}
+.wake-meter {
+  flex: 1;
+  max-width: 160px;
+  height: 6px;
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-sunken);
+  overflow: hidden;
+}
+.wake-meter > span {
+  display: block;
+  height: 100%;
+  background: var(--ds-accent);
+}

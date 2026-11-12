@@ -23,6 +23,7 @@ import { clampSpeed, modelPrice, SPEED_MAX, SPEED_MIN, SPEED_STEP, speedLabel, V
 import { SecretInput } from './SecretInput';
 import { chooseVoicePatch } from './voiceQuickRules';
 import { JarvisSettings } from './JarvisSettings';
+import { WakeSettings } from './wake/WakeSettings';
 
 const DOCS = 'https://github.com/leonvanzyl/cubefarm/blob/main/docs/voice.md';
 
@@ -401,6 +402,7 @@ export function VoiceSettings() {
       </label>
       {(eleven || cache.clips > 0) && <SavedClips voice={voice} save={save} />}
       <JarvisSettings />
+      <WakeSettings />
       <Listening keyShown={eleven} />
     </div>
   );

@@ -37,6 +37,7 @@ import { SearchButton, SearchPalette } from '../ui/SearchPalette';
 import { useFinder } from '../ui/goTo';
 import type { ScreenId } from '../ui/screenHelp';
 import { NoticeBell, NoticeCentre, NoticeToasts } from '../ui/Notices';
+import { WakeLight } from '../ui/wake/WakeRunner';
 import { BrowserFullButton } from '../ui/BrowserFullButton';
 import { QuickToggles } from '../ui/QuickToggles';
 import { useChatMode } from '../ui/chatMode';
@@ -649,6 +650,7 @@ export default function Pocket() {
         )}
         <UpdatePill className="btn btn-small btn-good pk-update" short={!wide} />
         {/* the chat has its own 🔍 (its conversations); Ctrl+K and the other tabs reach this one */}
+        <WakeLight className="pk-icon-btn" />
         {(tab !== 'chat' || wide) && <SearchButton className="pk-icon-btn" />}
         {(wide || tab !== 'chat') && <NoticeBell className="pk-icon-btn" compact={!wide} />}
         <QuickToggles className="pk-icon-btn" compact={!wide} />

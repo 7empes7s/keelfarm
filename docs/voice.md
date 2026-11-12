@@ -290,9 +290,9 @@ option. It feels like a conversation rather than messages read out:
 - **The screens stay:** the call screen, captions, Mute, Speaker, Pause, Skip and End work as before. The orb is
   [ElevenLabs UI's Orb](https://ui.elevenlabs.io/docs/components/orb) (MIT), ported to plain WebGL2 so a phone never
   loads three.js (`client/src/ui/AgentOrb.tsx`); it leads the phone's call screen and moves with listening, thinking
-  and talking. **"That's all"** (or "bye") ends the conversation but not the call: tap the orb to talk again. There's
-  no wake word: an iPhone browser can't listen in the background, so a hidden tab ends the conversation and a new one
-  starts when you're back.
+  and talking. **"That's all"** (or "bye") ends the conversation but not the call: tap the orb to talk again, or
+  say the wake word (below). An iPhone browser can't listen in the background, so a hidden tab ends the conversation
+  and a new one starts when you're back.
 - **Transcripts:** your words and the voice's answers go into the CEO chat as messages marked `voiceCall` (never read
   aloud again); a hand-off is your message to the CEO, as if typed.
 - **iPhone:** the call's audio starts inside the tap on Call (iOS only plays sound from a tap), the audio session is
@@ -318,6 +318,61 @@ ElevenLabs' protocol and "speaks" a soft tone; `__swarmCall.agent` is the conver
 `live`, `idle`), `__swarmCall.say(text)` types a turn to it (there's no mic in a headless browser) and
 `__swarmCall.agentProbe()` gives the last turn's `ackMs`, what was said and heard, and interruptions.
 `e2e/voiceAgent.spec.ts` walks it through at 390 px (Chromium, and WebKit where installed).
+
+### Wake word (#537)
+
+Settings → Voice → **Wake word**: say **"Hey Mimoun"** (or the stock **"Hey Jarvis"**) while the office is open on
+screen and the call starts, no tap: a soft chime, the orb, and the Jarvis voice (or today's voice mode without it), as
+if you'd tapped Call. During a call after "that's all", the word talks again like a tap on the orb.
+
+- **On this device only, off by default.** It's this device's mic, so the switch, the word and the **Sensitivity**
+  (Strict · Balanced · Easy) are saved in this browser (`localStorage` `cubefarm:wake`). Turning it on asks for the mic
+  once. A reload needs one tap anywhere before audio can run (browsers' rule); the header's light says so.
+- **Nothing leaves the device until it fires.** The mic goes through an AudioWorklet, down to 16 kHz, into
+  [openWakeWord](https://github.com/dscripka/openWakeWord)'s models on
+  [onnxruntime-web](https://onnxruntime.ai/docs/tutorials/web/) (WASM, one thread), all in the page. It's loaded only
+  once the wake word is on (about 3 MB of models and the 14 MB runtime, cached after).
+- **Cheap when nobody talks:** an 80 ms chunk too quiet to be speech costs a level check; anything louder asks
+  [Silero VAD](https://github.com/snakers4/silero-vad); only speech runs the wake word's models, replaying the 2 s
+  before it so the start of the phrase isn't lost, until 2 s after it ends. `wakePipeline.test.ts` logs the CPU of an
+  idle room (quiet, and with a fan) and fails over 5% of a core: about 0.1% and 1-2% here.
+- **One wake per phrase:** a score over the threshold (0.8 Strict … 0.5 Balanced … 0.2 Easy) wakes once, then not again
+  for 2 s and until the score has dropped (`WakeGate`, `client/src/ui/wake/wakeWord.ts`).
+- **The mic light:** whenever it listens, a mic with an orange dot sits in the header (the 3D office's HUD, the phone
+  HUD and pocket mode); a tap opens Settings → Voice. It pauses, and lets go of the mic, during a call, while the office
+  is in the background (another tab, the phone locked, the app switched away) and on low battery (unplugged at 20% or
+  less, where the browser says: Chrome's Battery API; Safari doesn't tell).
+- **iPhone:** foreground only. Safari stops the mic when the page is hidden or the screen locks, so it listens while
+  the office is on screen, and starts again when you're back.
+
+**The models** are in `client/public/wake/` with their licences (`LICENSES.md`): openWakeWord's melspectrogram and
+speech embedding (Apache-2.0), Silero VAD (MIT), the stock "hey jarvis" classifier (**CC BY-NC-SA 4.0**:
+non-commercial, fine for this private office tool) and "Hey Mimoun", trained here (this repo's MIT).
+
+**Training "Hey Mimoun"** (`scripts/wakeword/train_hey_mimoun.py`, openWakeWord's synthetic-voice recipe made small
+enough for a CPU, about 40 minutes): Piper TTS says the phrase (spelt and phonetic variants of "mee-MOON") in 420
+LibriTTS-R voices at random speeds, the same voices say near-misses ("hey Simon", "hey moon", "hey Ramon", "hey
+Jarvis"…) and random sentences, everything is mixed with noise at random levels, turned into openWakeWord's frozen
+features and a small network (1536 → 64 → 1) learns the phrase, weighted against false wakes. It's written as an ONNX
+model with openWakeWord's input, so the browser runs it like a stock one, and the test clips
+(`client/src/ui/wake/fixtures/`, other voices than training's) are written next to the tests. To retrain (a new
+spelling, more voices):
+
+```bash
+python3 -m venv venv && venv/bin/pip install piper-tts numpy onnx
+venv/bin/python -m piper.download_voices en_US-libritts_r-medium en_US-lessac-medium en_GB-alan-medium
+gh release download v0.5.1 -R dscripka/openWakeWord -p melspectrogram.onnx -p embedding_model.onnx -D oww
+venv/bin/python -I scripts/wakeword/train_hey_mimoun.py --voices . --oww oww --repo .
+```
+
+It prints the held-out voices' recall and how many near-miss clips woke it. openWakeWord's full notebook
+(`notebooks/automatic_model_training.ipynb`: thousands of voices, room impulse responses and ~2,000 hours of
+precomputed negative speech, on a GPU) makes a sturdier model; its output drops into the same file.
+
+`window.__swarmWake` is the probe (`status`: `''` listening, `off`, `call`, `hidden`, `battery`, `no-mic`, `starting`,
+`tap`, `error`; `wakes`; `stats()`). `e2e/wakeWord.spec.ts` plays the clips into a fake mic stream at 390 px
+(Chromium, and WebKit where installed): on shows the light, a near-miss is ignored, the phrase starts the demo's call,
+a hidden tab lets go of the mic.
 
 ### The meeting room (#369)
 

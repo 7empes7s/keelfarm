@@ -25,6 +25,7 @@ import { RoofHud } from './RoofHud';
 import { SearchButton } from './SearchPalette';
 import { GuideButton } from './GuideCard';
 import { NoticeBell, NoticeToasts } from './Notices';
+import { WakeLight } from './wake/WakeRunner';
 import { QuickToggles } from './QuickToggles';
 import { usageChip } from '../ops';
 import { heldNote } from '../../../shared/health';
@@ -257,6 +258,7 @@ export function HUD() {
           {/* the bell and Settings first: when the row wraps, its last pills go under the workers list, never these */}
           <div className="hud-status">
             <NoticeBell className="pill" />
+            <WakeLight className="pill" />
             <SettingsButton />
             <QuickToggles className="pill" />
             {demo && <span className="pill pill-demo">{publicDemo ? `Demo office · resets every ${publicDemo.resetHours} h` : 'DEMO'}</span>}

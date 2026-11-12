@@ -7,6 +7,7 @@ import { SetupChecklist } from './ui/FloorSetup';
 import { OfficeBoundary } from './ui/OfficeBoundary';
 import { installQuickKeys } from './ui/QuickToggles';
 import { useCall } from './ui/voiceCallStore';
+import { WakeRunner } from './ui/wake/WakeRunner';
 import './ui/voiceTap'; // a first tap unlocks the voice's <audio> element (#532)
 
 // Each loads only when it's shown: a phone in pocket mode never fetches three.js.
@@ -39,6 +40,7 @@ export function App() {
           <CallScreens />
         </Suspense>
       )}
+      <WakeRunner />
       <SetupChecklist />
       <ConfirmDialog />
       <Captions />
