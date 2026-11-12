@@ -125,6 +125,9 @@ export const short = (s: string, n = 48) => (s.length > n ? `${s.slice(0, n - 1)
 /** An office tool's refusal, without its "Refused: ". */
 export const refused = (out: string) => out.replace(/^Refused: /, '');
 
+/** The office tools that hold the CEO's session open until something happens. */
+const WAIT_TOOLS = ['wait_for', 'consult', 'ask_manager'];
+
 /** The demo CEO grows a floor up to this many agents on its own (the real CEO's "rarely more than 4 to 6"). */
 const DEMO_GROW_TO = 6;
 
@@ -175,9 +178,21 @@ export function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionH
     cb.log([{ kind: 'result', text: `  ⎿ ${s.floors.length} floors · ${agents} agents · ${free} free · ${issues} open issues · ${s.pendingChanges.length} team changes pending` }]);
     return s;
   };
+  let held: (() => void)[] | null = null; // the manager's messages while it waits: answered once the wait is over
   const use = async (name: string, args: Record<string, unknown>) => {
     await step([{ kind: 'tool', tool: `mcp__office__${name}`, text: `⏺ ${describeOfficeTool(name, args)}` }]);
-    const out = await office.call(name, args);
+    // As the real CLI: a wait goes to the background and shows nothing, so the stuck alarm must not fire (#596).
+    const waits = WAIT_TOOLS.includes(name);
+    if (waits) {
+      cb.tool(null);
+      held = [];
+    }
+    const out = await office.call(name, args).finally(() => {
+      if (!waits) return;
+      const later = held ?? [];
+      held = null;
+      later.forEach((f) => f());
+    });
     cb.log([{ kind: out.startsWith('Refused') ? 'error' : 'result', text: `  ⎿ ${out.split('\n')[0].slice(0, 170)}` }]);
     return out;
   };
@@ -346,13 +361,13 @@ export function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionH
       // "look into …": the step log, long enough to hear two progress windows (#150, #286), before the files: the session's prompt may list the seeded chat's attachments
       const round = await demoRound(text, s.floors, use, async (tool, line, out, error, ms = 3500) => (await step([{ kind: 'tool', tool, text: `⏺ ${line}` }], ms), step([{ kind: error ? 'error' : 'result', text: `  ⎿ ${out}` }], 300)), async (floor) => objectiveIds((await detail(floor)).charter)[0]);
       if (round) return round;
+      const awake = await demoAwake(text, s.floors, use); // "wait for PR #3", "consult …", "ask me …" (#28); before the files, which open decisions' lines look like (#596)
+      if (awake) return awake;
       const sent = sentFiles(opts.prompt); // files from the manager, or a document asked for: the demo makes one
       if (sent.length || wantsFile(text)) return demoMakeFiles({ step, read, use, cwd: opts.cwd }, s.floors, sent);
       // A reply to one of the CEO's messages: answer it, quoting what it answers.
       const reply = parseForwarded(text);
       if (reply) return answerReply(reply);
-      const awake = await demoAwake(text, s.floors, use); // "wait for PR #3", "consult …", "ask me …" (#28)
-      if (awake) return awake;
       const resolved = await demoResolve(text, s.openDecisions, use); // an open decision answered in words (#114)
       if (resolved) return resolved;
       // The replies that show features' CEO tools (ceoReplies.ts, and any feature's own module): the first that answers.
@@ -445,6 +460,7 @@ export function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionH
         const resumed = opts.resumeSessionId?.startsWith('demo-ceo-') ? opts.resumeSessionId : undefined;
         if (resumed || opts.env?.CLAUDE_CONFIG_DIR) cb.sessionId(resumed ?? `demo-ceo-${crypto.randomUUID()}`);
         if (resumed) cb.log([{ kind: 'system', text: `  ↻ Resumed conversation ${resumed.slice(0, 17)}…${opts.env?.CLAUDE_CONFIG_DIR ? ` on ${opts.env.CLAUDE_CONFIG_DIR}` : ''}` }]);
+        if (/\bstay quiet\b/i.test(prompt)) await wait(75_000); // the demo's stuck CEO (#596): no answer and no tool for over a minute
         const reply = withSpoken(await run());
         await writeReply(reply, opts, cb, () => stopped);
         finish(true, reply);
@@ -456,15 +472,16 @@ export function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionH
 
   return {
     send(text) {
-      timers.push(
+      const answer = () =>
         setTimeout(() => {
           if (stopped || done) return;
           const said = text.split('\n').slice(1).join(' ').replace(/^\(message \d+\) /, '').trim() || text;
           const reply = parseForwarded(said);
           cb.log([{ kind: 'text', text: `● Noted: "${short(reply?.reply ?? said, 70)}"` }]);
           cb.turn?.(withSpoken(reply ? answerReply(reply) : `Noted, I'll factor that in: "${short(said, 90)}"`));
-        }, 1500),
-      );
+        }, 1500);
+      if (held) held.push(() => timers.push(answer()));
+      else timers.push(answer());
     },
     stop() {
       stopped = true;

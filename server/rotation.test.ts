@@ -511,6 +511,20 @@ describe('the CEO on a second account', { timeout: 30_000 }, () => {
     expect(swarm.snapshot().agents.find((a) => a.id === 'ceo')?.blocked).toBeNull();
     expect(ceo().status).toBe('working');
   });
+
+  it("isn't stuck while it waits in wait_for, and is once nothing is open for a minute (#596)", async () => {
+    const { swarm, i, cards } = await ceoOn();
+    i.backend.startSession = (_opts, c) => ({ send: () => undefined, stop: () => c.finished({ ok: false, text: '', costUsd: 0, turns: 0, errors: ['Stopped'], interrupted: true }) });
+    const holds = (swarm as unknown as { holds: { wait: (label: string, check: () => string | null, ms: number) => Promise<string>; cancel: (why: string) => void } }).holds;
+    await swarm.messageCeo('Merge it when green');
+    void holds.wait('PR #592 on floor 1 to merge', () => null, 15 * 60_000); // the MCP call went to the background: the CLI shows nothing
+    await wait(5 * 60_000);
+    expect(cards()).toHaveLength(0);
+    expect(swarm.snapshot().agents.find((a) => a.id === 'ceo')?.blocked).toBeFalsy();
+    holds.cancel('done'); // the wait is over and nothing else runs
+    await wait(61_000);
+    expect(cards().map((m) => m.ceoStuck?.kind)).toEqual(['silent']);
+  });
 });
 
 // Make default and task stickiness (#390): an open task's sessions stay on the account it started on; new tasks go to
