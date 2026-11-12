@@ -63,6 +63,16 @@ const floorThemes: View = {
   },
 };
 
+/** The same floor's project props open (#536): Auto and a card per set. */
+const floorProps: View = {
+  name: 'Floors & repos: project props cards',
+  go: async (root) => {
+    await pocketSection(root, 'Floors & repos');
+    await root.locator('.floor-theme summary', { hasText: 'Project props' }).first().click();
+    await expect(root.locator('[aria-label$="project props"] .floor-theme-card').first()).toBeVisible();
+  },
+};
+
 /** Mission control's usage card (#361) with its worst source's detail open. */
 const usageDetail = (where: Where): View => ({
   name: 'Mission control: a usage source open',
@@ -125,7 +135,7 @@ const SCREENS: Screen[] = [
       await page.request.put('/api/notify/telegram', { data: { token: `123456:${'A'.repeat(35)}` } }); // shows Telegram's settings (demo bot)
       return pocketSettings(page);
     },
-    tabs: ['', ...consoleSections('pocket'), wasteGroup('pocket'), wasteGroup('pocket', true), labRow('pocket'), trendDay('pocket'), charterEditor, floorThemes, objectiveProgress('pocket'), ...telegramViews(['on', 'off', 'error', 'on'], (r) => pocketSection(r, 'Notifications')), addProject('A folder on this computer'), addProject('A GitHub repo'), addProject('Something new')],
+    tabs: ['', ...consoleSections('pocket'), wasteGroup('pocket'), wasteGroup('pocket', true), labRow('pocket'), trendDay('pocket'), charterEditor, floorThemes, floorProps, objectiveProgress('pocket'), ...telegramViews(['on', 'off', 'error', 'on'], (r) => pocketSection(r, 'Notifications')), addProject('A folder on this computer'), addProject('A GitHub repo'), addProject('Something new')],
   },
   {
     name: "manager's console",

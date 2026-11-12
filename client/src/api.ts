@@ -12,6 +12,7 @@ import type { TimelineView } from '../../shared/careerTimeline';
 import type { Experiment, ExperimentInput } from '../../shared/experiments';
 import type { PracticeOverrides } from '../../shared/practices';
 import type { FloorTheme } from '../../shared/floorThemes';
+import type { PropSet } from '../../shared/floorProps';
 import type { DecorItem, ProgressView } from '../../shared/progress';
 import type { QuickPicks } from '../../shared/used';
 import type { ConversationHit, ConversationPatch } from '../../shared/conversations';
@@ -89,6 +90,7 @@ export const api = {
       browserTesting?: boolean;
       color?: string;
       theme?: FloorTheme;
+      props?: PropSet | 'auto';
       links?: string[];
       mission?: string;
       summary?: string;
