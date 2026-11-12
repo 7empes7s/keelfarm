@@ -191,28 +191,6 @@ summary:focus-visible,
 .floor-summary {
   margin: 4px 0 10px;
 }
-.floor-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.92rem;
-}
-.floor-table th,
-.floor-table td {
-  text-align: left;
-  padding: 6px 8px;
-  border-bottom: 2px solid rgba(31, 29, 43, 0.12);
-  vertical-align: middle;
-}
-.floor-table thead th {
-  font-size: 0.78rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-.floor-floors {
-  margin: 4px 0;
-  padding-left: 18px;
-  line-height: 1.8;
-}
 
 /* secondary text on a coloured panel head, and on a colour-blind palette's card colours, reads in ink */
 .panel-head .muted,

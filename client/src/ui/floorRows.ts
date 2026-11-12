@@ -11,6 +11,7 @@ import { KIND_ICON_NAME, STATUS_KIND, type StatusKind } from './statusLook';
 export interface FloorRow {
   id: string;
   name: string;
+  color: string;
   /** "CEO", or the coding agent they run ("Claude Code", "Codex"…). */
   agent: string;
   status: string;
@@ -65,9 +66,13 @@ export function doingText(a: Pick<Agent, 'role' | 'status' | 'task' | 'issueNumb
   return a.issueTitle ?? 'Working';
 }
 
-/** One row per person, in the order given (agentsOnRepo: by desk). */
-export function floorRows(agents: Agent[], settings: Runtime, clis: CliView[]): FloorRow[] {
-  return agents.map((a) => {
+/**
+ * One row per person, in the order given (agentsOnRepo: by desk). The CEO's agent stays `done` through its jobs, so
+ * `ceoJob` (CeoInfo.job, what the chat's live steps show) makes it working on that job (#527).
+ */
+export function floorRows(agents: Agent[], settings: Runtime, clis: CliView[], ceoJob: { label: string } | null = null): FloorRow[] {
+  return agents.map((who) => {
+    const a = who.role === 'ceo' && ceoJob ? { ...who, status: 'working' as const, issueTitle: ceoJob.label } : who;
     const signIn = signInFor(a, settings);
     const why = a.role === 'ceo' ? null : needsYou(a);
     const needs = why === 'question' || why === 'prompt'; // a sign-in is signIn's, which also checks they're in a Box
@@ -75,6 +80,7 @@ export function floorRows(agents: Agent[], settings: Runtime, clis: CliView[]): 
     return {
       id: a.id,
       name: a.name,
+      color: a.color,
       agent: agentLabel(a, settings, clis),
       status: signIn ? 'Needs you to sign in' : needs ? 'Needs you' : STATUS_WORDS[a.status],
       kind,
