@@ -20,7 +20,7 @@ import { SecretInput } from './SecretInput';
 import { PlanFlag } from './PlanFlag';
 import { LimitTimeline, RotationCard } from './RotationSettings';
 import { CliMissingCard, OpencodeCard } from './CliSetupCard';
-import { bundledLabel } from '../../../shared/claudeCode';
+import { BundledClaude } from './BundledClaude';
 
 const DOCS = 'https://github.com/7empes7s/keelfarm/blob/main/docs/accounts.md';
 
@@ -416,7 +416,7 @@ export function ProvidersSettings() {
             <p className="muted small">
               Signs in with {c.signs}.{users ? ` ${users} of the team run${users === 1 ? 's' : ''} it.` : ''}
             </p>
-            {cli?.bundled && bundledLabel(cli.version) && <p className="muted small">{bundledLabel(cli.version)}</p>}
+            {cli?.bundled && <BundledClaude version={cli.version} />}
             {missing && c.id !== 'opencode' && <p className="muted small">Sign in and Add account need {c.name} on this computer: install it first.</p>}
             <CliMissingCard cli={cli} anyInstalling={anyInstalling} />
             {c.id === 'opencode' && <OpencodeCard cli={cli} />}

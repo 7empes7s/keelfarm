@@ -13,6 +13,7 @@ import { DEFAULT_TEST_LAB, type TestLabView } from '../../shared/testLab';
 import type { ItDeskView } from '../../shared/itDesk';
 import { IT_DEPT_DEFAULTS, type ItView } from '../../shared/itDept';
 import type { ItWatchView } from '../../shared/itWatch';
+import type { SdkUpdateView } from '../../shared/agentSdk';
 import type { ItTicket } from '../../shared/itTickets';
 import type { VoiceAgentView } from '../../shared/voiceAgent';
 import type { Problem } from '../../shared/problems';
@@ -132,6 +133,7 @@ export interface State {
   machinesRoot: string;
   settings: SwarmSettings;
   clis: CliView[]; // the coding-agent CLIs installed where the office runs
+  sdkUpdate: SdkUpdateView | null; // the bundled Claude Code against the npm registry's latest (#569)
   models: ModelCatalogView; // their models to pick from (#198)
   repos: RepoView[];
   agents: Record<string, Agent>;
@@ -313,6 +315,7 @@ export const useStore = create<State>((set, get) => ({
     officePlaybook: '',
   },
   clis: [],
+  sdkUpdate: null,
   models: { entries: [], checkedAt: 0 },
   repos: [],
   agents: {},

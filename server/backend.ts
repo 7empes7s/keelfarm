@@ -27,6 +27,7 @@ import { installDesk, type DepsCallbacks, type DepsOutcome } from './deps.ts';
 import { realDisk, type DiskBackend } from './diskCare.ts';
 import { previewDesks, realPreviews, type PreviewBackend } from './previewRunner.ts';
 import { realOffice, type LastUpdate, type OfficeHost } from './officeUpdate.ts';
+import { realAgentSdk, type AgentSdkHost } from './agentSdk.ts';
 import { elevenLabs } from './elevenlabs.ts';
 import { httpTransport, type NotifyTransport } from './notifier.ts';
 import { telegramHttp, type TelegramApi } from './telegramBot.ts';
@@ -187,6 +188,8 @@ export interface Backend {
   testLab: LabRunner;
   /** The running office's own folder and its launcher, for the office's self-update. */
   office: OfficeHost;
+  /** The bundled Agent SDK's version and the npm registry's latest, for the daily check (#569). Never installs anything. */
+  agentSdk: AgentSdkHost;
   /** Text to speech for the manager's phone (ElevenLabs). */
   voice: VoiceApi;
   /** The real local weather for Settings → Weather (Open-Meteo, keyless; only coordinates are sent once a city is found). */
@@ -393,6 +396,7 @@ export const realBackend: Backend = {
   survivalSignals: github.survivalSignals,
   previews: realPreviews,
   office: realOffice,
+  agentSdk: realAgentSdk,
   voice: elevenLabs,
   weather: openMeteo,
   notify: httpTransport,

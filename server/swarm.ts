@@ -70,7 +70,7 @@ import {
 } from './swarm/model.ts';
 import { FLOOR_THEMES, lookFor, LOOKS, PROP_SETS, propSetOf, upgradeFloorTheme } from './swarm/flavour.ts';
 import { loadScreen } from './swarm/screens.ts';
-import { SwarmVoiceAgent } from './swarm/voiceAgent.ts';
+import { SwarmAgentSdk } from './swarm/agentSdk.ts';
 import { loadDecisions } from '../shared/decisions.ts';
 
 export { HttpError };
@@ -78,7 +78,7 @@ export { HttpError };
 // A Stop waits this long for the office tools the CEO had called to finish, so its reply can say what they did.
 const STOP_SETTLE_MS = 15_000;
 
-export class Swarm extends SwarmVoiceAgent {
+export class Swarm extends SwarmAgentSdk {
   protected ceoChat = new CeoChat(CONVERSATIONS_DIR, path.join(CEO_DIR, 'NOTES.md'), (live) => this.broadcast({ type: 'ceoChat', live }), (n) => this.state.repos.find((r) => r.floor === n)?.id ?? null, (ref) => this.state.agents.find((a) => a.id === ref || a.name.toLowerCase() === ref.trim().toLowerCase())?.id ?? null, (id) => this.state.agents.find((a) => a.id === id || a.name.toLowerCase() === id.toLowerCase())?.name ?? null, this.ceoTalk);
 
   // ---------- lifecycle ----------
