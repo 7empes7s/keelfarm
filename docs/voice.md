@@ -165,12 +165,24 @@ seconds rather than a minute, so its short jobs can be heard.
 
 ## Replaying a message
 
-Every CEO message that was read aloud has a ▶ in the phone chat. It plays the clip saved when the message first
-arrived, never a new one: `clips.json` in the cache folder records which clips belong to which message, so a message
-keeps its clip after you pick another voice or model. A message read by the browser's voice is said again by the
-browser (free). While it plays the button shows ⏹; replaying stops whatever is being read, and a new message stops a
-replay. When a clip has been deleted, the ▶ is greyed out with "Audio no longer saved". Messages that arrived with the
-voice off have no button.
+Every CEO message has a ▶ in the chat (the phone, pocket mode and the 3D office's chat), also one that arrived with
+the voice off or while the app was closed (#532). It plays the clip saved under the message when there is one:
+`clips.json` in the cache folder records which clips belong to which message, so a message keeps its clip after you
+pick another voice or model, and replaying it is free. With no clip yet (or a deleted one), the tap makes it: the ▶
+spins ("Getting the audio ready…"; tap it again to cancel), the office makes the clip in the current voice (ElevenLabs
+when a key is saved and the browser's voice isn't picked, even with Speak messages off), saves it under the message and
+plays it as soon as it's ready. Only a tap costs characters, counted in today's characters as usual. Without a key, and
+for a message the browser's voice read before, the browser says it (free). The ⋯ menu's **Read the whole message**
+works the same way. While it plays the button shows ⏹; replaying stops whatever is being read, and a new message stops
+a replay. When it can't play, the message says why in plain words ("Couldn't make the audio: ElevenLabs rejected the
+key.") with **Retry** and **Use the phone's voice**.
+
+Phones only let sound start from a tap, so the tap itself wakes the office's audio and plays a moment of silence on
+the `<audio>` element replays use; the clip then plays on that element when it arrives. Every tap also wakes the
+office's AudioContext again: iOS stops it while the app is in the background (its state goes `suspended` or
+`interrupted`), and before #532 only the first tap after loading started it, so after the app came back from the
+background new messages fell silent and ▶ did nothing until a reload. While the voice is on, the first tap also unlocks
+that element, so a message arriving while iOS keeps the AudioContext asleep plays on it instead.
 
 The cache is tidied when the office starts and on its housekeeping timer (every 15 minutes): clips older than
 **Keep voice clips for N days** (Settings → Voice, 1–90, default 7) go, then the oldest beyond 200, but the clips of the

@@ -533,6 +533,54 @@ describe('Voice', () => {
     expect(await status(v.talkAudio(7))).toBe(404);
   });
 
+  describe("the ▶'s clip made on a tap (#532)", () => {
+    const msg = (id: number) => messages.find((m) => m.id === id)!;
+    const err = (p: Promise<unknown>) => p.then(() => '', (e: unknown) => (e as Error).message);
+
+    it('makes a clip for a message that has none, caches it under the message and reuses it', async () => {
+      const v = make();
+      await v.setKey('sk_good');
+      settings = { ...settings, provider: 'off' }; // the message arrived, and is replayed, with the voice off
+      expect(await status(v.messageAudio(3))).toBe(404); // never without a tap
+      expect(await status(v.cachedAudio(3))).toBe(404);
+      const made = await v.messageAudio(3, false, true);
+      expect(made.toString()).toBe('mp3:Another one.');
+      expect(await v.cachedAudio(3)).toEqual({ audio: made, parts: 1 });
+      expect(v.cacheInfo()).toMatchObject({ saved: [3], charsToday: 'Another one.'.length });
+      expect(await v.messageAudio(3, false, true)).toEqual(made);
+      expect(calls.synth).toBe(1);
+      expect(await status(v.messageAudio(2, false, true))).toBe(404); // the manager's own message
+    });
+
+    it('makes a deleted clip again, in the current voice', async () => {
+      const v = make();
+      await v.setKey('sk_good');
+      await v.messageAudio(1, false, true);
+      const [file] = clipsFor(JSON.parse(await fs.readFile(path.join(dir, 'voice', 'clips.json'), 'utf8')), msg(1))!;
+      await fs.rm(path.join(dir, 'voice', file));
+      expect(await status(v.cachedAudio(1))).toBe(404);
+      settings = { ...settings, voiceId: 'otherVoice' };
+      expect((await v.messageAudio(1, false, true)).toString()).toBe('mp3:Floor 2 shipped number 12.');
+      expect(calls.synth).toBe(2);
+      expect(await status(v.cachedAudio(1))).toBe(200);
+    });
+
+    it('says clearly why when ElevenLabs refuses', async () => {
+      const v = make();
+      await v.setKey('sk_good');
+      failWith = 401;
+      expect(await err(v.messageAudio(3, false, true))).toBe('ElevenLabs rejected the key.');
+      expect(await err(v.messageAudio(3, false, true))).toBe('ElevenLabs rejected the key. Set a new one in the voice settings.');
+      failWith = 429;
+      await v.setKey('sk_other');
+      expect(await err(v.messageAudio(3, false, true))).toBe("ElevenLabs couldn't speak the message: 429: nope");
+      await v.setKey('');
+      expect(await err(v.messageAudio(3, false, true))).toBe('Add an ElevenLabs API key first.');
+      settings = { ...settings, provider: 'browser' };
+      expect(await status(v.messageAudio(3, false, true))).toBe(404); // the phone's own voice reads it
+    });
+  });
+
   it('other ElevenLabs failures are a 502 and keep trying', async () => {
     const v = make();
     await v.setKey('sk_good');

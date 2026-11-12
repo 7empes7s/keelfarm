@@ -5,16 +5,22 @@
 import fs from 'node:fs/promises';
 import { constants as fsConst } from 'node:fs';
 import path from 'node:path';
-import { createHmac, randomUUID } from 'node:crypto';
+import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { HttpError } from './httpError.ts';
 import { mergeSecrets, readSecrets } from './secrets.ts';
 import { defaultUse, isProviderUse, keyHint, keyProblem, mcpProblem, mcpTestNote, mcpTestRequest, providerDef, sessionMcpServers, splitCommand, testNote, testPlan, testRequest, testUsage, type McpInput, type ProbeRequest, type ProbeResult } from '../shared/providers.ts';
 import { checkResult, legacyImportName } from '../shared/keyScan.ts';
 import { cleanTags } from '../shared/accounts.ts';
-import type { McpServerConfig, ProviderConnection, ProvidersView, ProviderTest, ProviderUse } from '../shared/types.ts';
+import { OAUTH, authorizeUrl, callbackPath, codeForm, needsRefresh, oauthDef, readTokens, refreshForm, type OAuthDef } from '../shared/oauth.ts';
+import { cloudflareVerify, missingClassicScopes, missingNote, permissionSteps, runPermissionSteps, turnedAwayNote } from '../shared/keySetup.ts';
+import { CAPABILITIES } from '../shared/capabilities.ts';
+import type { Capability, CapabilityChoice, McpServerConfig, ProviderConnection, ProvidersView, ProviderTest, ProviderUse } from '../shared/types.ts';
 
-const keyOf = (id: string) => `provider:${id}`;
+const keyOf = (id: string) => `provider:${id}`; // a sign-in's refresh token (Meta's long-lived token)
+const accessOf = (id: string) => `oauth-access:${id}`; // a sign-in's access token
+const clientOf = (company: string, part: 'id' | 'secret') => `oauth-client:${company}:${part}`;
 const mcpKeyOf = (id: string, name: string) => `mcp:${id}:${name}`;
+const PENDING_MS = 10 * 60_000;
 
 export interface ProvidersDeps {
   file: string; // <SWARM_HOME>/providers.json
@@ -22,6 +28,10 @@ export interface ProvidersDeps {
   /** One cheap read-only call (backend.providerProbe; the demo's is fake). Never throws. */
   probe: (req: ProbeRequest) => Promise<ProbeResult>;
   changed: (view: ProvidersView) => void;
+  /** The demo: a sign-in's consent comes straight back, with no OAuth client (#533). */
+  fakeConsent?: boolean;
+  /** The first floor's repo ("owner/name"), for a GitHub token's permission checks. */
+  repo?: () => string | undefined;
 }
 
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
@@ -48,8 +58,24 @@ function readConnection(c: Record<string, unknown>): ProviderConnection[] {
       usedFor: isProviderUse(c.usedFor) ? c.usedFor : defaultUse(def.category),
       ...(source ? { source } : {}),
       ...(named ? { named } : {}),
+      ...(str(c.accountId) ? { accountId: str(c.accountId) } : {}),
+      ...(Array.isArray(c.scopes) ? { scopes: strs(c.scopes) } : {}),
+      ...(Number(c.expiresAt) > 0 ? { expiresAt: Number(c.expiresAt) } : {}),
     },
   ];
+}
+
+/** The manager's default and fallback per capability, anything malformed dropped. */
+function readDefaults(raw: unknown): Partial<Record<Capability, CapabilityChoice>> {
+  const o = raw && typeof raw === 'object' ? (raw as Record<string, Record<string, unknown>>) : {};
+  return Object.fromEntries(
+    CAPABILITIES.flatMap(({ id }) => {
+      const c = o[id];
+      if (!c || typeof c !== 'object') return [];
+      const choice: CapabilityChoice = { ...(str(c.primary) ? { primary: str(c.primary) } : {}), ...(str(c.fallback) ? { fallback: str(c.fallback) } : {}) };
+      return Object.keys(choice).length ? [[id, choice]] : [];
+    }),
+  );
 }
 
 /** The saved file as a view, anything malformed dropped. */
@@ -61,7 +87,8 @@ export function readProvidersFile(raw: unknown): ProvidersView {
       ? [{ id: str(m.id), name: str(m.name), ...(str(m.command) ? { command: str(m.command), args: strs(m.args) } : { url: str(m.url) }), envKeys: strs(m.envKeys), on: m.on !== false, agents: strs(m.agents), test: testOf(m.test) }]
       : [],
   );
-  return { connections, mcp };
+  const clients = strs(o.clients).filter((c) => oauthDef(c));
+  return { connections, mcp, defaults: readDefaults(o.defaults), clients };
 }
 
 const b64url = (v: string | Buffer) => Buffer.from(v).toString('base64url');
@@ -76,7 +103,9 @@ export function klingToken(key: string, now = Date.now()): string {
 }
 
 export class Providers {
-  private data: ProvidersView = { connections: [], mcp: [] };
+  private data: ProvidersView = { connections: [], mcp: [], defaults: {}, clients: [] };
+  /** Sign-ins waiting for their consent: state → where they started. Memory only. */
+  private pending = new Map<string, { company: string; redirectUri: string; at: number }>();
   private keys = new Map<string, string>(); // secrets.json's provider:* and mcp:* values
   private writing: Promise<void> = Promise.resolve();
 
@@ -85,11 +114,16 @@ export class Providers {
   async init() {
     this.data = readProvidersFile(await fs.readFile(this.deps.file, 'utf8').then((t) => JSON.parse(t) as unknown, () => null));
     const s = await readSecrets(this.deps.secretsFile);
-    for (const [k, v] of Object.entries(s)) if ((k.startsWith('provider:') || k.startsWith('mcp:')) && typeof v === 'string' && v) this.keys.set(k, v);
+    for (const [k, v] of Object.entries(s)) if (/^(provider|mcp|oauth-access|oauth-client):/.test(k) && typeof v === 'string' && v) this.keys.set(k, v);
   }
 
   view(): ProvidersView {
-    return { connections: this.data.connections.map((c) => ({ ...c })), mcp: this.data.mcp.map((m) => ({ ...m })) };
+    return {
+      connections: this.data.connections.map((c) => ({ ...c })),
+      mcp: this.data.mcp.map((m) => ({ ...m })),
+      defaults: structuredClone(this.data.defaults ?? {}),
+      clients: this.deps.fakeConsent ? OAUTH.map((o) => o.company) : [...(this.data.clients ?? [])],
+    };
   }
 
   /** Every saved value, for the journal's and logs' redaction. */
@@ -113,7 +147,7 @@ export class Providers {
   // ---------- keys ----------
 
   /** A key for a catalogue provider: saved, then tested. An empty one reuses the key it shares (Google video's Gemini key). */
-  async add(provider: string, rawKey: string, rawLabel = '', source = ''): Promise<ProviderConnection> {
+  async add(provider: string, rawKey: string, rawLabel = '', source = '', accountId = ''): Promise<ProviderConnection> {
     const shared = providerDef(provider)?.sharesKeyWith;
     const from = shared && this.data.connections.find((x) => x.provider === shared);
     const key = rawKey.trim() || (from ? (this.keys.get(keyOf(from.id)) ?? '') : '');
@@ -121,7 +155,9 @@ export class Providers {
     if (problem) throw new HttpError(400, problem);
     const def = providerDef(provider)!;
     const label = rawLabel.trim().slice(0, 60) || def.name;
-    const c: ProviderConnection = { id: randomUUID().slice(0, 8), provider, label, addedAt: Date.now(), keyHint: keyHint(key), test: null, tags: [], usedFor: defaultUse(def.category), ...(source ? { source } : {}) };
+    const acct = accountId.trim();
+    if (acct && !/^[0-9a-f]{32}$/i.test(acct)) throw new HttpError(400, 'An Account ID is 32 letters and digits: copy it from any domain’s Overview page.');
+    const c: ProviderConnection = { id: randomUUID().slice(0, 8), provider, label, addedAt: Date.now(), keyHint: keyHint(key), test: null, tags: [], usedFor: defaultUse(def.category), ...(source ? { source } : {}), ...(acct ? { accountId: acct } : {}) };
     await mergeSecrets(this.deps.secretsFile, { [keyOf(c.id)]: key });
     this.keys.set(keyOf(c.id), key);
     this.data.connections.push(c);
@@ -130,8 +166,14 @@ export class Providers {
   }
 
   /** Rename and tags (#523): its name (empty: the provider's), tags and what it's for. A name set here stays. */
-  async update(id: string, patch: { label?: string; tags?: unknown; usedFor?: ProviderUse }): Promise<ProviderConnection> {
+  async update(id: string, patch: { label?: string; tags?: unknown; usedFor?: ProviderUse; accountId?: string }): Promise<ProviderConnection> {
     const c = this.connection(id);
+    if (patch.accountId !== undefined) {
+      const acct = patch.accountId.trim();
+      if (acct && !/^[0-9a-f]{32}$/i.test(acct)) throw new HttpError(400, 'An Account ID is 32 letters and digits: copy it from any domain’s Overview page.');
+      if (acct) c.accountId = acct;
+      else delete c.accountId;
+    }
     if (patch.label !== undefined) {
       c.label = patch.label.trim().slice(0, 60) || providerDef(c.provider)!.name;
       c.named = true;
@@ -149,23 +191,154 @@ export class Providers {
     this.connection(id);
     this.data.connections = this.data.connections.filter((x) => x.id !== id);
     this.keys.delete(keyOf(id));
-    await mergeSecrets(this.deps.secretsFile, { [keyOf(id)]: undefined });
+    this.keys.delete(accessOf(id));
+    await mergeSecrets(this.deps.secretsFile, { [keyOf(id)]: undefined, [accessOf(id)]: undefined });
+    for (const [cap, choice] of Object.entries(this.data.defaults ?? {})) {
+      if (choice.primary === `connection:${id}`) delete choice.primary;
+      if (choice.fallback === `connection:${id}`) delete choice.fallback;
+      if (!choice.primary && !choice.fallback) delete this.data.defaults![cap as Capability];
+    }
     await this.save();
   }
 
-  /** Its cheap read-only call, and what that said about usage where the provider tells. */
+  /**
+   * Its cheap read-only call, and what that said about usage where the provider tells. A sign-in refreshes its token
+   * first; Cloudflare and GitHub keys then check the permissions the office needs (#533).
+   */
   async test(id: string): Promise<ProviderConnection> {
     const c = this.connection(id);
-    const key = this.keys.get(keyOf(id)) ?? '';
-    const req = testRequest(c.provider, c.provider === 'kling' ? klingToken(key) : key);
+    let key = this.keys.get(keyOf(id)) ?? '';
+    if (oauthDef(c.provider)) {
+      try {
+        key = await this.accessToken(id);
+      } catch (err) {
+        c.test = { at: Date.now(), ok: false, note: (err as Error).message, result: 'dead' };
+        await this.save();
+        return { ...c };
+      }
+    }
+    const req = c.provider === 'cloudflare' && c.accountId ? cloudflareVerify(key, c.accountId) : testRequest(c.provider, c.provider === 'kling' ? klingToken(key) : key);
     if (!req) throw new HttpError(400, `${c.label} is tested in its own settings.`);
-    const r = await this.deps.probe(req);
+    let r = await this.deps.probe(req);
+    // an Account ID beside a user token: the user's verify call is the right one
+    if (c.provider === 'cloudflare' && c.accountId && r.status >= 400 && r.status < 500) r = await this.deps.probe(cloudflareVerify(key));
     const ok = r.status >= 200 && r.status < 300;
     const windows = ok ? testUsage(c.provider, r.body) : [];
     const plan = ok ? testPlan(c.provider, r.body) : undefined;
-    c.test = { at: Date.now(), ...testNote(r), ...(windows.length ? { windows } : {}), ...(plan ? { plan } : {}), result: checkResult(c.provider, r).result };
+    const missing = ok ? [...(c.provider === 'github' ? missingClassicScopes(r.headers) : []), ...(await runPermissionSteps(c.provider, permissionSteps(c.provider, key), this.deps.probe, { accountId: c.accountId, repo: this.deps.repo?.() }))] : [];
+    const note = testNote(r);
+    c.test = {
+      at: Date.now(),
+      ...note,
+      note: missing.length ? missingNote(missing) : ok ? note.note : (turnedAwayNote(c.provider, r.status) ?? note.note),
+      ...(windows.length ? { windows } : {}),
+      ...(plan ? { plan } : {}),
+      result: checkResult(c.provider, r).result,
+      ...(missing.length ? { missing } : {}),
+    };
     await this.save();
     return { ...c };
+  }
+
+  // ---------- defaults per capability (#533) ----------
+
+  /** A capability's default and fallback (card keys; empty = the office picks). */
+  async setDefault(capability: Capability, choice: CapabilityChoice): Promise<ProvidersView> {
+    if (!CAPABILITIES.some((x) => x.id === capability)) throw new HttpError(400, 'Pick text, image, video, audio, operations or publishing.');
+    const next: CapabilityChoice = { ...(choice.primary ? { primary: choice.primary } : {}), ...(choice.fallback && choice.fallback !== choice.primary ? { fallback: choice.fallback } : {}) };
+    this.data.defaults ??= {};
+    if (Object.keys(next).length) this.data.defaults[capability] = next;
+    else delete this.data.defaults[capability];
+    await this.save();
+    return this.view();
+  }
+
+  // ---------- one sign-in per company (#533) ----------
+
+  /** A company's OAuth client (made once in its developer console): the id and secret stay in secrets.json. */
+  async setClient(company: string, clientId: string, clientSecret: string) {
+    if (!oauthDef(company)) throw new HttpError(400, 'Pick Google, Meta, TikTok or Microsoft.');
+    const [id, secret] = [clientId.trim(), clientSecret.trim()];
+    if (!id || !secret || /\s/.test(id + secret)) throw new HttpError(400, 'Paste both the client ID and the client secret.');
+    await mergeSecrets(this.deps.secretsFile, { [clientOf(company, 'id')]: id, [clientOf(company, 'secret')]: secret });
+    this.keys.set(clientOf(company, 'id'), id);
+    this.keys.set(clientOf(company, 'secret'), secret);
+    this.data.clients = [...new Set([...(this.data.clients ?? []), company])];
+    await this.save();
+  }
+
+  /** The consent screen's address, asking for every scope at once; the browser comes back to `origin` + callbackPath. */
+  oauthStart(company: string, origin: string): { url: string } {
+    const def = oauthDef(company);
+    if (!def) throw new HttpError(400, 'Pick Google, Meta, TikTok or Microsoft.');
+    if (!/^https?:\/\/[^/\s]+$/.test(origin)) throw new HttpError(400, 'Open the office from its own address to sign in.');
+    const redirectUri = origin + callbackPath;
+    const state = randomBytes(16).toString('hex');
+    const now = Date.now();
+    for (const [k, p] of this.pending) if (now - p.at > PENDING_MS) this.pending.delete(k);
+    if (this.deps.fakeConsent) {
+      this.pending.set(state, { company, redirectUri, at: now });
+      return { url: `${redirectUri}?${new URLSearchParams({ state, code: 'demo-consent' })}` };
+    }
+    const clientId = this.keys.get(clientOf(company, 'id'));
+    if (!clientId) throw new HttpError(400, `Set up ${def.name}'s sign-in first: paste its client ID and secret.`);
+    this.pending.set(state, { company, redirectUri, at: now });
+    return { url: authorizeUrl(def, { clientId, redirectUri, state }) };
+  }
+
+  /** The consent came back: trade its code for tokens (kept here), and the company's connection lights up. */
+  async oauthFinish(state: string, code: string): Promise<ProviderConnection> {
+    const p = this.pending.get(state);
+    this.pending.delete(state);
+    if (!p || Date.now() - p.at > PENDING_MS) throw new HttpError(400, 'This sign-in expired or was already used: start it again from Settings → Providers.');
+    if (!code) throw new HttpError(400, 'The sign-in was cancelled.');
+    const def = oauthDef(p.company)!;
+    const client = this.client(def);
+    const r = await this.deps.probe({ kind: 'form', url: def.tokenUrl, form: codeForm(def, { ...client, code, redirectUri: p.redirectUri }) });
+    const t = readTokens(r.body);
+    if ('error' in t) throw new HttpError(400, `${def.name} said: ${t.error}`);
+    // one connection per company: signing in again replaces its tokens
+    let c = this.data.connections.find((x) => x.provider === def.company);
+    if (!c) {
+      c = { id: randomUUID().slice(0, 8), provider: def.company, label: def.name, addedAt: Date.now(), keyHint: '', test: null, tags: [], usedFor: defaultUse('signin') };
+      this.data.connections.push(c);
+    }
+    c.scopes = t.scopes ?? def.scopes.flatMap((s) => s.scope.split(' '));
+    c.expiresAt = t.expiresAt;
+    const vals = { [keyOf(c.id)]: t.refresh ?? t.access, [accessOf(c.id)]: t.access };
+    await mergeSecrets(this.deps.secretsFile, vals);
+    for (const [k, v] of Object.entries(vals)) this.keys.set(k, v);
+    await this.save();
+    return this.test(c.id);
+  }
+
+  /** A sign-in's access token, refreshed here when it runs out; the tokens never leave the server. */
+  async accessToken(id: string): Promise<string> {
+    const c = this.connection(id);
+    const def = oauthDef(c.provider);
+    if (!def) throw new HttpError(400, `${c.label} is a key, not a sign-in.`);
+    const access = this.keys.get(accessOf(id));
+    if (access && !needsRefresh(def, c.expiresAt)) return access;
+    const token = this.keys.get(keyOf(id));
+    if (!token) throw new Error(`Sign in with ${def.name} again: no token is saved.`);
+    const r = await this.deps.probe({ kind: 'form', url: def.tokenUrl, form: refreshForm(def, { ...this.client(def), token }) });
+    const t = readTokens(r.body);
+    if ('error' in t) throw new Error(`Sign in with ${def.name} again: ${t.error}`);
+    c.expiresAt = t.expiresAt;
+    if (t.scopes) c.scopes = t.scopes;
+    const vals = { [accessOf(id)]: t.access, ...(t.refresh ? { [keyOf(id)]: t.refresh } : def.refresh === 'fb_exchange_token' ? { [keyOf(id)]: t.access } : {}) };
+    await mergeSecrets(this.deps.secretsFile, vals);
+    for (const [k, v] of Object.entries(vals)) this.keys.set(k, v);
+    await this.save();
+    return t.access;
+  }
+
+  private client(def: OAuthDef) {
+    if (this.deps.fakeConsent) return { clientId: 'demo-client', clientSecret: 'demo-secret' };
+    const clientId = this.keys.get(clientOf(def.company, 'id'));
+    const clientSecret = this.keys.get(clientOf(def.company, 'secret'));
+    if (!clientId || !clientSecret) throw new HttpError(400, `Set up ${def.name}'s sign-in first: paste its client ID and secret.`);
+    return { clientId, clientSecret };
   }
 
   // ---------- MCP servers ----------
@@ -254,9 +427,15 @@ async function onPath(command: string): Promise<boolean> {
 export async function realProbe(req: ProbeRequest): Promise<ProbeResult> {
   if (req.kind === 'command') return { status: (await onPath(req.command)) ? 200 : 404 };
   try {
-    const res = await fetch(req.url, { headers: req.headers, signal: AbortSignal.timeout(10_000) });
+    // a sign-in's token exchange: the one POST, to the company's token URL (shared/oauth.ts)
+    const init: RequestInit =
+      req.kind === 'form'
+        ? { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' }, body: new URLSearchParams(req.form).toString() }
+        : { headers: req.headers };
+    const res = await fetch(req.url, { ...init, signal: AbortSignal.timeout(10_000) });
     const body = await res.json().catch(() => undefined);
-    return { status: res.status, body };
+    const headers = Object.fromEntries(['x-oauth-scopes', 'x-accepted-github-permissions'].flatMap((h) => (res.headers.has(h) ? [[h, res.headers.get(h) ?? '']] : [])));
+    return { status: res.status, body, ...(Object.keys(headers).length ? { headers } : {}) };
   } catch {
     return { status: 0 };
   }
