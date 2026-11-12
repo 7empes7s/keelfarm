@@ -1,16 +1,19 @@
-// The IT department's tools (#506, #524): it_run (a read-only command now), it_propose (a change the manager runs from a
-// card), it_health (the office's own readings) and it_ticket (#542: answer and close a ticket), served to the IT lead's
-// session only (itOfficeTools); the CEO gets ask_it instead (createOfficeTools, ceo.ts). it_report (#542) is every
-// agent's and the CEO's. The office's side is server/swarm/itDesk.ts, itDept.ts and itTickets.ts.
+// The IT department's tools (#506, #524, #525): it_run (a read-only command now), it_propose (a change the manager runs
+// from a card), it_recommend (#525: a health check's ranked options, one picked by the manager), it_health (the office's
+// own readings) and it_ticket (#542: answer and close a ticket), served to the IT lead's session only (itOfficeTools);
+// the CEO gets ask_it instead (createOfficeTools, ceo.ts). it_report (#542) is every agent's and the CEO's. The office's
+// side is server/swarm/itDesk.ts, itDept.ts, itTickets.ts and itWatch.ts.
 import { tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 import { runTool, toolServer, type OfficeTools } from './ceo.ts';
 import { TICKET_WHERE } from '../shared/itTickets.ts';
 import type { ItProposeArgs, ItRunArgs } from './swarm/itDesk.ts';
+import type { ItRecommendArgs } from './swarm/itWatch.ts';
 
 export interface ItHandlers {
   itRun(a: ItRunArgs): Promise<string>;
   itPropose(a: ItProposeArgs): string;
+  itRecommend(a: ItRecommendArgs): string;
   itHealth(): string;
   itTicket(a: ItTicketArgs): Promise<string>;
 }
@@ -56,6 +59,28 @@ function itTools(h: ItHandlers, run: Run) {
         risk: z.enum(['low', 'medium', 'high']),
       },
       (a) => run(() => h.itPropose(a)),
+    ),
+    tool(
+      'it_recommend',
+      "Answer a health check that got worse with a card for the manager: what's wrong in one line, the evidence, and 1-4 options best first. They tap one; the office runs it through it_propose's never-list, measures again and posts before/after. Not now snoozes it a day. One per check: a new one replaces it.",
+      {
+        check: z.enum(['disk', 'memory', 'load', 'units', 'failed', 'docker', 'leftovers', 'qaShots', 'logs', 'files', 'backups', 'certs']),
+        title: z.string().min(1).max(160).describe('e.g. "Disk: 7.9 GB free on /, full in 4 days"'),
+        evidence: z.string().min(1).max(600).describe('The numbers: sizes, units, ages'),
+        options: z
+          .array(
+            z.object({
+              argv: z.array(z.string().min(1).max(1000)).min(1).max(60).describe('One program, no shell, e.g. ["docker", "builder", "prune", "-f"]'),
+              does: z.string().min(1).max(120).describe('e.g. "Remove the Docker build cache"'),
+              frees: z.string().min(1).max(120).describe('e.g. "frees 9 GB"'),
+              risk: z.enum(['low', 'medium', 'high']),
+              undo: z.string().min(1).max(160).describe('e.g. "rebuilt on the next build", or "can\'t be undone"'),
+            }),
+          )
+          .min(1)
+          .max(4),
+      },
+      (a) => run(() => h.itRecommend(a)),
     ),
     tool('it_health', "The office's own readings: memory, swap and load, sessions running, free disk and what agents' machines hold, the watchdog's findings, the IT desk's latest commands and the open tickets.", {}, () => run(() => h.itHealth())),
     tool(
