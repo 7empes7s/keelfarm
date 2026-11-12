@@ -4,7 +4,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_TEST_LAB, testLabSettings, type TestLabView } from '../shared/testLab.ts';
 import type { SessionKind } from '../shared/health.ts';
-import { browsersPath, estimateWaitMs, labArgv, labCommand, labFile, labOutDir, labPattern, labProblem, pickNext, silenceMs, TestLab, type LabRunner, type Requester, type RunResult, type TestLabHost } from './testLab.ts';
+import { browsersPath, estimateWaitMs, LAB_BROWSER_KILL_MB, labArgv, labCommand, labFile, labOutDir, labPattern, labProblem, pickNext, silenceMs, TestLab, type LabRunner, type Requester, type RunResult, type TestLabHost } from './testLab.ts';
 import { expiredResults, requestKey, saveResult } from './testLabResults.ts';
 import { createLabTools, labProgress, progressStream } from './testLabTools.ts';
 import { demoLabRunner, fakeShot } from './demoTestLab.ts';
@@ -45,6 +45,18 @@ describe('pickNext', () => {
     expect(pickNext(q, [], { ...LIMITS, total: 1 }, new Map()).map((j) => j.id)).toEqual(['a']);
     expect(pickNext(q.slice(1), [q[0]], { ...LIMITS, total: 1 }, new Map())).toEqual([]);
     expect(pickNext(q, [], { browser: 2, heavy: 1, total: 2 }, new Map()).map((j) => j.id)).toEqual(['a', 'b']);
+  });
+
+  it("lets the lane that waited longest go first under the total cap, so heavy runs can't keep a browser check waiting (#578)", () => {
+    const q = [job('e2', 'run', 'B', 5), job('check', 'check', 'C', 2)];
+    expect(pickNext(q, [], { ...LIMITS, total: 1 }, new Map()).map((j) => j.id)).toEqual(['check']);
+    expect(pickNext([job('e3', 'run', 'B', 1), q[1]], [], { ...LIMITS, total: 1 }, new Map()).map((j) => j.id)).toEqual(['e3']);
+  });
+
+  it('runs one job per agent at a time (#578)', () => {
+    const mine = (id: string, kind: 'screenshot' | 'run', agentId: string, at: number) => ({ ...job(id, kind, `R${id}`, at), agentId });
+    expect(pickNext([mine('a2', 'screenshot', 'a', 1), mine('b1', 'screenshot', 'b', 2)], [mine('a1', 'run', 'a', 0)], { browser: 2, heavy: 1 }, new Map()).map((j) => j.id)).toEqual(['b1']);
+    expect(pickNext([mine('a1', 'run', 'a', 1), mine('a2', 'screenshot', 'a', 2)], [], { browser: 1, heavy: 1 }, new Map()).map((j) => j.id)).toEqual(['a1']);
   });
 
   it('estimates the wait from the place in the lane', () => {
@@ -294,7 +306,7 @@ describe('never silent while queued (#560)', () => {
     return { runner, l };
   };
 
-  it('sends a heartbeat with the place and the reason every 20 s while a job waits, and stops once it starts', async () => {
+  it('sends a heartbeat with the place and the reason every 20 s while a job waits, and stops once it ends', async () => {
     vi.useFakeTimers();
     const { runner, l } = busy();
     const beats: { position: number; message: string }[] = [];
@@ -311,6 +323,46 @@ describe('never silent while queued (#560)', () => {
     await vi.advanceTimersByTimeAsync(60_000);
     expect(beats).toHaveLength(2);
     expect(await ask).toMatch(/^npm test: exit code 1/);
+  });
+
+  it('keeps a call that waits 10 minutes behind 3 jobs hearing from the lab at least every 60 s, then answers it (#578)', async () => {
+    vi.useFakeTimers();
+    const start = Date.now();
+    const runner = fakeRunner([], -1);
+    const l = lab(runner, () => null, undefined, { ...DEFAULT_TEST_LAB, totalJobs: 1 }).lab;
+    const others = ['a', 'b', 'c'].map((id, i) => l.submit(who(id, `r${i}`, i), shot(`http://localhost:${i}/`)));
+    const heard: number[] = [];
+    const beats: { position: number; message: string }[] = [];
+    const call = new AbortController();
+    const ask = l.submit(who('d', 'r9', 9), shot('http://localhost:9/'), Date.now(), (b) => (heard.push(Date.now()), beats.push(b)), call.signal);
+    expect(l.view().queue).toHaveLength(3); // b, c and d wait behind a
+    let answer: string | null = null;
+    void ask.then((t) => (answer = t));
+    for (let min = 1; min <= 10; min++) {
+      await vi.advanceTimersByTimeAsync(60_000);
+      if (min % 3 === 0) runner.release(); // the jobs ahead, then d itself, each take minutes
+    }
+    runner.release();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(call.signal.aborted).toBe(false);
+    expect(answer).toMatch(/^3 screenshots/);
+    const times = [start, ...heard, Date.now()];
+    const gaps = times.slice(1).map((t, i) => t - times[i]);
+    expect(Math.max(...gaps)).toBeLessThanOrEqual(60_000);
+    expect(beats.some((b) => b.position === 0 && /^Lab job \w+ running: screenshot localhost:9\/ × 3, \d+ s so far/.test(b.message))).toBe(true); // also while it runs
+    expect(beats.some((b) => b.position > 0)).toBe(true);
+    await Promise.all(others);
+  });
+
+  it("drops a queued job whose caller has gone, so it holds no one's place (#578)", async () => {
+    const { runner, l } = busy();
+    const call = new AbortController();
+    const ask = l.submit(who('b', 'r2', 2), { kind: 'run', command: 'npm test' }, Date.now(), () => undefined, call.signal);
+    expect(l.view().queue).toHaveLength(1);
+    call.abort();
+    expect(l.view().queue).toEqual([]);
+    expect(await ask).toMatch(/^Not run: the call was cut off/);
+    runner.release();
   });
 
   it('answers at once with the place and when to retry when the caller cannot take progress, and queues nothing', () => {
@@ -388,6 +440,37 @@ describe('lab problems (#189)', () => {
     expect(log).toEqual([`run npx playwright test --reporter=line in ${dir}`, `install browser in ${dir}`, `run npx playwright test --reporter=line in ${dir}`]);
     expect(report).toMatch(/exit code 0/);
     expect(report).not.toMatch(/LAB ERROR/);
+  });
+
+  it('stops a run over its memory limit as a LAB ERROR, and never lets the shared browser grow into an OOM kill (#578)', async () => {
+    expect(labProblem({ code: null, tail: [], oomMb: 4200 })).toBe('oom');
+    const runs: number[] = [];
+    const runner = fakeRunner([], 0, [{ code: null, oomMb: 4200 }]);
+    const ran = runner.run.bind(runner);
+    runner.run = (o) => (runs.push(o.maxMb), ran(o));
+    const { lab: l } = lab(runner);
+    expect(await l.submit(who('a'), { kind: 'run', command: 'npx playwright test' })).toMatch(/: used 4200 MB, over the lab's 4096 MB limit, and was stopped after 1 s\.\nLAB ERROR \(oom\)/);
+    expect(runs).toEqual([4096]);
+
+    vi.useFakeTimers();
+    const slow = fakeRunner([], -1);
+    let closed = 0;
+    let mb = 900;
+    slow.browserMb = async () => mb;
+    slow.close = async () => {
+      closed++;
+      slow.release();
+    };
+    const { lab: l2, views } = lab(slow);
+    const ask = l2.submit(who('a'), shot('http://localhost:1/'));
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(closed).toBe(0);
+    mb = LAB_BROWSER_KILL_MB + 100;
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(closed).toBeGreaterThan(0);
+    expect(await ask).toMatch(new RegExp(`^LAB ERROR \\(oom\\): the lab's browser used ${LAB_BROWSER_KILL_MB + 100} MB`));
+    expect(views.at(-1)!.recent[0]).toMatchObject({ ok: false, summary: 'lab error: oom' });
+    vi.useRealTimers();
   });
 
   it('shares one browser cache', () => {

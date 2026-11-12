@@ -23,13 +23,17 @@ interface Queued {
   queuedAt: number;
   /** Runs with nothing else in the lab: a full-quality browser pass (#301). */
   alone?: boolean;
+  /** Who asked: an agent runs one lab job at a time (#578). */
+  agentId?: string;
 }
 
 /**
  * The jobs to start now. Each lane runs up to its limit; among the waiting jobs the floor with the fewest running jobs
  * goes first, then the floor served longest ago, then the oldest request. Two heavy jobs of one floor never run at once:
  * they share the floor's lab checkout. A job that runs alone goes first once the lab is empty, and nothing new starts
- * while it waits for that or runs. `total` caps both lanes together (#560).
+ * while it waits for that or runs. `total` caps both lanes together (#560); when it does, the lane whose oldest request
+ * waited longest goes first, so a stream of heavy runs can't keep a browser check waiting (#578). An agent runs one job
+ * at a time.
  */
 export function pickNext<J extends Queued>(queue: readonly J[], running: readonly J[], limits: Record<LabLane, number> & { total?: number }, servedAt: ReadonlyMap<string, number>): J[] {
   if (running.some((j) => j.alone)) return [];
@@ -38,12 +42,15 @@ export function pickNext<J extends Queued>(queue: readonly J[], running: readonl
   const now = [...running];
   const served = new Map(servedAt);
   const picked: J[] = [];
-  for (const lane of ['heavy', 'browser'] as const) {
+  const mine = (j: J) => j.agentId !== undefined && now.some((r) => r.agentId === j.agentId);
+  const oldest = (lane: LabLane) => Math.min(...queue.filter((j) => laneOf(j.kind) === lane && !mine(j)).map((j) => j.queuedAt));
+  const lanes: LabLane[] = limits.total !== undefined && oldest('browser') < oldest('heavy') ? ['browser', 'heavy'] : ['heavy', 'browser'];
+  for (const lane of lanes) {
     for (;;) {
       if (now.length >= (limits.total ?? Infinity) || now.filter((j) => laneOf(j.kind) === lane).length >= limits[lane]) break;
       const busy = (repoId: string) => now.filter((j) => j.repoId === repoId).length;
       const next = queue
-        .filter((j) => laneOf(j.kind) === lane && !picked.includes(j) && !(lane === 'heavy' && now.some((r) => r.kind === 'run' && r.repoId === j.repoId)))
+        .filter((j) => laneOf(j.kind) === lane && !picked.includes(j) && !mine(j) && !(lane === 'heavy' && now.some((r) => r.kind === 'run' && r.repoId === j.repoId)))
         .sort((a, b) => busy(a.repoId) - busy(b.repoId) || (served.get(a.repoId) ?? 0) - (served.get(b.repoId) ?? 0) || a.queuedAt - b.queuedAt)[0];
       if (!next) break;
       picked.push(next);
@@ -62,6 +69,11 @@ export function estimateWaitMs(ahead: number, limit: number, avgMs: number): num
 /** A queued job's place and why it waits: the heartbeat's words (#560). */
 function queueNote(x: { id: string; position: number; lane: LabLane; reason: string; waitMs: number }): string {
   return `Lab job ${x.id} queued: position ${x.position} in the lab's ${x.lane} queue (${x.reason}), about ${Math.max(1, Math.ceil(x.waitMs / 60_000))} min. Keep waiting: it starts by itself.`;
+}
+
+/** A running job's heartbeat (#578): the call keeps hearing from the lab until its result comes back. */
+function runningNote(x: { id: string; title: string; ms: number }): string {
+  return `Lab job ${x.id} running: ${x.title}, ${Math.round(x.ms / 1000)} s so far. Keep waiting: the result comes back here, and stays in .lab/${x.id}/ for lab_result.`;
 }
 
 /** The answer to a caller that can't take progress notifications while its job would wait (#560): nothing queued. */
@@ -136,8 +148,9 @@ const PROBLEMS: [LabProblem, RegExp][] = [
 export const LAB_PROBLEM_TEXT = new RegExp(`LAB ERROR|went silent for \\d+ ?s|${PROBLEMS.map(([, re]) => re.source).join('|')}`, 'i');
 
 /** A failed run whose cause is the lab, not the code under test: the silence watchdog, a missing browser, OOM, a busy port. */
-export function labProblem(r: Pick<RunResult, 'code' | 'silent' | 'tail'>): LabProblem | null {
+export function labProblem(r: Pick<RunResult, 'code' | 'silent' | 'tail' | 'oomMb'>): LabProblem | null {
   if (r.silent) return 'silent';
+  if (r.oomMb) return 'oom';
   if (r.code === 0) return null;
   if (r.code === 137) return 'oom'; // SIGKILL: the kernel's OOM killer, as a shell reports it
   const text = r.tail.slice(-60).join('\n');
@@ -155,6 +168,12 @@ const PROBLEM_TEXT: Record<LabProblem, string> = {
 
 /** The shared browser restarts between jobs once its processes use this much: a software-rendered 3D page grows it. */
 export const LAB_BROWSER_MAX_MB = 1200;
+/** A browser job is stopped when the shared browser grows past this while it runs (#578: one grew to 3.9 GB and the kernel killed). */
+export const LAB_BROWSER_KILL_MB = 2500;
+/** A lab run is stopped when its processes (an e2e suite's browser included) use more than this together (#578). */
+const LAB_RUN_MAX_MB = 4096;
+/** How often a running job's memory is measured against those limits. */
+export const LAB_MEMORY_CHECK_MS = 5_000;
 
 /**
  * The shared browser's command-line flags, each measured on a 3D demo office and kept only where it lowered the peak
@@ -269,6 +288,7 @@ export interface RunResult {
   tail: string[]; // the last lines of output
   timedOut: boolean;
   silent?: boolean; // stopped by the silence watchdog (silenceMs)
+  oomMb?: number; // stopped by the memory limit (maxMb): what its processes used then
   artifacts: string[]; // files the run left in its report folders, relative to the checkout
 }
 
@@ -298,7 +318,7 @@ function checkReport(r: CheckResult, graphics: LabGraphics): string {
 function runReport(command: string, r: RunResult): string {
   const problem = labProblem(r);
   return [
-    `${command}: ${r.silent ? `went silent for ${Math.round((silenceMs(command.split(' ')) ?? 0) / 1000)} s and was stopped` : r.timedOut ? 'timed out' : `exit code ${r.code}`} after ${Math.round(r.ms / 1000)} s.`,
+    `${command}: ${r.silent ? `went silent for ${Math.round((silenceMs(command.split(' ')) ?? 0) / 1000)} s and was stopped` : r.oomMb ? `used ${r.oomMb} MB, over the lab's ${LAB_RUN_MAX_MB} MB limit, and was stopped` : r.timedOut ? 'timed out' : `exit code ${r.code}`} after ${Math.round(r.ms / 1000)} s.`,
     ...(problem ? [`LAB ERROR (${problem}): ${PROBLEM_TEXT[problem]}. This is the lab, not the code: QA reports verdict "lab-error" if it can't judge the PR without this run.`] : []),
     ...few('Artifacts', r.artifacts, 20),
     `Last ${Math.min(200, r.tail.length)} lines of output:`,
@@ -347,8 +367,8 @@ export interface LabRunner {
   check(o: BrowserOpts & { viewport: number; steps: LabStep[] }): Promise<CheckResult>;
   /** The floor's lab checkout at the requester's committed HEAD (`worktree`) or a branch on origin, dependencies installed. */
   checkout(o: { fullName: string; defaultBranch: string; worktree: string; branch?: string }): Promise<string>;
-  /** silenceMs: stop it when it prints nothing for this long (RunResult.silent); null: never. */
-  run(o: { dir: string; argv: string[]; timeoutMs: number; silenceMs: number | null }): Promise<RunResult>;
+  /** silenceMs: stop it when it prints nothing for this long (RunResult.silent); null: never. maxMb: stop it when its processes use more (RunResult.oomMb). */
+  run(o: { dir: string; argv: string[]; timeoutMs: number; silenceMs: number | null; maxMb: number }): Promise<RunResult>;
   /** Install Playwright's Chromium for the checkout's own Playwright, into the shared cache; false when it couldn't. */
   installBrowser(dir: string): Promise<boolean>;
   /** At office start: install that browser with the office's own Playwright, so no session has to. */
@@ -387,10 +407,10 @@ interface Job extends Queued {
   answer: Promise<string>;
   /** The call that asked was aborted (MCP client gave up): the result waits on disk for lab_result (#562). */
   gone: () => boolean;
-  beat?: ReturnType<typeof setInterval>; // the heartbeat while it waits (#560)
+  beat?: ReturnType<typeof setInterval>; // the heartbeat while it waits (#560) and runs (#578)
 }
 
-/** A heartbeat while a job waits (#560): its place in its lane's queue and the words to show. */
+/** A heartbeat while a job waits (#560) or runs (#578): its place in its lane's queue (0: running) and the words to show. */
 export type LabProgress = (beat: { position: number; message: string }) => void;
 
 // ---------- the lab ----------
@@ -415,7 +435,7 @@ export interface TestLabHost {
 }
 
 const BROWSER_IDLE_MS = 5 * 60_000;
-/** A waiting job's heartbeat: well inside the 300 s of silence after which an MCP client gives up on the call. */
+/** A waiting or running job's heartbeat: well inside the 300 s of silence after which an MCP client gives up on the call. */
 const BEAT_MS = 20_000;
 const RETRY_MS = 5_000;
 const DEFAULT_RUN_MIN = 15;
@@ -440,10 +460,11 @@ export class TestLab {
 
   /**
    * Queue a request; resolves with the report the agent reads (refusals included: they're tool errors upstream).
-   * `progress`: called every BEAT_MS while the job waits; null: the caller can't take progress (an MCP call without a
+   * `progress`: called every BEAT_MS while the job waits and runs; null: the caller can't take progress (an MCP call without a
    * progressToken), so a job that can't start at once is refused with its place instead of waiting in silence.
    * `signal`: the call's; aborted when the caller is gone. A retry of the same request after that gets the job's result
-   * (still running: its answer; ended within REUSE_MS: the kept one) instead of a second run (#562).
+   * (still running: its answer; ended within REUSE_MS: the kept one) instead of a second run (#562). A job still
+   * queued when its caller is gone is dropped (#578): nobody would read it, and it holds others' places.
    */
   submit(who: Requester, input: JobInput, now = Date.now(), progress?: LabProgress | null, signal?: AbortSignal): Promise<string> {
     const key = requestKey(input);
@@ -451,7 +472,8 @@ export class TestLab {
     const same = [...this.running, ...this.queue].find((j) => j.who.agentId === who.agentId && j.key === key && j.gone());
     if (same) {
       same.gone = gone;
-      if (!same.startedAt && progress) this.heartbeat(same, progress);
+      if (progress) this.heartbeat(same, progress);
+      signal?.addEventListener('abort', () => this.leave(same), { once: true });
       return same.answer;
     }
     const kept = this.unread.get(who.agentId)?.find((r) => r.key === key && now - r.endedAt <= REUSE_MS);
@@ -468,7 +490,7 @@ export class TestLab {
     let done!: (text: string) => void;
     const answer = new Promise<string>((r) => (done = r));
     const id = `${now.toString(36)}${(++seq).toString(36)}`;
-    const job: Job = { id, kind: input.kind, repoId: who.repoId, queuedAt: now, alone: input.kind !== 'run' && input.graphics === 'full', input, key, who, title: titleOf(input), startedAt: null, done, answer, gone };
+    const job: Job = { id, kind: input.kind, repoId: who.repoId, agentId: who.agentId, queuedAt: now, alone: input.kind !== 'run' && input.graphics === 'full', input, key, who, title: titleOf(input), startedAt: null, done, answer, gone };
     this.queue.push(job);
     this.pump();
     if (!this.queue.includes(job)) return answer;
@@ -479,15 +501,28 @@ export class TestLab {
       throw new Error(queuedRefusal(place));
     }
     if (progress) this.heartbeat(job, progress);
+    signal?.addEventListener('abort', () => this.leave(job), { once: true });
+    if (signal?.aborted) this.leave(job);
     return answer;
   }
 
   private heartbeat(job: Job, progress: LabProgress) {
     clearInterval(job.beat);
     job.beat = setInterval(() => {
+      if (job.startedAt) return progress({ position: 0, message: runningNote({ id: job.id, title: job.title, ms: Date.now() - job.startedAt }) });
       const place = this.place(job);
       progress({ position: place.position, message: queueNote(place) });
     }, BEAT_MS);
+  }
+
+  /** The call that asked is gone (#578): stop its heartbeat, and drop the job if it hasn't started (a running one still keeps its result). */
+  private leave(job: Job) {
+    if (!job.gone()) return; // a retry took the job over
+    clearInterval(job.beat);
+    if (!this.queue.includes(job)) return;
+    this.queue = this.queue.filter((q) => q !== job);
+    job.done('Not run: the call was cut off before the job started.');
+    this.pump();
   }
 
   /** A waiting job's place in its lane, why it waits and roughly how long. */
@@ -570,7 +605,10 @@ export class TestLab {
       clearInterval(j.beat);
       j.done(`Not run: ${again}`);
     }
-    for (const j of this.running) j.done(`Cut off: ${again}`);
+    for (const j of this.running) {
+      clearInterval(j.beat);
+      j.done(`Cut off: ${again}`);
+    }
     this.queue = [];
     this.running = [];
     await this.host.runner().close().catch(() => undefined);
@@ -597,7 +635,6 @@ export class TestLab {
         held = why; // already reads "Waiting for memory: …" (#313)
         continue;
       }
-      clearInterval(j.beat);
       this.queue = this.queue.filter((q) => q !== j);
       this.running.push(j);
       j.startedAt = Date.now();
@@ -619,31 +656,41 @@ export class TestLab {
     let summary: string;
     let file: string | undefined;
     let artifacts: string[] = [];
+    let browserOomMb: number | null = null;
     try {
       const outDir = labOutDir(j.who.worktree, j.id, this.host.forbidden());
       const input = j.input;
       if (input.kind === 'run') {
         const argv = labArgv(labCommand(input.command, j.who.labCommands));
         const dir = await runner.checkout({ fullName: j.who.fullName, defaultBranch: j.who.defaultBranch, worktree: j.who.worktree, branch: input.branch });
-        const go = () => runner.run({ dir, argv, timeoutMs: Math.max(1, Math.min(30, input.timeoutMin ?? DEFAULT_RUN_MIN)) * 60_000, silenceMs: silenceMs(argv) });
+        const go = () => runner.run({ dir, argv, timeoutMs: Math.max(1, Math.min(30, input.timeoutMin ?? DEFAULT_RUN_MIN)) * 60_000, silenceMs: silenceMs(argv), maxMb: LAB_RUN_MAX_MB });
         let r = await go();
         // The checkout's Playwright wants a browser build the shared cache lacks: install it once and run again.
         if (labProblem(r) === 'browser' && (await runner.installBrowser(dir))) r = await go();
         ok = r.code === 0 && !r.timedOut && !r.silent;
         const problem = labProblem(r);
         summary = problem ? `lab error: ${problem}` : r.timedOut ? 'timed out' : `exit ${r.code}`;
-        if (problem) this.host.trouble?.({ agent: j.who.agent, job: j.id, problem, detail: `${argv.join(' ')}: ${r.silent ? 'went silent' : r.timedOut ? 'timed out' : `exit code ${r.code}`}` });
+        if (problem) this.host.trouble?.({ agent: j.who.agent, job: j.id, problem, detail: `${argv.join(' ')}: ${r.silent ? 'went silent' : r.oomMb ? `used ${r.oomMb} MB` : r.timedOut ? 'timed out' : `exit code ${r.code}`}` });
         artifacts = r.artifacts;
         text = runReport(argv.join(' '), r);
       } else {
         const url = input.url ? labUrl(input.url) : await this.host.previewUrl(j.repoId, j.who.pr, j.who.agentId);
         const graphics = input.graphics ?? 'lab';
         const base = { url, profile: input.profile, theme: input.theme, graphics, outDir };
+        // The shared browser never grows into an OOM kill (#578): past LAB_BROWSER_KILL_MB it closes, and the job fails as the lab's.
+        const guard = setInterval(() => {
+          void runner.browserMb().then((mb) => {
+            if (mb === null || mb < LAB_BROWSER_KILL_MB || browserOomMb) return;
+            browserOomMb = mb;
+            return runner.close();
+          }).catch(() => undefined);
+        }, LAB_MEMORY_CHECK_MS);
         // Whatever happens on the page, the browser restarts after a full pass (and between jobs once it has grown).
         const recycled = async <T>(p: Promise<T>): Promise<T> => {
           try {
             return await p;
           } finally {
+            clearInterval(guard);
             await this.recycleBrowser(j, graphics === 'full');
           }
         };
@@ -670,6 +717,12 @@ export class TestLab {
       summary = clip((err as Error).message, 160);
       text = `Refused: ${(err as Error).message}`;
     }
+    if (browserOomMb) {
+      ok = false;
+      summary = 'lab error: oom';
+      text = `LAB ERROR (oom): the lab's browser used ${browserOomMb} MB, over its ${LAB_BROWSER_KILL_MB} MB limit, and was stopped. This is the lab, not the code: ask again once; QA reports verdict "lab-error" if it keeps happening.\n${text}`;
+      this.host.trouble?.({ agent: j.who.agent, job: j.id, problem: 'oom', detail: `${j.title}: the browser used ${browserOomMb} MB` });
+    }
     const endedAt = Date.now();
     const ms = endedAt - (j.startedAt ?? endedAt);
     const lane = laneOf(j.kind);
@@ -678,6 +731,7 @@ export class TestLab {
     this.usage.set(j.repoId, { floor: j.who.floor, jobs: u.jobs + 1, ms: u.ms + ms });
     this.recent = [{ id: j.id, kind: j.kind, repoId: j.repoId, floor: j.who.floor, agentId: j.who.agentId, agent: j.who.agent, pr: j.who.pr, title: j.title, queuedAt: j.queuedAt, startedAt: j.startedAt, endedAt, ok, summary, shot: !!file, file }, ...this.recent].slice(0, RECENT_MAX);
     this.keep(j, { ok, summary, report: text, artifacts, endedAt });
+    clearInterval(j.beat);
     if (!this.running.includes(j)) return; // answered by close()
     this.running = this.running.filter((r) => r !== j);
     this.lastLab.set(j.who.agentId, endedAt);
