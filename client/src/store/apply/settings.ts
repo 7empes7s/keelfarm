@@ -11,6 +11,7 @@ const TICKER_KEEP = 120; // ticker lines kept across every floor
 export const handlers = {
   voiceKey: (ev, { set }) => set({ voiceKeySet: ev.voiceKeySet, voiceKeyHint: ev.voiceKeyHint }),
   voiceCache: (ev, { set }) => set({ voiceCache: ev.voiceCache }),
+  voiceAgent: (ev, { set }) => set({ voiceAgent: ev.voiceAgent }),
   weather: (ev, { set }) => set({ weather: ev.weather }),
   ticker: (ev, { set, get }) => set({ ticker: [...get().ticker.slice(-(TICKER_KEEP - 1)), ev.item] }),
   notifyChannels: (ev, { set }) => set({ notifyChannels: ev.notifyChannels }),
@@ -29,6 +30,7 @@ export const snapshot: SnapshotPart = (d, { get }) => ({
   voiceKeySet: d.voiceKeySet ?? false,
   voiceKeyHint: d.voiceKeyHint ?? '',
   voiceCache: d.voiceCache ?? { clips: 0, bytes: 0, saved: [], charsToday: 0 },
+  voiceAgent: d.voiceAgent ?? get().voiceAgent,
   weather: d.weather ?? EMPTY_WEATHER_VIEW,
   ticker: d.ticker ?? [],
   notifyChannels: d.notifyChannels ?? get().notifyChannels,

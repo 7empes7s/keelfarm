@@ -3,6 +3,8 @@
 import { CEO_ID } from '../../../shared/types';
 import { messageSpeech } from '../../../shared/speech';
 import { useStore } from '../store';
+import type { AgentMode } from './agentCall';
+import { useAgentCall } from './agentCallStore';
 import { callStatus, captionLine, splitSentences } from './voiceCall';
 import { useCall } from './voiceCallStore';
 
@@ -11,6 +13,13 @@ export function useCallCaptions() {
   const { call, heard } = useCall();
   const ceo = useStore((s) => s.agents[CEO_ID]?.name ?? 'CEO');
   const message = useStore((s) => (call.reply ? s.messages.find((m) => m.id === call.reply!.id) : undefined));
-  const saying = message && call.reply ? (splitSentences(messageSpeech(message))[call.reply.sentence] ?? '') : '';
-  return { ceo, status: callStatus(call, ceo), line: captionLine(call, ceo, saying, heard) };
+  const mode = useAgentCall((s) => s.mode); // the Jarvis voice (#534): its own words, and "tap the orb" after "that's all"
+  const agentSaying = useAgentCall((s) => s.saying);
+  const saying = mode !== 'off' ? agentSaying : message && call.reply ? (splitSentences(messageSpeech(message))[call.reply.sentence] ?? '') : '';
+  return { ceo, status: agentStatus(mode) ?? callStatus(call, ceo), line: captionLine(call, ceo, saying, heard) };
+}
+
+/** The call's status line while the Jarvis voice has nothing of its own to say, or null. */
+export function agentStatus(mode: AgentMode): string | null {
+  return mode === 'idle' ? 'Tap the orb to talk' : null;
 }

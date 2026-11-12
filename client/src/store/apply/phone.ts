@@ -9,6 +9,7 @@ import { clearDesktopNotes, showDesktopNote } from '../../notifications';
 import { announce } from '../../ui/announce';
 import { audioUnlocked, chirp } from '../../ui/sfx';
 import { claimVoice } from '../../ui/voiceClaim';
+import { agentOn, agentRelay } from '../../ui/agentCallStore';
 import { callOn, callVoice, holdNote } from '../../ui/voiceCallStore';
 import { speakable } from '../../ui/voiceQueue';
 import type { ApplyHandlers, SnapshotPart } from './types';
@@ -20,7 +21,9 @@ export const handlers = {
     const o = get().overlay;
     const reading = get().chatDocked || (o?.kind === 'phone' && (o.tab ?? 'chat') === 'chat');
     // Read aloud, in this tab or another (always in a voice call); the voice plays the chirp itself if it can't. Locked audio can't speak.
-    const speak = live && audioUnlocked() && speakable(ev.message, callVoice(get().settings.voice), Date.now());
+    // On a Jarvis call (#534) the CEO's reply is said by ElevenLabs' voice instead.
+    const jarvis = live && ev.message.from === 'ceo' && !ev.message.voiceCall && !ev.message.silent && agentRelay('msg', ev.message.id);
+    const speak = !jarvis && live && audioUnlocked() && speakable(ev.message, callVoice(get().settings.voice), Date.now());
     if (speak) {
       const arrived = Date.now();
       const wait = claimVoice(ev.message.id);
@@ -35,6 +38,7 @@ export const handlers = {
   voiceLine: (ev, { set, get, cues }) => {
     if (!cues) return;
     set({ voiceLine: ev.line });
+    if (ev.line.kind === 'ack' ? agentOn() : agentRelay('line', ev.line.id)) return; // a Jarvis call acks by itself and says progress in its voice (#534)
     if (!audioUnlocked() || callVoice(get().settings.voice).provider === 'off') return;
     const arrived = Date.now();
     const wait = claimVoice(-ev.line.id); // negative: never a message's id

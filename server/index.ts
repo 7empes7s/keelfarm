@@ -26,6 +26,8 @@ import { serviceWorkerSource, swVersion } from './pwa.ts';
 import { screenStatus } from './screenReply.ts';
 import { parseSendBackNote } from './sendBack.ts';
 import { handleGateway, upgradeGateway } from './previewGateway.ts';
+import { completionEvents, completionJson } from './voiceAgent.ts';
+import { FAKE_AGENT_PATH, fakeAgent } from './voiceAgentFake.ts';
 import { PresenceHub } from './presence.ts';
 import { PUBLIC_DEMO_FILE_BYTES, RateLimiter, clientIp, demoUploadProblem, filesOverCap, pathScrubber, publicDemoBlock, publicDemoProblem, resetDue, routePath, scrubRoots } from './publicDemo.ts';
 import { HttpError, Swarm } from './swarm.ts';
@@ -438,6 +440,22 @@ app.get(
     sendAudio(res, await swarm.voice.standupAudio(q.n, q.part));
   }),
 );
+// The Jarvis voice (#534): a signed URL for one ElevenLabs conversation (never the key), its end (minutes), and the
+// office as the agent's custom LLM: OpenAI's chat completions, streamed when asked, behind the agent's bearer token.
+app.post('/api/voice/agent/start', route(() => swarm.startVoiceAgent()));
+app.post('/api/voice/agent/:session/end', route((req) => swarm.endVoiceAgent(String(req.params.session))));
+app.post(
+  '/v1/chat/completions',
+  route(async (req, res) => {
+    const text = await swarm.voiceLlm(req.body, req.get('authorization'));
+    const model = typeof req.body?.model === 'string' ? req.body.model : 'cubefarm-voice';
+    if (req.body?.stream !== true) return completionJson(text, model);
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    for (const ev of completionEvents(text, model)) res.write(ev);
+    res.end();
+  }),
+);
 // A clicked agent's line (#321): the words (POST, `hour` the manager's local hour), then its clip in their voice (GET).
 app.post('/api/voice/lines/:id', route((req) => swarm.agentSays(String(req.params.id), parse(z.object({ hour: z.number().int().min(0).max(23) }), req.body ?? {}).hour)));
 app.get('/api/voice/lines/:id', route(async (req, res) => sendAudio(res, await swarm.agentLineAudio(String(req.params.id)), 'no-store')));
@@ -612,6 +630,9 @@ server.requestTimeout = 2 * 3600_000;
 // Two sockets: /ws carries the office's state to every tab, /ws/term?agent=<id> one agent's terminal to whoever opened it.
 const wss = new WebSocketServer({ noServer: true });
 const terms = new WebSocketServer({ noServer: true });
+// The demo's ElevenLabs agent (#534, server/voiceAgentFake.ts): the client's Jarvis call with no network.
+const fakeAgents = DEMO ? new WebSocketServer({ noServer: true }) : null;
+fakeAgents?.on('connection', (ws) => fakeAgent(ws, (session, messages) => swarm.voiceLlm({ cubefarm_session: session, messages }, undefined, true), () => swarm.agentGreeting()));
 // The public demo's scrubber sees everything a tab is sent.
 const scrubbed = (ws: WebSocket) => {
   if (!scrub) return ws;
@@ -632,7 +653,7 @@ setInterval(() => {
 terms.on('connection', (ws, req) => swarm.attachTerminal(new URL(req.url ?? '', 'http://localhost').searchParams.get('agent') ?? '', scrubbed(ws)));
 server.on('upgrade', (req, socket, head) => {
   const { pathname } = new URL(req.url ?? '', 'http://localhost');
-  const target = pathname === '/ws' ? wss : pathname === '/ws/term' ? terms : null;
+  const target = pathname === '/ws' ? wss : pathname === '/ws/term' ? terms : pathname === FAKE_AGENT_PATH ? fakeAgents : null;
   if (!target && upgradeGateway(req, socket as Socket, head, proxied, previewUse)) return;
   if (!target) return void socket.destroy();
   if (PUBLIC_DEMO && !wsLimit.take(ipOf(req))) return void socket.end('HTTP/1.1 429 Too Many Requests\r\nConnection: close\r\n\r\n');

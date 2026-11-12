@@ -258,6 +258,8 @@ export const api = {
   setUsageAdminKey: (provider: 'anthropic' | 'openai', key: string) => call<{ set: boolean }>('PUT', '/api/usage/admin-key', { provider, key }),
   /** Saves (or with '' removes) the ElevenLabs key. No toast: the settings show why a key was rejected. */
   setVoiceKey: (key: string) => call<{ voiceKeySet: boolean; voiceKeyHint: string }>('PUT', '/api/voice/key', { key }, false),
+  /** The Jarvis voice (#534): a signed URL for one ElevenLabs conversation; errors fall back to today's voice mode quietly. */
+  startVoiceAgent: () => call<{ session: string; url: string }>('POST', '/api/voice/agent/start', undefined, false),
   voices: () => call<VoiceOption[]>('GET', '/api/voice/voices'),
   /** No toast: Settings → Voice's Test says what went wrong (voiceTest.ts). */
   voiceSample: (voiceId: string) => clip(`/api/voice/sample?voiceId=${encodeURIComponent(voiceId)}`, false),

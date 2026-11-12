@@ -13,6 +13,28 @@
   font-weight: var(--ds-weight-strong);
   box-shadow: var(--ds-shadow-2);
 }
+/* ElevenLabs UI's orb (AgentOrb.tsx, #534) over the CSS one, which shows while it loads or without WebGL2 */
+.vcall-orb {
+  position: relative;
+  overflow: hidden;
+  padding: 0;
+}
+.vcall-orb-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.vcall-orb-tap {
+  cursor: pointer;
+}
+.vcall-orb-tap:focus-visible {
+  outline: var(--ds-border-strong) solid var(--ds-focus);
+  outline-offset: var(--ds-space-1);
+}
+.vcall-middle-agent .vcall-tile {
+  max-width: calc(var(--ds-target) * 5);
+}
 .vcall-orb-big {
   width: calc(var(--ds-target) * 3);
   height: calc(var(--ds-target) * 3);

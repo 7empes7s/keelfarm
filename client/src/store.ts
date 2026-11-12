@@ -15,6 +15,7 @@ import { IT_DEPT_DEFAULTS, type ItView } from '../../shared/itDept';
 import type { ItWatchView } from '../../shared/itWatch';
 import type { SdkUpdateView } from '../../shared/agentSdk';
 import type { ItTicket } from '../../shared/itTickets';
+import type { VoiceAgentView } from '../../shared/voiceAgent';
 import type { Problem } from '../../shared/problems';
 import { DEFAULT_CEO_AWAKE } from '../../shared/ceoAwake';
 import { DEFAULT_CLOUD, EMPTY_CLOUD } from '../../shared/cloud';
@@ -176,6 +177,7 @@ export interface State {
   voiceKeySet: boolean; // an ElevenLabs key is saved on the server
   voiceKeyHint: string; // its last 4 characters
   voiceCache: VoiceCacheView; // the voice's saved clips: Settings → Voice, and which messages the phone's ▶ replays
+  voiceAgent: VoiceAgentView; // the Jarvis voice's minutes today and this month (#534)
   progress: ProgressView; // coins, decorations and achievements (#210)
   pastCareers: PastCareer[]; // careers of people let go (#205): the Team tab's Past agents
   voiceSpeaking: number | null; // the phone message being read aloud in this tab (ui/voiceMessages.ts)
@@ -354,6 +356,7 @@ export const useStore = create<State>((set, get) => ({
   voiceKeySet: false,
   voiceKeyHint: '',
   voiceCache: { clips: 0, bytes: 0, saved: [], charsToday: 0 },
+  voiceAgent: { minutesToday: 0, minutesMonth: 0, fake: false },
   progress: { floors: {}, achievements: [], coffees: 0, merges: 0 },
   pastCareers: [],
   voiceSpeaking: null,
