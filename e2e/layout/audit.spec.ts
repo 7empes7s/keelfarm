@@ -34,7 +34,7 @@ test("a usage card's plan warning opens the card like the rest of it", async ({ 
   // Mission control lists every source; Company's card shows only the worst four, which may not hold the warning.
   await page.goto('/?pocket=1#company/ops');
   await expect(page.locator('html[data-route-ready="1"]')).toBeAttached();
-  const warning = page.locator('.us-row .plan-flag-warn').first();
+  const warning = page.locator('#ops-card-sources .us-row .plan-flag-warn').first(); // not Company's card under it
   // The warning lets taps fall through to its card's button: in the middle of the screen (the list re-sorts as
   // readings arrive, and bars sit at its edges), its centre hits that button, and a tap there opens the card.
   const spot = () =>

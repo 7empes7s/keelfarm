@@ -35,7 +35,8 @@ export const test = base.extend<{ page: Page }>({
       if (m.type() === 'error') problems.push(`console error: ${m.text()}`);
     });
     page.on('pageerror', (e) => problems.push(`page error: ${e.message}`));
-    page.on('requestfailed', (r) => problems.push(`request failed: ${r.method()} ${r.url()} (${r.failure()?.errorText})`));
+    // a stubbed outside request (a preview's frame) cut off by the next page load isn't the office failing
+    page.on('requestfailed', (r) => r.url().startsWith(baseURL!) && problems.push(`request failed: ${r.method()} ${r.url()} (${r.failure()?.errorText})`));
     page.on('response', (r) => {
       if (r.status() >= 400) problems.push(`HTTP ${r.status()}: ${r.request().method()} ${r.url()}`);
     });
