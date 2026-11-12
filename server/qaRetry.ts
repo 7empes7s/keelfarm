@@ -16,11 +16,14 @@ export interface QaEnding {
   report: boolean;
   /** This QA run can still be resumed: it has a session and hasn't been resumed yet. */
   canResume: boolean;
+  /** It ended on a sign-in or an expired login (#617): the account's trouble, not the PR's. */
+  signedOut?: boolean;
 }
 
-/** report: post it. resume: nudge the same session once. give-up: today's path (count the failure, requeue). */
-export function qaRetry(e: QaEnding): 'report' | 'resume' | 'give-up' {
+/** report: post it. resume: nudge the same session once. requeue: back in line, nothing counted. give-up: today's path (count the failure, requeue). */
+export function qaRetry(e: QaEnding): 'report' | 'resume' | 'requeue' | 'give-up' {
   if (e.stopped) return 'give-up';
   if (e.report) return 'report';
+  if (e.signedOut) return 'requeue';
   return e.ok && !e.limited && e.canResume ? 'resume' : 'give-up';
 }
