@@ -3,6 +3,7 @@
 import type { WorldSnapshot } from '../../../../shared/types';
 import type { State } from '../../store';
 import * as agents from './agents';
+import * as checklists from './checklists';
 import * as company from './company';
 import * as floors from './floors';
 import * as it from './it';
@@ -13,10 +14,11 @@ import * as settings from './settings';
 import * as world from './world';
 import type { ApplyCtx, Handler, Live } from './types';
 
-export const AREAS = { agents, company, floors, it, office, phone, qa, settings, world };
+export const AREAS = { agents, checklists, company, floors, it, office, phone, qa, settings, world };
 
 export const APPLY: { [K in Live]: Handler<K> } = {
   ...agents.handlers,
+  ...checklists.handlers,
   ...company.handlers,
   ...floors.handlers,
   ...it.handlers,

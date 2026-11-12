@@ -66,6 +66,7 @@ export interface PhoneMessage {
   ceoStuck?: ChatCeoStuck; // the office's: the CEO's session is stuck (#375), as a card with Open terminal, Sign in and Switch back
   pacing?: true; // the office's: pacing started on a usage warning, as a card with Resume full speed and Always keep full speed (#323)
   problems?: ProblemsDigest; // the office's daily problems digest (#544), as a card with tappable items
+  checklist?: { id: string }; // a checklist's card (#612), drawn live from the store's checklists
   ceoJob?: CeoJobTag; // the CEO's reply to a job the office started (#332): its model, and Redo on Opus
 }
 

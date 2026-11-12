@@ -25,3 +25,4 @@ import './itDesk.ts';
 import './cloudflare.ts';
 import './providerActions.ts';
 import './problems.ts';
+import './checklists.ts';

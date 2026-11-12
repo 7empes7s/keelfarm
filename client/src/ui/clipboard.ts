@@ -16,6 +16,7 @@ export async function copyText(text: string): Promise<boolean> {
   ta.style.cssText = 'position:fixed;opacity:0;left:-9999px';
   document.body.appendChild(ta);
   ta.select();
+  ta.setSelectionRange(0, text.length); // iOS Safari selects nothing with select() alone
   const ok = document.execCommand('copy');
   ta.remove();
   return ok;

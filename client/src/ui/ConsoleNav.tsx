@@ -11,6 +11,8 @@ import { useItBadge } from './useItBadge';
 import { AboutOffice, AgentsSettings, CeoSettings, CompanySettings, PreviewsSettings, RuntimeSettings } from './SettingsSections';
 import { OpsTab } from './MissionConsole';
 import { ProblemsPage } from './ProblemsPage';
+import { ChecklistsPage } from './ChecklistsPage';
+import { isOpenChecklist } from '../../../shared/checklists';
 import { CharterTab } from './CharterTab';
 import { ToolsTab } from './ToolsSettings';
 import { HistorySettings, HistoryTab, type HistoryFocus } from './HistoryTab';
@@ -64,7 +66,7 @@ function useCardFocus(card: string | undefined) {
 
 /** One section's content. */
 export function SectionBody({ id, where, focus = {} }: { id: SectionId; where: Where; focus?: SectionFocus }) {
-  useCardFocus(id === 'ops' ? undefined : focus.card);
+  useCardFocus(id === 'ops' || id === 'checklists' ? undefined : focus.card);
   const one = (body: ReactNode) => <div className="cn-one">{body}</div>;
   switch (id) {
     case 'floors':
@@ -77,6 +79,8 @@ export function SectionBody({ id, where, focus = {} }: { id: SectionId; where: W
       return <OpsTab card={focus.card} />;
     case 'problems':
       return <ProblemsPage />;
+    case 'checklists':
+      return <ChecklistsPage open={focus.card} />;
     case 'charter':
       return <CharterTab initialRepo={focus.repoId} />;
     case 'map':
@@ -164,7 +168,8 @@ export function useBadges(): Partial<Record<SectionId, number>> {
   const ceo = useStore((s) => pendingRequests(s.requests).length);
   const ops = useStore((s) => s.ops.alarms.length + s.doctor.length);
   const charter = useStore((s) => s.repos.filter((r) => r.charter.proposal).length);
-  return { ceo, ops, charter, 'it-dept': useItBadge() };
+  const checklists = useStore((s) => s.checklists.filter(isOpenChecklist).length); // #612
+  return { ceo, ops, charter, 'it-dept': useItBadge(), checklists };
 }
 
 const groupBadge = (g: GroupId, where: Where, badges: Partial<Record<SectionId, number>>) => sectionsIn(g, where).reduce((n, s) => n + (badges[s.id] ?? 0), 0);

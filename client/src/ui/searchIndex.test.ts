@@ -21,6 +21,7 @@ const input: IndexInput = {
     { id: 1, from: 'manager', text: 'Hello there' },
     { id: 2, from: 'ceo', text: 'Here is the roadmap for the shop', artifacts: [{ id: '2-0', title: 'Q4 roadmap', lead: 'Three milestones' }] },
   ],
+  checklists: [{ id: 'c1', title: 'YouTube app', steps: [{ id: 's1', title: 'Add the redirect URI', details: '', copy: [], secret: null, state: 'done', comments: [], v: 2 }] }],
 };
 
 const items = buildIndex(input);
@@ -39,6 +40,8 @@ describe('search everything', () => {
     expect(first('two seconds', 'objective')?.target).toEqual({ kind: 'section', section: 'charter', repoId: 'acme/shop' });
     expect(first('roadmap', 'message')?.target).toEqual({ kind: 'ceo' });
     expect(first('q4', 'artifact')?.label).toBe('Q4 roadmap');
+    expect(first('youtube', 'checklist')).toMatchObject({ sub: '1 of 1 done', target: { kind: 'overlay', overlay: { kind: 'manager', tab: 'checklists', card: 'c1' } } }); // #612
+    expect(first('redirect uri', 'checklist')).toMatchObject({ sub: 'YouTube app' });
     expect(searchAll('IT', items, [])[0]?.items[0]).toMatchObject({ label: 'IT department', target: { kind: 'section', section: 'it-dept' } }); // #580
   });
 

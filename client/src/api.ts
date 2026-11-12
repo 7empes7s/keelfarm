@@ -21,6 +21,7 @@ import type { CleanPlan, CleanResult, DiskSettings } from '../../shared/disk';
 import type { HealthView } from '../../shared/health';
 import type { ChatPage } from '../../shared/chatPage';
 import type { TryThis } from '../../shared/tryIt';
+import type { Checklist } from '../../shared/checklists';
 
 async function call<T = unknown>(method: string, url: string, body?: unknown, toast = true): Promise<T> {
   // The time-lapse shows a recorded day: nothing in it can be acted on.
@@ -135,6 +136,10 @@ export const api = {
   snoozeSetup: (repoId: string, gap: string) => call<RepoView>('POST', `${r(repoId)}/setup/snooze`, { gap }),
   closeSetupReview: (repoId: string) => call<RepoView>('POST', `${r(repoId)}/setup/review`),
   setCompanyUseCases: (useCases: UseCase[]) => call<UseCase[]>('PUT', '/api/company/use-cases', { useCases }),
+  /** Checklists (#612): a step's tick, untick, not needed or comment; a secret field (saved to Providers only); a copy. */
+  checklistStep: (id: string, step: string, body: { action: 'tick' | 'untick' | 'skip' | 'comment'; reason?: string; text?: string; fileId?: string }) => call<Checklist>('POST', `/api/checklists/${id}/steps/${step}`, body),
+  checklistSecret: (id: string, step: string, value: string) => call<Checklist>('POST', `/api/checklists/${id}/steps/${step}/secret`, { value }),
+  checklistDuplicate: (id: string, title: string) => call<Checklist>('POST', `/api/checklists/${id}/duplicate`, { title }),
   mergePull: (repoId: string, n: number, method: 'squash' | 'merge' | 'rebase' = 'squash') => call('POST', `${r(repoId)}/pulls/${n}/merge`, { method }),
   closePull: (repoId: string, n: number) => call('POST', `${r(repoId)}/pulls/${n}/close`),
   /** Queues the PR for QA; with `agentId`, that (free) agent tests it now. */
