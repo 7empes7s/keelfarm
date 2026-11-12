@@ -63,6 +63,8 @@ export default defineConfig({
     ...(installed.webkit ? [{ name: 'iphone-steps', testMatch: 'chatSteps.spec.ts', dependencies: ['smoke'], use: { ...devices['iPhone 15'], headless: true } }] : []),
     // The Jarvis voice's call (#534) on Safari's engine too: its audio and the fake agent socket.
     ...(installed.webkit ? [{ name: 'iphone-jarvis', testMatch: 'voiceAgent.spec.ts', dependencies: ['smoke'], use: { ...devices['iPhone 15'], headless: true } }] : []),
+    // The wake word (#537) on Safari's engine too: onnxruntime-web, the AudioWorklet and the fake mic.
+    ...(installed.webkit ? [{ name: 'iphone-wake', testMatch: 'wakeWord.spec.ts', dependencies: ['smoke'], use: { ...devices['iPhone 15'], headless: true } }] : []),
   ],
   webServer: {
     command: webServerCommand(process.env),
