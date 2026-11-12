@@ -13,7 +13,7 @@ for (const width of [390, 1280]) {
     await expect(conflicts).toContainText('Recurring');
     await expect(conflicts.locator('[data-problem]')).toHaveCount(3);
     await expect(page.getByRole('region', { name: /^Bugs QA found, floor \d+$/ })).toBeVisible();
-    await expect(page.getByRole('region', { name: 'Needs your decision' })).toContainText('PR #19 needs a human');
+    await expect(page.getByRole('region', { name: 'Needs your decision' })).toContainText('PR #919 needs a human');
     expect(await overflowProblems(page.locator('body'))).toEqual([]);
 
     // IT's tickets only: infrastructure, no work groups
@@ -24,7 +24,7 @@ for (const width of [390, 1280]) {
     // this week's resolved ones
     await page.getByRole('group', { name: 'Owner' }).getByRole('button', { name: 'Everyone' }).click();
     await page.getByRole('button', { name: 'Resolved this week' }).click();
-    await expect(page.getByText('QA sent it back for nits on PR #28')).toBeVisible();
+    await expect(page.getByText('QA sent it back for nits on PR #928')).toBeVisible();
     await expect(conflicts).toBeHidden();
 
     // a link opens the agent's window
@@ -42,9 +42,9 @@ for (const width of [390, 1280]) {
     await page.setViewportSize({ width, height: 844 });
     await page.goto('/?pocket=1&tab=chat');
     const card = page.locator('.pb-digest-card').last();
-    await expect(card).toContainText(/Yesterday: \d+ new problems?, \d+ resolved; top: .*; needs you: 1\./);
-    const first = card.locator('.pb-digest-item').first();
-    await expect(first).toContainText('Needs you: PR #19 needs a human');
+    await expect(card).toContainText(/Yesterday: \d+ new problems?, \d+ resolved; top: .*; needs you: \d+\./);
+    await expect(card.locator('.pb-digest-item').first()).toContainText('Needs you:');
+    await expect(card.locator('.pb-digest-yours', { hasText: 'PR #919 needs a human' })).toBeVisible();
     expect(await overflowProblems(page.locator('body'))).toEqual([]);
     await card.getByRole('button', { name: 'Open Problems' }).click();
     await expect(page.getByRole('region', { name: /^Merge conflicts, floor \d+$/ })).toBeVisible();

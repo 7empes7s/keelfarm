@@ -88,9 +88,10 @@ export abstract class SwarmProblems extends SwarmLiveLeases {
 
   /** The register's clock starts with the office (init starts the usage readings once). A fresh demo gets the sample and a digest. */
   protected override async startUsage() {
-    if (this.backend.demo && !this.state.problems.list.length) {
+    const fresh = this.state.problems.list.length; // before the demo's own sessions record theirs
+    if (this.backend.demo && !fresh) {
       setTimeout(() => {
-        if (!wantsTicketSample(this.backend.demo, this.state.repos.length, this.state.problems.list.length)) return;
+        if (!wantsTicketSample(this.backend.demo, this.state.repos.length, fresh)) return; // floors connect after this
         problemSample(this.state.problems, this.state.repos, this.state.agents, Date.now());
         this.problemsChanged();
         this.problemsDigest(Date.now());
