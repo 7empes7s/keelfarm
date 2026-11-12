@@ -77,7 +77,7 @@
   padding: 0;
   list-style: none;
 }
-/* Two buttons beside who and when: keep that on one line and let the buttons wrap under it on a phone. */
+/* Two buttons beside who and when: keep that on one line and let the buttons wrap under it, together, on a phone. */
 .it-imp-card .it-rec-foot {
   flex-wrap: wrap;
 }
@@ -87,4 +87,9 @@
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+.it-imp-acts {
+  display: flex;
+  gap: var(--ds-space-2);
+  margin-left: auto;
 }

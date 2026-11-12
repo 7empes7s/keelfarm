@@ -56,12 +56,14 @@ function ImproveCard({ c }: { c: ItImproveCard }) {
         <span className="muted small grow">
           {c.by} · {agoText(c.at, Date.now())}
         </span>
-        <button type="button" className="btn btn-small btn-ghost" disabled={busy} onClick={() => act(() => api.itImproveDismiss(c.id))}>
-          Not now
-        </button>
-        <button type="button" className="btn btn-small btn-good" disabled={busy} onClick={() => act(() => api.itImproveApprove(c.id))}>
-          <Icon name="check" /> Approve
-        </button>
+        <span className="it-imp-acts">
+          <button type="button" className="btn btn-small btn-ghost" disabled={busy} onClick={() => act(() => api.itImproveDismiss(c.id))}>
+            Not now
+          </button>
+          <button type="button" className="btn btn-small btn-good" disabled={busy} onClick={() => act(() => api.itImproveApprove(c.id))}>
+            <Icon name="check" /> Approve
+          </button>
+        </span>
       </div>
     </article>
   );
