@@ -16,6 +16,7 @@ import { consultRefusal } from './consult.ts';
 import { keyHelperCommand, nonInteractiveEnv } from './unblock.ts';
 import type { StuckKind } from './liveState.ts';
 import { transcriptEvents, type TranscriptEvent } from '../shared/agentChat.ts';
+import { CLAUDE_NO_ATTRIBUTION } from './clis.ts';
 
 // One Claude Code instance (via the Claude Agent SDK) on one task (building an issue, testing or fixing a PR) in its own git worktree.
 // The CEO runs through here too, with the office tools instead of a shell.
@@ -457,9 +458,8 @@ export function startSession(opts: SessionOptions, callbacks: SessionCallbacks):
     settingSources: ['user', 'project', 'local'],
     // Plugins the manager switched off for this session: flag settings win over theirs, and their files stay as they are.
     // An API key account's key comes through apiKeyHelper (#247).
-    ...(plugins.length || opts.apiKeyEnv
-      ? { settings: { ...(plugins.length ? { enabledPlugins: Object.fromEntries(plugins.map((p) => [p, false])) } : {}), ...(opts.apiKeyEnv ? { apiKeyHelper: keyHelperCommand(opts.apiKeyEnv) } : {}) } }
-      : {}),
+    // No Co-Authored-By or "Generated with" in its commits and PRs (#599).
+    settings: { ...(plugins.length ? { enabledPlugins: Object.fromEntries(plugins.map((p) => [p, false])) } : {}), ...(opts.apiKeyEnv ? { apiKeyHelper: keyHelperCommand(opts.apiKeyEnv) } : {}), ...CLAUDE_NO_ATTRIBUTION },
     systemPrompt: { type: 'preset', preset: 'claude_code', append: opts.systemAppend },
     mcpServers,
     disallowedTools,

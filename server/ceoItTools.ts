@@ -32,7 +32,7 @@ export interface CloudflareHandlers {
 
 export interface ItHandlers extends CloudflareHandlers {
   itRun(a: ItRunArgs): Promise<string>;
-  itPropose(a: ItProposeArgs): string;
+  itPropose(a: ItProposeArgs): Promise<string>;
   itRecommend(a: ItRecommendArgs): string;
   itHealth(): string;
   itTicket(a: ItTicketArgs): Promise<string>;
@@ -73,7 +73,7 @@ function itTools(h: ItHandlers, run: Run) {
     ),
     tool(
       'it_propose',
-      "Propose a command that changes this machine: the manager sees it on a card with Run / Not now (chat and Telegram), and it runs only on their Run; you then get its output to check. One program per card, as argv, no shell. Never: pkill/killall, shutdown, docker volume prune or keel-postgres, /etc/keel, git push --force, the live office's folders, rm -rf of /, /root, /opt, /etc or /var.",
+      "Propose a command that changes this machine: the manager sees it on a card with Run / Not now (chat and Telegram), and it runs only on their Run; you then get its output to check. With the manager's Auto-approve on, a routine step (git fetch/pull --ff-only, your own units, installing a unit or Caddy file, caddy validate then reload) runs at once and the reply has its output. One program per card, as argv, no shell. Never: pkill/killall, shutdown, docker volume prune or keel-postgres, /etc/keel, git push --force, the live office's folders, rm -rf of /, /root, /opt, /etc or /var.",
       {
         argv: z.array(z.string().min(1).max(1000)).min(1).max(60).describe('e.g. ["journalctl", "--vacuum-size=500M"]'),
         why: z.string().min(1).max(300).describe('Why, in a sentence the manager can decide on'),

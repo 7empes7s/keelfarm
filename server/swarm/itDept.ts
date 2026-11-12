@@ -303,6 +303,20 @@ export abstract class SwarmItDept extends SwarmSetup {
     if (ran && this.state.settings.itDept.on && !p.rec) this.enqueueIt({ kind: 'ran', line: argvLine(p.argv), code: ran.code, out, at: Date.now() });
   }
 
+  /** An auto-approved step (#585) or its Undo: into IT's chat (an auto step's card has its Undo) and Telegram. */
+  protected itAutoPosted(text: string, out: string, itAuto?: PhoneMessage['itAuto']) {
+    this.postIt('office', text, { notice: { details: out.trim() || '(no output)' }, ...(itAuto && { itAuto }) });
+    void this.itTelegram(`${text}\n${out.trim().split('\n').slice(0, 8).join('\n')}`.slice(0, 1500));
+  }
+
+  /** An auto step's card after its Undo: the button goes. */
+  protected itAutoUndone(logId: string) {
+    const m = this.state.it.messages.find((x) => x.itAuto?.log === logId);
+    if (!m?.itAuto) return;
+    m.itAuto = { ...m.itAuto, undone: true };
+    this.broadcast({ type: 'it', it: this.itHead(), message: m });
+  }
+
   /** A Run / Not now button on Telegram (IT's bot, or IT's card on the CEO's). */
   protected async itDecide(verdict: 'approve' | 'decline', id: string): Promise<string> {
     if (verdict === 'decline') {
