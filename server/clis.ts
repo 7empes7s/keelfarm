@@ -408,19 +408,28 @@ export function codexThread(action: 'archive' | 'unarchive', id: string, after?:
 
 // ---------- prompts the office answers ----------
 
-const TRUST_PROMPT = /Quick safety check|Do you trust the (files|contents) (in|of) this|trust this folder|allow Codex to work in this folder/i;
+// The question's title line (never an option: "Yes, I trust this folder" mustn't count as one).
+const TRUST_PROMPT = /Quick safety check|Do you trust the (files|contents) (in|of) this|allow Codex to work in this folder/i;
 
 /**
- * The key that moves a CLI's folder-trust question toward trusting the office's own worktree: Enter when the
- * selected option says yes, Down when it says no (Claude Code selects "No, exit" first), null when there's no such
- * question on screen.
+ * The key that moves a CLI's folder-trust question toward trusting the office's own worktree: Enter only while the
+ * yes option ("Yes, I trust this folder", Codex's "Yes, continue") is the selected one, else a step toward it; null
+ * when there's no such question on screen or its menu can't be read. Only the last copy of the question counts: a
+ * CLI that redraws it (a resize) can leave an older frame above, whose stale ❯ would otherwise be read (#575).
  */
-export function trustKey(screen: string): 'enter' | 'down' | null {
-  if (!TRUST_PROMPT.test(screen)) return null;
-  const selected = screen.match(/^\s*[❯›]\s*(?:\d+\.\s*)?(.+)$/m)?.[1] ?? '';
-  if (/^(yes|trust|continue|proceed)\b/i.test(selected.trim())) return 'enter';
-  if (/^(no|exit|quit|cancel)\b/i.test(selected.trim())) return 'down';
-  return null;
+export function trustKey(screen: string): 'enter' | 'down' | 'up' | null {
+  const lines = screen.split('\n');
+  const title = lines.findLastIndex((l) => TRUST_PROMPT.test(l));
+  if (title < 0) return null;
+  const opts = lines.slice(title + 1).flatMap((l) => {
+    // An option has a ❯ or a number, or reads "Yes, …" / "No, …": a wrapped title line ("trust? (Like your own…") isn't one.
+    const m = /^[\s│┃|]*([❯›>])?\s*(\d+\.\s+)?((?:yes|no|trust|continue|proceed|exit|quit|cancel)\b.*?)[\s│┃|]*$/i.exec(l);
+    return m && (m[1] || m[2] || /^(yes|no),/i.test(m[3])) ? [{ text: m[3], selected: !!m[1] }] : [];
+  });
+  const yes = opts.findIndex((o) => /^(yes|trust|continue|proceed)\b/i.test(o.text));
+  const at = opts.findIndex((o) => o.selected);
+  if (yes < 0 || at < 0 || opts.filter((o) => o.selected).length > 1) return null;
+  return yes === at ? 'enter' : yes > at ? 'down' : 'up';
 }
 
 /**

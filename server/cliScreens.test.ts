@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { countAnswer, keyBytes, pick, screenStep } from './cliScreens.ts';
+import { countAnswer, gaveUpNote, keyBytes, pick, SCREEN_TRIES, screenStep, screenTry, type ScreenKey } from './cliScreens.ts';
 
 // Screens as the CLIs drew them in the office's terminals on 2026-11-08 (#360) and since.
 const THEME = [
@@ -80,6 +80,62 @@ describe('screenStep', () => {
     expect(screenStep(THEME, 'codex')).toBeNull();
     expect(screenStep('● Reading server/swarm.ts\n❯ Try "refactor <filepath>"', 'claude')).toBeNull();
     expect(screenStep(' ❯ 1. Yes\n   2. No\n Do you want to proceed?', 'claude')).toBeNull(); // the watchdog's permission dialog, not a start-up screen
+  });
+});
+
+describe('the folder-trust screen (#575)', () => {
+  const noSelected = TRUST.replace('❯ 1. Yes', '  1. Yes').replace('  2. No, exit', '❯ 2. No, exit');
+
+  /**
+   * Claude Code's trust menu as it behaved on floor 4: Down wraps, and every redraw lands below the frame before it
+   * (a resize), so the old ❯ stays on screen above the new one. Runs the office's answers until it presses Enter.
+   */
+  function drive(start: 0 | 1): { keys: ScreenKey[]; confirmed?: string } {
+    const frame = (at: number) => TRUST.replace('❯ 1. Yes', at === 0 ? '❯ 1. Yes' : '  1. Yes').replace('  2. No, exit', at === 1 ? '❯ 2. No, exit' : '  2. No, exit');
+    let at: number = start;
+    let screen = frame(at);
+    const keys: ScreenKey[] = [];
+    for (let i = 0; i < 10; i++) {
+      const step = screenStep(screen, 'claude');
+      if (step?.do !== 'keys') return { keys };
+      keys.push(step.key);
+      if (step.key === 'enter') return { keys, confirmed: at === 0 ? 'Yes, I trust this folder' : 'No, exit' };
+      at = (at + (step.key === 'down' ? 1 : -1) + 2) % 2;
+      screen = `${screen}\n${frame(at)}`.split('\n').slice(-30).join('\n');
+    }
+    return { keys };
+  }
+
+  it('with "No, exit" highlighted, ends on Yes and presses Enter once', () => {
+    const run = drive(1);
+    expect(run.confirmed).toBe('Yes, I trust this folder');
+    expect(run.keys.filter((k) => k === 'enter')).toHaveLength(1);
+    expect(run.keys.length).toBeLessThanOrEqual(2);
+  });
+
+  it('with Yes already highlighted, only presses Enter', () => {
+    expect(drive(0).keys).toEqual(['enter']);
+  });
+
+  it('never presses Enter while "No, exit" is highlighted, whatever is left on screen above', () => {
+    const key = (screen: string) => (screenStep(screen, 'claude') as { key?: ScreenKey } | null)?.key;
+    expect(key(noSelected)).toBe('up');
+    expect(key(`${TRUST}\n${noSelected}`)).toBe('up'); // an old frame with Yes selected above the live one
+    expect(key(`${noSelected}\n${TRUST}\n${noSelected}`)).toBe('up');
+    expect(key(`${noSelected}\n${TRUST}`)).toBe('enter'); // the live frame is the last one
+    expect(key(noSelected.replace(/^ /gm, ' │ '))).toBe('up'); // drawn in a box
+    expect(key(noSelected.replace('  1. Yes', '❯ 1. Yes'))).toBeUndefined(); // two selected in one frame: can't tell
+  });
+
+  it('stops after a few tries and says the agent needs setup', () => {
+    const tries = new Map<string, number>();
+    let gaveUp = 0;
+    const got = Array.from({ length: SCREEN_TRIES + 3 }, () => screenTry(tries, 'trust', () => (gaveUp += 1)));
+    expect(got).toEqual([...Array<boolean>(SCREEN_TRIES).fill(true), false, false, false]);
+    expect(gaveUp).toBe(1);
+    expect(screenTry(tries, 'theme', () => (gaveUp += 1))).toBe(true);
+    const step = screenStep(TRUST, 'claude');
+    if (step?.do === 'keys') expect(gaveUpNote('Alan', step.screen)).toBe(`⚠ Alan needs setup: the office answered their folder-trust question ${SCREEN_TRIES} times and it is still on screen. Open their terminal and pick the answer there.`);
   });
 });
 
