@@ -154,7 +154,7 @@ export abstract class SwarmCore extends SwarmContract {
     pong: {},
     officeId: officeId(),
     claudeUsage: [],
-    questions: [], decisions: { list: [], digestAt: 0 }, taskAccounts: {}, itDesk: { waiting: [], log: [] }, it: loadIt(undefined), itTickets: { seq: 0, list: [] }, itWatch: { checks: [], marks: {}, recs: [], digestDay: '', samples: [] },
+    questions: [], decisions: { list: [], digestAt: 0 }, taskAccounts: {}, itDesk: { waiting: [], log: [] }, it: loadIt(undefined), itTickets: { seq: 0, list: [] }, itImprove: { records: [], cards: [], changes: [], reviewWeek: '', reviewedAt: 0 }, itWatch: { checks: [], marks: {}, recs: [], digestDay: '', samples: [] },
     experiments: loadLab(undefined, Date.now()),
   };
   /** The chat's files store; every change goes out to the tabs as a `files` event. */

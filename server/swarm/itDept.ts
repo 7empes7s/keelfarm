@@ -189,9 +189,9 @@ export abstract class SwarmItDept extends SwarmSetup {
     return (this.itBot as TelegramBot | undefined)?.secret() ?? null;
   }
 
-  /** IT's office tools: it_run, it_propose, it_recommend (itWatch.ts), it_health and it_ticket (server/ceoItTools.ts). */
+  /** IT's office tools: it_run, it_propose, it_recommend (itWatch.ts), it_health, it_ticket, it_review and it_improve (itImprove.ts; server/ceoItTools.ts). */
   protected itTools(): OfficeTools {
-    return itOfficeTools({ itRun: (a) => this.itRun(a), itPropose: (a) => this.itPropose(a), itRecommend: (a) => this.itRecommend(a), itHealth: () => this.itHealth(), itTicket: (a) => this.itTicket(a) });
+    return itOfficeTools({ itRun: (a) => this.itRun(a), itPropose: (a) => this.itPropose(a), itRecommend: (a) => this.itRecommend(a), itHealth: () => this.itHealth(), itTicket: (a) => this.itTicket(a), itReview: (a) => this.itReview(a), itImprove: (a) => this.itImprove(a) });
   }
 
   /** it_health: the office's readings, compact. */
@@ -208,7 +208,7 @@ export abstract class SwarmItDept extends SwarmSetup {
     // A session carries on only on the coding agent that made it.
     const resume = this.state.it.sessionId && (this.state.it.sessionCli ?? 'claude') === cli ? this.state.it.sessionId : undefined;
     const how = this.sessionRuntime(a, resume);
-    Object.assign(a, { status: 'working' as AgentStatus, issueTitle: job.kind === 'chat' ? 'Answering the manager' : job.kind === 'ask' ? `${job.from}'s question` : job.kind === 'ticket' ? `Ticket #${job.id}` : job.kind === 'watch' ? 'Looking at a health check' : `Checking ${job.line}`, startedAt: Date.now(), endedAt: null, lastError: null });
+    Object.assign(a, { status: 'working' as AgentStatus, issueTitle: job.kind === 'chat' ? 'Answering the manager' : job.kind === 'ask' ? `${job.from}'s question` : job.kind === 'ticket' ? `Ticket #${job.id}` : job.kind === 'watch' ? 'Looking at a health check' : job.kind === 'review' ? 'Weekly review' : `Checking ${job.line}`, startedAt: Date.now(), endedAt: null, lastError: null });
     if (job.kind === 'chat') this.itDelivery(job.messageIds, 'read');
     this.itChanged();
     await fs.mkdir(IT_DIR, { recursive: true }).catch(() => undefined);

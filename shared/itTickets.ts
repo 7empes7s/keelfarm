@@ -38,6 +38,8 @@ export interface ItTicket {
   resolution?: string;
   wokeAt?: number; // when IT was last woken for it
   auto?: boolean; // the office filed it
+  cause?: string; // IT's cause on close, for the weekly review (#543)
+  lostMin?: number; // agent minutes blocked on it, set on close (#543)
 }
 
 export interface TicketsState {
@@ -71,12 +73,12 @@ export function checkReport(raw: unknown): ItReport {
 }
 
 /** Two reports are the same problem when their what matches, case, punctuation and numbers aside. */
-const key = (what: string) => what.toLowerCase().replace(/\d+/g, '#').replace(/[^a-z#]+/g, ' ').trim();
+export const whatKey = (what: string) => what.toLowerCase().replace(/\d+/g, '#').replace(/[^a-z#]+/g, ' ').trim();
 
 /** Files a report: into the open ticket for the same what and where within the hour, else a new one. */
 export function fileTicket(s: TicketsState, r: ItReport, who: { id: string; name: string }, now: number, auto = false): { ticket: ItTicket; joined: boolean } {
   const blocks = r.blocking && who.id !== 'office' && who.id !== 'ceo';
-  const open = s.list.find((t) => t.status === 'open' && t.where === r.where && key(t.what) === key(r.what) && now - t.lastAt < TICKET_DUP_MS);
+  const open = s.list.find((t) => t.status === 'open' && t.where === r.where && whatKey(t.what) === whatKey(r.what) && now - t.lastAt < TICKET_DUP_MS);
   if (open) {
     open.count++;
     open.lastAt = now;
@@ -110,9 +112,12 @@ export function closeTicket(s: TicketsState, id: number, resolution: string, now
   if (t.status === 'closed') throw new Error(`Ticket #${id} is closed already: ${t.resolution ?? ''}`.trim());
   const done = resolution.trim().slice(0, 600);
   if (!done) throw new Error('Say what was done (close).');
-  Object.assign(t, { status: 'closed', resolution: done, closedAt: now, waiting: [] });
+  Object.assign(t, { status: 'closed', resolution: done, closedAt: now, lostMin: blockedMinutes(t, now), waiting: [] });
   return t;
 }
+
+/** Minutes the agents waiting on it were blocked, up to `end` (#543). */
+export const blockedMinutes = (t: Pick<ItTicket, 'by' | 'waiting'>, end: number) => Math.round(t.waiting.reduce((n, id) => n + Math.max(0, end - (t.by.find((b) => b.id === id)?.at ?? end)), 0) / 60_000);
 
 /** The open ticket this agent waits on, or null. */
 export function waitingOn(list: readonly ItTicket[], agentId: string): number | null {

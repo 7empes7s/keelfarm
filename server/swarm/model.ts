@@ -27,6 +27,7 @@ import type { ItDeskState } from '../../shared/itDesk.ts';
 import type { TicketsState } from '../../shared/itTickets.ts';
 import type { ItState } from '../../shared/itDept.ts';
 import type { ItWatchState } from '../../shared/itWatch.ts';
+import type { ItImproveState } from '../../shared/itImprove.ts';
 import type { ChatsState } from '../../shared/conversations.ts';
 import type { MemoryNote } from '../../shared/ceoMemory.ts';
 import { CHAT_KEEP } from '../../shared/chatPage.ts';
@@ -251,6 +252,7 @@ export interface Persisted {
   it: ItState; // the IT department's chat, queue and the session it resumes (#524)
   itWatch: ItWatchState; // IT monitoring (#525): the latest checks, their wake marks, recommendations, the digest, disk samples
   itTickets: TicketsState; // office problems reported to IT, and their outcomes (#542)
+  itImprove: ItImproveState; // closed tickets' records, the weekly review's cards and the changes approved (#543)
   diskAlert?: DiskAlertMark | null; // the last disk notification, so a restart doesn't repeat it (#502)
   usageWaiver?: Waiver | null; // pacing the manager cleared with Resume full speed, kept for its window across restarts (#323)
   experiments: LabState; // the lab's experiments and the issues in them (experiments.ts)

@@ -490,6 +490,9 @@ app.post('/api/it/recs/:id/pick', route((req) => {
   return swarm.itPick(String(req.params.id), option);
 }));
 app.post('/api/it/recs/:id/snooze', route((req) => swarm.itSnooze(String(req.params.id))));
+app.post('/api/it/improve/review', route(() => swarm.improveReviewNow()));
+app.post('/api/it/improve/:id/approve', route((req) => swarm.improveApprove(String(req.params.id))));
+app.post('/api/it/improve/:id/dismiss', route((req) => swarm.improveDismiss(String(req.params.id))));
 app.post('/api/disk/simulate', route((req) => swarm.simulateDisk(req.body?.low === true)));
 // The server's load by program (#271): the 24 h trend (in memory), and Mission control's "Stop it" for a leftover process
 app.get('/api/server/trend', route(() => swarm.serverTrend()));

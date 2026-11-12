@@ -154,7 +154,7 @@ export class Swarm extends SwarmLiveLeases {
         officeId: typeof loaded.officeId === 'string' && /^[a-z0-9]{6}$/.test(loaded.officeId) ? loaded.officeId : this.state.officeId,
         claudeUsage: Array.isArray(loaded.claudeUsage) ? mergeReadings([], loaded.claudeUsage.filter((r) => r && typeof r.type === 'string' && Number.isFinite(r.pct) && Number.isFinite(r.at))) : [],
         diskAlert: loadDiskAlert(loaded.diskAlert),
-        itDesk: loadItDesk(loaded.itDesk), it: this.loadItState(loaded.it), itTickets: this.loadTickets(loaded.itTickets), itWatch: this.loadItWatchState(loaded.itWatch),
+        itDesk: loadItDesk(loaded.itDesk), it: this.loadItState(loaded.it), itTickets: this.loadTickets(loaded.itTickets), itImprove: this.loadImproveState(loaded.itImprove), itWatch: this.loadItWatchState(loaded.itWatch),
         usageWaiver: keptWaiver(loaded.usageWaiver, loaded.settings?.usageWarnings, Date.now()),
         experiments: loadLab(loaded.experiments, Date.now()), taskAccounts: loadTaskAccounts(loaded.taskAccounts),
       };

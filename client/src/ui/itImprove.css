@@ -1,0 +1,79 @@
+/* IT's improvements (ui/ItImprove.tsx, #543): the review's cards, problems per week as bars, causes and changes. */
+.it-improve {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  min-width: 0;
+}
+.it-imp-h {
+  margin: var(--ds-space-2) 0 0;
+  font-size: var(--ds-text-sm);
+  color: var(--ds-text-muted);
+}
+.it-imp-cause,
+.it-imp-body p,
+.it-imp-changes li {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.it-imp-body p {
+  white-space: pre-wrap;
+}
+.it-imp-status {
+  flex: none;
+  padding: 2px var(--ds-space-2);
+  border-radius: var(--ds-radius-pill);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-strong);
+  color: var(--ds-on-color);
+}
+.it-imp-new {
+  background: var(--ds-warn-fill);
+}
+.it-imp-recurring {
+  background: var(--ds-bad-fill);
+}
+.it-imp-fixed {
+  background: var(--ds-good-fill);
+}
+.it-imp-weeks {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 2px;
+  height: 9rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.it-imp-week {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  align-items: end;
+  min-width: 0;
+  text-align: center;
+}
+.it-imp-bar {
+  align-self: end;
+  min-height: 2px;
+  margin: 0 15%;
+  border-radius: 4px 4px 0 0;
+  background: var(--ds-series-1);
+}
+.it-imp-count {
+  font-weight: var(--ds-weight-strong);
+}
+.it-imp-day {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: var(--ds-text-xs);
+}
+.it-imp-changes,
+.it-imp-ids {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}

@@ -88,6 +88,7 @@ export abstract class SwarmItTickets extends SwarmItDept {
     const { ticket, joined } = fileTicket(this.state.itTickets, r, who, now);
     if (!s.on) ticket.waiting = ticket.waiting.filter((id) => id !== who.id); // nobody waits on a department that's off
     this.ticketFiled(ticket, now, closed);
+    this.recordTickets(closed);
     const head = joined ? `Joined open ticket #${ticket.id} (${ticket.count} reports).` : `Opened ticket #${ticket.id}.`;
     if (!s.on) return `${head} The IT department is off, so nobody looks at it: work around it if you can, and say so in your PR.`;
     if (r.blocking) return `${head} ${s.name} (IT) looks now and messages you what to do. Carry on with anything that doesn't need it meanwhile; don't retry it in a loop.`;
@@ -99,6 +100,7 @@ export abstract class SwarmItTickets extends SwarmItDept {
     const now = Date.now();
     const closed = pruneTickets(this.state.itTickets, now);
     this.ticketFiled(fileTicket(this.state.itTickets, autoReport(e), OFFICE, now, true).ticket, now, closed);
+    this.recordTickets(closed);
   }
 
   /** it_ticket: IT tells the reporters, asks the CEO for a code fix and/or closes the ticket. */
@@ -135,11 +137,13 @@ export abstract class SwarmItTickets extends SwarmItDept {
     }
     const waiting = [...t.waiting];
     if (close) {
+      if (a.cause?.trim()) t.cause = a.cause.trim().slice(0, 120);
       closeTicket(this.state.itTickets, t.id, close, Date.now());
       this.postIt('office', `✅ Ticket #${t.id} closed: ${close}`);
       done.push('closed it');
     }
     this.ticketsChanged(waiting);
+    if (close) this.recordTickets([t]);
     return `Ticket #${t.id}: ${done.join(', ') || 'nothing to do'}.`;
   }
 }
