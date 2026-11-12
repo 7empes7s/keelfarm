@@ -71,6 +71,9 @@ test('tap Call: the Jarvis voice acks in under a second, the orb follows, captio
   const voice = (state.messages as { from: string; text: string; voiceCall?: boolean }[]).filter((m) => m.voiceCall);
   expect(voice.map((m) => m.from)).toEqual(expect.arrayContaining(['manager', 'ceo']));
   expect(voice.some((m) => m.text === "What's floor 1 doing?")).toBe(true);
+  await page.waitForTimeout(1500);
+  console.log('DIAG chat', JSON.stringify(await page.evaluate(() => ({ chats: document.querySelectorAll('.phone-chat').length, tab: document.querySelector('.pk-chat-tab')?.className, vcall: !!document.querySelector('.vcall-screen'), text: (document.querySelector('.phone-chat') as HTMLElement | null)?.innerText.slice(-1500) }))));
+  console.log('DIAG msgs', JSON.stringify(voice.map((m) => [m.from, m.text.slice(0, 60)])));
   await expect(page.locator('.pk-chat, .phone-chat').getByText("What's floor 1 doing?").first()).toBeVisible(); // back in the chat, with the transcript
   expect(state.voiceAgent.minutesToday).toBeGreaterThan(0);
 });
