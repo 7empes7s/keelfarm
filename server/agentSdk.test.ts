@@ -21,6 +21,7 @@ type Internals = {
   state: { agents: Agent[]; messages: { from: string; text: string }[] };
   repoRt: Map<string, { issues: { number: number; title: string }[] }>;
   sdkRun: Promise<unknown>;
+  officeUpdate: { behind: number };
   onFinished(a: Agent, repo: unknown, ran: SessionResult): Promise<void>;
 };
 
@@ -95,6 +96,18 @@ describe('the daily Agent SDK check (#569)', () => {
     await i.sdkRun;
     expect(filed).toHaveLength(1);
     expect(r(i)).toHaveLength(1);
+  });
+
+  it('a bump already live is no longer in flight while other merges wait for the office update', async () => {
+    fs.mkdirSync(HOME_DIR, { recursive: true });
+    fs.writeFileSync(path.join(HOME_DIR, 'agent-sdk.json'), JSON.stringify({ checkedAt: 1, latest: NEW, bump: { issue: 9999, version: '0.3.300', at: 1 } }));
+    let latest = NEW;
+    const { swarm, i, filed } = await office(async () => latest, NEW);
+    i.officeUpdate.behind = 3;
+    expect(await swarm.checkAgentSdk()).toMatchObject({ behind: false, bump: null, alarm: null });
+    latest = { version: '0.3.340', claudeCode: '2.1.340' };
+    expect(await swarm.checkAgentSdk()).toMatchObject({ behind: true, bump: { merged: false } });
+    expect(filed).toEqual([`${OWN}: Bump the Agent SDK to 0.3.340 (Claude Code 2.1.340)`]);
   });
 
   it("a week and more behind with nothing in flight: the alarm card, and its chat line once", async () => {

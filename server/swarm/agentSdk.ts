@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { HOME_DIR } from '../config.ts';
 import { bumpIssue, CHECK_EVERY_MS, isBehind, isBumpTitle, loadSdkState, modelLine, needsNewerClaude, sdkAlarm, sdkStep, type SdkUpdateState, type SdkUpdateView } from '../../shared/agentSdk.ts';
-import { modelNeedsNewerClaude } from '../../shared/claudeCode.ts';
+import { modelNeedsNewerClaude, versionAtLeast } from '../../shared/claudeCode.ts';
 import { isClaudeModel, modelLabel } from '../../shared/models.ts';
 import type { WorldSnapshot } from '../../shared/types.ts';
 import type { SessionResult } from '../agentRunner.ts';
@@ -69,7 +69,14 @@ export abstract class SwarmAgentSdk extends SwarmLiveLeases {
   private bumpInFlight(own: PersistedRepo | undefined) {
     const rt = own && this.repoRt.get(own.id);
     const prOpen = !!rt?.pulls.some((p) => p.state === 'OPEN' && (isBumpTitle(p.title) || (this.sdkState.bump && p.closesIssues.includes(this.sdkState.bump.issue))));
-    return !!this.openBump(own) || prOpen || (!!this.sdkState.bump && this.officeUpdate.behind > 0);
+    return !!this.openBump(own) || prOpen || this.bumpWaiting();
+  }
+
+  /** The last bump merged and waits for the office's update: only while it's newer than what's installed. */
+  private bumpWaiting() {
+    const bump = this.sdkState.bump;
+    const installed = this.backend.agentSdk.installed();
+    return !!bump && this.officeUpdate.behind > 0 && (!installed || !versionAtLeast(installed.version, bump.version));
   }
 
   private sdkInput(own: PersistedRepo | undefined) {
@@ -90,7 +97,7 @@ export abstract class SwarmAgentSdk extends SwarmLiveLeases {
       error: s.error,
       checking: this.sdkChecking,
       behind: isBehind(input.installed, s.latest),
-      bump: !own ? null : open ? { issue: open.number, floor: own.floor, merged: false } : s.bump && input.inFlight ? { issue: s.bump.issue, floor: own.floor, merged: true } : null,
+      bump: !own ? null : open ? { issue: open.number, floor: own.floor, merged: false } : s.bump && this.bumpWaiting() ? { issue: s.bump.issue, floor: own.floor, merged: true } : null,
       alarm: sdkAlarm(input),
     };
   }
