@@ -16,6 +16,12 @@ for (const width of [390, 1280]) {
     await expect(causes.getByRole('button', { name: /Port taken for my dev server: (Recurring|Fixed)/ })).toBeVisible(); // Fixed once an earlier width approved its card
     await expect(section.getByRole('list', { name: 'What changed' })).toContainText(/ a week before, [\d.]+ after/);
     expect(await overflowProblems(page.locator('body'))).toEqual([]);
+    // Each card's who · when stays on one line beside or above its two buttons, in IT's chat and in the section.
+    const feet = page.getByRole('article', { name: 'Improvement: Report a sign-in screen at once' }).locator('.it-rec-foot > .grow');
+    await expect(feet.first()).toBeVisible();
+    for (const foot of await feet.all()) {
+      expect(await foot.evaluate((el) => el.getBoundingClientRect().height < 2 * parseFloat(getComputedStyle(el).fontSize))).toBe(true);
+    }
 
     // The widths share one demo office: the first approves the card, the next finds the link it left.
     const card = section.getByRole('article', { name: 'Improvement: Stop leftover dev servers before a session starts' });
