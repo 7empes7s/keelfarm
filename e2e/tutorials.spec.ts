@@ -90,7 +90,7 @@ for (const [where, width] of [
   ['desktop', 1280],
 ] as const) {
   for (const t of TUTORIALS) {
-    test(`pocket mode (${where}): ${t.title} runs from its first step to Done`, async ({ page }, info) => {
+    test(`pocket mode (${where}): ${t.title} runs from its first step to Done [${where}-${t.id}]`, async ({ page }, info) => {
       await page.setViewportSize({ width, height: 844 });
       await progress(page, null);
       await page.goto('/?pocket=1&tab=company');
@@ -147,6 +147,7 @@ test('the first launch offers Get started, and Not now puts it away', async ({ p
 test('the 3D office runs a tutorial end to end', async ({ page }, info) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   const t = TUTORIALS.find((x) => x.id === 'needs-you')!;
+  await page.request.patch('/api/settings', { data: { tutorialStep: -1 } }); // the first-run tour is over
   await progress(page, { at: { [t.id]: { step: 0, done: false } }, running: t.id });
   await enterOffice(page);
   await runThrough(page, t, info, '3d');

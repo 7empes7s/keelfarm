@@ -86,7 +86,8 @@ function useBringIntoView(selectors: readonly string[], key: string) {
       const el = selectors.map((s) => document.querySelector(s)).find(Boolean);
       if (el) {
         const r = el.getBoundingClientRect();
-        if (r.top < 0 || r.bottom > innerHeight || r.left < 0 || r.right > innerWidth) el.scrollIntoView({ block: 'center', inline: 'center', behavior: reduceMotion() ? 'auto' : 'smooth' });
+        // one taller than the screen (a Kanban column) shows its top, where its header and first card are
+        if (r.top < 0 || r.bottom > innerHeight || r.left < 0 || r.right > innerWidth) el.scrollIntoView({ block: r.height > innerHeight * 0.8 ? 'start' : 'center', inline: 'nearest', behavior: 'auto' });
         clearInterval(t);
       } else if (++tries > 40) clearInterval(t);
     }, 250);
