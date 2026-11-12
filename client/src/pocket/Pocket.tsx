@@ -7,6 +7,7 @@ import { agentsOnRepo, kanbanFor, unreadMessages, useStore, type Overlay } from 
 import { CEO_ID } from '../../../shared/types';
 import { officeUpdateChip, restartExpected } from '../officeUpdate';
 import { UpdatePill } from '../ui/UpdatePill';
+import { OfficeUpdateButton } from '../ui/OfficeUpdateButton';
 import { loadUpdate } from '../updateLoad';
 import { BacklogBar } from '../ui/FloorProgress';
 import { KanbanView } from '../ui/KanbanView';
@@ -650,6 +651,7 @@ export default function Pocket() {
             <span className="sr-only">{usage === 'paused' ? ' paused' : ' pacing'}</span>
           </span>
         )}
+        <OfficeUpdateButton className="btn btn-small btn-good pk-update pk-office-update" />
         <UpdatePill className="btn btn-small btn-good pk-update" short />
         <HeadTools wide={wide} tab={tab} help={tab === 'chat' ? undefined : HELP[tab]} />
         {/* a phone's chat header has no room: its ⛶ sits here (#201) */}

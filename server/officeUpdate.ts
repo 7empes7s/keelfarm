@@ -3,7 +3,7 @@ import path from 'node:path';
 import { HOME_DIR } from './config.ts';
 import { git } from './exec.ts';
 import { cleanTerminalText } from '../shared/terminalText.ts';
-import type { ChatNotice, OfficeUpdateState } from '../shared/types.ts';
+import type { ChatNotice, OfficeUpdateState, UpdateWait } from '../shared/types.ts';
 
 // The office updating itself (#37, #74). The server only decides when: it lets a run of merges settle into one update,
 // drains the sessions an office restart would stop (CLIs in the terminal keeper and in Boxes carry on through it), and
@@ -23,6 +23,12 @@ export const DRAIN_TIMEOUT_MS = 20 * 60_000;
 export const LAB_DRAIN_CAP_MS = 10 * 60_000;
 /** A QA session between lab calls holds the update until its last lab call is this old (or its round ends). */
 export const LAB_UNIT_MS = 2 * 60_000;
+/** Past the drain timeout, a session in the middle of a tool call is waited for this much longer (its next safe point, #600). */
+export const STEP_GRACE_MS = 5 * 60_000;
+/** The launcher's probation after a restart (scripts/officeSteps.mjs' PROBATION_MS; a test keeps them equal). */
+export const PROBATION_MS = 2 * 60_000;
+/** The launcher holding an update this long without an answer is reported as stuck. */
+export const LAUNCHER_STUCK_MS = 10 * 60_000;
 /** Later: ask again after this long, or sooner when a newer commit lands. */
 export const POSTPONE_MS = 2 * 60 * 60_000;
 /** Batching: an automatic update waits until no commit has landed for this many minutes (Settings)… */
@@ -63,6 +69,7 @@ export interface DrainInput {
   drainingSince: number | null;
   sent: boolean; // handed to the launcher
   running: number; // sessions an office restart would stop (not CLIs in the terminal keeper or in a Box)
+  midStep?: number; // of those, sessions in the middle of a tool call: past the timeout the drain waits for their next safe point
   lab: number; // test-lab work a restart would cut off (#333): running jobs and QA rounds between lab calls (labHold)
   pendingSince: number | null; // the first commit of this update was seen then (null: don't wait for more)
   lastCommitAt: number | null; // the latest one
@@ -101,8 +108,53 @@ export function drainDecision(s: DrainInput): DrainDecision {
   const at = s.requested || s.drainingSince !== null ? null : settleAt(s.pendingSince, s.lastCommitAt, s.settleMs);
   if (at !== null && s.now < at) return idle('settling', at);
   const since = s.drainingSince ?? s.now;
-  const timedOut = s.running > 0 && s.now - since >= DRAIN_TIMEOUT_MS;
+  const waited = s.now - since;
+  // Past the timeout, stop sessions between steps (no tool call running), else at most STEP_GRACE_MS later (#600).
+  const timedOut = s.running > 0 && waited >= DRAIN_TIMEOUT_MS && (!s.midStep || waited >= DRAIN_TIMEOUT_MS + STEP_GRACE_MS);
   return { state: 'draining', drainingSince: since, send: (s.running === 0 && !labWaits(s)) || timedOut, timedOut, holds: true, updateAt: null };
+}
+
+/** What updateWait needs besides the drain's input: how the last update ended, and the hand-over's progress. */
+export interface WaitInput extends DrainInput {
+  failedStage: UpdateStage | null;
+  probationUntil: number | null; // the last update's probation runs until then (the launcher holds a new one meanwhile)
+  sentAt: number | null; // handed to the launcher then
+}
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+/**
+ * Why a ready update isn't applied yet (#600), in a line for the header and Settings: busy agents, the test lab,
+ * merges settling, automatic updates off, Later, a failed preflight (with its log), the last update's probation, the
+ * launcher's lock, an error, or no launcher. null: nothing waits (up to date, or it goes ahead now).
+ */
+export function updateWait(s: WaitInput, d: DrainDecision): UpdateWait | null {
+  if (s.behind <= 0 && !s.sent) return null;
+  if (!s.launcher) return { kind: 'no-launcher', text: "The office wasn't started by its launcher (npm start), so it can't install updates itself." };
+  const failure = (s.failed ?? 'unknown error').split('\n')[0].slice(0, 160);
+  switch (d.state) {
+    case 'updating':
+      if (s.probationUntil !== null && s.now < s.probationUntil) return { kind: 'probation', text: "The last update is still on probation (2 min): the launcher starts this one right after it." };
+      if (s.sentAt !== null && s.now - s.sentAt >= LAUNCHER_STUCK_MS) return { kind: 'lock', text: `The launcher has held this update for over ${LAUNCHER_STUCK_MS / 60_000} min (its update lock): look at its log, or restart the office.` };
+      return { kind: 'launcher', text: 'The launcher is running the preflight, then restarts the office for a few seconds.' };
+    case 'failed':
+      if (s.failedStage === 'preflight') return { kind: 'preflight', text: `The preflight failed: ${failure}. Still on the old version; Update now tries again.`, log: s.failed ?? undefined };
+      if (s.failedStage === 'probation') return { kind: 'failed', text: `The last update failed its probation and was rolled back: ${failure}. Update now tries again.`, log: s.failed ?? undefined };
+      return { kind: 'failed', text: `The last update failed: ${failure}. Update now tries again, or a newer commit does.`, log: s.failed ?? undefined };
+    case 'waiting':
+      return { kind: 'postponed', text: 'Postponed with Later: it asks again in 2 hours, or when a newer commit lands.' };
+    case 'available':
+      return { kind: 'manual', text: 'Automatic updates are off: tap Update now to apply it.' };
+    case 'settling':
+      return { kind: 'settling', text: 'Waiting for merges to settle, so a run of them restarts the office once.' };
+    case 'draining':
+      if (d.send) return null;
+      if (s.running > 0) return { kind: 'busy', text: `${plural(s.running, 'agent')} busy: waiting for ${s.running === 1 ? 'it' : 'them'} to finish (after 20 min, at their next safe step).` };
+      if (s.lab > 0) return { kind: 'lab', text: `Waiting for ${plural(s.lab, 'test-lab check')} (at most 10 min).` };
+      return null;
+    default:
+      return null;
+  }
 }
 
 /** The drain still waits for the test lab: lab work is under way and the drain is younger than LAB_DRAIN_CAP_MS. */

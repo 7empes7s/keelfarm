@@ -243,6 +243,7 @@ export const api = {
   demoPropose: (kind: 'hire' | 'let-go', floor?: number) => call<{ text: string }>('POST', '/api/demo/proposals', { kind, floor }),
   demoNewCommit: () => call<{ commit: string }>('POST', '/api/demo/new-commit'),
   demoLabUpdate: () => call<OfficeUpdateView>('POST', '/api/demo/lab-update'),
+  demoUpdateWait: () => call<OfficeUpdateView>('POST', '/api/demo/update-wait'),
   /** Saves an Anthropic or OpenAI Admin key for the usage card's organisation spend (#361); '' removes it. */
   // Settings → Providers (#362): keys and MCP servers' secrets go in and never come back out.
   addProvider: (provider: string, key: string, label?: string, accountId?: string) => call<ProviderConnection>('POST', '/api/providers', { provider, key, label, accountId }, false),

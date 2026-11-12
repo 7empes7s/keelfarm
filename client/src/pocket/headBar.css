@@ -31,3 +31,9 @@
 .pk-railed .pk-title {
   flex: none;
 }
+/* the office's own Update (#600): only its glyph on a phone's bar, so the name and Settings keep their room */
+@container pkhead (max-width: 720px) {
+  .pk-head .pk-office-update .office-update-label {
+    display: none;
+  }
+}

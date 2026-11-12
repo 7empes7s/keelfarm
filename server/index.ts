@@ -598,6 +598,7 @@ app.post('/api/decisions/:id', route((req) => swarm.decideOpen(String(req.params
 app.post('/api/demo/proposals', route((req) => swarm.demoPropose(req.body?.kind, req.body?.floor)));
 app.post('/api/demo/new-commit', route(() => swarm.demoNewCommit()));
 app.post('/api/demo/lab-update', route(() => swarm.demoLabUpdate()));
+app.post('/api/demo/update-wait', route(() => swarm.demoUpdateWait()));
 
 // Office progression (#210): the lobby kiosk, a floor's decorations, the player's coffees, and the demo's coins and
 // tenure for QA.

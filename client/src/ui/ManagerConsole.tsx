@@ -53,8 +53,8 @@ async function attempt<T>(fn: () => Promise<T>): Promise<T | undefined> {
 
 const NO_LAUNCHER = 'Start the office with npm run dev or npm start so it can install updates and restart itself.';
 
-/** The office itself: the commit it runs and its own update. Hidden on servers that can't update themselves. */
-function OfficeRow({ update }: { update: OfficeUpdateView }) {
+/** The office itself: the commit it runs, its own update and why it waits (#600). Hidden on servers that can't update themselves. */
+export function OfficeRow({ update }: { update: OfficeUpdateView }) {
   const commit = useStore((s) => s.officeCommit);
   const autoUpdate = useStore((s) => s.settings.autoUpdate);
   const demo = useStore((s) => s.demo);
@@ -107,7 +107,19 @@ function OfficeRow({ update }: { update: OfficeUpdateView }) {
           tap="See the commit it runs in About this office"
         />
       )}
-      {update.detail && update.state !== 'failed' && <div className="muted small">{update.detail}</div>}
+      {update.wait ? (
+        <div className="small office-wait" role="note">
+          <b>Why it waits:</b> {update.wait.text}
+          {update.wait.log && (
+            <details>
+              <summary>Log</summary>
+              <pre className="office-wait-log">{update.wait.log}</pre>
+            </details>
+          )}
+        </div>
+      ) : (
+        update.detail && update.state !== 'failed' && <div className="muted small">{update.detail}</div>
+      )}
       {deadline && update.running > 0 && (
         <div className="muted small">Sessions a restart would stop that are still running at {new Date(deadline).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} are stopped, and their work goes back to the queue.</div>
       )}
@@ -122,6 +134,9 @@ function OfficeRow({ update }: { update: OfficeUpdateView }) {
           <span className="muted small">Demo:</span>
           <button className="btn btn-small btn-ghost" onClick={() => void attempt(api.demoNewCommit)} title="As if the office just updated itself: open tabs keep working and show New version · Update">
             <Icon name="refresh-cw" /> Simulate an office update
+          </button>
+          <button className="btn btn-small btn-ghost" onClick={() => void attempt(api.demoUpdateWait)} title="Show the next reason a ready update waits for, as the header and this row show it">
+            <Icon name="hourglass" /> Next wait reason
           </button>
           {update.launcher && (
             <button className="btn btn-small btn-ghost" onClick={() => void attempt(api.demoLabUpdate)} title="A 20-second lab browser check starts, then a commit lands: the update waits for the check">

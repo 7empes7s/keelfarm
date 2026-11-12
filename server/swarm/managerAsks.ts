@@ -209,4 +209,12 @@ export abstract class SwarmManagerAsks extends SwarmTeam {
     await this.mergePull(repo.id, n);
     return this.askedDone(repo.id, `merged PR #${n} on floor ${repo.floor}`);
   }
+
+  /** apply_update (#600): the manager's Update now, through the drain and the launcher's preflight and probation. */
+  protected askApplyUpdate(a: Args<'applyUpdate'>) {
+    this.checkAsked(a);
+    const v = this.updateOffice('now');
+    const n = `${v.behind} commit${v.behind === 1 ? '' : 's'}`;
+    return this.askedDone(null, `started the office's update (${n}): ${v.wait?.text ?? 'the preflight runs, then the office restarts for a few seconds and is watched on probation'}`);
+  }
 }
