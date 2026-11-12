@@ -349,7 +349,7 @@ export function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionH
       const reply = parseForwarded(text);
       if (reply) return answerReply(reply);
       const awake = await demoAwake(text, s.floors, use); // "wait for PR #3", "consult …", "ask me …" (#28)
-      const round = awake || (await demoRound(text, s.floors, use, async (tool, line, out, error) => (await step([{ kind: 'tool', tool, text: `⏺ ${line}` }]), step([{ kind: error ? 'error' : 'result', text: `  ⎿ ${out}` }], 300)), async (floor) => objectiveIds((await detail(floor)).charter)[0])); // "look into …": the step log (#150)
+      const round = awake || (await demoRound(text, s.floors, use, async (tool, line, out, error) => (await step([{ kind: 'tool', tool, text: `⏺ ${line}` }], 3500), step([{ kind: error ? 'error' : 'result', text: `  ⎿ ${out}` }], 300)), async (floor) => objectiveIds((await detail(floor)).charter)[0])); // "look into …": the step log, long enough to hear two progress windows (#150, #286)
       if (round) return round;
       const resolved = await demoResolve(text, s.openDecisions, use); // an open decision answered in words (#114)
       if (resolved) return resolved;

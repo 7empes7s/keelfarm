@@ -13,6 +13,22 @@ export interface VoiceSettings {
   speed: number; // speech speed, 0.7–1.2 (ElevenLabs' voice_settings.speed, the browser voice's rate); shared/voices.ts
   favourites: string[]; // ElevenLabs voice ids starred in any voice picker, shown first (ids only)
   agentsSpeak: boolean; // agents say a short line in their voice when clicked (#321, shared/agentLines.ts)
+  talk: TalkWhileWorking; // the CEO's spoken progress while it works (#286); during a call 'off' means milestones
+}
+
+/** Settings → Voice's "Talk while working": no progress lines, only milestones, or a line about every minute too. */
+export type TalkWhileWorking = 'off' | 'milestones' | 'regular';
+
+/**
+ * A line the CEO says while it works (#286, shared/voiceTalk.ts): an instant ack of the manager's message, or progress.
+ * Spoken and shown as a chip, never a chat message. Its clip is GET /api/voice/talk/:id.
+ */
+export interface VoiceLine {
+  id: number;
+  kind: 'ack' | 'progress';
+  milestone?: boolean;
+  text: string;
+  at: number;
 }
 
 /** Who turns the manager's speech into text: nobody (no 🎙), the browser's own recognition, or ElevenLabs (with the key). */

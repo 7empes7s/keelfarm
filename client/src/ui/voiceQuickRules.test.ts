@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { UsageSource, VoiceSettings } from '../../../shared/types';
 import { chooseVoicePatch, elevenLabsUse, moreSettingsTarget, readAloudPatch } from './voiceQuickRules';
 
-const voice: VoiceSettings = { provider: 'elevenlabs', voiceId: 'a', voiceName: 'Ada', model: 'm', speakOffice: false, keepDays: 7, speed: 1, favourites: [], agentsSpeak: true };
+const voice: VoiceSettings = { provider: 'elevenlabs', voiceId: 'a', voiceName: 'Ada', model: 'm', speakOffice: false, keepDays: 7, speed: 1, favourites: [], talk: 'off', agentsSpeak: true };
 // What the quick sheet saves is applied over settings.voice, the object Settings → Voice reads.
 const saved = (patch: Partial<VoiceSettings>) => ({ ...voice, ...patch });
 

@@ -404,6 +404,10 @@ app.get(
   route(async (req, res) => sendAudio(res, await swarm.voice.sampleAudio(parse(z.object({ voiceId: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/, 'not a voice id').optional() }), req.query).voiceId))),
 );
 app.get(
+  '/api/voice/talk/:id',
+  route(async (req, res) => sendAudio(res, await swarm.voice.talkAudio(parse(z.object({ id: z.coerce.number().int().min(1) }), req.params).id))),
+);
+app.get(
   '/api/voice/standup',
   route(async (req, res) => {
     const q = parse(z.object({ n: z.coerce.number().int().min(1).max(99), part: z.enum(DAY_PARTS) }), req.query);
@@ -455,6 +459,14 @@ app.put('/api/it/telegram', route((req) => swarm.itBot.setToken(req.body?.token)
 app.post('/api/it/telegram/link', route(() => swarm.itBot.link()));
 app.delete('/api/it/telegram', route(() => swarm.itBot.remove()));
 app.post('/api/it/telegram/demo', route((req) => swarm.itTelegramDemo(req.body ?? {})));
+// IT monitoring (#525): the checks now, a recommendation's option picked, Not now.
+app.post('/api/it/watch/check', route(() => swarm.itWatchTick()));
+app.post('/api/it/recs/:id/pick', route((req) => {
+  const option = Number(req.body?.option);
+  if (!Number.isInteger(option) || option < 0) throw new HttpError(400, 'Pass option: the index of the option to run.');
+  return swarm.itPick(String(req.params.id), option);
+}));
+app.post('/api/it/recs/:id/snooze', route((req) => swarm.itSnooze(String(req.params.id))));
 app.post('/api/disk/simulate', route((req) => swarm.simulateDisk(req.body?.low === true)));
 // The server's load by program (#271): the 24 h trend (in memory), and Mission control's "Stop it" for a leftover process
 app.get('/api/server/trend', route(() => swarm.serverTrend()));

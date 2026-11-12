@@ -161,6 +161,13 @@ describe('voiceSettings', () => {
     expect(voiceSettings(DEFAULT_VOICE, old)).toMatchObject({ speed: 1, favourites: [], model: 'eleven_flash_v2_5' });
   });
 
+  it("keeps Talk while working to its three choices, off for an office saved before it (#286)", () => {
+    expect(DEFAULT_VOICE.talk).toBe('off');
+    expect(voiceSettings(DEFAULT_VOICE, { talk: 'regular' }).talk).toBe('regular');
+    expect(voiceSettings({ ...DEFAULT_VOICE, talk: 'milestones' }, { talk: 'always' }).talk).toBe('milestones');
+    expect(voiceSettings(DEFAULT_VOICE, { provider: 'browser', speakOffice: false }).talk).toBe('off');
+  });
+
   it('starts new offices on Eleven v4, the higher-quality model', () => {
     expect(DEFAULT_VOICE.model).toBe('eleven_v4');
   });
@@ -509,6 +516,19 @@ describe('Voice', () => {
     expect(calls.synth).toBe(2);
     settings = { ...settings, provider: 'browser' };
     expect(await status(v.standupAudio(3, 'morning'))).toBe(404);
+  });
+
+  it("voices the CEO's ack and progress lines it was given, each wording made once (#286)", async () => {
+    const v = make();
+    await v.setKey('sk_good');
+    expect(await status(v.talkAudio(7))).toBe(404); // never a line the office didn't say
+    v.rememberTalk(7, 'Heard you, one moment.');
+    v.rememberTalk(8, 'Heard you, one moment.');
+    expect((await v.talkAudio(7)).toString()).toBe('mp3:Heard you, one moment.');
+    await v.talkAudio(8);
+    expect(calls.synth).toBe(1);
+    settings = { ...settings, provider: 'browser' };
+    expect(await status(v.talkAudio(7))).toBe(404);
   });
 
   it('other ElevenLabs failures are a 502 and keep trying', async () => {
