@@ -191,7 +191,7 @@ export abstract class SwarmItDept extends SwarmSetup {
 
   /** IT's office tools: it_run, it_propose, it_recommend (itWatch.ts), it_health, it_ticket, it_review and it_improve (itImprove.ts; server/ceoItTools.ts). */
   protected itTools(): OfficeTools {
-    return itOfficeTools({ itRun: (a) => this.itRun(a), itPropose: (a) => this.itPropose(a), itRecommend: (a) => this.itRecommend(a), itHealth: () => this.itHealth(), itTicket: (a) => this.itTicket(a), itReview: (a) => this.itReview(a), itImprove: (a) => this.itImprove(a) });
+    return itOfficeTools({ itRun: (a) => this.itRun(a), itPropose: (a) => this.itPropose(a), itRecommend: (a) => this.itRecommend(a), itHealth: () => this.itHealth(), itTicket: (a) => this.itTicket(a), itReview: (a) => this.itReview(a), itImprove: (a) => this.itImprove(a), problemsList: (a) => this.problemsList(a), noteProblem: (a) => this.noteProblem(a) });
   }
 
   /** it_health: the office's readings, compact. */

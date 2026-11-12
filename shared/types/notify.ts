@@ -16,6 +16,7 @@ export interface NotifySettings {
   officeUrl: string; // where messages link back to ('' = no link), e.g. a Tailscale Serve URL
   telegramMirror: boolean; // every CEO message also goes to Telegram (otherwise only replies to messages sent from there)
   quietInApp: boolean; // nothing goes out while the manager is using the app on any device (#210)
+  problemsDigestHour?: number; // the daily problems digest's hour (#544, Settings → Problems): 0-23, -1 off; absent: 9 (shared/problems.ts)
 }
 
 /** A channel's last send since the office started: when, and whether it arrived (else why not). */
