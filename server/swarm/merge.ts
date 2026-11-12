@@ -217,6 +217,7 @@ export abstract class SwarmMerge extends SwarmRepos {
     if (!repo.ciOutage) {
       if (reason === NEVER_STARTED) reason = outageReason(await this.backend.checkAnnotations(repo.fullName, pr.failedChecks.flatMap((c) => c.url ?? [])).catch(() => [])) ?? reason;
       repo.ciOutage = { reason, since: now, probeAt: now, back: null };
+      this.autoTicket({ kind: 'ci', repo: repo.fullName, reason });
       this.postMessage('office', `🛑 CI can't run on ${repo.fullName}: ${reason}. PRs that passed QA wait for it instead of going back for fixes; the office re-runs one every ${OUTAGE_PROBE_MS / 60_000} minutes and merges them by itself once CI runs again. One question: is CI off on purpose? If not, fix it on GitHub (billing, spending limit or Actions settings); nothing else needs you.`);
     }
     rec.ciOutage = now;
