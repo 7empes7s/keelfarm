@@ -10,7 +10,7 @@ import { BOX_CDP, BoxPty, boxHooksReady, finishedTurn, lookAtBoxCli, readFrom, t
 import { BOX_BIN, BOX_CLI_BIN, BOX_HOME, boxSessionDir, signInCommand, tmuxKill } from './boxScripts.ts';
 import { adoptsCli } from './cliAdopt.ts';
 import { cliLabel, CLIS, codexThread, commandFor, geminiLimit, interruptions, isCli, launchArgs, lostLogin, prepareLaunch, writeHelperFiles } from './clis.ts';
-import { answerNote, countAnswer, keyBytes, screenStep, signInError } from './cliScreens.ts';
+import { answerNote, countAnswer, gaveUpNote, keyBytes, screenStep, screenTry, signInError } from './cliScreens.ts';
 import { adoptPty, discardPty, hooksReady as keeperHooksReady, keeperHookUrl, keeperPid, leaveKeeper, spawnPty, startKeeper, terminalsAvailable, type Pty } from './ptyClient.ts';
 import type { BoxApi } from './box.ts';
 import {
@@ -497,7 +497,7 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
   let screenTimer: NodeJS.Timeout | undefined;
   let shotTimer: NodeJS.Timeout | undefined;
   const nudged = new Set<string>();
-  let trustKeys = 0; // keys pressed on start-up screens (a few at most)
+  const screenTries = new Map<string, number>(); // keys pressed on each start-up screen (a few at most)
   let trustedAt = 0;
   const roots = sessionRoots(opts.cwd, opts.env, dir); // the folders the session may write in
   let lastCall: { tool: string; input: Record<string, unknown> } = { tool: '', input: {} };
@@ -970,8 +970,10 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
       if (done || Date.now() - started > BOOT_MS * 2) return clearInterval(screenTimer);
       const screen = term.screen();
       const step = screenStep(screen, cli);
-      if (step?.do === 'keys' && trustKeys < 20 && Date.now() - trustedAt > 3000) {
-        trustKeys += 1;
+      if (step?.do === 'keys' && Date.now() - trustedAt > 3000) {
+        const go = screenTry(screenTries, step.screen.id);
+        if (go === 'give-up') log([{ kind: 'error', text: gaveUpNote(label, step.screen) }]);
+        if (go !== 'send') return; // the live state reports it as needing setup (liveState.ts)
         if (step.key === 'enter') {
           trustedAt = Date.now(); // the screen takes a moment to go: don't answer it twice
           log([{ kind: 'system', text: answerNote(label, step.screen, opts.account, countAnswer(opts.account, step.screen.id)) }]);
