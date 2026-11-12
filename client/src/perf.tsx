@@ -203,7 +203,7 @@ let readoutEl: HTMLSpanElement | null = null;
 
 const fmt = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}k` : String(n));
 
-/** With `?stats`, window.__swarmStats: the same numbers for scripts (scripts/bench.mjs), and census() of what's drawn. */
+/** With `?stats`, window.__swarmStats: the same numbers for scripts (scripts/bench.mjs), census() of what's drawn and find() by name. */
 const probe = { fps: 0, ms: 0, calls: 0, triangles: 0, geometries: 0, textures: 0, programs: 0 };
 let probeScene: THREE.Scene | null = null;
 
@@ -225,7 +225,19 @@ function census(top = 25) {
   return [...counts.entries()].sort((a, b) => b[1].draws - a[1].draws || b[1].triangles - a[1].triangles).slice(0, top);
 }
 
-if (statsEnabled) Object.assign(window as unknown as Record<string, unknown>, { __swarmStats: Object.assign(probe, { census }) });
+/** The visible groups named `prefix`…, with their userData and how many meshes each draws: what e2e checks are on screen. */
+function find(prefix: string) {
+  const out: { name: string; userData: Record<string, unknown>; meshes: number }[] = [];
+  probeScene?.traverseVisible((o) => {
+    if (!o.name.startsWith(prefix)) return;
+    let meshes = 0;
+    o.traverseVisible((c) => void (meshes += (c as THREE.Mesh).isMesh ? 1 : 0));
+    out.push({ name: o.name, userData: { ...o.userData }, meshes });
+  });
+  return out;
+}
+
+if (statsEnabled) Object.assign(window as unknown as Record<string, unknown>, { __swarmStats: Object.assign(probe, { census, find }) });
 
 /** Lives inside the Canvas (only with `?stats`). Samples the frame rate and the renderer's counters twice a second. */
 export function StatsProbe({ paused }: { paused: boolean }) {
