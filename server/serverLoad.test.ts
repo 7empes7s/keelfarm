@@ -1,8 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { addPoint, byAgent, byKind, capPrograms, POINT_MS, TREND_MS, type ProgramUse, type ServerNow, type ServerPoint } from '../shared/serverLoad.ts';
+import { addPoint, byAgent, byKind, capPrograms, keptTrend, POINT_MS, SAVE_MS, TREND_MS, type ProgramUse, type ServerNow, type ServerPoint } from '../shared/serverLoad.ts';
 import { cpuShares, groupPrograms, orphanUses, parseCpuTicks, parseLoadavg, parseMeminfo, parseStat, ServerLoad, type LoadContext, type ProcRow } from './serverLoad.ts';
+import { demoServerLoad } from './demoServerLoad.ts';
 
 const fixture = (name: string) => fs.readFileSync(path.join(import.meta.dirname, 'fixtures', 'proc', name), 'utf8');
 
@@ -142,6 +143,20 @@ describe('the 24 h trend (#271)', () => {
     expect(trend[0].at).toBeGreaterThan(end - TREND_MS);
     expect(trend.every((x, i) => i === 0 || x.at - trend[i - 1].at >= POINT_MS)).toBe(true);
   });
+
+  it('reads back only the last day of well-formed points, oldest first (#587)', () => {
+    const now = 30 * 3_600_000;
+    const raw = [pt(now - 60_000), pt(now - 25 * 3_600_000), { at: now - 120_000, memPct: 'x' }, null, pt(now + 60_000), { ...pt(now - 180_000), loadPct: null }];
+    expect(keptTrend(raw, now).map((p) => p.at)).toEqual([now - 180_000, now - 60_000]);
+    expect([keptTrend({}, now), keptTrend(null, now)]).toEqual([[], []]);
+  });
+
+  it('the demo day has a gap of two hours with no readings', () => {
+    const day = demoServerLoad(async () => ({ totalMb: 8000, availableMb: 4000, cpus: 4 })).serverSeed();
+    const gaps = day.slice(1).map((p, i) => p.at - day[i].at);
+    expect(gaps.filter((g) => g > POINT_MS)).toHaveLength(1);
+    expect(Math.max(...gaps)).toBeGreaterThan(110 * 60_000);
+  });
 });
 
 describe('capPrograms', () => {
@@ -163,5 +178,17 @@ describe('ServerLoad', () => {
     expect(sent).toEqual([reading]);
     expect(load.view()).toBe(reading);
     expect(load.points()).toEqual([{ at: 1_000_000, memPct: 75, swapPct: 50, loadPct: 50 }]);
+  });
+
+  it('keeps the trend for the next start every 10 minutes, starting from what was kept (#587)', async () => {
+    let at = 1_000_000;
+    const saved: number[][] = [];
+    const kept = [{ at: 500_000, memPct: 40, swapPct: 5, loadPct: 10 }];
+    const read = async (): Promise<ServerNow> => ({ at, cpus: 4, load: 2, cpuPct: 50, totalMb: 8000, availableMb: 2000, swapTotalMb: 1000, swapFreeMb: 500, disks: [], programs: [], orphans: [], measured: true });
+    const load = new ServerLoad({ read, seed: () => kept, context: () => ctx, emit: () => undefined, save: (p) => saved.push(p.map((x) => x.at)) });
+    for (; at < 1_000_000 + SAVE_MS * 2; at += 60_000) await load.tick();
+    expect(saved).toHaveLength(2);
+    expect(saved[0]).toEqual([500_000, 1_000_000]);
+    expect(saved[1][saved[1].length - 1]).toBe(1_000_000 + SAVE_MS);
   });
 });

@@ -105,7 +105,7 @@
   stroke-width: 1.5;
 }
 .viz-slot.viz-on .viz-hit {
-  fill: var(--ds-surface-hover);
+  fill: color-mix(in srgb, var(--ds-accent) 10%, transparent); /* light, so the marks under it still show (#587) */
 }
 .viz-cursor {
   stroke: var(--ds-line-strong);
@@ -172,11 +172,11 @@
   height: 100%;
   background: var(--ds-series-2);
 }
+/* A compact inline legend (#587): each name a toggle, the tap target still 44px tall */
 .viz-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--ds-space-1);
-  margin-top: var(--ds-space-1);
+  column-gap: var(--ds-space-2);
 }
 .viz-legend-chip {
   display: inline-flex;
@@ -184,10 +184,10 @@
   gap: var(--ds-space-1);
   min-height: var(--ds-target);
   max-width: 100%;
-  padding: 0 var(--ds-space-2);
-  border: 1.5px solid var(--ds-line-strong);
-  border-radius: var(--ds-radius-pill);
-  background: var(--ds-surface-raised);
+  padding: 0 var(--ds-space-1);
+  border: 0;
+  border-radius: var(--ds-radius-sm);
+  background: none;
   color: var(--ds-text);
   font: inherit;
   font-size: var(--ds-text-xs);
@@ -200,12 +200,14 @@
 .viz-legend-chip[aria-pressed='false'] .viz-swatch {
   opacity: 0.3;
 }
+.viz-legend-chip:hover {
+  background: var(--ds-surface-hover);
+}
 .viz-swatch {
   flex: none;
-  width: 12px;
-  height: 12px;
-  border: 1.5px solid var(--ds-outline);
-  border-radius: 3px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
 }
 .viz-tip {
   display: flex;
