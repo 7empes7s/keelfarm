@@ -154,7 +154,7 @@ export abstract class SwarmCore extends SwarmContract {
     pong: {},
     officeId: officeId(),
     claudeUsage: [], usageWatch: [],
-    questions: [], decisions: { list: [], digestAt: 0 }, taskAccounts: {}, itDesk: { waiting: [], log: [] }, it: loadIt(undefined), itTickets: { seq: 0, list: [] }, itWatch: { checks: [], marks: {}, recs: [], digestDay: '', samples: [] },
+    questions: [], decisions: { list: [], digestAt: 0 }, taskAccounts: {}, itDesk: { waiting: [], log: [] }, it: loadIt(undefined), itTickets: { seq: 0, list: [] }, problems: { seq: 0, list: [], digestDay: '' }, itWatch: { checks: [], marks: {}, recs: [], digestDay: '', samples: [] },
     experiments: loadLab(undefined, Date.now()),
   };
   /** The chat's files store; every change goes out to the tabs as a `files` event. */
@@ -269,7 +269,7 @@ export abstract class SwarmCore extends SwarmContract {
       cacheChanged: (voiceCache) => this.broadcast({ type: 'voiceCache', voiceCache }),
       log: (line) => console.log(line),
     });
-    this.spend = new SessionCosts(new CostLedger(path.join(HOME_DIR, backend.demo ? 'demo-costs.jsonl' : 'costs.jsonl')), () => this.limited(), (line, run) => { this.lab.session(line); this.logSession(line, run); this.careerWork(line); this.usageSharesSoon(); });
+    this.spend = new SessionCosts(new CostLedger(path.join(HOME_DIR, backend.demo ? 'demo-costs.jsonl' : 'costs.jsonl')), () => this.limited(), (line, run) => { this.lab.session(line); this.logSession(line, run); this.careerWork(line); this.problemSession(line); this.usageSharesSoon(); });
     // The machine's daily log folder only for the real office: never from the demo or the tests.
     const machineDir = !backend.demo && !process.env.VITEST && existsSync(MACHINE_DAILY_DIR) ? MACHINE_DAILY_DIR : null;
     this.history = new SessionHistory({

@@ -15,6 +15,8 @@ describe('notification settings', () => {
     expect(s.officeUrl).toBe('https://office.tail1234.ts.net/');
     expect(notifySettings(s, { officeUrl: 'javascript:alert(1)' }).officeUrl).toBe('https://office.tail1234.ts.net/');
     expect(notifySettings(s, { officeUrl: '' }).officeUrl).toBe('');
+    expect(notifySettings(s, { problemsDigestHour: -1 }).problemsDigestHour).toBe(-1); // the problems digest's hour (#544): off
+    expect(notifySettings({ ...s, problemsDigestHour: 7 }, { problemsDigestHour: 40 }).problemsDigestHour).toBe(9);
     // An older saved state without the newer fields gets their defaults.
     expect(notifySettings(DEFAULT_NOTIFY, { events: { needsHuman: false } }).events.usage).toBe(true);
   });

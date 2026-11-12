@@ -172,7 +172,7 @@ describe('office tools', () => {
       sessionHistory: (a) => (calls.push(['session_history', a]), 'history'),
       react: (a) => (calls.push(['react', a]), 'reacted'),
       reply: (a) => (calls.push(['reply', a]), 'answered'),
-      runExperiment: () => '', setFloorSwitches: () => '', setIssuePriority: async () => '', setCeoSetup: () => '', applyCharter: () => '', mergePull: async () => '', askIt: () => '', itReport: () => '',
+      runExperiment: () => '', setFloorSwitches: () => '', setIssuePriority: async () => '', setCeoSetup: () => '', applyCharter: () => '', mergePull: async () => '', askIt: () => '', itReport: () => '', problemsList: () => '', noteProblem: () => '',
     });
     const [serverSide, clientSide] = InMemoryTransport.createLinkedPair();
     await office.server.instance.connect(serverSide);
@@ -210,7 +210,7 @@ describe('office tools', () => {
       'make_default_account',
       'merge_pull',
       'message_agent',
-      'pr_diff',
+      'note_problem', 'pr_diff', 'problems',
       'propose_charter',
       'propose_design',
       'qa_report',
@@ -293,6 +293,7 @@ describe('office tools', () => {
       merge_pull: { ...f, pr: 7, asked_in: 4 },
       ask_it: { question: 'Why is the disk full?' },
       it_report: { what: 'CI is down', where: 'ci', evidence: 'checks never started', blocking: false },
+      note_problem: { title: 'Issue #4 had no acceptance criteria', cause: 'vague-brief' },
     };
     const acting = tools.map((t) => t.name).filter((name) => !NOT_CARDS.has(name));
     for (const name of acting) {
@@ -717,7 +718,7 @@ describe('follow-ups (#27)', () => {
           fileIssue: async () => 'filed', setDependencies: async () => 'ok', closeIssue: async () => 'ok', retryQa: async () => 'ok', sendBack: async () => 'ok', rerunChecks: async () => 'ok',
           closePull: async () => 'ok', escalate: async () => 'ok', attachFile: async () => 'ok', worktreeFile: async () => 'ok', prDiff: async () => 'ok', sendTelegram: async () => 'ok', scanKeys: async () => 'ok', makeDefaultAccount: () => 'ok', editMessage: async () => 'ok',
           restartAgent: ok, stopAgent: ok, messageAgent: async () => 'ok', assignIssue: async () => 'ok', answerAgent: async () => 'ok', askManagerChoice: ok, defineExperiment: ok, sessionHistory: ok, proposeCharter: ok, resolveDecision: ok, proposeDesign: async () => 'ok',
-          waitFor: async () => 'ok', askManager: async () => 'ok', consult: async () => 'ok', react: ok, reply: ok,
+          waitFor: async () => 'ok', askManager: async () => 'ok', consult: async () => 'ok', react: ok, reply: ok, problemsList: ok, noteProblem: ok,
           runExperiment: ok, setFloorSwitches: ok, setIssuePriority: async () => 'ok', setCeoSetup: ok, applyCharter: ok, mergePull: async () => 'ok', askIt: ok, itReport: ok,
         },
         () => researching,
