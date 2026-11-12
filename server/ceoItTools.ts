@@ -26,6 +26,8 @@ export interface CloudflareArgs {
   tunnel?: string;
   emails?: string[];
   bypass?: string[];
+  idps?: string[];
+  auto_redirect?: boolean;
   name?: string;
   duration?: string;
   env_file?: string;
@@ -247,7 +249,7 @@ export function cloudflareTools(h: CloudflareHandlers, run: Run) {
     ),
     tool(
       'cloudflare',
-      "Cloudflare through the office's own key (never shown to you): tunnel_ingress_get and token_scopes read now (token_scopes names any missing permission); tunnel_ingress_add (hostname → service before the catch-all, every rule kept), dns_cname_ensure (proxied CNAME to the tunnel), access_app_ensure (an email allow-list, optional bypass paths) and access_service_token_ensure (a service token by name with a Service Auth policy on the hostname's app; its secret goes only into env_file as CF_ACCESS_CLIENT_ID/SECRET, mode 600) put a diff card to the manager with Approve / Not now, then apply and read back.",
+      "Cloudflare through the office's own key (never shown to you): tunnel_ingress_get and token_scopes read now (token_scopes names any missing permission); tunnel_ingress_add (hostname → service before the catch-all, every rule kept), dns_cname_ensure (proxied CNAME to the tunnel), access_app_ensure (an email allow-list, optional bypass paths; idps adds logins by name, keeping the app's others), access_idp_ensure (the Entra ID login from provider_action entra entra_app_ensure's app; its secret stays in the office) and access_service_token_ensure (a service token by name with a Service Auth policy on the hostname's app; its secret goes only into env_file as CF_ACCESS_CLIENT_ID/SECRET, mode 600) put a diff card to the manager with Approve / Not now, then apply and read back.",
       {
         op: z.enum(CF_OPS),
         hostname: z.string().min(4).max(253).optional().describe('e.g. "clip.techinsiderbytes.com"; needed by the writes'),
@@ -255,7 +257,9 @@ export function cloudflareTools(h: CloudflareHandlers, run: Run) {
         tunnel: z.string().min(1).max(100).optional().describe("The tunnel's name or id, when the account has several"),
         emails: z.array(z.string().email().max(200)).min(1).max(50).optional().describe('access_app_ensure: who may sign in'),
         bypass: z.array(z.string().min(1).max(200)).max(10).optional().describe('access_app_ensure: paths without sign-in, e.g. ["/api/health"]'),
-        name: z.string().min(1).max(100).optional().describe('access_service_token_ensure: the token\'s name, e.g. "clipfarm e2e"'),
+        idps: z.array(z.string().min(1).max(60)).max(10).optional().describe('access_app_ensure: logins to add by name, e.g. ["Entra ID"]'),
+        auto_redirect: z.boolean().optional().describe('access_app_ensure: skip the login picker (only with one login)'),
+        name: z.string().min(1).max(100).optional().describe('access_service_token_ensure: the token\'s name, e.g. "clipfarm e2e"; access_idp_ensure: the login\'s name (default "Entra ID")'),
         duration: z.string().min(2).max(10).optional().describe('access_service_token_ensure: e.g. "8760h" (Cloudflare\'s default when left out)'),
         env_file: z.string().min(2).max(500).optional().describe("access_service_token_ensure: the absolute path of the env file the service reads; left out, one in the office's own secrets folder"),
         why: z.string().min(1).max(300).optional().describe('For the card: why, in a sentence'),

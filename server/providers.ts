@@ -12,7 +12,7 @@ import { defaultUse, isProviderUse, keyHint, keyProblem, mcpProblem, mcpTestNote
 import { checkResult, legacyImportName } from '../shared/keyScan.ts';
 import { cleanTags } from '../shared/accounts.ts';
 import { OAUTH, authorizeUrl, callbackPath, codeForm, needsRefresh, oauthDef, readTokens, refreshForm, type OAuthDef } from '../shared/oauth.ts';
-import { cloudflareVerify, missingClassicScopes, missingNote, permissionSteps, runPermissionSteps, turnedAwayNote } from '../shared/keySetup.ts';
+import { cloudflareVerify, entraTokenProbe, missingClassicScopes, missingNote, permissionSteps, runPermissionSteps, turnedAwayNote } from '../shared/keySetup.ts';
 import { CAPABILITIES } from '../shared/capabilities.ts';
 import type { Capability, CapabilityChoice, KeyMint, McpServerConfig, ProviderConnection, ProvidersView, ProviderTest, ProviderUse } from '../shared/types.ts';
 import type { KeyInstall } from '../shared/keyInstall.ts';
@@ -190,7 +190,7 @@ export class Providers {
     const def = providerDef(provider)!;
     const label = rawLabel.trim().slice(0, 60) || def.name;
     const acct = accountId.trim();
-    if (acct && !/^[0-9a-f]{32}$/i.test(acct)) throw new HttpError(400, 'An Account ID is 32 letters and digits: copy it from any domain’s Overview page.');
+    if (acct) accountIdCheck(provider, acct);
     const usedBy = extra.usedBy?.trim().slice(0, 200);
     const c: ProviderConnection = { id: randomUUID().slice(0, 8), provider, label, addedAt: Date.now(), keyHint: keyHint(key), test: null, tags: [], usedFor: defaultUse(def.category), ...(source ? { source } : {}), ...(acct ? { accountId: acct } : {}), ...(usedBy && { usedBy }), ...(extra.expiresAt && { expiresAt: extra.expiresAt }), ...(extra.mint && { mint: extra.mint }) };
     await mergeSecrets(this.deps.secretsFile, { [keyOf(c.id)]: key });
@@ -217,7 +217,7 @@ export class Providers {
     const c = this.connection(id);
     if (patch.accountId !== undefined) {
       const acct = patch.accountId.trim();
-      if (acct && !/^[0-9a-f]{32}$/i.test(acct)) throw new HttpError(400, 'An Account ID is 32 letters and digits: copy it from any domain’s Overview page.');
+      if (acct) accountIdCheck(c.provider, acct);
       if (acct) c.accountId = acct;
       else delete c.accountId;
     }
@@ -264,7 +264,8 @@ export class Providers {
         return { ...c };
       }
     }
-    const req = c.provider === 'cloudflare' && c.accountId ? cloudflareVerify(key, c.accountId) : testRequest(c.provider, c.provider === 'kling' ? klingToken(key) : key);
+    if (c.provider === 'entra' && !entraTokenProbe(key, c.accountId ?? '')) throw new HttpError(400, `Set ${c.label}'s Tenant ID, and paste the key as "client id:client secret".`);
+    const req = c.provider === 'entra' ? entraTokenProbe(key, c.accountId ?? '') : c.provider === 'cloudflare' && c.accountId ? cloudflareVerify(key, c.accountId) : testRequest(c.provider, c.provider === 'kling' ? klingToken(key) : key);
     if (!req && c.provider !== 'gcloud') throw new HttpError(400, `${c.label} is tested in its own settings.`);
     let r = req ? await this.deps.probe(req) : await gcloudProbe(key, this.deps.probe); // a service account: a token, then its project
     // an Account ID beside a user token: the user's verify call is the right one
@@ -469,6 +470,13 @@ async function onPath(command: string): Promise<boolean> {
       if (ok) return true;
     }
   return false;
+}
+
+/** A connection's Account ID: Cloudflare's 32 characters, or an Entra tenant's GUID (#621). */
+function accountIdCheck(provider: string, acct: string) {
+  if (provider === 'entra') {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(acct)) throw new HttpError(400, 'A Tenant ID looks like 1a2b3c4d-…: copy the Directory (tenant) ID from Entra → Overview.');
+  } else if (!/^[0-9a-f]{32}$/i.test(acct)) throw new HttpError(400, 'An Account ID is 32 letters and digits: copy it from any domain’s Overview page.');
 }
 
 /** backend.providerProbe: a GET with the key in its header (10 s), or the command looked up. The key goes nowhere else. */

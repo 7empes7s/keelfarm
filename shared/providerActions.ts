@@ -31,7 +31,8 @@ export const PROVIDER_ACTIONS: Record<string, ActionOp[]> = {
     { op: 'tunnel_ingress_get', risk: 'read', does: "read the tunnel's hostnames", args: '{ tunnel? }', needs: 'Cloudflare Tunnel edit' },
     { op: 'tunnel_ingress_add', risk: 'change', does: 'publish a hostname on the tunnel', args: '{ hostname, service, tunnel? }', needs: 'Cloudflare Tunnel edit' },
     { op: 'dns_cname_ensure', risk: 'change', does: 'point DNS at the tunnel', args: '{ hostname, tunnel? }', needs: 'Zone DNS edit' },
-    { op: 'access_app_ensure', risk: 'change', does: 'put a hostname behind Access', args: '{ hostname, emails, bypass? }' },
+    { op: 'access_app_ensure', risk: 'change', does: 'put a hostname behind Access', args: '{ hostname, emails, bypass?, idps?, auto_redirect? }' },
+    { op: 'access_idp_ensure', risk: 'change', does: 'add the Microsoft Entra sign-in to Access', args: '{ name? }', needs: 'Access identity providers write' },
     // it can rotate a secret a service runs on, so it always asks
     { op: 'access_service_token_ensure', risk: 'destructive', does: 'make an Access service token', args: '{ hostname, name, duration?, env_file? }' },
     // #609: a narrow API token, saved as the office's own key and renewed before it expires
@@ -54,6 +55,7 @@ export const PROVIDER_ACTIONS: Record<string, ActionOp[]> = {
   cerebras: INFERENCE,
   nvidia: INFERENCE,
   elevenlabs: [KEY_TEST, { op: 'voices', risk: 'read', does: 'list voices' }, { op: 'usage', risk: 'read', does: 'read character usage' }],
+  entra: [KEY_TEST, { op: 'entra_app_ensure', risk: 'change', does: 'register the Cloudflare Access sign-in app', args: '{ name? }' }],
   // #622: the office's service account; enabling an allow-listed API is routine, a key is a change
   gcloud: [
     { op: 'key_test', risk: 'read', does: 'test the service account' },

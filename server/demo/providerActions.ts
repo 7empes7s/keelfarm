@@ -1,6 +1,8 @@
 // The demo's provider actions (#602): GitHub, the OpenAI-style inference APIs and ElevenLabs answered in memory, and a
 // few Upstash boxes. A key with "bad" in it is turned away (401); a GitHub token with "noadmin" lacks Administration
-// (write), one with "nosecrets" Secrets (read). `calls` records each request and whether its key came with it (the
+// (write), one with "nosecrets" Secrets (read). Microsoft Entra (#621): the token exchange and Graph's app registrations,
+// service principals and consent grants; an admin app with "noconsent" can't grant consent. `world.entra.secrets` holds
+// every client secret Graph handed out, so tests can look for them. `calls` records each request and whether its key came with it (the
 // tests check the key reached the provider and nothing else). The demo CEO shows a read and a write card.
 import type { ActionRequest, ActionResponse, ProviderHttp } from '../providerActions/types.ts';
 import type { BoxApi, BoxInfo } from '../box.ts';
@@ -9,10 +11,14 @@ import { fakeClipfarm, fakeGoogle } from './gcloud.ts';
 
 export const DEMO_REPO = 'demo-co/storefront';
 
+type GraphApp = { id: string; appId: string; displayName: string; web?: { redirectUris?: string[] }; requiredResourceAccess?: unknown[]; passwordCredentials: { keyId: string; endDateTime: string }[] };
+
 /** A fake of every provider's API the layer calls. */
 export function fakeProviderHttp() {
   const repo = { full_name: DEMO_REPO, default_branch: 'main', private: true, allow_auto_merge: false, delete_branch_on_merge: false, allow_squash_merge: true, allow_merge_commit: true, allow_rebase_merge: false, permissions: { admin: true } };
   const world = { repo, secrets: ['NPM_TOKEN', 'DEPLOY_KEY'], protection: null as string[] | null, reruns: [] as number[], runs: [{ id: 4242, name: 'CI', head_branch: 'swarm/issue-7', conclusion: 'failure', created_at: '2026-11-12T09:30:00Z' }] };
+  const entra = { apps: [] as GraphApp[], sps: [{ id: 'sp-graph', appId: '00000003-0000-0000-c000-000000000000' }], grants: [] as { id: string; clientId: string; consentType: string; resourceId: string; scope: string }[], secrets: [] as string[], tenants: [] as string[] };
+  Object.assign(world, { entra });
   const calls: (ActionRequest & { key: string })[] = [];
   const google = fakeGoogle();
   const clipfarm = fakeClipfarm();
@@ -54,6 +60,59 @@ export function fakeProviderHttp() {
     }
     return { status: 404, body: { message: 'Not Found' } };
   };
+  let seq = 0;
+  const graph = (key: string, req: ActionRequest): ActionResponse => {
+    const [p, query = ''] = req.url.replace('https://graph.microsoft.com/v1.0', '').split('?');
+    const filter = new URLSearchParams(query).get('$filter') ?? '';
+    const eq = (field: string) => filter.match(new RegExp(`${field} eq '([^']*)'`))?.[1];
+    if (p === '/applications') {
+      if (req.method === 'POST') {
+        entra.apps.push({ id: `obj-${++seq}`, appId: `0000c1f0-0000-4000-8000-${String(seq).padStart(12, '0')}`, ...(req.body as Omit<GraphApp, 'id' | 'appId' | 'passwordCredentials'>), passwordCredentials: [] });
+        return ok(entra.apps.at(-1), 201);
+      }
+      const name = eq('displayName');
+      return ok({ value: structuredClone(entra.apps.filter((a) => name === undefined || a.displayName === name.replace(/''/g, "'"))) });
+    }
+    const app = p.match(/^\/applications\/([^/]+)(\/\w+)?$/);
+    if (app) {
+      const a = entra.apps.find((x) => x.id === app[1]);
+      if (!a) return { status: 404, body: { error: { code: 'Request_ResourceNotFound' } } };
+      if (app[2] === '/addPassword') {
+        const secretText = `entra-secret-${++seq}-Xq~${Math.random().toString(36).slice(2)}`;
+        entra.secrets.push(secretText);
+        const cred = { keyId: `key-${seq}`, endDateTime: (req.body as { passwordCredential: { endDateTime: string } }).passwordCredential.endDateTime };
+        a.passwordCredentials.push(cred);
+        return ok({ ...cred, secretText });
+      }
+      if (app[2] === '/removePassword') {
+        a.passwordCredentials = a.passwordCredentials.filter((c) => c.keyId !== (req.body as { keyId: string }).keyId);
+        return ok(undefined, 204);
+      }
+      if (req.method === 'PATCH') Object.assign(a, req.body);
+      return ok(structuredClone(a));
+    }
+    if (p === '/servicePrincipals') {
+      if (req.method === 'POST') {
+        entra.sps.push({ id: `sp-${++seq}`, appId: (req.body as { appId: string }).appId });
+        return ok(entra.sps.at(-1), 201);
+      }
+      return ok({ value: entra.sps.filter((x) => x.appId === eq('appId')) });
+    }
+    if (p.startsWith('/oauth2PermissionGrants')) {
+      if (/noconsent/i.test(key)) return { status: 403, body: { error: { code: 'Authorization_RequestDenied', message: 'Insufficient privileges to complete the operation.' } } };
+      const id = p.split('/')[2];
+      if (req.method === 'POST') {
+        entra.grants.push({ id: `grant-${++seq}`, ...(req.body as Omit<(typeof entra.grants)[number], 'id'>) });
+        return ok(entra.grants.at(-1), 201);
+      }
+      if (req.method === 'PATCH') {
+        Object.assign(entra.grants.find((g) => g.id === id) ?? {}, req.body);
+        return ok(undefined, 204);
+      }
+      return ok({ value: entra.grants.filter((g) => g.clientId === eq('clientId') && g.resourceId === eq('resourceId')) });
+    }
+    return { status: 404, body: { error: { code: 'BadRequest' } } };
+  };
   const models = (ids: string[]) => ok({ object: 'list', data: ids.map((id) => ({ id, object: 'model' })) });
   const http: ProviderHttp = async (key, req) => {
     calls.push({ ...req, key });
@@ -63,6 +122,12 @@ export function fakeProviderHttp() {
     if (/bad/i.test(key)) return { status: 401, body: { error: { message: 'Invalid API key' } } };
     const u = req.url;
     if (u.startsWith('https://api.github.com')) return github(key, req);
+    const login = u.match(/^https:\/\/login\.microsoftonline\.com\/([^/]+)\/oauth2\/v2\.0\/token$/);
+    if (login && req.auth === 'entra-token') {
+      entra.tenants.push(login[1]);
+      return key.includes(':') ? ok({ token_type: 'Bearer', expires_in: 3599, access_token: `graph-token-${/noconsent/i.test(key) ? 'noconsent-' : ''}${++seq}` }) : { status: 401, body: { error: 'invalid_client' } };
+    }
+    if (u.startsWith('https://graph.microsoft.com/v1.0')) return graph(key, req);
     if (u === 'https://openrouter.ai/api/v1/key') return ok({ data: { label: 'demo', usage: 3.4, limit: 10, limit_remaining: 6.6 } });
     if (u === 'https://openrouter.ai/api/v1/models') return models(['anthropic/claude-sonnet-5.5', 'openai/gpt-5', 'google/gemini-3-flash']);
     if (u.startsWith('https://api.openai.com')) return models(['gpt-5', 'gpt-5-mini', 'gpt-image-2.6-flare']);
@@ -118,3 +183,10 @@ registerCeoReply('provider actions', async ({ text, use }) => {
   const first = (s: string) => s.split('\n')[0].replace(/^Refused:\s*/, '');
   return `With the office's own keys (never shown to me):\n- OpenRouter: ${first(credit)}\n- GitHub: ${first(repo)}\n\n${card.startsWith('Refused') ? `I couldn't plan the change: ${first(card)}` : 'One change is on a card with its before and after: delete merged branches automatically. Tap Approve and it is applied and read back.'}`;
 }, { early: true }); // before the demo's files, which answer about the chat's last attachment
+
+// "Sign in with Microsoft on clip": the Entra app registration's card (#621); Approve, then the IdP and the app's logins.
+registerCeoReply('entra sign-in', async ({ text, use }) => {
+  if (!/\b(entra|sign in with microsoft|microsoft sign-in)\b/i.test(text)) return null;
+  const card = await use('provider_action', { provider: 'entra', op: 'entra_app_ensure', why: 'Microsoft sign-in for clip.techinsiderbytes.com through Cloudflare Access.' });
+  return card.startsWith('Refused') ? `I couldn't plan it: ${card.split('\n')[0]}` : 'Step 1 of 3 is on a card: register the "Cloudflare Access" app in Entra (its secret goes straight into the office\'s key store). After Approve I add the Entra ID login to Access and attach it to clip, keeping the Google login.';
+}, { early: true });

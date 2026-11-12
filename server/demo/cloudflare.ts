@@ -1,7 +1,8 @@
 // The demo's Cloudflare (#586): one account with the main tunnel (KEEL's hostname and the catch-all), the
 // techinsiderbytes.com zone and no Access apps, kept in memory. A token with "bad" in it is turned away (401), one with
 // "notunnel" gets 1001 on tunnels (as the real one did on 2026-11-06), "nodns" a 403 on DNS records, "notoken" a 403 on
-// service tokens and "nopolicy" on adding a policy (#607). `secrets` holds every client secret it handed out, so tests
+// service tokens and "nopolicy" on adding a policy (#607), "noidp" a 403 on identity providers and the team (#621): the
+// account has a one-time PIN and a Google login already. `secrets` holds every client secret it handed out, so tests
 // can look for them. The tests use it too.
 import type { CfApi, CfRequest, CfResponse, IngressRule } from '../cloudflare.ts';
 import { randomUUID } from 'node:crypto';
@@ -23,7 +24,7 @@ export const DEMO_CF = { account: '0123456789abcdef0123456789abcdef', tunnel: 'c
 /** A fake Cloudflare API; `calls` records every request (without its key). */
 export function fakeCloudflare(o: { ingress?: IngressRule[]; access?: boolean } = {}) {
   const ingress: IngressRule[] = o.ingress ?? [{ hostname: 'keel.techinsiderbytes.com', service: 'http://localhost:80' }, { service: 'http_status:404' }];
-  const world = { config: { ingress, 'warp-routing': { enabled: false } } as Record<string, unknown>, dns: [{ id: 'r1', type: 'CNAME', name: 'keel.techinsiderbytes.com', content: `${DEMO_CF.tunnel}.cfargotunnel.com`, proxied: true }], apps: [] as { id: string; domain: string; name: string }[], policies: {} as Record<string, Policy[]>, tokens: [] as { id: string; name: string; client_id: string; duration?: string }[], secrets: [] as string[], apiTokens: [] as { id: string; name: string; value: string; expires_on: string; policies: unknown[] }[] };
+  const world = { config: { ingress, 'warp-routing': { enabled: false } } as Record<string, unknown>, dns: [{ id: 'r1', type: 'CNAME', name: 'keel.techinsiderbytes.com', content: `${DEMO_CF.tunnel}.cfargotunnel.com`, proxied: true }], apps: [] as { id: string; domain: string; name: string; allowed_idps?: string[]; auto_redirect_to_identity?: boolean }[], idps: [{ id: 'idp-otp', name: 'One-time PIN', type: 'onetimepin', config: {} }, { id: 'idp-google', name: 'Google', type: 'google', config: { client_id: 'google-client' } }] as { id: string; name: string; type: string; config: Record<string, unknown> }[], policies: {} as Record<string, Policy[]>, tokens: [] as { id: string; name: string; client_id: string; duration?: string }[], secrets: [] as string[], apiTokens: [] as { id: string; name: string; value: string; expires_on: string; policies: unknown[] }[] };
   let seq = 0;
   if (o.access) {
     // the demo office: KEEL already behind Access with an email allow-list
@@ -99,6 +100,34 @@ export function fakeCloudflare(o: { ingress?: IngressRule[]; access?: boolean } 
       }
       const name = new URLSearchParams(p.split('?')[1] ?? '').get('name');
       return ok(world.tokens.filter((x) => !name || x.name === name).map(({ id: tid, name: n, client_id }) => ({ id: tid, name: n, client_id })));
+    }
+    if (p.startsWith(`/accounts/${DEMO_CF.account}/access/organizations`) || p.startsWith(`/accounts/${DEMO_CF.account}/access/identity_providers`)) {
+      if (/noidp/i.test(key)) return no(403, 10000, 'Authentication error');
+      if (p.includes('/organizations')) return ok({ name: 'techinsiderbytes', auth_domain: 'techinsiderbytes.cloudflareaccess.com' });
+      const id = p.match(/identity_providers\/([^/?]+)/)?.[1];
+      const shown = (i: (typeof world.idps)[number]) => ({ ...i, config: { ...i.config, client_secret: i.config.client_secret ? '**********' : undefined } }); // Cloudflare never returns it
+      if (req.method === 'POST') {
+        world.idps.push({ id: `idp${++seq}`, ...(req.body as { name: string; type: string; config: Record<string, unknown> }) });
+        return ok(shown(world.idps.at(-1)!));
+      }
+      const i = world.idps.find((x) => x.id === id);
+      if (id && !i) return no(404, 12130, 'access.api.error.not_found');
+      if (req.method === 'PUT') {
+        Object.assign(i!, req.body);
+        return ok(shown(i!));
+      }
+      return ok(i ? shown(i) : world.idps.map(shown));
+    }
+    const one = p.match(new RegExp(`^/accounts/${DEMO_CF.account}/access/apps/([^/?]+)$`));
+    if (one) {
+      const app = world.apps.find((x) => x.id === one[1]);
+      if (!app) return no(404, 12130, 'access.api.error.not_found');
+      if (req.method === 'PUT') {
+        const b = req.body as { allowed_idps?: string[]; auto_redirect_to_identity?: boolean; domain?: string };
+        if (b.domain !== app.domain) return no(400, 12130, 'domain is required');
+        Object.assign(app, { allowed_idps: b.allowed_idps, auto_redirect_to_identity: b.auto_redirect_to_identity });
+      }
+      return ok({ ...structuredClone(app), type: 'self_hosted', session_duration: '24h', policies: (world.policies[app.id] ?? []).map((x, n) => ({ ...x, precedence: n + 1 })) });
     }
     const pol = p.match(new RegExp(`^/accounts/${DEMO_CF.account}/access/apps/([^/]+)/policies(?:/([^/?]+))?`));
     if (pol) {

@@ -35,6 +35,7 @@ const CF_PERM = {
   dns: 'Zone › DNS › Edit',
   access: 'Account › Access: Apps and Policies › Edit',
   tokens: 'Account › Access: Service Tokens › Edit',
+  idp: 'Account › Access: Organizations, Identity Providers, and Groups › Write',
 } as const;
 
 export class CfError extends Error {
@@ -177,6 +178,98 @@ const policiesOf = async (call: Call, account: string, app: string) => (await cf
 /** A Service Auth policy letting this token in. */
 const servesToken = (p: Policy, id: string) => p.decision === 'non_identity' && (p.include ?? []).some((r) => (r.service_token as { token_id?: string } | undefined)?.token_id === id);
 
+// ---------- identity providers (#621) ----------
+
+type Idp = { id: string; name: string; type?: string; config?: { client_id?: string; directory_id?: string; support_groups?: boolean } };
+type AppFull = AccessApp & { allowed_idps?: string[]; auto_redirect_to_identity?: boolean; policies?: { id: string; precedence?: number }[]; [k: string]: unknown };
+const idpsOf = async (call: Call, account: string) => (await cf<Idp[]>(call, { method: 'GET', path: `/accounts/${account}/access/identity_providers?per_page=100` }, CF_PERM.idp)) ?? [];
+const orgOf = (call: Call, account: string) => cf<{ auth_domain?: string; name?: string }>(call, { method: 'GET', path: `/accounts/${account}/access/organizations` }, CF_PERM.idp);
+const appOf = (call: Call, account: string, id: string) => cf<AppFull>(call, { method: 'GET', path: `/accounts/${account}/access/apps/${id}` }, CF_PERM.access);
+const idpName = (i: Idp) => i.name || i.type || i.id;
+
+/** The Access team domain (e.g. "team.cloudflareaccess.com"), for the Entra app's callback. */
+export function teamDomain(keys: readonly CfKey[], api: CfApi): Promise<string> {
+  return withKey(keys, api, async (call, k) => {
+    const d = (await orgOf(call, await accountOf(call, k)))?.auth_domain?.trim().toLowerCase();
+    if (!d || !HOST.test(d)) throw new CfError('The Cloudflare account has no Zero Trust team domain yet: open Zero Trust once to pick a team name.');
+    return d;
+  });
+}
+
+/** The Entra IdP an access_idp_ensure updates: same name and directory; never a second one with that name. */
+function idpMatch(idps: readonly Idp[], name: string, directoryId: string): Idp | undefined {
+  const n = name.trim().toLowerCase();
+  const same = idps.filter((i) => i.name.trim().toLowerCase() === n);
+  const hit = same.find((i) => i.type === 'azureAD' && i.config?.directory_id === directoryId);
+  if (!hit && same.length) throw new CfError(`An identity provider named "${same[0].name}" already exists for ${same[0].type === 'azureAD' ? `another directory (${same[0].config?.directory_id ?? '?'})` : same[0].type ?? 'another login'}: give access_idp_ensure another name.`);
+  return hit;
+}
+
+/** The secret's half of the store, for apply and renewal: the record, or why there's none. */
+export interface IdpSecret {
+  tenant: string;
+  clientId: string;
+  keyId: string;
+  secret: string;
+}
+
+/** access_idp_ensure's plan: the IdP by name and directory, created or updated with the office's Entra app. */
+export function planIdp(keys: readonly CfKey[], api: CfApi, a: { name?: string; cred?: IdpSecret & { idp?: { id: string; keyId: string } } }): Promise<CfPlan> {
+  const name = (a.name ?? 'Entra ID').trim() || 'Entra ID';
+  if (!/^[\w .()-]{1,60}$/.test(name)) throw new CfError(`"${name}" isn't a name like "Entra ID".`);
+  const c = a.cred;
+  if (!c) throw new CfError('No Entra app yet: run provider_action entra entra_app_ensure first; its secret goes straight into the office\'s key store.');
+  return withKey(keys, api, async (call, k) => {
+    const account = await accountOf(call, k);
+    const hit = idpMatch(await idpsOf(call, account), name, c.tenant);
+    const sameApp = hit?.config?.client_id === c.clientId && hit.config.support_groups === true;
+    const current = sameApp && c.idp?.id === hit!.id && c.idp.keyId === c.keyId;
+    const change: CfChange = { op: 'access_idp_ensure', keyId: k.id, accountId: account, name, ...(hit && { idpId: hit.id }), directoryId: c.tenant, clientId: c.clientId };
+    const line = hit ? `${current ? ' ' : '~'} ${name} (azureAD, directory ${c.tenant}): ${current ? `client ${c.clientId}` : `client ${hit.config?.client_id ?? '?'} → ${c.clientId}, a new secret, groups on`}` : `+ ${name} (azureAD, directory ${c.tenant}, client ${c.clientId}, groups on)`;
+    return { change, diff: `Access identity providers:\n${line}\n  the client secret comes from the office's key store (not shown)`, summary: `${hit ? 'updates' : 'adds'} the "${name}" sign-in (Microsoft Entra) in Cloudflare Access`, ...(current && { already: `"${name}" already signs in with the office's Entra app (${c.clientId}).` }) };
+  });
+}
+
+/** Writes the IdP (created or updated) with this secret; its id. Used by Approve and by the secret's renewal. */
+export async function writeIdp(call: Call, account: string, o: { id?: string; name: string; cred: IdpSecret }): Promise<string> {
+  const body = { name: o.name, type: 'azureAD', config: { client_id: o.cred.clientId, client_secret: o.cred.secret, directory_id: o.cred.tenant, support_groups: true } };
+  const r = await cf<Idp>(call, o.id ? { method: 'PUT', path: `/accounts/${account}/access/identity_providers/${o.id}`, body } : { method: 'POST', path: `/accounts/${account}/access/identity_providers`, body }, CF_PERM.idp);
+  return r?.id ?? o.id ?? '';
+}
+
+/** Approve on access_idp_ensure: planned again (no duplicate), written with the stored secret, read back. Never throws. */
+export async function applyIdp(keys: readonly CfKey[], api: CfApi, c: Extract<CfChange, { op: 'access_idp_ensure' }>, cred: IdpSecret | undefined, saved: (idpId: string) => Promise<void>): Promise<{ ok: boolean; text: string }> {
+  const key = keys.find((k) => k.id === c.keyId);
+  if (!key) return { ok: false, text: 'The Cloudflare key this card was planned with is gone from Settings → Providers: ask for it again.' };
+  if (!cred || cred.clientId !== c.clientId || cred.tenant !== c.directoryId) return { ok: false, text: "The office's Entra app changed since this card: ask for access_idp_ensure again." };
+  const call: Call = (req) => api(key.key, req);
+  try {
+    const hit = idpMatch(await idpsOf(call, c.accountId), c.name, c.directoryId);
+    const id = await writeIdp(call, c.accountId, { id: hit?.id, name: c.name, cred });
+    await saved(id);
+    const back = (await idpsOf(call, c.accountId)).find((i) => i.id === id);
+    const ok = back?.type === 'azureAD' && back.config?.client_id === cred.clientId && back.config.directory_id === cred.tenant;
+    return { ok, text: ok ? `Read back: identity provider "${back!.name}" (azureAD, directory ${cred.tenant}, client ${cred.clientId}, groups ${back!.config?.support_groups ? 'on' : 'off'}). Attach it to an app with access_app_ensure idps: ["${c.name}"].` : `Read back, but "${c.name}" isn't the office's Entra app.` };
+  } catch (err) {
+    return { ok: false, text: (err as Error).message };
+  }
+}
+
+/** The app's logins after adding `want`: an empty list means every login, so those stay (Google, one-time PIN). */
+function idpsAfter(allowed: readonly string[] | undefined, all: readonly Idp[], want: readonly string[]): string[] {
+  const base = allowed?.length ? allowed : all.map((i) => i.id);
+  return [...new Set([...base, ...want])];
+}
+
+/** The names asked for, as the account's IdPs. */
+function resolveIdps(all: readonly Idp[], names: readonly string[]): { id: string; name: string }[] {
+  return names.map((n) => {
+    const hit = all.find((i) => idpName(i).toLowerCase() === n.trim().toLowerCase());
+    if (!hit) throw new CfError(`No identity provider "${n}" (there are: ${all.map(idpName).join(', ') || 'none'}): add it with access_idp_ensure first.`);
+    return { id: hit.id, name: idpName(hit) };
+  });
+}
+
 /** tunnel_ingress_get: the tunnel's rules, one a line. */
 export function ingressGet(keys: readonly CfKey[], api: CfApi, tunnel?: string): Promise<string> {
   return withKey(keys, api, async (call, k) => {
@@ -216,6 +309,7 @@ export async function tokenScopes(keys: readonly CfKey[], api: CfApi, o: { hostn
       if (zone) await check(`DNS records in ${zone.name}`, CF_PERM.dns, () => dnsOf(call, zone.id, cleanHost(o.hostname!)));
       if (account) await check('Access apps', CF_PERM.access, () => appsOf(call, account));
       if (account) await check('Access service tokens', CF_PERM.tokens, () => tokenOf(call, account, 'cubefarm'));
+      if (account) await check('Access identity providers and team domain', CF_PERM.idp, () => Promise.all([idpsOf(call, account), orgOf(call, account)]));
     }
     out.push(`"${k.label}"${k.ok === false ? ' (its Providers test fails)' : ''}:\n${lines.join('\n')}`);
   }
@@ -232,7 +326,7 @@ export interface CfPlan {
 }
 
 /** A write's plan: the ids found, the card's diff, or `already` when it's in place. */
-export function planWrite(keys: readonly CfKey[], api: CfApi, a: { op: CfChange['op']; hostname: string; service?: string; tunnel?: string; emails?: string[]; bypass?: string[]; name?: string; duration?: string; secretFile?: CfSecretFile }): Promise<CfPlan> {
+export function planWrite(keys: readonly CfKey[], api: CfApi, a: { op: CfChange['op']; hostname: string; service?: string; tunnel?: string; emails?: string[]; bypass?: string[]; idps?: string[]; auto_redirect?: boolean; name?: string; duration?: string; secretFile?: CfSecretFile }): Promise<CfPlan> {
   const host = cleanHost(a.hostname);
   return withKey(keys, api, async (call, k) => {
     if (a.op === 'access_service_token_ensure') return planServiceToken(call, k, host, a);
@@ -261,10 +355,30 @@ export function planWrite(keys: readonly CfKey[], api: CfApi, a: { op: CfChange[
     const bypass = [...new Set((a.bypass ?? []).map(cleanPath))];
     const apps = await appsOf(call, account);
     const missing = accessMissing(apps, host, bypass);
-    const change: CfChange = { op: 'access_app_ensure', keyId: k.id, accountId: account, hostname: host, emails, bypass };
-    const lines = [`${missing.includes(host) ? '+' : ' '} ${host}: allow ${emails.join(', ')}`, ...bypass.map((p) => `${missing.includes(`${host}${p}`) ? '+' : ' '} ${host}${p}: bypass (no sign-in)`)];
-    return { change, diff: `Access apps:\n${lines.join('\n')}`, summary: `puts ${host} behind Access for ${emails.length} email${emails.length === 1 ? '' : 's'}`, ...(!missing.length && { already: `${host} already has its Access app${bypass.length ? 's' : ''}.` }) };
+    const login = await planLogins(call, account, apps, host, a);
+    const change: CfChange = { op: 'access_app_ensure', keyId: k.id, accountId: account, hostname: host, emails, bypass, ...(login.idps.length && { idps: login.idps }), ...(a.auto_redirect !== undefined && { autoRedirect: a.auto_redirect }) };
+    const lines = [`${missing.includes(host) ? '+' : ' '} ${host}: allow ${emails.join(', ')}`, ...login.lines, ...bypass.map((p) => `${missing.includes(`${host}${p}`) ? '+' : ' '} ${host}${p}: bypass (no sign-in)`)];
+    const idpNote = login.idps.length ? `, signing in with ${login.idps.map((i) => i.name).join(', ')} too` : '';
+    return { change, diff: `Access apps:\n${lines.join('\n')}`, summary: `puts ${host} behind Access for ${emails.length} email${emails.length === 1 ? '' : 's'}${idpNote}`, ...(!missing.length && login.same && { already: `${host} already has its Access app${bypass.length ? 's' : ''}${idpNote}.` }) };
   });
+}
+
+/** access_app_ensure's logins (#621): the IdPs asked for joined to the app's (its policies untouched), and auto-redirect. */
+async function planLogins(call: Call, account: string, apps: readonly AccessApp[], host: string, a: { idps?: string[]; auto_redirect?: boolean }) {
+  const names = [...new Set((a.idps ?? []).map((n) => n.trim()).filter(Boolean))];
+  if (!names.length && a.auto_redirect === undefined) return { idps: [], lines: [], same: true };
+  const all = await idpsOf(call, account);
+  const idps = resolveIdps(all, names);
+  const app = apps.find((x) => x.domain?.toLowerCase() === host);
+  const full = app ? await appOf(call, account, app.id) : undefined;
+  const after = idpsAfter(full?.allowed_idps, all, idps.map((i) => i.id));
+  if (a.auto_redirect && after.length !== 1) throw new CfError(`auto_redirect needs exactly one login on the app, and ${host} would have ${after.length} (${after.map((id) => idpName(all.find((i) => i.id === id) ?? { id, name: id })).join(', ')}): leave it off to keep the others.`);
+  const had = new Set(full?.allowed_idps ?? []);
+  const label = (id: string) => idpName(all.find((i) => i.id === id) ?? { id, name: id });
+  const lines = [`${after.every((id) => had.has(id)) ? ' ' : '~'}   sign in with: ${after.map((id) => `${had.has(id) ? '' : '+'}${label(id)}`).join(', ')}`];
+  const redirect = a.auto_redirect ?? full?.auto_redirect_to_identity ?? false;
+  if (a.auto_redirect !== undefined) lines.push(`${(full?.auto_redirect_to_identity ?? false) === redirect ? ' ' : '~'}   straight to the login page: ${redirect ? 'on' : 'off'}`);
+  return { idps, lines, same: !!full && after.every((id) => had.has(id)) && (full.auto_redirect_to_identity ?? false) === redirect };
 }
 
 const cleanPath = (p: string) => {
@@ -363,6 +477,27 @@ async function applyServiceToken(call: Call, c: Extract<CfChange, { op: 'access_
   return { ok, text: ok ? `Read back: service token "${c.name}" gets through Access on ${c.hostname} (Service Auth); its secret is stored at ${file.path}.` : `Read back, but ${!back ? 'no token' : !policy ? 'no Service Auth policy' : `the secret at ${file.path} isn't this token's`}.` };
 }
 
+/** Approve's logins (#621): the app's IdPs with the card's joined (Google and one-time PIN kept), read back by name. */
+async function applyLogins(call: Call, c: Extract<CfChange, { op: 'access_app_ensure' }>, apps: readonly AccessApp[]) {
+  const app = apps.find((x) => x.domain?.toLowerCase() === c.hostname);
+  if (!app) return { ok: false, wrote: false, text: `No Access app on ${c.hostname} to add the logins to.` };
+  const all = await idpsOf(call, c.accountId);
+  const full = await appOf(call, c.accountId, app.id);
+  const after = idpsAfter(full.allowed_idps, all, (c.idps ?? []).map((i) => i.id));
+  const redirect = c.autoRedirect ?? full.auto_redirect_to_identity ?? false;
+  const had = full.allowed_idps ?? [];
+  const wrote = !(after.length === had.length && after.every((id) => had.includes(id)) && (full.auto_redirect_to_identity ?? false) === redirect);
+  if (wrote) {
+    const { id: _id, aud: _aud, created_at: _c, updated_at: _u, policies, ...rest } = full;
+    const body = { ...rest, allowed_idps: after, auto_redirect_to_identity: redirect, ...(policies?.length && { policies: policies.map((p, i) => ({ id: p.id, precedence: p.precedence ?? i + 1 })) }) };
+    await cf(call, { method: 'PUT', path: `/accounts/${c.accountId}/access/apps/${app.id}`, body }, CF_PERM.access);
+  }
+  const back = await appOf(call, c.accountId, app.id);
+  const names = (back.allowed_idps ?? []).map((id) => idpName(all.find((i) => i.id === id) ?? { id, name: id }));
+  const ok = (c.idps ?? []).every((i) => back.allowed_idps?.includes(i.id)) && (back.auto_redirect_to_identity ?? false) === redirect;
+  return { ok, wrote, text: `${c.hostname} signs in with: ${names.join(', ') || 'every login'}${redirect ? ' (straight to the login page)' : ''}.` };
+}
+
 /** Approve: plans again with the card's key (rules added since are kept), writes, reads back. Never throws. */
 export async function applyWrite(keys: readonly CfKey[], api: CfApi, c: CfChange, secretFile?: CfSecretFile): Promise<{ ok: boolean; text: string }> {
   const key = keys.find((k) => k.id === c.keyId);
@@ -386,14 +521,20 @@ export async function applyWrite(keys: readonly CfKey[], api: CfApi, c: CfChange
       const ok = back.some((r) => r.type === 'CNAME' && r.content === c.target && r.proxied);
       return { ok, text: `${ok ? 'Read back' : 'Read back, but no matching record'}: ${back.map((r) => `${r.type} ${r.name} → ${r.content}${r.proxied ? ' (proxied)' : ''}`).join('\n') || '(no records)'}` };
     }
+    if (c.op === 'access_idp_ensure') return { ok: false, text: 'access_idp_ensure applies through applyIdp.' };
     const missing = accessMissing(await appsOf(call, c.accountId), c.hostname, c.bypass);
     for (const domain of missing) {
       const main = domain === c.hostname;
       const policy = main ? { name: 'Allowed emails', decision: 'allow', include: c.emails.map((email) => ({ email: { email } })) } : { name: 'Bypass', decision: 'bypass', include: [{ everyone: {} }] };
       await cf(call, { method: 'POST', path: `/accounts/${c.accountId}/access/apps`, body: { name: main ? c.hostname : `${domain} (bypass)`, domain, type: 'self_hosted', session_duration: '24h', policies: [policy] } }, CF_PERM.access);
     }
-    const left = accessMissing(await appsOf(call, c.accountId), c.hostname, c.bypass);
-    return { ok: !left.length, text: missing.length ? (left.length ? `Read back, but still missing: ${left.join(', ')}` : `Read back: Access apps on ${[c.hostname, ...c.bypass.map((p) => c.hostname + p)].join(', ')}`) : 'The Access apps were already there: nothing written.' };
+    const apps = await appsOf(call, c.accountId);
+    const left = accessMissing(apps, c.hostname, c.bypass);
+    const login = c.idps?.length || c.autoRedirect !== undefined ? await applyLogins(call, c, apps) : null;
+    const ok = !left.length && (login?.ok ?? true);
+    const wrote = missing.length || login?.wrote;
+    const text = wrote ? (left.length ? `Read back, but still missing: ${left.join(', ')}` : `Read back: Access apps on ${[c.hostname, ...c.bypass.map((p) => c.hostname + p)].join(', ')}`) : 'The Access apps were already there: nothing written.';
+    return { ok, text: login ? `${text}\n${login.text}` : text };
   } catch (err) {
     return { ok: false, text: (err as Error).message };
   }

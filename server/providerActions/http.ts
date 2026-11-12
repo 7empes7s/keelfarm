@@ -13,6 +13,12 @@ function headersFor(key: string, req: ActionRequest): Record<string, string> {
   return { Authorization: `Bearer ${key}`, ...json };
 }
 
+/** An Entra client-credentials form (#621): the key is "client id:secret". */
+export function entraForm(key: string, form: Record<string, string> = {}): string {
+  const at = key.indexOf(':');
+  return new URLSearchParams({ ...form, client_id: key.slice(0, Math.max(0, at)), client_secret: key.slice(at + 1) }).toString();
+}
+
 export async function realProviderHttp(key: string, req: ActionRequest): Promise<ActionResponse> {
   if (req.auth === 'google-sa') {
     const t = await accessToken(key, realProbe);
@@ -20,7 +26,9 @@ export async function realProviderHttp(key: string, req: ActionRequest): Promise
     return realProviderHttp(t.token, { ...req, auth: 'bearer' });
   }
   try {
-    const res = await fetch(req.url, { method: req.method, headers: headersFor(key, req), ...(req.body === undefined ? {} : { body: JSON.stringify(req.body) }), signal: AbortSignal.timeout(20_000) });
+    const send = req.auth === 'entra-token' ? { body: entraForm(key, req.form) } : req.body === undefined ? {} : { body: JSON.stringify(req.body) };
+    const headers = req.auth === 'entra-token' ? { 'Content-Type': 'application/x-www-form-urlencoded' } : headersFor(key, req);
+    const res = await fetch(req.url, { method: req.method, headers, ...send, signal: AbortSignal.timeout(20_000) });
     const body = await res.json().catch(() => undefined);
     const perm = res.headers.get('x-accepted-github-permissions');
     return { status: res.status, body, ...(perm !== null && { headers: { 'x-accepted-github-permissions': perm } }) };

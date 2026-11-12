@@ -44,6 +44,7 @@ export const PROVIDER_CAPS: Record<string, Capability[]> = {
   cloudflare: ['operations'],
   gcloud: ['operations'],
   github: ['operations'],
+  entra: ['operations'],
   hetzner: ['operations'],
   twitch: ['operations'],
   youtube: ['operations'],

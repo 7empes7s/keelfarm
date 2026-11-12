@@ -27,6 +27,7 @@ import { installKeyFile, restoreKeyFile } from '../keyInstall.ts';
 import { renewMinted } from '../keyRenew.ts';
 import { CF_OPS } from '../../shared/cloudflare.ts';
 import { ActionError, applyAction, MODULES, runAction, type ActionCtx } from '../providerActions/index.ts';
+import { renewEntraSecret } from '../providerActions/entra.ts';
 import { actionOp, autoApplies, type ActionRisk, type ProviderChange } from '../../shared/providerActions.ts';
 import type { CfChange } from '../../shared/cloudflare.ts';
 import { SwarmManagerAsks } from './managerAsks.ts';
@@ -232,7 +233,21 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
   /** A provider's keys (ElevenLabs' is Voice's), the one network call, and the Box API: the keys stay on the server. */
   private actionCtx(provider: string): ActionCtx {
     const voice = provider === 'elevenlabs' && this.voice.secret() ? [{ id: 'voice', label: 'ElevenLabs (Voice)', key: this.voice.secret(), ok: true }] : [];
-    return { keys: [...voice, ...this.providers.keysFor(provider)], http: this.backend.providerHttp, cloudflareApi: this.backend.cloudflareApi, boxes: this.cloud.boxApi(), repo: this.state.repos[0]?.fullName, secretFile: (envFile, name) => envSecretFile(this.cfSecretPath(envFile, name)), saveMinted: async (k) => (await this.providers.add(k.provider, k.value, k.label, '', k.mint.accountId, { expiresAt: k.expiresAt, mint: k.mint, usedBy: 'Made by the office' })).label, saveKey: (k) => this.providers.saveByName(k.provider, k.value, k.label, k.usedBy), savedKey: (provider, label) => this.providers.view().connections.some((c) => c.provider === provider && c.label === label) };
+    return { keys: [...voice, ...this.providers.keysFor(provider)], http: this.backend.providerHttp, cloudflareApi: this.backend.cloudflareApi, boxes: this.cloud.boxApi(), repo: this.state.repos[0]?.fullName, secretFile: (envFile, name) => envSecretFile(this.cfSecretPath(envFile, name)), saveMinted: async (k) => (await this.providers.add(k.provider, k.value, k.label, '', k.mint.accountId, { expiresAt: k.expiresAt, mint: k.mint, usedBy: 'Made by the office' })).label, cfKeys: this.providers.keysFor('cloudflare'), entra: this.entraStore, saveKey: (k) => this.providers.saveByName(k.provider, k.value, k.label, k.usedBy), savedKey: (provider, label) => this.providers.view().connections.some((c) => c.provider === provider && c.label === label) };
+  }
+
+  private entraTried = 0;
+
+  /** With the hourly renewals: the Entra secret renewed 30 days before it ends (#621), tried at most once a day; logged and posted, never shown. */
+  private async entraRenewTick(now = Date.now()) {
+    if (now - this.entraTried < 86_400_000) return;
+    const r = await renewEntraSecret(this.actionCtx('entra'), now);
+    if (!r) return;
+    this.entraTried = now;
+    const out = this.itMask(r.text);
+    this.itLog({ kind: 'change', auto: true, by: 'The office (Entra secret renewal)', argv: ['entra', 'secret_renew'], code: r.ok ? 0 : 1, out, why: 'The Cloudflare Access sign-in secret ends within 30 days.' });
+    this.itDeskChanged();
+    this.postMessage('office', `🔑 ${r.ok ? 'Renewed' : "Couldn't renew"} the Entra sign-in secret`, undefined, { notice: { details: out } });
   }
 
   /** Where a service token's secret goes (#607): the env file asked for, else one under the office's home (the demo's always is). */
@@ -508,7 +523,7 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
 
   /** Renewals once an hour, the first a minute after start (#609). */
   protected override async startUsage() {
-    setInterval(() => void this.renewKeys(), 3_600_000).unref();
+    setInterval(() => void this.renewKeys().then(() => this.entraRenewTick()), 3_600_000).unref();
     setTimeout(() => void this.renewKeys(), 60_000).unref();
     await super.startUsage();
   }

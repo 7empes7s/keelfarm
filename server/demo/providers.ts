@@ -27,6 +27,9 @@ export const DEMO_FOUND_KEYS: RawKey[] = [
   { variable: 'VAST_API_KEY', value: 'demo-vast-retired-key-0000v9w2', source: LITELLM },
 ];
 
+/** The demo's made-up Entra tenant (#621). */
+const DEMO_TENANT = '7e57e57e-0000-4000-8000-00000000c1f0';
+
 async function demoProbe(req: ProbeRequest): Promise<ProbeResult> {
   if (req.kind === 'command') return { status: /^(npx|node|uvx|docker)$/.test(req.command) ? 200 : 404 };
   if (req.kind === 'form') return { status: 200, body: { access_token: `demo-access-${Date.now().toString(36)}`, refresh_token: req.form.refresh_token ?? 'demo-refresh-token', expires_in: 3600 } };
@@ -72,6 +75,7 @@ registerDemo('providers', () => ({
       { provider: 'gemini-video', key: 'AIza-demo-video-00003a4b', label: 'Google video' },
       { provider: 'luma', key: 'luma-demo-00005c6d', label: 'Luma' },
       { provider: 'kling', key: 'demo-access:demo-secret-7e8f', label: 'Kling' },
+      { provider: 'entra', key: 'demo-admin-client-0001:demo-admin-secret-9a0b', label: 'Microsoft Entra', accountId: DEMO_TENANT }, // #621
     ],
     mcp: [
       { name: 'github', command: 'npx -y @modelcontextprotocol/server-github', secrets: { GITHUB_PERSONAL_ACCESS_TOKEN: 'demo-gh-token-0000' } },
