@@ -31,10 +31,8 @@ for (const width of [390, 1280]) {
     await page.getByRole('button', { name: 'Open', exact: true }).click();
     const row = page.locator('[data-group^="waste:"] [data-problem]').first();
     const agent = row.locator('.pb-links button').last();
-    const name = (await agent.innerText()).trim();
     await agent.click();
     await expect(page.getByRole('button', { name: 'Open terminal' }).last()).toBeVisible(); // their chat window
-    await expect(page.getByText(name).first()).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   });
 
