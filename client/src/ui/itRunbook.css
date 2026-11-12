@@ -1,0 +1,90 @@
+/* A runbook job's card in IT's chat (ui/ItRunbook.tsx, #611); the card itself is the IT desk's .it-card. */
+.it-rb {
+  align-self: center;
+  width: min(100%, 30rem);
+}
+.it-rb-done {
+  border-left-color: var(--ds-good-fill);
+}
+.it-rb-failed {
+  border-left-color: var(--ds-bad-fill);
+}
+.it-rb-dismissed,
+.it-rb-undone {
+  border-left-color: var(--ds-line);
+}
+.it-rb-status {
+  flex: none;
+  padding: 2px var(--ds-space-2);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-sunken);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-strong);
+}
+.it-rb-bar {
+  width: 100%;
+  height: 6px;
+  accent-color: var(--ds-accent);
+}
+.it-rb-steps > summary {
+  min-height: var(--ds-target);
+  padding: var(--ds-space-2) 0;
+  box-sizing: border-box;
+  color: var(--ds-link);
+  font-weight: var(--ds-weight-strong);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.it-rb-steps ol {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.it-rb-step-top {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ds-space-2);
+  min-width: 0;
+}
+.it-rb-step-top code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.it-rb-step-failed .ds-icon {
+  color: var(--ds-danger-text);
+}
+.it-rb-step-skipped,
+.it-rb-step-waiting {
+  color: var(--ds-text-muted);
+}
+.it-rb-tag {
+  flex: none;
+  padding: 0 var(--ds-space-1);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface-sunken);
+  font-size: var(--ds-text-xs);
+}
+.it-rb-out {
+  max-height: 10rem;
+  margin: var(--ds-space-1) 0 0;
+  padding: var(--ds-space-2);
+  overflow: auto;
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface-sunken);
+  font-size: var(--ds-text-xs);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .it-rb-step-running .ds-icon {
+    animation: it-rb-spin 1s linear infinite;
+  }
+}
+@keyframes it-rb-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

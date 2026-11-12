@@ -12,6 +12,7 @@ import { makeArtifacts, parseMessage } from '../../shared/chatParts.ts';
 import { ceoModelOn } from '../../shared/ceoRunsOn.ts';
 import { forwardText, isHarnessText, stripHarness } from '../../shared/chat.ts';
 import { isReaction, react } from '../../shared/reactions.ts';
+import type { ItRunbookView } from '../../shared/itRunbook.ts';
 import type { AgentStatus, PhoneMessage, WorldSnapshot } from '../../shared/types.ts';
 import { HOME_DIR } from '../config.ts';
 import { HttpError } from '../httpError.ts';
@@ -206,7 +207,7 @@ export abstract class SwarmItDept extends SwarmSetup {
 
   /** IT's office tools: it_run, it_propose, it_recommend (itWatch.ts), it_health, it_ticket, it_review and it_improve (itImprove.ts; server/ceoItTools.ts). */
   protected itTools(): OfficeTools {
-    return itOfficeTools({ itRun: (a) => this.itRun(a), itPropose: (a) => this.itPropose(a), itRecommend: (a) => this.itRecommend(a), itHealth: () => this.itHealth(), itTicket: (a) => this.itTicket(a), itReview: (a) => this.itReview(a), itImprove: (a) => this.itImprove(a), cloudflare: (a) => this.cloudflareAct(a, this.itName), providerAction: (a) => this.providerAct(a, this.itName), problemsList: (a) => this.problemsList(a), noteProblem: (a) => this.noteProblem(a) });
+    return itOfficeTools({ itRun: (a) => this.itRun(a), itPropose: (a) => this.itPropose(a), itRunbook: (a) => this.itRunbook(a), itRecommend: (a) => this.itRecommend(a), itHealth: () => this.itHealth(), itTicket: (a) => this.itTicket(a), itReview: (a) => this.itReview(a), itImprove: (a) => this.itImprove(a), cloudflare: (a) => this.cloudflareAct(a, this.itName), providerAction: (a) => this.providerAct(a, this.itName), problemsList: (a) => this.problemsList(a), noteProblem: (a) => this.noteProblem(a) });
   }
 
   /** it_health: the office's readings, compact. */
@@ -309,6 +310,13 @@ export abstract class SwarmItDept extends SwarmSetup {
     void this.itTelegram(`${text}\n${out.trim().split('\n').slice(0, 8).join('\n')}`.slice(0, 1500));
   }
 
+  /** A runbook job's card (#611) in IT's chat: its summary, then its result; Approve / Not now on Telegram while it waits. A failure wakes IT to look. */
+  protected itRunbookPosted(job: ItRunbookView, text: string, details: string) {
+    this.postIt('office', text, { notice: { details: details.trim() || '(no output)' }, itRunbook: { job: job.id } });
+    void this.itTelegram(`${text}\n${details.trim().split('\n').slice(0, 8).join('\n')}`.slice(0, 1500), job.state === 'waiting' ? runKeyboard(job.id) : undefined);
+    if (job.state === 'failed' && this.state.settings.itDept.on) this.enqueueIt({ kind: 'ran', line: `runbook ${job.title}`, code: 1, out: `${text}\n${details}`, at: Date.now() });
+  }
+
   /** An auto step's card after its Undo: the button goes. */
   protected itAutoUndone(logId: string) {
     const m = this.state.it.messages.find((x) => x.itAuto?.log === logId);
@@ -319,6 +327,10 @@ export abstract class SwarmItDept extends SwarmSetup {
 
   /** A Run / Not now button on Telegram (IT's bot, or IT's card on the CEO's). */
   protected async itDecide(verdict: 'approve' | 'decline', id: string): Promise<string> {
+    if (id.startsWith('rb-')) {
+      this.itRunbookDecide(id, verdict === 'approve');
+      return verdict === 'decline' ? '✋ Not now: nothing ran.' : '▶️ Running: each step and the result come to the IT chat.';
+    }
     if (verdict === 'decline') {
       this.itDismiss([id]);
       return '✋ Not now: nothing ran.';

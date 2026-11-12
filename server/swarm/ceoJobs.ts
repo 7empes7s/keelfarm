@@ -679,7 +679,7 @@ export abstract class SwarmCeo extends SwarmCeoLog {
 
   /** A team-change button pressed on Telegram: the same approve and decline as the lobby's. */
   protected decideFromTelegram(verdict: 'approve' | 'decline', id: string): string | Promise<string> {
-    if (id.startsWith('it-') || IMPROVE_CARD_ID.test(id)) return this.itDecide(verdict, id); // an IT card sent on this bot, as IT has none of its own (#524, #543)
+    if (id.startsWith('it-') || id.startsWith('rb-') || IMPROVE_CARD_ID.test(id)) return this.itDecide(verdict, id); // an IT card sent on this bot, as IT has none of its own (#524, #543)
     const req = this.state.requests.find((r) => r.id === id);
     if (verdict === 'approve') this.approveRequest(id);
     else this.rejectRequest(id);

@@ -3,6 +3,7 @@ import type { Backend } from './backend.ts';
 import type { DemoFloor } from './demo.ts';
 import type { PrDiff } from './github.ts';
 import { guardPath, type WorktreeRead } from './worktreeRead.ts';
+import { DEMO_RUNBOOK, DEMO_RUNBOOK_PATH } from './demo/runbookSample.ts';
 
 /** The demo repos' dependencies, for the setup advisor's guess (#366): two web apps, an API and the three.js game left to move in. */
 const DEMO_DEPS: Record<string, string[]> = {
@@ -72,6 +73,7 @@ export function demoRepoFile(fullName: string, rel: string): string | null {
   const p = rel.replace(/\\/g, '/').replace(/^\.\//, '');
   if (p === 'package.json' && DEMO_DEPS[fullName]) return JSON.stringify({ name: fullName.split('/')[1], private: true, scripts: { dev: 'vite' }, dependencies: Object.fromEntries(DEMO_DEPS[fullName].map((d) => [d, '*'])) }, null, 2);
   if (p === 'README.md') return [`# ${fullName.split('/')[1]}`, '', 'A demo project: the office makes up its files.', '', '## Run it', '', '```bash', 'npm install', 'npm run dev', '```', ''].join('\n');
+  if (p === DEMO_RUNBOOK_PATH) return DEMO_RUNBOOK; // #611
   if (p !== 'src/App.tsx') return null;
   return [
     "import { useEffect, useState } from 'react';",

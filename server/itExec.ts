@@ -11,11 +11,11 @@ export interface ItExecResult {
 
 const MAX_BUFFER = 8 * 1024 * 1024;
 
-export function itExec(argv: string[], timeoutMs: number): Promise<ItExecResult> {
+export function itExec(argv: string[], timeoutMs: number, cwd?: string): Promise<ItExecResult> {
   const env: NodeJS.ProcessEnv = { NO_COLOR: '1', PAGER: 'cat', SYSTEMD_PAGER: 'cat', GIT_TERMINAL_PROMPT: '0', DEBIAN_FRONTEND: 'noninteractive' };
   for (const [k, v] of Object.entries(process.env)) if (!/^(ANTHROPIC_|CLAUDE)/i.test(k) && !(k in env)) env[k] = v;
   return new Promise((resolve) => {
-    const child = execFile(argv[0], argv.slice(1), { cwd: os.homedir(), timeout: timeoutMs, killSignal: 'SIGKILL', maxBuffer: MAX_BUFFER, windowsHide: true, env }, (err, stdout, stderr) => {
+    const child = execFile(argv[0], argv.slice(1), { cwd: cwd ?? os.homedir(), timeout: timeoutMs, killSignal: 'SIGKILL', maxBuffer: MAX_BUFFER, windowsHide: true, env }, (err, stdout, stderr) => {
       const out = stdout?.toString() ?? '';
       const errText = stderr?.toString() ?? '';
       if (!err) return resolve({ code: 0, out, err: errText });

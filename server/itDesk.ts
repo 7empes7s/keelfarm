@@ -57,12 +57,13 @@ export function secretPath(arg: string): boolean {
   );
 }
 
-/** Problems every command has before its program is looked at. */
-function basics(argv: readonly string[]): string | null {
+/** Problems every command has before its program is looked at. `writable`: a runbook's own credential files (#611),
+ * which its steps may write (never read or print). */
+function basics(argv: readonly string[], writable?: (p: string) => boolean): string | null {
   if (!argv.length || !argv[0]) return 'Give a command.';
   if (argv.length > 60 || argv.some((a) => a.length > 1000 || a.includes('\0'))) return 'That command is too long.';
   if (argv[0].includes('/') || argv[0].includes('\\')) return `Name the program, not its path: "${path.posix.basename(argv[0])}".`;
-  const secret = argv.slice(1).find(secretPath);
+  const secret = argv.slice(1).find((a) => secretPath(a) && !writable?.(a));
   if (secret) return `${secret} holds secrets: the IT desk never reads or changes credential files (/etc/keel, .env, keys).`;
   return null;
 }
@@ -185,8 +186,8 @@ const POWER = new Set(['shutdown', 'reboot', 'poweroff', 'halt', 'init', 'telini
 const WHOLE = ['/', '/root', '/opt', '/etc', '/var', '/home', '/usr', '/boot', '/srv', '/mnt'];
 
 /** Why a change can never run, even after the manager's Run; null when it may. `office`: the live office's folders. */
-export function neverRefusal(argv: readonly string[], office: { protectedDirs: string[] }): string | null {
-  const bad = basics(argv);
+export function neverRefusal(argv: readonly string[], office: { protectedDirs: string[]; writable?: (p: string) => boolean }): string | null {
+  const bad = basics(argv, office.writable);
   if (bad) return bad;
   const [program, ...args] = argv;
   const never = (what: string) => `Never, even with the manager's Run: ${what}.`;

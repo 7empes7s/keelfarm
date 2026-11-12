@@ -186,6 +186,8 @@ export const api = {
   itRun: (ids: string[]) => call('POST', '/api/it/run', { ids }),
   itDismiss: (ids: string[]) => call('POST', '/api/it/dismiss', { ids }),
   itUndo: (logId: string) => call<{ ok: boolean }>('POST', `/api/it/undo/${encodeURIComponent(logId)}`),
+  itRunbook: (id: string, run: boolean) => call<{ ok: boolean }>('POST', `/api/it/runbook/${encodeURIComponent(id)}`, { run }),
+  itRunbookUndo: (id: string) => call<{ ok: boolean }>('POST', `/api/it/runbook/${encodeURIComponent(id)}/undo`),
   // The IT department (#524): its chat, and its own Telegram bot (no toasts on the token: the card shows why).
   messageIt: (text: string, replyTo?: number) => call<{ id: number }>('POST', '/api/it/message', { text, replyTo }),
   reactToItMessage: (id: number, emoji: string) => call('POST', `/api/it/messages/${id}/react`, { emoji }),
