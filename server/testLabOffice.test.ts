@@ -43,6 +43,9 @@ describe('a demo office with the test lab', () => {
     const lab = swarm.snapshot().testLab!;
     expect(lab.recent[0]).toMatchObject({ kind: 'screenshot', ok: true, shot: true });
     expect(swarm.testLab.shotFile(lab.recent[0].id)).toBe(file);
+    // Kept for a cut-off call (#562): lab_status lists it, lab_result reads it back.
+    expect(await opts.office!.call('lab_status', {})).toContain(`\n  ${lab.recent[0].id}: screenshot localhost:5678/ × 2, passed`);
+    expect(await opts.office!.call('lab_result', { job_id: lab.recent[0].id })).toMatch(/^Lab job \w+: .*\n2 screenshots/);
     expect(await opts.office!.call('lab_run', { command: 'npm run deploy' })).toMatch(/^Refused: "npm run deploy" isn't on this floor's lab allowlist/);
     await swarm.testLab.close();
   }, 20_000);

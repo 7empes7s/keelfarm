@@ -37,7 +37,7 @@ import { readingOf } from '../shared/usage.ts';
 import { isHarnessText } from '../shared/chat.ts';
 import { transcriptStartup } from './tooling.ts';
 import { ANSWER_AFTER_MS, answerHook, cliEnv, keyHelperCommand, permissionScreen, sessionRoots, STALL_MS, watchdogStep, worktreePermissions, type Waiting } from './unblock.ts';
-import { actOn, requiredKeys, SessionWatch } from './liveState.ts';
+import { actOn, plainTurnError, requiredKeys, SessionWatch } from './liveState.ts';
 import { resumableSession, TranscriptTail } from './transcriptTail.ts';
 import { programStatusStep, ProgramStatusReporter, type ProgramStatus } from './programStatus.ts';
 import { envSecrets } from './journal.ts';
@@ -768,7 +768,7 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
         const error = String(b.error ?? 'unknown');
         const details = String(b.error_details ?? '').trim();
         if (error === 'rate_limit') cb.limited?.([...usageResets.values()].find((t) => t !== null) ?? null);
-        finish({ ok: false, text: lastText, errors: [`${label} stopped: ${error.replace(/_/g, ' ')}${details ? ` (${clip(details, 160)})` : ''}`] }, true);
+        finish({ ok: false, text: lastText, errors: [plainTurnError(error, details) ?? `${label} stopped: ${error.replace(/_/g, ' ')}${details ? ` (${clip(details, 160)})` : ''}`] }, true);
         return {};
       }
       case 'Notification': {

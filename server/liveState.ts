@@ -3,6 +3,8 @@
 // without the office noticing (its result printed, the task still open). Pure: the terminal runtime (cliRunner.ts) and
 // the demo's fake sessions feed SessionWatch their screen every couple of seconds and act on what it says.
 
+import { modelSupportMessage } from '../shared/claudeCode.ts';
+
 /** No model turn this long after starting: Enter is pressed once, then it's blocked. */
 export const NOT_STARTED_MS = 90_000;
 /** After that retry, how long it gets before it's marked blocked. */
@@ -13,6 +15,9 @@ export const UNREGISTERED_MS = 60_000;
 const HOLD_MS: Record<ScreenState, number> = { 'sign-in': 5_000, setup: 10_000, error: 30_000, menu: 60_000, ended: 0, working: 0, idle: 0 };
 /** Menus and error banners count only once the session has been this quiet (the office answers its own prompts first). */
 const QUIET_FOR: Partial<Record<ScreenState, number>> = { error: 30_000, menu: 60_000 };
+
+/** A failed turn's error (StopFailure) in plain words when the office knows it, else null: a model newer than the bundled Claude Code (#546). */
+export const plainTurnError = (error: string, details: string): string | null => modelSupportMessage(`${error} ${details}`);
 
 /** Why a session isn't moving. */
 export type StuckKind = 'sign-in' | 'setup' | 'menu' | 'error' | 'not-started' | 'unregistered' | 'prompt';
@@ -50,6 +55,8 @@ export function classifyScreen(screen: string): { state: ScreenState; reason: st
   if (SIGN_IN.test(screen)) return { state: 'sign-in', reason: 'needs sign-in' };
   for (const [re, what] of SETUP) if (re.test(screen)) return { state: 'setup', reason: `needs setup (${what})` };
   if (menuOnScreen(screen)) return { state: 'menu', reason: 'a menu on screen' };
+  const unsupported = modelSupportMessage(screen);
+  if (unsupported) return { state: 'error', reason: unsupported };
   for (const [re, what] of ERRORS) if (re.test(screen)) return { state: 'error', reason: what };
   return { state: 'idle', reason: '' };
 }

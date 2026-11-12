@@ -1,9 +1,11 @@
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_TEST_LAB, testLabSettings, type TestLabView } from '../shared/testLab.ts';
 import type { SessionKind } from '../shared/health.ts';
 import { browsersPath, estimateWaitMs, labArgv, labCommand, labFile, labOutDir, labPattern, labProblem, pickNext, silenceMs, TestLab, type LabRunner, type Requester, type RunResult, type TestLabHost } from './testLab.ts';
+import { expiredResults, requestKey, saveResult } from './testLabResults.ts';
 import { createLabTools, labProgress, progressStream } from './testLabTools.ts';
 import { demoLabRunner, fakeShot } from './demoTestLab.ts';
 import { devSystemPrompt, qaSystemPrompt } from './prompts.ts';
@@ -300,7 +302,7 @@ describe('never silent while queued (#560)', () => {
     await vi.advanceTimersByTimeAsync(19_000);
     expect(beats).toEqual([]);
     await vi.advanceTimersByTimeAsync(1_000);
-    expect(beats).toEqual([{ position: 1, message: expect.stringMatching(/^Queued: position 1 in the lab's heavy queue \(the lab is busy with screenshot localhost:9\/ × 3\)/) }]);
+    expect(beats).toEqual([{ position: 1, message: expect.stringMatching(/^Lab job \w+ queued: position 1 in the lab's heavy queue \(the lab is busy with screenshot localhost:9\/ × 3\)/) }]);
     await vi.advanceTimersByTimeAsync(20_000);
     expect(beats).toHaveLength(2);
     runner.release();
@@ -395,16 +397,98 @@ describe('lab problems (#189)', () => {
   });
 });
 
+describe("a finished job's kept result (#562)", () => {
+  const home = (agentId: string) => ({ ...who(agentId), worktree: path.join(os.tmpdir(), `labkeep-${process.pid}-${Math.random().toString(36).slice(2)}`, agentId) });
+
+  it('is readable through lab_result after the caller disconnected before the job ended', async () => {
+    const runner = fakeRunner([], -1);
+    const { lab: l } = lab(runner);
+    const me = home('a');
+    const call = new AbortController();
+    void l.submit(me, shot('http://localhost:1/'), Date.now(), undefined, call.signal);
+    await Promise.resolve();
+    const id = l.view().running[0].id;
+    expect(l.result(me, id)).toMatch(/is running/);
+    call.abort(); // the MCP client gave up after 300 s of silence
+    runner.release();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(l.view().running).toHaveLength(0);
+    expect(l.result(me, id)).toContain(`Lab job ${id}: screenshot localhost:1/ × 3, ended 0 min ago (passed: 3 shots, 0 errors).\n3 screenshots`);
+    const kept = JSON.parse(fs.readFileSync(path.join(me.worktree, '.lab', id, 'result.json'), 'utf8'));
+    expect(kept).toMatchObject({ id, callerGone: true, ok: true, artifacts: [path.join(me.worktree, '.lab', id, '375.png'), expect.any(String), expect.any(String)] });
+    expect(fs.readFileSync(path.join(me.worktree, '.lab', '.gitignore'), 'utf8')).toBe('*\n');
+    expect(l.status('a', me.worktree)).toMatch(new RegExp(`Your finished jobs.*\n {2}${id}: screenshot localhost:1/ × 3, passed`));
+    expect(() => l.result(home('b'), id)).toThrow(/No result for lab job/); // another agent's worktree has none
+  });
+
+  it("answers a retry of the same request after a cut-off call with the kept result, once, instead of running it again", async () => {
+    const log: string[] = [];
+    const { lab: l } = lab(fakeRunner(log));
+    const me = home('a');
+    const call = new AbortController();
+    call.abort();
+    await l.submit(me, { kind: 'run', command: 'npm test' }, Date.now(), undefined, call.signal);
+    const again = await l.submit(me, { kind: 'run', command: 'npm test' });
+    expect(again).toMatch(/^Your earlier call was cut off; this is its job's result, not run again/);
+    expect(again).toMatch(/npm test: exit code 1/);
+    expect(log).toHaveLength(1);
+    await l.submit(me, { kind: 'run', command: 'npm test' }); // asked again: runs afresh
+    await l.submit(me, { kind: 'run', command: 'npm run build' }); // another request never reuses
+    expect(log).toHaveLength(3);
+    // Not after 30 minutes, and not when the first answer was delivered.
+    await l.submit(me, { kind: 'run', command: 'npm run lint' }, Date.now(), undefined, call.signal);
+    await l.submit(me, { kind: 'run', command: 'npm run lint' }, Date.now() + 31 * 60_000);
+    expect(log).toHaveLength(5);
+  });
+
+  it('joins a retry to the same job while it still runs for a caller that is gone', async () => {
+    const runner = fakeRunner([], -1);
+    const { lab: l } = lab(runner);
+    const me = home('a');
+    const call = new AbortController();
+    void l.submit(me, shot('http://localhost:1/'), Date.now(), undefined, call.signal);
+    call.abort();
+    const again = l.submit(me, shot('http://localhost:1/'));
+    expect(l.view().running.length + l.view().queue.length).toBe(1);
+    await Promise.resolve();
+    runner.release();
+    expect(await again).toMatch(/^3 screenshots/);
+  });
+
+  it('keeps a day of results, the newest 20, and leaves other folders alone', () => {
+    const now = 100 * 3600_000;
+    const rs = Array.from({ length: 23 }, (_, i) => ({ id: `j${i}`, endedAt: now - i * 60_000 }));
+    expect(expiredResults([...rs, { id: 'old', endedAt: now - 25 * 3600_000 }], now)).toEqual(['j20', 'j21', 'j22', 'old']);
+    const wt = home('a').worktree;
+    fs.mkdirSync(path.join(wt, '.lab', 'notours'), { recursive: true });
+    const base = { kind: 'run' as const, title: 't', key: 'k', ok: true, summary: 's', report: 'r', artifacts: [], queuedAt: 0, startedAt: 0, callerGone: false };
+    for (const r of rs) saveResult(wt, { ...base, ...r }, [], now);
+    expect(fs.readdirSync(path.join(wt, '.lab')).sort()).toEqual(['.gitignore', 'notours', ...rs.slice(0, 20).map((r) => r.id)].sort());
+  });
+
+  it('treats the same arguments in any order as the same request', () => {
+    expect(requestKey({ kind: 'run', command: 'npm test', branch: undefined })).toBe(requestKey({ command: 'npm test', kind: 'run' }));
+    expect(requestKey({ kind: 'run', command: 'npm test' })).not.toBe(requestKey({ kind: 'run', command: 'npm run build' }));
+  });
+});
+
 describe('the lab tools', () => {
   it('validate their input and answer in plain text', async () => {
     const asked: unknown[] = [];
-    const tools = createLabTools({ submit: async (i) => (asked.push(i), 'ok'), status: () => 'Lab: 0 running, 0 waiting' });
+    const tools = createLabTools({ submit: async (i) => (asked.push(i), 'ok'), status: () => 'Lab: 0 running, 0 waiting', result: (id) => `job ${id}` });
     expect(await tools.call('lab_status', {})).toBe('Lab: 0 running, 0 waiting');
+    expect(await tools.call('lab_result', { job_id: 'mw1' })).toBe('job mw1');
+    for (const d of tools.defs.filter((x) => x.name !== 'lab_status' && x.name !== 'lab_result')) expect(d.description).toMatch(/cut off.*lab_result.*instead of asking again/);
     expect(await tools.call('lab_screenshot', { url: 'http://localhost:5678/', viewports: [390, 1280], theme: 'dark' })).toBe('ok');
     expect(asked[0]).toEqual({ kind: 'screenshot', url: 'http://localhost:5678/', preview: undefined, viewports: [390, 1280], profile: 'desktop', theme: 'dark', graphics: undefined, waitFor: undefined, actions: [], fullPage: false });
     expect(await tools.call('lab_run', { command: 'npm test' })).toBe('ok');
-    const refused = createLabTools({ submit: () => Promise.reject(new Error('the queue is full')), status: () => '' });
+    const refused = createLabTools({ submit: () => Promise.reject(new Error('the queue is full')), status: () => '', result: () => '' });
     expect(await refused.call('lab_run', { command: 'npm test' })).toBe('Refused: the queue is full');
+    const signals: (AbortSignal | undefined)[] = [];
+    const call = new AbortController();
+    const bound = createLabTools({ submit: async (_i, _p, signal) => (signals.push(signal), 'ok'), status: () => '', result: () => '' });
+    await bound.defs.find((d) => d.name === 'lab_run')!.handler({ command: 'npm test' } as never, { signal: call.signal } as never);
+    expect(signals).toEqual([call.signal]); // the call's own, so the lab knows when its caller is gone (#562)
   });
 });
 

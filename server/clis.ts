@@ -139,7 +139,7 @@ export async function detectClis(): Promise<CliView[]> {
       const cmd = commandFor(c.id);
       const version = cmd ? await run(cmd.file, [...cmd.args, '--version'], { timeoutMs: 20_000 }).catch(() => null) : null;
       const auth = cmd && c.id === 'opencode' ? await run(cmd.file, [...cmd.args, 'auth', 'list'], { timeoutMs: 20_000 }).catch(() => null) : null;
-      return { id: c.id, label: c.label, installed: !!cmd, version: version?.split(/\r?\n/)[0].trim().slice(0, 60) || null, integrated: c.integrated, ...(auth !== null && { providers: opencodeProviders(auth) }) };
+      return { id: c.id, label: c.label, installed: !!cmd, version: version?.split(/\r?\n/)[0].trim().slice(0, 60) || null, integrated: c.integrated, ...(c.id === 'claude' && !!bundledClaude() && { bundled: true }), ...(auth !== null && { providers: opencodeProviders(auth) }) };
     }),
   );
 }
