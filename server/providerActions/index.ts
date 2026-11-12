@@ -4,12 +4,13 @@
 import { actionOp, PROVIDER_ACTIONS, type ProviderChange } from '../../shared/providerActions.ts';
 import { cloudflareModule } from './cloudflare.ts';
 import { elevenlabsModule } from './elevenlabs.ts';
+import { entraModule } from './entra.ts';
 import { githubModule } from './github.ts';
 import { inferenceModules } from './inference.ts';
 import { upstashModule } from './upstash.ts';
 import { ActionError, type ActionCtx, type ActionPlan, type ActionResult, type ProviderModule } from './types.ts';
 
-export const MODULES: Record<string, ProviderModule> = Object.fromEntries([cloudflareModule, githubModule, elevenlabsModule, upstashModule, ...inferenceModules].map((m) => [m.provider, m]));
+export const MODULES: Record<string, ProviderModule> = Object.fromEntries([cloudflareModule, githubModule, elevenlabsModule, upstashModule, entraModule, ...inferenceModules].map((m) => [m.provider, m]));
 
 const opsLine = (provider: string) => (PROVIDER_ACTIONS[provider] ?? []).map((o) => `${o.op}${o.args ? ` ${o.args}` : ''}`).join('; ');
 

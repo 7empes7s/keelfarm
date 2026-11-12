@@ -7,7 +7,10 @@ import { ACTION_PROVIDERS, autoApplies, keyAbilities, PROVIDER_ACTIONS } from '.
 import { DEMO_REPO, fakeBoxes, fakeProviderHttp } from '../demo/providerActions.ts';
 import { fakeCloudflare } from '../demo/cloudflare.ts';
 import { applyAction, MODULES, runAction } from './index.ts';
-import type { ActionCtx, ActionKey } from './types.ts';
+import type { ActionCtx, ActionKey, EntraCred } from './types.ts';
+
+const TENANT = '7e57e57e-0000-4000-8000-00000000c1f0';
+const STORED = 'entra-stored-secret-Zz9~kept';
 
 const SECRET = 'sk-live-Zq81xWvP0aa7-secret';
 const DEAD = 'sk-bad-old-0001-secret';
@@ -21,8 +24,10 @@ const SAMPLE: Record<string, Record<string, Record<string, unknown>>> = {
     dns_cname_ensure: { hostname: 'clip.techinsiderbytes.com' },
     access_app_ensure: { hostname: 'clip.techinsiderbytes.com', emails: ['manager@example.com'] },
     access_service_token_ensure: { hostname: 'keel.techinsiderbytes.com', name: 'clipfarm e2e' },
+    access_idp_ensure: {},
     token_create: { name: 'clipfarm DNS', permissions: ['DNS Write'] },
   },
+  entra: { key_test: {}, entra_app_ensure: {} },
   github: {
     key_scopes: {},
     repo_get: {},
@@ -43,7 +48,9 @@ function ctxFor(provider: string, keys: ActionKey[] = [{ id: 'dead', label: 'Old
   const cf = fakeCloudflare({ access: true });
   const boxes = fakeBoxes();
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cubefarm-actions-'));
-  const ctx: ActionCtx = { keys, http: net.http, cloudflareApi: cf.api, boxes, repo: DEMO_REPO, secretFile: (_f, name) => envSecretFile(path.join(dir, `${name.replace(/\W+/g, '-')}.env`)) };
+  let cred: EntraCred | undefined = { tenant: TENANT, appObjectId: 'obj-x', clientId: 'client-x', keyId: 'key-x', secret: STORED, expiresAt: Date.now() + 400 * 86_400_000 };
+  const entraKeys = keys.map((k) => ({ ...k, key: `admin-client:${k.key}`, accountId: TENANT }));
+  const ctx: ActionCtx = { keys: provider === 'entra' ? entraKeys : keys, http: net.http, cloudflareApi: cf.api, boxes, repo: DEMO_REPO, secretFile: (_f, name) => envSecretFile(path.join(dir, `${name.replace(/\W+/g, '-')}.env`)), cfKeys: [{ id: 'cf', label: 'Cloudflare', key: 'cf-live' }], entra: { get: () => cred, set: async (c) => void (cred = c) } };
   return { ctx, net, cf, boxes, provider };
 }
 
@@ -57,6 +64,7 @@ describe('the provider-action layer', () => {
     for (const provider of ACTION_PROVIDERS) {
       for (const { op, risk } of PROVIDER_ACTIONS[provider]) {
         const { ctx, net, cf } = ctxFor(provider);
+        const graphSecrets = (net.world as unknown as { entra: { secrets: string[] } }).entra.secrets;
         const out = await runAction(ctx, { provider, op, args: sample(provider, op) }).catch((err: Error) => ({ error: err.message }));
         expect('error' in out ? out.error : '', `${provider} ${op}`).toBe('');
         const seen = [JSON.stringify(out)];
@@ -66,7 +74,8 @@ describe('the provider-action layer', () => {
         } else expect(risk, `${provider} ${op}`).toBe('read');
         expect(seen.join('\n'), `${provider} ${op}`).not.toContain(SECRET);
         expect(seen.join('\n'), `${provider} ${op}`).not.toContain(DEAD);
-        if (provider !== 'upstash') expect(net.calls.some((c) => c.key === SECRET) || cf.calls.length > 0, `${provider} ${op} reached the provider`).toBe(true);
+        for (const x of [STORED, ...graphSecrets, ctx.entra!.get()!.secret]) expect(seen.join('\n'), `${provider} ${op}`).not.toContain(x);
+        if (provider !== 'upstash') expect(net.calls.some((c) => c.key.endsWith(SECRET)) || cf.calls.length > 0, `${provider} ${op} reached the provider`).toBe(true);
       }
     }
   });
