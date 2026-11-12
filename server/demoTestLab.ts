@@ -83,7 +83,7 @@ export function demoLabRunner(): LabRunner {
 
 /** A fake build or QA session on the test lab asks it for screenshots a few seconds in, the way a real one would. */
 export function withLab(opts: SessionOptions, cb: SessionCallbacks): SessionCallbacks {
-  const lab = opts.office;
+  const lab = opts.office?.defs.some((d) => d.name === 'lab_screenshot') ? opts.office : undefined; // every agent has an office server (it_report, #542)
   // Builds of odd issues skip it: their screenshot is one without an address (demo.ts issueScript, #230).
   if (!lab || (opts.task !== 'issue' && opts.task !== 'qa') || (opts.task === 'issue' && Number(opts.prompt.match(/#(\d+):/)?.[1] ?? 0) % 2)) return cb;
   setTimeout(() => {

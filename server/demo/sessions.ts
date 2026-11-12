@@ -20,7 +20,7 @@ import { keyName } from '../../shared/termKeys.ts';
 import { toolArgsLine } from '../../shared/tooling.ts';
 import type { AgentCli, UsageReading } from '../../shared/types.ts';
 import { ceoSession } from './ceo.ts';
-import { itSession } from './itDesk.ts';
+import { itSession, withItReport } from './itDesk.ts';
 import { boxDeskRepo } from './cloud.ts';
 import { registerDemo } from './registry.ts';
 import { DARK_MODE_TITLE } from './seedRepos.ts';
@@ -488,7 +488,7 @@ registerDemo('sessions', ({ scale, deskRepo }) => ({
     if (!opts.resumeSessionId) cb.startup?.({ tokens: 23_500 + charTokens(opts.systemAppend.length + opts.prompt.length) + (opts.tools?.noConnectors ? 0 : 27_800), memoryChars: 24_000 });
     const fake = !opts.readOnly && opts.role !== 'ceo';
     const stuck = fake && !scale && !opts.box && !opts.resumeSessionId && opts.terminal ? demoStuck(opts.task) : null; // a cloud agent's sign-in is the office's own (docs/cloud.md)
-    return inTerminal(opts, cb, (c) => (opts.readOnly ? demoConsultSession(opts, c) : opts.role === 'ceo' ? (signInSession(opts, c) ?? (opts.dept === 'it' ? itSession(opts, c) : ceoSession(opts, c))) : agentSession(opts, withDemoChat(opts, withLab(opts, c)), deskRepo.get(opts.cwd) ?? boxDeskRepo(opts.cwd) ?? [...repos.keys()][0])), fake, stuck);
+    return inTerminal(opts, cb, (c) => (opts.readOnly ? demoConsultSession(opts, c) : opts.role === 'ceo' ? (signInSession(opts, c) ?? (opts.dept === 'it' ? itSession(opts, c) : ceoSession(opts, c))) : agentSession(opts, withDemoChat(opts, withLab(opts, withItReport(opts, c))), deskRepo.get(opts.cwd) ?? boxDeskRepo(opts.cwd) ?? [...repos.keys()][0])), fake, stuck);
   },
   sessionTranscript: (_cwd, sessionId, about) => demoTranscript(path.join(HOME_DIR, 'demo-transcripts'), sessionId, about),
   terminals: true,

@@ -391,6 +391,8 @@ export interface TestLabHost {
   emit(view: TestLabView): void;
   /** While the office updates itself (#333): the agents whose queued jobs may still start (labGate); null: anyone's. */
   updateGate?(): readonly string[] | null;
+  /** A run failed for the lab's own reason (labProblem), for IT's tickets (#542). */
+  trouble?(t: { agent: string; job: string; problem: LabProblem; detail: string }): void;
 }
 
 const BROWSER_IDLE_MS = 5 * 60_000;
@@ -543,6 +545,7 @@ export class TestLab {
         ok = r.code === 0 && !r.timedOut && !r.silent;
         const problem = labProblem(r);
         summary = problem ? `lab error: ${problem}` : r.timedOut ? 'timed out' : `exit ${r.code}`;
+        if (problem) this.host.trouble?.({ agent: j.who.agent, job: j.id, problem, detail: `${argv.join(' ')}: ${r.silent ? 'went silent' : r.timedOut ? 'timed out' : `exit code ${r.code}`}` });
         text = runReport(argv.join(' '), r);
       } else {
         const url = input.url ? labUrl(input.url) : await this.host.previewUrl(j.repoId, j.who.pr, j.who.agentId);

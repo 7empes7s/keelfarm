@@ -74,6 +74,7 @@ const ACTS: Record<string, string> = {
   merge_pull: '🔀',
   it_propose: '🖥️',
   ask_it: '🖥️',
+  it_report: '🖥️',
 };
 
 /** The office tools that aren't cards: reads, and what shows in the chat itself (files, edits, reactions, questions). */
@@ -95,6 +96,7 @@ const SECTIONS: Partial<Record<string, ActionSection>> = {
   scan_keys: 'providers',
   it_propose: 'ops',
   ask_it: 'it-dept',
+  it_report: 'it-dept',
   make_default_account: 'accounts',
 };
 const DETAILS: Partial<Record<string, 'now' | 'setup'>> = { restart_agent: 'now', stop_agent: 'now', configure_agent: 'setup' };
