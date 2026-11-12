@@ -25,10 +25,9 @@ export abstract class SwarmItTickets extends SwarmItDept {
 
   /** A fresh demo office gets a few sample tickets once its team is hired (init hires it after the usage readings start). */
   protected override async startUsage() {
-    if (this.backend.demo) {
+    if (this.backend.demo && !this.state.itTickets.list.length) {
       setTimeout(() => {
-        if (this.state.itTickets.list.length) return;
-        this.state.itTickets = ticketSample(this.state.agents, Date.now());
+        ticketSample(this.state.itTickets, this.state.agents, Date.now());
         this.ticketsChanged();
       }, 3000).unref();
     }
