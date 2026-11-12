@@ -339,9 +339,10 @@ if you'd tapped Call. During a call after "that's all", the word talks again lik
 - **One wake per phrase:** a score over the threshold (0.8 Strict … 0.5 Balanced … 0.2 Easy) wakes once, then not again
   for 2 s and until the score has dropped (`WakeGate`, `client/src/ui/wake/wakeWord.ts`).
 - **The mic light:** whenever it listens, a mic with an orange dot sits in the header (the 3D office's HUD, the phone
-  HUD and pocket mode); a tap opens Settings → Voice. It pauses, and lets go of the mic, during a call, while the office
-  is in the background (another tab, the phone locked, the app switched away) and on low battery (unplugged at 20% or
-  less, where the browser says: Chrome's Battery API; Safari doesn't tell).
+  HUD and pocket mode); a tap opens Settings → Voice. It pauses, and lets go of the mic, during a call, while the
+  message box's mic listens, while the office is in the background (another tab, the phone locked, the app switched
+  away) and on low battery (unplugged at 20% or less, where the browser says: Chrome's Battery API; Safari doesn't
+  tell).
 - **iPhone:** foreground only. Safari stops the mic when the page is hidden or the screen locks, so it listens while
   the office is on screen, and starts again when you're back.
 

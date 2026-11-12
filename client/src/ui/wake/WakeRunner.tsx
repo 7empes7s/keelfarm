@@ -1,9 +1,10 @@
-// The wake word at app level (#537): WakeRunner decides when it listens (on, no call, the tab on screen, not on low
-// battery) and loads the engine only then; WakeLight is the header's mic light while it listens, in the 3D office's
+// The wake word at app level (#537): WakeRunner decides when it listens (on, no call, the message box's mic off, the
+// tab on screen, not on low battery) and loads the engine only then; WakeLight is the header's mic light while it listens, in the 3D office's
 // HUD, the phone HUD and pocket mode. window.__swarmWake is the probe.
 import { useEffect, useState } from 'react';
 import { useStore } from '../../store';
 import { Icon } from '../Icon';
+import { useMic } from '../mic';
 import { inCall } from '../voiceCall';
 import { useCall } from '../voiceCallStore';
 import type * as Engine from './wakeEngine';
@@ -52,9 +53,10 @@ export function WakeRunner() {
   const prefs = useWake((s) => s.prefs);
   const micRefused = useWake((s) => s.micRefused);
   const calling = useCall((s) => inCall(s.call));
+  const dictating = useMic((s) => s.state !== 'idle');
   const hidden = useHidden();
   const saver = useBatterySaver(prefs.on);
-  const pause = wakePause({ on: prefs.on, inCall: calling, hidden, batterySaver: saver, micRefused });
+  const pause = wakePause({ on: prefs.on, inCall: calling, dictating, hidden, batterySaver: saver, micRefused });
   useEffect(() => {
     if (pause) {
       if (pause !== 'no-mic') useWake.setState({ status: pause });

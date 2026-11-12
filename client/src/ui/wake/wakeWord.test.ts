@@ -30,6 +30,7 @@ describe('when it listens', () => {
   it('pauses during a call, in a hidden tab and on battery saver', () => {
     expect(wakePause({ ...listening, inCall: true })).toBe('call');
     expect(wakePause({ ...listening, hidden: true })).toBe('hidden');
+    expect(wakePause({ ...listening, dictating: true })).toBe('dictating');
     expect(wakePause({ ...listening, batterySaver: true })).toBe('battery');
     expect(wakePause({ ...listening, on: false, inCall: true })).toBe('off');
     expect(wakePause({ ...listening, micRefused: true })).toBe('no-mic');

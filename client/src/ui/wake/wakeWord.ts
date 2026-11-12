@@ -52,13 +52,14 @@ export const sensitivityLabel = (s: number) => (s < 0.34 ? 'Strict' : s > 0.66 ?
 
 // ---------- when it listens ----------
 
-export type WakePause = '' | 'off' | 'call' | 'hidden' | 'battery' | 'no-mic';
+export type WakePause = '' | 'off' | 'call' | 'dictating' | 'hidden' | 'battery' | 'no-mic';
 
 /** Why it isn't listening right now ('' when it is). */
-export function wakePause(s: { on: boolean; inCall: boolean; hidden: boolean; batterySaver: boolean; micRefused: boolean }): WakePause {
+export function wakePause(s: { on: boolean; inCall: boolean; dictating?: boolean; hidden: boolean; batterySaver: boolean; micRefused: boolean }): WakePause {
   if (!s.on) return 'off';
   if (s.micRefused) return 'no-mic';
   if (s.inCall) return 'call';
+  if (s.dictating) return 'dictating';
   if (s.hidden) return 'hidden';
   if (s.batterySaver) return 'battery';
   return '';
@@ -69,6 +70,7 @@ export const PAUSE_WORDS: Record<WakePause, string> = {
   off: 'Off',
   'no-mic': 'The microphone was refused: allow it for this site, then turn the wake word on again',
   call: 'Paused during the call',
+  dictating: 'Paused while the message box listens',
   hidden: 'Paused while the office is in the background',
   battery: 'Paused on low battery',
 };

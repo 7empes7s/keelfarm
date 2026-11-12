@@ -43,7 +43,7 @@ export function WakeSettings() {
       </label>
       <p className="muted small">
         It listens on this device and nothing is sent anywhere until it hears the word: then a chime, and the call starts as if you tapped Call. A phone can't listen in the background or with the screen locked, so it's while the office is on
-        screen. It pauses during a call, while the office is in the background and on low battery.
+        screen. It pauses during a call, while the message box's mic listens, while the office is in the background and on low battery.
       </p>
       {prefs.on && (
         <>
