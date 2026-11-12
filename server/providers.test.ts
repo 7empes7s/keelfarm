@@ -6,6 +6,7 @@ import type { ServerEvent } from '../shared/types.ts';
 import { providerCards } from '../shared/providers.ts';
 import { EMPTY_CLOUD } from '../shared/cloud.ts';
 import { redact } from '../shared/journal.ts';
+import type { ProbeRequest, ProbeResult } from '../shared/providers.ts';
 
 // Its own folder: the demo's secrets files are read straight from SWARM_HOME.
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'cubefarm-providers-'));
@@ -46,7 +47,7 @@ describe('the providers store', () => {
 
     changed.mockClear();
     await p.remove(c.id);
-    expect(changed).toHaveBeenCalledWith({ connections: [], mcp: [] });
+    expect(changed).toHaveBeenCalledWith({ connections: [], mcp: [], defaults: {}, clients: [] });
     expect(JSON.parse(fs.readFileSync(path.join(dir, 'secrets.json'), 'utf8'))).toEqual({});
     await expect(p.remove(c.id)).rejects.toThrow(/No such connection/);
   });
@@ -71,7 +72,92 @@ describe('the providers store', () => {
     expect(readProvidersFile({ connections: [{ id: 'x', provider: 'nope' }, { id: 'y', provider: 'gemini' }], mcp: [{ id: 'z', name: 'n' }] })).toEqual({
       connections: [{ id: 'y', provider: 'gemini', label: 'Google Gemini API', addedAt: 0, keyHint: '', test: null, tags: [], usedFor: 'inference' }],
       mcp: [],
+      defaults: {},
+      clients: [],
     });
+  });
+});
+
+describe('one sign-in per company and permission checks (#533)', () => {
+  const ACCOUNT = '0123456789abcdef0123456789abcdef';
+
+  it('signs in against a fake Google: tokens kept server-side only, refreshed when they run out, one connection per company', async () => {
+    const dir = fs.mkdtempSync(path.join(home, 'oauth-'));
+    let n = 0;
+    const probe = vi.fn(async (req: ProbeRequest): Promise<ProbeResult> => {
+      if (req.kind === 'form') return { status: 200, body: { access_token: `ya29.access-${++n}`, ...(req.form.grant_type === 'authorization_code' ? { refresh_token: '1//refresh-secret' } : {}), expires_in: 3600, scope: 'openid email https://www.googleapis.com/auth/youtube.upload' } };
+      return { status: 200, body: { email: 'boss@example.com' } };
+    });
+    const p = new Providers({ file: path.join(dir, 'providers.json'), secretsFile: path.join(dir, 'secrets.json'), probe, changed: vi.fn() });
+    await p.init();
+    expect(() => p.oauthStart('google', 'http://localhost:4317')).toThrow(/client ID and secret/);
+    await p.setClient('google', 'cid.apps.googleusercontent.com', 'client-secret-xyz');
+    const { url } = p.oauthStart('google', 'http://localhost:4317');
+    const q = new URL(url).searchParams;
+    expect(q.get('redirect_uri')).toBe('http://localhost:4317/api/oauth/callback');
+    await expect(p.oauthFinish('forged', 'code')).rejects.toThrow(/expired or was already used/);
+
+    const c = await p.oauthFinish(q.get('state')!, 'auth-code');
+    expect(probe).toHaveBeenCalledWith({ kind: 'form', url: 'https://oauth2.googleapis.com/token', form: { grant_type: 'authorization_code', code: 'auth-code', redirect_uri: 'http://localhost:4317/api/oauth/callback', client_id: 'cid.apps.googleusercontent.com', client_secret: 'client-secret-xyz' } });
+    expect(c).toMatchObject({ provider: 'google', scopes: ['openid', 'email', 'https://www.googleapis.com/auth/youtube.upload'], test: { ok: true, plan: 'boss@example.com' } });
+    await expect(p.oauthFinish(q.get('state')!, 'auth-code')).rejects.toThrow(/already used/); // a state works once
+    const view = JSON.stringify(p.view());
+    for (const secret of ['1//refresh-secret', 'ya29.access-1', 'client-secret-xyz']) {
+      expect(view).not.toContain(secret);
+      expect(fs.readFileSync(path.join(dir, 'providers.json'), 'utf8')).not.toContain(secret);
+    }
+    expect(JSON.parse(fs.readFileSync(path.join(dir, 'secrets.json'), 'utf8'))).toMatchObject({ [`provider:${c.id}`]: '1//refresh-secret', [`oauth-access:${c.id}`]: 'ya29.access-1' });
+    expect(p.view().clients).toEqual(['google']);
+
+    // a fresh token is used as is; one about to run out is refreshed with the refresh token
+    expect(await p.accessToken(c.id)).toBe('ya29.access-1');
+    const inner = (p as unknown as { data: { connections: { expiresAt?: number }[] } }).data.connections[0];
+    inner.expiresAt = Date.now() + 1000;
+    expect(await p.accessToken(c.id)).toBe('ya29.access-2');
+    expect(probe).toHaveBeenLastCalledWith({ kind: 'form', url: 'https://oauth2.googleapis.com/token', form: expect.objectContaining({ grant_type: 'refresh_token', refresh_token: '1//refresh-secret' }) });
+    expect(JSON.parse(fs.readFileSync(path.join(dir, 'secrets.json'), 'utf8'))[`provider:${c.id}`]).toBe('1//refresh-secret'); // kept when none came back
+
+    // signing in again keeps one connection
+    const again = p.oauthStart('google', 'http://localhost:4317');
+    await p.oauthFinish(new URL(again.url).searchParams.get('state')!, 'code-2');
+    expect(p.view().connections.filter((x) => x.provider === 'google')).toHaveLength(1);
+    await expect(p.add('google', 'a-key')).rejects.toThrow(/Sign in with Google/);
+  });
+
+  it("says a refused refresh means signing in again, and the demo's consent needs no client", async () => {
+    const dir = fs.mkdtempSync(path.join(home, 'oauth-demo-'));
+    let refuse = false;
+    const probe = vi.fn(async (req: ProbeRequest): Promise<ProbeResult> => (req.kind === 'form' ? (refuse ? { status: 400, body: { error: 'invalid_grant', error_description: 'Token has been expired or revoked.' } } : { status: 200, body: { access_token: 'a', refresh_token: 'r', expires_in: 1 } }) : { status: 200, body: { name: 'Demo Studio' } }));
+    const changed = vi.fn();
+    const p = new Providers({ file: path.join(dir, 'providers.json'), secretsFile: path.join(dir, 'secrets.json'), probe, changed, fakeConsent: true });
+    await p.init();
+    expect(p.view().clients).toEqual(['google', 'meta', 'tiktok', 'microsoft']);
+    const { url } = p.oauthStart('meta', 'http://127.0.0.1:5829');
+    expect(url).toMatch(/^http:\/\/127\.0\.0\.1:5829\/api\/oauth\/callback\?state=\w+&code=demo-consent$/);
+    const c = await p.oauthFinish(new URL(url).searchParams.get('state')!, 'demo-consent');
+    expect(c.test?.plan).toBe('Demo Studio');
+    refuse = true;
+    expect((await p.test(c.id)).test).toMatchObject({ ok: false, result: 'dead', note: 'Sign in with Meta again: Token has been expired or revoked.' });
+  });
+
+  it("tests a Cloudflare account token on its account and names what it lacks; a GitHub token on the floor's repo", async () => {
+    const dir = fs.mkdtempSync(path.join(home, 'perms-'));
+    const probe = vi.fn(async (req: ProbeRequest): Promise<ProbeResult> => {
+      const url = req.kind === 'command' ? '' : req.url;
+      if (url.includes('/zones?')) return { status: 200, body: { result: [{ id: 'z1' }] } };
+      if (url.includes('/dns_records')) return { status: 403, body: { errors: [{ code: 10000 }] } };
+      if (url.includes('/pulls')) return { status: 403, headers: { 'x-accepted-github-permissions': 'pull_requests=read' } };
+      return { status: 200, body: { result: { status: 'active' } } };
+    });
+    const changed = vi.fn();
+    const p = new Providers({ file: path.join(dir, 'providers.json'), secretsFile: path.join(dir, 'secrets.json'), probe, changed, repo: () => 'acme/app' });
+    await p.init();
+    await expect(p.add('cloudflare', 'cf-token', '', '', 'not-an-id')).rejects.toThrow(/32 letters and digits/);
+    const cf = await p.add('cloudflare', 'cf-token', '', '', ACCOUNT);
+    expect(probe).toHaveBeenCalledWith({ kind: 'http', url: `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT}/tokens/verify`, headers: { Authorization: 'Bearer cf-token' } });
+    expect(cf.test).toMatchObject({ ok: true, result: 'live', missing: ['Zone DNS edit'], note: 'Missing: Zone DNS edit' });
+    const gh = await p.add('github', 'github_pat_abc');
+    expect(gh.test).toMatchObject({ missing: ['Pull requests (read)'], note: 'Missing: Pull requests (read)' });
   });
 });
 

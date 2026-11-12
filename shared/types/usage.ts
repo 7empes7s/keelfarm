@@ -2,7 +2,7 @@
 // the accounts view (snapshot and `accounts` event). Imported through shared/types.ts. Never a key.
 
 export type UsageProvider = 'claude' | 'codex' | 'elevenlabs' | 'upstash' | 'anthropic' | 'openai' | 'gemini' | 'openrouter' | 'hetzner' | 'runway' | 'luma' | 'kling';
-type UsageCategory = 'coding' | 'text' | 'audio' | 'video' | 'image' | 'cloud' | 'mcp';
+type UsageCategory = 'coding' | 'text' | 'audio' | 'video' | 'image' | 'cloud' | 'signin' | 'mcp';
 export type UsageSourceStatus = 'ready' | 'near' | 'limited' | 'signed-out' | 'error';
 
 /** One limit of a source: "5-hour" 42%, or "Characters" 61k of 100k. */
