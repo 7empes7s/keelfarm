@@ -20,4 +20,5 @@ import './doctor.ts';
 import './disk.ts';
 import './setup.ts';
 import './liveLeases.ts';
+import './agentSdk.ts';
 import './itDesk.ts';

@@ -1,0 +1,39 @@
+.bundled-claude {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  min-width: 0;
+}
+.bundled-claude-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-width: 0;
+}
+.bundled-claude-row > p {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+/* "latest 2.1.330, checked 09:14" on its own line under the version */
+.bundled-claude-latest {
+  display: block;
+}
+.bundled-claude-alarm {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ds-space-2);
+  padding: var(--ds-space-3);
+  border: var(--ds-border) solid var(--ds-warn-fill);
+  border-radius: var(--ds-radius-md);
+  color: var(--ds-warn-text);
+  font-size: var(--ds-text-sm);
+  overflow-wrap: anywhere;
+}
+.bundled-claude-alarm svg {
+  flex: none;
+  width: 1.1em;
+  height: 1.1em;
+  margin-top: 0.1em;
+}

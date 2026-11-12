@@ -179,7 +179,7 @@ export interface LaunchContext {
 export const BOX_CODEX_VERSION = '0.163.0';
 
 /** A field of an installed package's package.json, found from its entry file (its exports may not offer package.json). */
-function packageField(pkg: string, field: string): string | null {
+export function packageField(pkg: string, field: string): string | null {
   try {
     let dir = path.dirname(createRequire(import.meta.url).resolve(pkg));
     for (let i = 0; i < 6; i++) {

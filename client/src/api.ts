@@ -186,6 +186,7 @@ export const api = {
   removeItTelegram: () => call<TelegramView>('DELETE', '/api/it/telegram'),
   // IT monitoring (#525): the checks now, a recommendation's option, Not now.
   itWatchCheck: () => call('POST', '/api/it/watch/check', {}),
+  agentSdkCheck: () => call('POST', '/api/agent-sdk/check', {}),
   itPick: (id: string, option: number) => call('POST', `/api/it/recs/${encodeURIComponent(id)}/pick`, { option }),
   itSnooze: (id: string) => call('POST', `/api/it/recs/${encodeURIComponent(id)}/snooze`, {}),
   itTelegramDemo: (kind: 'start' | 'message' | 'approve' | 'decline', text = '') => call('POST', '/api/it/telegram/demo', { kind, text }),
