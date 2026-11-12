@@ -343,14 +343,16 @@ export function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionH
       const kit = { text, s, use, detail, scale: (f: DemoFloor, call: { size: number; reason: string }) => scale(s, f, call) };
       const early = await ceoReply(kit, true); // "assign #3 to Ada" (#265): a command, even with the seeded chat's attachment
       if (early !== null) return early;
+      // "look into …": the step log (#150), before the files: the session's prompt may list the seeded chat's attachments
+      const round = await demoRound(text, s.floors, use, async (tool, line, out, error, ms) => (await step([{ kind: 'tool', tool, text: `⏺ ${line}` }], ms), step([{ kind: error ? 'error' : 'result', text: `  ⎿ ${out}` }], 300)), async (floor) => objectiveIds((await detail(floor)).charter)[0]);
+      if (round) return round;
       const sent = sentFiles(opts.prompt); // files from the manager, or a document asked for: the demo makes one
       if (sent.length || wantsFile(text)) return demoMakeFiles({ step, read, use, cwd: opts.cwd }, s.floors, sent);
       // A reply to one of the CEO's messages: answer it, quoting what it answers.
       const reply = parseForwarded(text);
       if (reply) return answerReply(reply);
       const awake = await demoAwake(text, s.floors, use); // "wait for PR #3", "consult …", "ask me …" (#28)
-      const round = awake || (await demoRound(text, s.floors, use, async (tool, line, out, error) => (await step([{ kind: 'tool', tool, text: `⏺ ${line}` }]), step([{ kind: error ? 'error' : 'result', text: `  ⎿ ${out}` }], 300)), async (floor) => objectiveIds((await detail(floor)).charter)[0])); // "look into …": the step log (#150)
-      if (round) return round;
+      if (awake) return awake;
       const resolved = await demoResolve(text, s.openDecisions, use); // an open decision answered in words (#114)
       if (resolved) return resolved;
       // The replies that show features' CEO tools (ceoReplies.ts, and any feature's own module): the first that answers.

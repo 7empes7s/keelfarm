@@ -15,9 +15,9 @@ async function keyboard(page: Page, px: number) {
   await page.waitForTimeout(400);
 }
 
-/** A long job running, its log open with 15+ steps, the keyboard up, a message typed: everything still fits. */
+/** A long job running (its 17th step takes a minute), its log open, the keyboard up, a message typed: everything still fits. */
 async function check(page: Page, chat: Locator) {
-  await expect(chat.locator('.working-meta', { hasText: /step (1[5-9]|[2-9]\d)/ })).toBeVisible({ timeout: 90_000 });
+  await expect(chat.locator('.working-meta', { hasText: /step (1[7-9]|[2-9]\d)/ })).toBeVisible({ timeout: 90_000 });
   await chat.locator('.working-main').tap();
   await expect(chat.locator('.working-strip .step-log')).toBeVisible();
   const field = chat.locator('.chat-input textarea');
@@ -37,6 +37,7 @@ async function check(page: Page, chat: Locator) {
   const below = () => thread.evaluate((el) => el.lastElementChild!.getBoundingClientRect().bottom - el.getBoundingClientRect().bottom);
   await expect.poll(below, { message: 'the newest message reachable' }).toBeLessThanOrEqual(1);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'no sideways scroll').toBe(true);
+  await page.request.post('/api/ceo/stop'); // its minute-long step would hold up the next test's job
 }
 
 test('pocket mode: the open step log leaves the message box above the keyboard', async ({ page }) => {
