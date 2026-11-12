@@ -10,6 +10,12 @@ type CallWindow = { __swarmCall: { agent: string; phase: string; say(text: strin
 
 const agentOn = { on: true, capHours: 15 };
 
+// A microphone for the call's audio (silence from a fake device in Chromium; WebKit's capture is mocked already).
+test.use({
+  permissions: ['microphone'],
+  launchOptions: [async ({ browserName, launchOptions }, use) => use(browserName === 'chromium' ? { ...launchOptions, args: [...(launchOptions.args ?? []), '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] } : launchOptions), { scope: 'worker' }],
+});
+
 test.beforeAll(async ({ request }) => {
   expect((await request.put('/api/voice/key', { data: { key: 'demo-voice-key-1234' } })).ok()).toBe(true);
   await request.patch('/api/settings', { data: { voice: { provider: 'elevenlabs', voiceId: 'demoVoiceAvery00001', voiceName: 'Avery', agent: agentOn } } });
