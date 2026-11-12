@@ -5,6 +5,7 @@ import type { VoiceOption } from '../shared/types.ts';
 import { clipExtension } from '../shared/clipLimits.ts';
 import { isV4Voice } from '../shared/voices.ts';
 import { STT_MODEL, synthBody, VoiceApiError, type VoiceApi } from './voice.ts';
+import { agentBody, agentHash } from './voiceAgent.ts';
 
 const API = 'https://api.elevenlabs.io';
 const CHECK_TIMEOUT_MS = 10_000;
@@ -106,5 +107,30 @@ export const elevenLabs: VoiceApi = {
     form.append('file', new Blob([new Uint8Array(audio)], { type }), `speech.${clipExtension(type)}`);
     const res = await call(key, '/v1/speech-to-text', { method: 'POST', body: form }, signal);
     return s(((await res.json()) as { text?: unknown }).text);
+  },
+
+  // ElevenLabs Agents (#534): the LLM token as a workspace secret, then the agent made or patched to the config.
+  async ensureAgent(key, config, have, llmToken) {
+    const signal = AbortSignal.timeout(CHECK_TIMEOUT_MS);
+    const json = { 'Content-Type': 'application/json' };
+    let secretId = have?.secretId ?? '';
+    if (!secretId) {
+      const res = await call(key, '/v1/convai/secrets', { method: 'POST', headers: json, body: JSON.stringify({ type: 'new', name: 'cubefarm-voice-llm', value: llmToken }) }, signal);
+      secretId = s(((await res.json()) as { secret_id?: unknown }).secret_id);
+    }
+    const cfg = { ...config, llmSecretId: secretId };
+    const hash = agentHash(cfg);
+    if (have?.agentId && have.secretId === secretId && have.hash === hash) return have;
+    if (have?.agentId) {
+      await call(key, `/v1/convai/agents/${encodeURIComponent(have.agentId)}`, { method: 'PATCH', headers: json, body: JSON.stringify(agentBody(cfg)) }, signal);
+      return { agentId: have.agentId, secretId, hash };
+    }
+    const res = await call(key, '/v1/convai/agents/create', { method: 'POST', headers: json, body: JSON.stringify(agentBody(cfg)) }, signal);
+    return { agentId: s(((await res.json()) as { agent_id?: unknown }).agent_id), secretId, hash };
+  },
+
+  async agentUrl(key, agentId) {
+    const res = await call(key, `/v1/convai/conversation/get-signed-url?agent_id=${encodeURIComponent(agentId)}`, {}, AbortSignal.timeout(CHECK_TIMEOUT_MS));
+    return s(((await res.json()) as { signed_url?: unknown }).signed_url);
   },
 };

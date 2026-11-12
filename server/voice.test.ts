@@ -262,6 +262,8 @@ describe('Voice', () => {
       if (failWith) throw new VoiceApiError(failWith, `${failWith}: nope`);
       return '  Ship the login page today.  ';
     },
+    ensureAgent: async () => ({ agentId: 'a', secretId: 's', hash: 'h' }),
+    agentUrl: async () => 'wss://example/x',
   };
 
   const make = () =>

@@ -28,6 +28,7 @@ export interface PhoneMessage {
   requestId?: string; // a hire / let-go proposal this message is about
   voice?: Exclude<VoiceProvider, 'off'>; // who read it aloud when it arrived (absent: nobody), for the phone's ▶ replay
   telegram?: 'in' | 'out'; // in: the manager sent it from Telegram; out: the CEO's message also went there
+  voiceCall?: true; // said on a Jarvis voice call (#534): the manager's words, or the office voice's answer (never read aloud again)
   quiet?: true; // the CEO's: its notification wasn't sent, as the manager was in the app (#210)
   replyTo?: number; // replies to this one (its id): the manager's quote, or the CEO's answer to it (shared/reactions.ts)
   clientId?: string; // the manager's: the phone's id for the send, so a resend after a reload is taken once (#216)

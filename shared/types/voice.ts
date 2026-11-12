@@ -1,4 +1,5 @@
 // Reading messages aloud and listening to the manager (docs/voice.md). Imported through shared/types.ts.
+import type { VoiceAgentSettings } from '../voiceAgent.ts';
 
 /** Who reads phone messages aloud: nobody, the browser's own voice, or ElevenLabs (with the manager's key). */
 export type VoiceProvider = 'off' | 'browser' | 'elevenlabs';
@@ -14,6 +15,7 @@ export interface VoiceSettings {
   favourites: string[]; // ElevenLabs voice ids starred in any voice picker, shown first (ids only)
   agentsSpeak: boolean; // agents say a short line in their voice when clicked (#321, shared/agentLines.ts)
   talk: TalkWhileWorking; // the CEO's spoken progress while it works (#286); during a call 'off' means milestones
+  agent?: VoiceAgentSettings; // the Jarvis voice on calls (#534, shared/voiceAgent.ts): ElevenLabs Agents, its monthly cap; absent: the defaults
 }
 
 /** Settings → Voice's "Talk while working": no progress lines, only milestones, or a line about every minute too. */
