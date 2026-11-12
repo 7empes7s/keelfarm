@@ -373,6 +373,9 @@ export class Accounts {
   readings(id: string, readings: UsageReading[]) {
     this.usage.set(id, mergeReadings(this.usage.get(id) ?? [], readings));
     this.refresh.delete(id); // its session ran, so its token is fresh again
+    // A limit is over once a session's readings show room, as a poll's do in test(): the built-in login is never polled.
+    const cur = this.list().find((x) => x.id === id);
+    if (cur?.limitedUntil && readings.length && readings.every((x) => x.pct < NEAR_OUT_PCT)) this.replace({ ...cur, limitedUntil: null });
     this.emit();
   }
 
@@ -626,6 +629,7 @@ export class Accounts {
         const end = signInEnd(mode, code, term.unwrapped().split('\n')); // joined: a narrow phone's terminal wraps the reason (#350)
         this.runs.set(id, { mode, running: false, ...end });
         if (!end.ok) term.note(end.note);
+        else this.back(id); // a new login, maybe another account: its old limit isn't its (a real one comes back on its next session)
         this.emit();
         void this.test(id).catch(() => undefined);
       });
