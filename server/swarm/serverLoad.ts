@@ -17,6 +17,7 @@ export abstract class SwarmServerLoad extends SwarmVoices {
     seed: () => this.backend.resources.serverSeed(),
     context: () => this.loadContext(),
     emit: (serverLoad) => this.broadcast({ type: 'serverLoad', serverLoad }),
+    save: (points) => this.backend.resources.serverSave?.(points),
   });
 
   override snapshot(): WorldSnapshot {
@@ -49,7 +50,7 @@ export abstract class SwarmServerLoad extends SwarmVoices {
     return { officePids: [process.pid, keeperPid(), ...launcher].filter((p) => p > 0), machinesDir: MACHINES_DIR, agents, previews };
   }
 
-  /** The 24 h trend, 1-minute points (in memory only). */
+  /** The 24 h trend, 1-minute points (kept on disk every 10 minutes). */
   serverTrend(): ServerPoint[] {
     return this.serverLoad.points();
   }
