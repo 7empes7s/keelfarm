@@ -10,6 +10,7 @@ export const handlers = {
   health: (ev, { set }) => set({ health: ev.health }),
   serverLoad: (ev, { set }) => set({ serverLoad: ev.serverLoad }),
   testLab: (ev, { set }) => set({ testLab: ev.testLab }),
+  itDesk: (ev, { set }) => set({ itDesk: ev.itDesk }),
   // The CEO's, the test lab's and the accounts' changes as the outbox batches them (#491).
   views: (ev, { set, get }) => {
     const s = get();
@@ -36,6 +37,7 @@ export const snapshot: SnapshotPart = (d) => ({
   health: d.health ?? null,
   serverLoad: d.serverLoad ?? null,
   testLab: d.testLab ?? null,
+  itDesk: d.itDesk ?? null,
   claudeUsage: d.claudeUsage ?? [],
   claudeUsageCheck: d.claudeUsageCheck ?? null,
   claudeUsageShares: d.claudeUsageShares ?? [],

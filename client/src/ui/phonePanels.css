@@ -88,6 +88,12 @@
   html[data-touch][data-typing] .phone:has(.phone-chat) .chat-head {
     padding-right: calc(12px + var(--ds-target) + 8px);
   }
+  /* the decisions waiting give way before the message box does: they scroll in their tray, its header row kept */
+  .phone .phone-chat > .decision-tray {
+    flex-shrink: 1;
+    min-height: calc(var(--ds-target) + var(--ds-space-2));
+    overflow-y: auto;
+  }
   .phone-status {
     display: none;
   }
@@ -95,5 +101,6 @@
     display: inline-flex;
     align-self: flex-end;
     margin-bottom: 6px;
+    background: var(--ds-surface-raised); /* the default's dark x vanished on the phone's dark frame */
   }
 }

@@ -7,7 +7,7 @@ import { SONGS } from '../jukeboxSongs';
 import { DECOR_SLOT_AT, HALF_D, HALF_W, officeColliders, type Rect } from '../layout';
 import { findPath, spot, walkways, WALK_R } from '../walkways';
 import { THEME_PACKS, themePack } from './packs';
-import { placeProp, PROP_SPECS, themePropRects, themeProps } from './placement';
+import { nocBankRect, nocPanels, NOC_BANK, placeProp, PROP_SPECS, themePropRects, themeProps, themeWallRects } from './placement';
 import { buildProgress, candles, marketOpen, tickerQuotes, worldClocks } from './ticker';
 
 const PACKS = Object.values(THEME_PACKS);
@@ -82,6 +82,32 @@ describe('theme props', () => {
     const tv = placeProp('b-lounge', 'tv-console')!;
     expect(Math.sin(tv.rotY)).toBeCloseTo(-1); // facing west, at the couch against the west wall
     expect(placeProp('b-lounge', 'arcade')).toBeNull(); // a floor prop in a big slot
+  });
+});
+
+describe("the ops room's status wall (#371)", () => {
+  it('curves its panels round the north wall, facing in, and only on the ops floor', () => {
+    const p = nocPanels();
+    expect(p).toHaveLength(NOC_BANK.cols * NOC_BANK.rows);
+    const top = p.slice(0, NOC_BANK.cols);
+    expect(top[0].rotY).toBeGreaterThan(0); // the left end turns to face right
+    expect(top[NOC_BANK.cols - 1].rotY).toBeLessThan(0);
+    for (const q of p) expect(q.z).toBeGreaterThanOrEqual(-HALF_D);
+    expect(themeWallRects(THEME_PACKS['ops-control'])).toEqual([nocBankRect()]);
+    for (const pack of PACKS.filter((x) => x.id !== 'ops-control')) expect(themeWallRects(pack)).toEqual([]);
+  });
+
+  it('stays out of the walkways, off the slots and the office furniture, and leaves every spot reachable', () => {
+    const r = nocBankRect();
+    expect(r.maxZ - r.minZ).toBeLessThan(0.6);
+    const w = walkways('office');
+    for (const s of [...w.spots, ...w.homes]) {
+      expect(overlaps(r, { minX: s.x, maxX: s.x, minZ: s.z, maxZ: s.z }, WALK_R), s.id).toBe(false);
+      const path = findPath(w, spot(w, 'elevator')!, s);
+      for (const pt of path ?? []) expect(overlaps(r, { minX: pt.x, maxX: pt.x, minZ: pt.z, maxZ: pt.z }, WALK_R), `${s.id} path`).toBe(false);
+    }
+    for (const k of reservedDecorRects()) expect(overlaps(r, k), JSON.stringify(k)).toBe(false);
+    for (const c of officeColliders()) expect(overlaps(r, c), JSON.stringify(c)).toBe(false);
   });
 });
 

@@ -5,6 +5,7 @@ import type { CeoMandate, FollowupSettings } from '../followups.ts';
 import type { DiskSettings } from '../disk.ts';
 import type { MemorySettings } from '../health.ts';
 import type { WeatherSettings, WorldEventSettings } from '../outside.ts';
+import type { ItDeptSettings } from '../itDept.ts';
 import type { EveryProject } from '../practices.ts';
 import type { TestLabSettings } from '../testLab.ts';
 import type { ThemeSettings } from '../themes.ts';
@@ -61,6 +62,8 @@ export interface SwarmSettings {
   cloud: CloudSettings;
   tools: ToolSettings; // Tools & skills: what Everyone's and the CEO's sessions load (shared/tooling.ts)
   everyProject: EveryProject; // Settings → Every project: the practice switches every floor inherits (#24)
+  itDesk?: boolean; // the CEO's IT desk (#506): commands on this machine; absent: on
+  itDept: ItDeptSettings; // Settings → The IT department (#524): its lead, coding agent, account, model and effort
   statusReactions?: boolean; // the office's 👀 ⏳ ✅ under the manager's messages as the CEO or an agent works on them (#193: off by default)
   rotation?: RotationSettings; // Providers & accounts → Rotation (#248); absent: the defaults (shared/accountRotation.ts)
   officePlaybook: string; // above every floor's playbook in builders', fixers' and QA's prompts (up to OFFICE_PLAYBOOK_MAX)

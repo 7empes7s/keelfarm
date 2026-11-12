@@ -20,6 +20,7 @@ export const EMPTY_NUMBERS: OpsNumbers = {
   leadMs: null,
   qaWaitMs: null,
   qaPass: null,
+  qaPassTrend: Array.from({ length: 7 }, () => null),
   qaFirstPass: null,
   qaRoundsPerMerge: null,
   qaLabErrors: 0,

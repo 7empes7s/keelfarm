@@ -4,7 +4,7 @@
 import type { OfficeCall } from './ceoStream.ts';
 
 /** A console section an action card opens (ids from client/src/ui/consoleNavRules.ts). */
-type ActionSection = 'team' | 'ceo' | 'charter' | 'ops' | 'projects' | 'notifications' | 'providers' | 'accounts';
+type ActionSection = 'team' | 'ceo' | 'charter' | 'ops' | 'projects' | 'notifications' | 'providers' | 'accounts' | 'it-dept';
 
 /** What an action card opens, and whose live status it shows. */
 export type ActionRef =
@@ -72,10 +72,12 @@ const ACTS: Record<string, string> = {
   set_ceo_setup: '⚙️',
   apply_charter: '🧭',
   merge_pull: '🔀',
+  it_propose: '🖥️',
+  ask_it: '🖥️',
 };
 
 /** The office tools that aren't cards: reads, and what shows in the chat itself (files, edits, reactions, questions). */
-export const NOT_CARDS = new Set(['company_status', 'floor_detail', 'agent_detail', 'agent_log', 'qa_report', 'worktree_file', 'pr_diff', 'session_history', 'consult', 'attach_file', 'keep_file', 'edit_message', 'react', 'reply', 'ask_manager']);
+export const NOT_CARDS = new Set(['company_status', 'floor_detail', 'agent_detail', 'agent_log', 'qa_report', 'worktree_file', 'pr_diff', 'session_history', 'it_run', 'consult', 'attach_file', 'keep_file', 'edit_message', 'react', 'reply', 'ask_manager']);
 
 // Tools whose card opens a console section (with the floor, when the call names one).
 const SECTIONS: Partial<Record<string, ActionSection>> = {
@@ -91,6 +93,8 @@ const SECTIONS: Partial<Record<string, ActionSection>> = {
   set_office_playbook: 'projects',
   send_telegram: 'notifications',
   scan_keys: 'providers',
+  it_propose: 'ops',
+  ask_it: 'it-dept',
   make_default_account: 'accounts',
 };
 const DETAILS: Partial<Record<string, 'now' | 'setup'>> = { restart_agent: 'now', stop_agent: 'now', configure_agent: 'setup' };

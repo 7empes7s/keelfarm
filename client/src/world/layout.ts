@@ -341,6 +341,45 @@ export const coffeeCorner = (): Rect => rect(COFFEE_CORNER.x, HALF_D - COFFEE_CO
 export const KIOSK = { x: -4.8, z: -2.2, w: 0.9, d: 0.7, h: 1.75 };
 export const TROPHY_SHELF = { x: -6, z: HALF_D - 0.25, w: 2.2, d: 0.5, h: 2.1 };
 
+// The meeting room (#369), where voice calls with the CEO happen: a glass room in the lobby's west wing round the west
+// window, a corridor south of the manager's office keeping that door clear. Its east wall is solid, with the wall
+// screen (the call's captions) on it; the table runs east–west, the CEO stands at its east head in front of the screen
+// and the chairs round the rest face them. The door is in the south wall, towards the elevator.
+export const MEETING_ROOM = { minX: -HALF_W, maxX: -8, minZ: -2.2, maxZ: 3.1, doorMinX: -11.4, doorMaxX: -9.6 };
+export const MEETING_TABLE = { x: -12.3, z: 0.6, w: 3, d: 1.1 };
+/** The wall screen, on the east wall facing west, over the CEO's head (y: its middle). */
+export const MEETING_SCREEN = { x: MEETING_ROOM.maxX - 0.21, y: 2.35, z: MEETING_TABLE.z, w: 2.8, h: 1.3 };
+/** Where the CEO stands for a call: at the table's east head, facing down it. */
+export const MEETING_HEAD = { x: MEETING_TABLE.x + MEETING_TABLE.w / 2 + 0.55, z: MEETING_TABLE.z };
+/**
+ * The chairs you can take, the far head first: where each stands, the way you face sitting in it (a yaw, 0 north,
+ * towards the CEO) and where you stand once you get up.
+ */
+export const MEETING_CHAIRS = (() => {
+  const t = MEETING_TABLE;
+  const head = { x: t.x - t.w / 2 - 0.55, z: t.z, exit: { x: t.x - t.w / 2 - 0.55, z: t.z + 1.1 } };
+  const sides = [-0.6, 0.6].flatMap((dx) => [
+    { x: t.x + dx, z: t.z - t.d / 2 - 0.45, exit: { x: t.x + dx, z: t.z - t.d / 2 - 1.15 } },
+    { x: t.x + dx, z: t.z + t.d / 2 + 0.45, exit: { x: t.x + dx, z: t.z + t.d / 2 + 1.15 } },
+  ]);
+  return [head, ...sides].map((c) => ({ ...c, yaw: Math.atan2(-(MEETING_HEAD.x - c.x), -(MEETING_HEAD.z - c.z)) }));
+})();
+/** A meeting chair's solid, its sitter included. */
+const meetingChairRect = (c: { x: number; z: number }): Rect => rect(c.x, c.z, 0.6, 0.6, SOLID_H.seated);
+
+function meetingColliders(): Rect[] {
+  const m = MEETING_ROOM;
+  const t = 0.12;
+  return [
+    { minX: m.minX, maxX: m.maxX + t, minZ: m.minZ - t, maxZ: m.minZ + t, h: SOLID_H.glass }, // glass north wall
+    { minX: m.minX, maxX: m.doorMinX, minZ: m.maxZ - t, maxZ: m.maxZ + t, h: SOLID_H.glass }, // south wall, west of the door
+    { minX: m.doorMaxX, maxX: m.maxX + t, minZ: m.maxZ - t, maxZ: m.maxZ + t, h: SOLID_H.glass }, // east of it
+    { minX: m.maxX - 0.25, maxX: m.maxX + t, minZ: m.minZ, maxZ: m.maxZ, h: SOLID_H.glass }, // the east wall and its screen
+    rect(MEETING_TABLE.x, MEETING_TABLE.z, MEETING_TABLE.w + 0.1, MEETING_TABLE.d + 0.1, SOLID_H.desk),
+    ...MEETING_CHAIRS.map(meetingChairRect),
+  ];
+}
+
 /** Wall screens share their rendered positions and sizes with the lobby visibility guard. */
 export const LOBBY_SCREENS = {
   timelapse: { at: [12.6, 1.75, HALF_D - 0.03], w: 2.2, h: 1.25 },
@@ -414,6 +453,7 @@ export function lobbyFurnitureColliders(): Rect[] {
   out.push(...missionRects());
   out.push(rect(KIOSK.x, KIOSK.z, KIOSK.w, KIOSK.d, KIOSK.h));
   out.push(rect(TROPHY_SHELF.x, TROPHY_SHELF.z, TROPHY_SHELF.w, TROPHY_SHELF.d, TROPHY_SHELF.h));
+  out.push(...meetingColliders());
   return out;
 }
 
@@ -469,8 +509,8 @@ export function decorSlots(kind: FloorKind): DecorSlot[] {
     // the reception counter's top, either side of the receptionist bot, towards the lobby
     { id: 'reception-w', x: r.x - r.w / 2 + 0.55, y: 1.13, z: r.z + 0.2, rotY: 0 },
     { id: 'reception-e', x: r.x + r.w / 2 - 0.55, y: 1.13, z: r.z + 0.2, rotY: 0 },
-    // the lobby's showpiece (a tree, a gravestone), in the quiet corner south of the manager's office
-    { id: 'lobby-feature', x: -12.6, y: 0, z: -1.5, rotY: Math.PI / 4, floor: true },
+    // the lobby's showpiece (a tree, a gravestone), in the quiet corner east of the manager's office, behind the kiosk
+    { id: 'lobby-feature', x: -5, y: 0, z: -5.5, rotY: Math.PI / 4, floor: true },
     // out on the west patio, just north of the bench, in view through the window beside it
     { id: 'patio', x: -(HALF_W + WALL_T + BALCONY.depth / 2 + 0.1), y: 0, z: -1.2, rotY: Math.PI / 2, floor: true },
     // the manager's desk, on the visitor's side (+z), left of the monitor's stand
@@ -590,7 +630,7 @@ export function roofColliders(): Rect[] {
 export type Surface = 'wood' | 'rug' | 'lobby' | 'cabin';
 
 const OFFICE_RUGS: Rect[] = DESK_RUGS;
-const LOBBY_RUGS: Rect[] = [LOBBY_RUG, MANAGER_ROOM, CEO_ROOM];
+const LOBBY_RUGS: Rect[] = [LOBBY_RUG, MANAGER_ROOM, CEO_ROOM, MEETING_ROOM];
 
 /** The floor under (x, z), for footsteps. A rug's edge counts as rug; past the doorway is the elevator cabin, and
  * outside, a balcony's (or the patio's) paving sounds like the lobby's tiles. On the roof, the decking is wood and

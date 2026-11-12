@@ -60,6 +60,10 @@
   align-items: flex-start;
   gap: var(--ds-space-1);
 }
+/* a long name ends in an ellipsis at the card's edge, clear of its ⋯ */
+.pv-card .ds-row-title {
+  max-width: 100%;
+}
 .pv-warning {
   display: flex;
   align-items: flex-start;

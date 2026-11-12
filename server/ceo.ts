@@ -21,6 +21,7 @@ import { waitTools, type WaitHandlers } from './ceoWaitTools.ts';
 import { reactTools, type ReactHandlers } from './ceoReactTools.ts';
 import { setupTools, type SetupHandlers } from './ceoSetupTool.ts';
 import { ASKED_IN, askTools, type AskHandlers } from './ceoAskTools.ts';
+import { askItTools, type AskItHandlers } from './ceoItTools.ts';
 
 // The CEO: a Claude Code session in the lobby that runs the company instead of writing code.
 // It studies each floor's repo, sizes its team of interchangeable agents from its throughput (team changes the
@@ -158,7 +159,7 @@ export function qaReportText(
   return JSON.stringify(report, null, 1);
 }
 
-export interface OfficeHandlers extends WaitHandlers, ReactHandlers, SetupHandlers, AskHandlers {
+export interface OfficeHandlers extends WaitHandlers, ReactHandlers, SetupHandlers, AskHandlers, AskItHandlers {
   companyStatus(a: { full?: boolean }): string;
   floorDetail(a: { floor: number }): string;
   agentDetail(a: { agent_id: string }): string;
@@ -240,14 +241,32 @@ const CLI = z.enum(['claude', 'codex', 'opencode', 'gemini']);
 const TOOL_REFS = z.array(z.string().min(1).max(200)).max(30).optional();
 const TRIAGE_OR_ASKED = 'In a triage job (its stuck PR), or when the manager asks in a message to you now (pass asked_in): ';
 
-export function createOfficeTools(h: OfficeHandlers): OfficeTools {
-  const run = async (fn: () => string | Promise<string>) => {
-    try {
-      return { content: [{ type: 'text' as const, text: await fn() }] };
-    } catch (err) {
-      return { content: [{ type: 'text' as const, text: `Refused: ${(err as Error).message}` }], isError: true };
-    }
+/** A tool's handler: its output, or "Refused: why" for the model to act on. */
+export const runTool = async (fn: () => string | Promise<string>) => {
+  try {
+    return { content: [{ type: 'text' as const, text: await fn() }] };
+  } catch (err) {
+    return { content: [{ type: 'text' as const, text: `Refused: ${(err as Error).message}` }], isError: true };
+  }
+};
+
+/** These tools as the "office" MCP server (the CEO's, or the IT department's, server/ceoItTools.ts). */
+export function toolServer(defs: NonNullable<Parameters<typeof createSdkMcpServer>[0]['tools']>): OfficeTools {
+  const server = createSdkMcpServer({ name: 'office', version: '1.0.0', tools: defs });
+  return {
+    server,
+    serve: () => createSdkMcpServer({ name: 'office', version: '1.0.0', tools: defs }).instance,
+    async call(name, args) {
+      const def = defs.find((d) => d.name === name);
+      if (!def) throw new Error(`No office tool ${name}`);
+      const res = (await def.handler(args as never, undefined)) as { content: { text?: string }[] };
+      return res.content.map((c) => c.text ?? '').join('\n');
+    },
   };
+}
+
+export function createOfficeTools(h: OfficeHandlers): OfficeTools {
+  const run = runTool;
   const defs = [
     tool(
       'company_status',
@@ -515,18 +534,9 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
     ...reactTools(h, run),
     ...setupTools(h, run),
     ...askTools(h, run),
+    ...askItTools(h, run),
   ];
-  const server = createSdkMcpServer({ name: 'office', version: '1.0.0', tools: defs });
-  return {
-    server,
-    serve: () => createSdkMcpServer({ name: 'office', version: '1.0.0', tools: defs }).instance,
-    async call(name, args) {
-      const def = defs.find((d) => d.name === name);
-      if (!def) throw new Error(`No office tool ${name}`);
-      const res = (await def.handler(args as never, undefined)) as { content: { text?: string }[] };
-      return res.content.map((c) => c.text ?? '').join('\n');
-    },
-  };
+  return toolServer(defs);
 }
 
 // ---------- team size ----------
@@ -604,7 +614,7 @@ export function ceoSystemPrompt(o: {
     '',
     'How you work:',
     "- Call mcp__office__company_status first (floors, clone paths, teams, backlogs, PRs), and floor_detail before planning a floor's issues, QA brief or charter.",
-    '- Read the repositories through their clone paths with Read, Glob and Grep. They are read-only to you. You cannot run shell commands.',
+    '- Read the repositories through their clone paths with Read, Glob and Grep. They are read-only to you. You cannot run shell commands. This machine (disk, memory, services, logs) belongs to the IT department: ask_it hands them a question.',
     `- Keep durable notes about the company in ${o.notesFile}: read it at the start, and update it at the end with decisions and anything worth remembering next time.`,
     '- Change things only through the mcp__office__ tools.',
     "- wait_for a PR, issue, agent or preview instead of ending the job; ask_manager for answers you need; consult a floor's agent about its code.",

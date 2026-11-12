@@ -1,10 +1,10 @@
 // The CEO chat's header row (#270): which of its tools stay as buttons and which fold into its ⋯ at a given width,
 // and the badge ⋯ carries for what folded. Pure, so the rule is tested without a page (ChatActionsSheet.tsx draws it).
 
-export type ChatToolId = 'search' | 'charts' | 'full' | 'files' | 'text' | 'call' | 'handsFree';
+export type ChatToolId = 'search' | 'charts' | 'full' | 'files' | 'text' | 'call' | 'handsFree' | 'it';
 
 /** Most used first: the last ones fold first as the header narrows. */
-export const TOOL_ORDER: readonly ChatToolId[] = ['search', 'charts', 'full', 'files', 'text', 'call', 'handsFree'];
+export const TOOL_ORDER: readonly ChatToolId[] = ['search', 'charts', 'full', 'files', 'text', 'call', 'handsFree', 'it'];
 
 /** A tool button (44 px) and its gap (8 px). */
 export const TOOL_SLOT = 52;

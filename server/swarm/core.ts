@@ -56,6 +56,7 @@ import { latestPage } from '../../shared/chatPage.ts';
 import { CeoFiles } from '../ceoFiles.ts';
 import { consultSessions, type Consult } from '../consult.ts';
 import { DEFAULT_CEO_AWAKE } from '../../shared/ceoAwake.ts';
+import { IT_DEPT_DEFAULTS, loadIt } from '../../shared/itDept.ts';
 import { FileStore } from '../files.ts';
 import type {
   AgentActivity,
@@ -112,6 +113,7 @@ export abstract class SwarmCore extends SwarmContract {
       ceoFollowups: followupSettings(DEFAULT_FOLLOWUPS, {}),
       ceoMandates: [],
       ceoAwake: { ...DEFAULT_CEO_AWAKE },
+      itDept: { ...IT_DEPT_DEFAULTS },
       managerName: '',
       companyName: '',
       dogName: DEFAULT_DOG_NAME,
@@ -152,7 +154,7 @@ export abstract class SwarmCore extends SwarmContract {
     pong: {},
     officeId: officeId(),
     claudeUsage: [],
-    questions: [], decisions: { list: [], digestAt: 0 }, taskAccounts: {},
+    questions: [], decisions: { list: [], digestAt: 0 }, taskAccounts: {}, itDesk: { waiting: [], log: [] }, it: loadIt(undefined),
     experiments: loadLab(undefined, Date.now()),
   };
   /** The chat's files store; every change goes out to the tabs as a `files` event. */
@@ -665,11 +667,9 @@ export abstract class SwarmCore extends SwarmContract {
     void this.history.record(entry, null).then((kept) => this.broadcast({ type: 'history', entry: kept }));
   }
 
-  /** Values the journal must never write: the ElevenLabs key and secret-looking environment variables. */
+  /** Values the journal must never write: the ElevenLabs key, the Telegram bots' tokens and secret-looking environment variables. */
   protected secrets(): string[] {
-    const key = this.voice.secret();
-    const bot = this.telegram.secret();
-    return [...this.envSecrets, ...(key ? [key] : []), ...(bot ? [bot] : []), ...this.cloud.secretValues()];
+    return [...this.envSecrets, ...[this.voice.secret(), this.telegram.secret(), this.itBotSecret()].filter((v): v is string => !!v), ...this.cloud.secretValues()];
   }
 
   /** POST /api/journal/sample (demo only): writes a made-up working day as yesterday's journal, to replay. */

@@ -25,8 +25,8 @@ export const ROUTES: { office: Pt[]; lobby: Pt[] } = {
   ],
   lobby: [
     { x: 0, z: 9.5 },
-    { x: -9.5, z: 9.5 },
-    { x: -9.5, z: 0 },
+    { x: -7, z: 9.5 },
+    { x: -7, z: 0 }, // past the meeting room's east wall
     { x: 8, z: 0 },
     { x: 8, z: 9.5 },
   ],

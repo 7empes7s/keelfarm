@@ -10,6 +10,7 @@ import { run } from './exec.ts';
 import { localMachines, type MachineProvider } from './machines.ts';
 import { detectClis } from './clis.ts';
 import { npmInstall } from './cliInstall.ts';
+import { itExec, type ItExecResult } from './itExec.ts';
 import { readPicks } from './picks.ts';
 import type { QuickPicks } from '../shared/used.ts';
 import { scanTooling } from './tooling.ts';
@@ -159,6 +160,8 @@ export interface Backend {
   detectClis(): Promise<CliView[]>;
   /** Install a missing CLI's pinned npm package into `prefix` (#493). Never throws: how it went and its log's tail. */
   installCli(id: AgentCli, prefix: string): Promise<{ ok: boolean; tail: string[] }>;
+  /** The IT desk (#506): one command on this machine, as argv without a shell. Never throws. */
+  itExec(argv: string[], timeoutMs: number): Promise<ItExecResult>;
   /** OpenCode's own sign-in, `opencode auth login`, in `term` (#493). */
   opencodeSignIn(term: AgentTerminal, exited: (code: number) => void): BoxSignIn;
   /** The chat's "/" picks: the manager's installed skills and connected apps (server/picks.ts). */
@@ -189,6 +192,8 @@ export interface Backend {
   notify: NotifyTransport;
   /** The manager's Telegram bot (docs/pocket.md): the Bot API; the demo's is a fake that logs what it would send. */
   telegram: TelegramApi;
+  /** The IT department's own bot (#524): the same Bot API, its own long poll. */
+  telegramIt: TelegramApi;
   /** Cloud agents (docs/cloud.md): Upstash's Box API (the demo's is fake), and picking their CLIs up after a restart. */
   cloud: CloudBackend;
   /** Providers & accounts (#247, docs/accounts.md): testing them and their logins' sign-in terminals (the demo's are fake). */
@@ -371,6 +376,7 @@ export const realBackend: Backend = {
   releaseClis,
   detectClis,
   installCli: (id, prefix) => npmInstall(id, { prefix }),
+  itExec,
   opencodeSignIn: (term, exited) => startLocalSignIn({ cli: 'opencode', env: {}, term }, exited),
   quickPicks: () => readPicks(),
   toolInventory: (projects) => scanTooling(projects),
@@ -387,5 +393,6 @@ export const realBackend: Backend = {
   weather: openMeteo,
   notify: httpTransport,
   telegram: telegramHttp,
+  telegramIt: telegramHttp,
   cloud: realCloud,
 };

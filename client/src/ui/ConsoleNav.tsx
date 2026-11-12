@@ -5,6 +5,8 @@ import { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useRef,
 import { pendingRequests, useStore, type ManagerTab } from '../store';
 import { GROUPS, hashFor, loadRemembered, opening, remember, search, sectionRow, sectionsIn, stepTab, type GroupId, type Hit, type Section, type SectionId, type Where } from './consoleNavRules';
 import { CeoTab, FloorsTab, IssuesTab, TeamTab } from './ManagerConsole';
+import { ItDeskSettings } from './ItDeskCards';
+import { ItDept } from './ItDept';
 import { AboutOffice, AgentsSettings, CeoSettings, CompanySettings, PreviewsSettings, RuntimeSettings } from './SettingsSections';
 import { OpsTab } from './MissionConsole';
 import { CharterTab } from './CharterTab';
@@ -82,7 +84,14 @@ export function SectionBody({ id, where, focus = {} }: { id: SectionId; where: W
     case 'ceo':
       return <CeoTab focusRepo={focus.repoId} />;
     case 'ceo-settings':
-      return one(<CeoSettings />);
+      return one(
+        <>
+          <CeoSettings />
+          <ItDeskSettings />
+        </>,
+      );
+    case 'it-dept':
+      return <ItDept />;
     case 'tools':
       return <ToolsTab />;
     case 'history':

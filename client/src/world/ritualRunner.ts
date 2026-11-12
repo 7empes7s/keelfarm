@@ -9,6 +9,7 @@ import { dayPart, standupLine } from '../../../shared/speech';
 import { kanbanFor, useStore, type Agent } from '../store';
 import { ding, noise } from '../ui/sfx';
 import { playClip, speakLine } from '../ui/voicePlayback';
+import { callOn } from '../ui/voiceCallStore';
 import type { Gesture } from './body';
 import { headingFor, homeSpotId, isFree } from './errands';
 import { closeGathering, openGathering, type Gathering } from './gathering';
@@ -777,12 +778,24 @@ export class LobbyRitualRunner {
     if (due.length) this.later = this.later.filter((l) => l.at > shared.watched);
     for (const l of due) l.fn();
     if (this.out) this.away += dt;
+    if (this.p && callOn()) this.backForCall();
     if (this.p && !this.p.tick(dt)) this.p = null;
     if ((this.wait -= dt) > 0) return;
     this.wait = 0.5;
     const ceo = useStore.getState().agents[CEO_ID];
     if (this.p || !ceo || shared.watched < shared.walkAt) return;
-    if (walkHours(clockWith(this.pin, undefined).hour) && isFree(ceo.status) && isSeated(CEO_ID)) this.leave();
+    if (walkHours(clockWith(this.pin, undefined).hour) && isFree(ceo.status) && isSeated(CEO_ID) && !callOn()) this.leave();
+  }
+
+  /** A call started (#369): the walk stops there, the CEO back out of the elevator, for MeetingRoom.tsx to walk them to the table. */
+  private backForCall() {
+    this.p = null;
+    if (this.out) {
+      setHidden(CEO_ID, false);
+      placeBody(CEO_ID, CABIN.x, CABIN.z, 0);
+      this.out = false;
+    }
+    this.note('a call: the CEO goes to the meeting room');
   }
 
   private leave() {

@@ -7,7 +7,7 @@ const docked = (dock: number) => dock - 72;
 
 describe("the chat header's folding (#270)", () => {
   it('keeps 🔍, 📊 and ⛶ docked at 380 px, and only 🔍 and 📊 on narrower docks', () => {
-    expect(foldTools(docked(380), ALL)).toEqual({ shown: ['search', 'charts', 'full'], folded: ['files', 'text', 'call', 'handsFree'] });
+    expect(foldTools(docked(380), ALL)).toEqual({ shown: ['search', 'charts', 'full'], folded: ['files', 'text', 'call', 'handsFree', 'it'] });
     expect(foldTools(docked(360), ALL).shown).toEqual(['search', 'charts']);
     expect(foldTools(docked(330), ALL).shown).toEqual(['search', 'charts']);
   });

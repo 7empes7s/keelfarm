@@ -15,6 +15,7 @@ import { DEFAULT_TEST_LAB, testLabSettings } from '../shared/testLab.ts';
 import { reconcileStep, restartMessage, workState, type ReconcileStep, type RestartCounts } from './reconcile.ts';
 import { keptWaiver, mergeReadings } from '../shared/usage.ts';
 import { loadDiskAlert } from '../shared/disk.ts';
+import { loadItDesk } from '../shared/itDesk.ts';
 import { loadHistory } from './metrics.ts';
 import { clampTrimIdleMin, TRIM_SWEEP_MS } from './deskTrim.ts';
 import { clampStuckRecheckMin } from './stuckRecheck.ts';
@@ -153,10 +154,11 @@ export class Swarm extends SwarmLiveLeases {
         officeId: typeof loaded.officeId === 'string' && /^[a-z0-9]{6}$/.test(loaded.officeId) ? loaded.officeId : this.state.officeId,
         claudeUsage: Array.isArray(loaded.claudeUsage) ? mergeReadings([], loaded.claudeUsage.filter((r) => r && typeof r.type === 'string' && Number.isFinite(r.pct) && Number.isFinite(r.at))) : [],
         diskAlert: loadDiskAlert(loaded.diskAlert),
+        itDesk: loadItDesk(loaded.itDesk), it: this.loadItState(loaded.it),
         usageWaiver: keptWaiver(loaded.usageWaiver, loaded.settings?.usageWarnings, Date.now()),
         experiments: loadLab(loaded.experiments, Date.now()), taskAccounts: loadTaskAccounts(loaded.taskAccounts),
       };
-      for (const m of this.state.messages) this.messageSeq = Math.max(this.messageSeq, m.id + 1);
+      for (const m of [...this.state.messages, ...this.state.it.messages]) this.messageSeq = Math.max(this.messageSeq, m.id + 1);
       void this.ceoChat.backfill(this.state.ceo.chats, unfilled(loaded.ceo?.chats)).then((n) => n && this.broadcast({ type: 'ceoChat', conversations: conversationsView(this.state.ceo.chats) })); // threads from before #132
       if (!EFFORTS.includes(this.state.settings.defaultEffort)) this.state.settings.defaultEffort = 'medium';
       if (this.state.settings.runtime !== 'sdk') this.state.settings.runtime = 'terminal';
@@ -282,7 +284,7 @@ export class Swarm extends SwarmLiveLeases {
         const size = Math.min(this.backend.demoTeam?.(repo.floor) ?? 4, FLOOR_SEATS);
         if (size > this.state.settings.maxAgents) this.state.settings.maxAgents = size; // the big-company demo fills its floors
         for (let i = 1; i < size; i++) this.hireAgent(repo.id, repo.floor === 1 && i >= size - 2 ? { cli: i === size - 1 ? 'gemini' : 'codex' } : {}); // connecting hired the first; floor 1's last runs Gemini CLI (#365), the one before Codex on a long task (#409)
-        this.updateRepo(repo.id, { autoAssign: true, theme: FLOOR_THEMES[repo.floor - 1], ...(repo.floor === 1 ? { practices: { busyFiles: true, liveLeases: true } } : {}) }); // floor 1 shows conflict-aware scheduling (#256) and live leases (#398); floors 1-3 a floor theme each (#370)
+        this.updateRepo(repo.id, { autoAssign: true, theme: FLOOR_THEMES[repo.floor - 1], ...(repo.floor === 1 ? { practices: { busyFiles: true, liveLeases: true } } : {}) }); // floor 1 shows conflict-aware scheduling (#256) and live leases (#398); floor N the Nth floor theme (#370, #371)
         const charter = this.backend.demoCharter?.(repo.fullName).charter;
         if (charter) this.setCharter(repo.id, charter);
       }
@@ -697,9 +699,10 @@ export class Swarm extends SwarmLiveLeases {
     if (typeof patch.projectsDir === 'string' && patch.projectsDir.trim()) s.projectsDir = path.resolve(patch.projectsDir.trim());
     if (typeof patch.setupDone === 'boolean') s.setupDone = patch.setupDone;
     if (patch.tutorialStep !== undefined) s.tutorialStep = Math.max(-1, Math.round(Number(patch.tutorialStep)) || 0);
-    for (const k of ['autoUpdate', 'statusReactions'] as const) if (typeof patch[k] === 'boolean') s[k] = patch[k];
+    for (const k of ['autoUpdate', 'statusReactions', 'itDesk'] as const) if (typeof patch[k] === 'boolean') s[k] = patch[k];
     if (patch.updateSettleMin !== undefined) s.updateSettleMin = settleMinutes(patch.updateSettleMin);
     this.pacingSettings(patch);
+    this.itSettings(patch);
     if (patch.stuckRecheckMin !== undefined) s.stuckRecheckMin = clampStuckRecheckMin(patch.stuckRecheckMin);
     if (patch.trimIdleDesksMin !== undefined) {
       s.trimIdleDesksMin = clampTrimIdleMin(patch.trimIdleDesksMin);

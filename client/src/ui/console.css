@@ -247,7 +247,10 @@
   min-width: 0;
   margin: 0;
   font-size: var(--ds-text-lg);
+  line-height: var(--ds-leading-tight);
+  /* two lines before an ellipsis: "Providers & accounts" fits whole beside the Back button on a phone */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }

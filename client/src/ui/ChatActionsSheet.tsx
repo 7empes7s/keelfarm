@@ -137,10 +137,12 @@ export function ChatTools({ ceoName, who, files, onChats, onFiles, onCharts, int
   const handsFree = useHandsFree(ceoName);
   const fullScreen = useChatFull();
   const fullKey = keyLabel(useControls((s) => s.bindings.chatFull)[0] ?? '');
+  const itOn = useStore((s) => s.settings.itDept.on);
   const present: ChatToolId[] = ['search', 'charts', 'text', 'call'];
   if (files > 0) present.push('files');
   if (handsFree) present.push('handsFree');
   if (full) present.push('full');
+  if (itOn) present.push('it');
   const { shown, folded } = foldTools(width, present);
   const has = (t: ChatToolId) => shown.includes(t);
   const fold = (t: ChatToolId, item: MenuItem) => folded.includes(t) && item;
@@ -178,6 +180,12 @@ export function ChatTools({ ceoName, who, files, onChats, onFiles, onCharts, int
       )}
       {handsFree && has('handsFree') && <HandsFreeToggle ceoName={ceoName} {...handsFree} />}
       {has('full') && <FullButton />}
+      {has('it') && (
+        <button type="button" className="chat-tool xbtn" onClick={openIt} aria-label="IT chat" title="The IT department's chat: this machine's disk, memory and clean-ups">
+          <Icon name="monitor" />
+          <XLabel text="IT" />
+        </button>
+      )}
       <Menu
         label="More for the chat"
         className="chat-more"
@@ -191,6 +199,7 @@ export function ChatTools({ ceoName, who, files, onChats, onFiles, onCharts, int
           handsFree && fold('handsFree', { label: handsFree.on ? 'Turn hands-free off' : 'Hands-free', hint: handsFree.why || undefined, onSelect: () => void setHandsFree(!handsFree.on, ceoName) }),
           { label: 'Threads', hint: 'A new one, an earlier one, or search them all', onSelect: onChats },
           full && { label: fullScreen.on ? 'Leave full screen' : 'Full screen chat', hint: `${ceoName} fills the page${fullKey ? ` · ${fullKey}` : ''}`, onSelect: () => fullScreen.set(!fullScreen.on) },
+          fold('it', { label: 'IT chat', hint: "This machine's disk, memory and clean-ups", onSelect: openIt }),
         ]}
       />
     </>
@@ -207,6 +216,9 @@ export function ChatTools({ ceoName, who, files, onChats, onFiles, onCharts, int
 // Lucide's maximize-2 and minimize-2 (ISC, lucide.dev).
 const MAXIMIZE = 'M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7';
 const MINIMIZE = 'M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7';
+
+/** The IT department's chat and setup (#524): Console → The CEO → IT department. */
+const openIt = () => useStore.getState().openOverlay({ kind: 'manager', tab: 'it-dept' });
 
 /** ⛶ (#201): the chat fills the window, or on a phone hides the tab bar. */
 export function FullButton() {
