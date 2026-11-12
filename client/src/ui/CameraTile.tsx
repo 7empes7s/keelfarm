@@ -42,7 +42,7 @@ export default function CameraTile() {
     <section ref={box} className="cam-tile" role="dialog" aria-label={`${name}'s camera`} style={pos ? { left: pos.x, top: pos.y, right: 'auto', bottom: 'auto' } : undefined} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
       <div className="cam-frame">
         <Suspense fallback={<div className="cam-view cam-loading">{name.charAt(0)}</div>}>
-          <AgentCamTile id={id} label={`${name} on camera, at their desk`} />
+          <AgentCamTile id={id} initial={name.charAt(0)} label={`${name} on camera, at their desk`} />
         </Suspense>
         <span className="cam-name">
           <span className="cam-live" aria-hidden /> {name}

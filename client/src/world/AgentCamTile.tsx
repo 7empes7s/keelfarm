@@ -3,7 +3,7 @@
 // comes on, talking with their voice's level (agentCamera.ts mouthOpen), a thinking pose while the CEO works on an
 // answer. One small renderer of its own, as the meeting room's view (MeetingTile.tsx): CAM_PX square at CAM_FPS at most,
 // no frames while the tile is closed, the tab hidden or the tile off screen, so the office's frame rate pays nothing.
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot, extend, useFrame, type ReconcilerRoot } from '@react-three/fiber';
 import * as THREE from 'three';
 import { CEO_ID } from '../../../shared/types';
@@ -201,8 +201,9 @@ function Scene({ id }: { id: string }) {
 }
 
 /** The live camera of agent `id`, for the camera tile (ui/CameraTile.tsx); it's gone once the tile closes. */
-export default function AgentCamTile({ id, label }: { id: string; label: string }) {
+export default function AgentCamTile({ id, label, initial }: { id: string; label: string; initial: string }) {
   const host = useRef<HTMLDivElement>(null);
+  const [failed, setFailed] = useState(false);
   useEffect(() => {
     let live = true;
     let shown: { root: ReconcilerRoot<HTMLCanvasElement>; canvas: HTMLCanvasElement } | null = null;
@@ -228,7 +229,10 @@ export default function AgentCamTile({ id, label }: { id: string; label: string 
           cost = performance.now() - now;
         }, 1000 / CAM_FPS);
       },
-      (err) => console.warn('No agent camera:', err),
+      (err) => {
+        console.warn('No agent camera:', err);
+        if (live) setFailed(true);
+      },
     );
     return () => {
       live = false;
@@ -239,5 +243,11 @@ export default function AgentCamTile({ id, label }: { id: string; label: string 
       shown.canvas.remove();
     };
   }, [id]);
+  if (failed)
+    return (
+      <div className="cam-view cam-loading" role="img" aria-label={label}>
+        {initial}
+      </div>
+    );
   return <div ref={host} className="cam-view" role="img" aria-label={label} />;
 }
