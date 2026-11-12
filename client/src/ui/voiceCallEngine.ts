@@ -63,7 +63,7 @@ const EFFECTS: Record<CallEffect, () => void> = {
     setCallEars(EARS);
     setCallQuiet(true);
     markBusy(TARGET, 'call', true);
-    useCall.setState({ heard: '', chatTucked: useStore.getState().chatDocked }); // a docked chat tucks away behind the call
+    useCall.setState({ heard: '', managerSpeaking: false, chatTucked: useStore.getState().chatDocked }); // a docked chat tucks away behind the call
     if (useStore.getState().overlay?.kind === 'phone') useStore.getState().openOverlay(null); // and so does the phone's
     listenChime(true);
     report(sendWs, false, true);
@@ -83,7 +83,7 @@ const EFFECTS: Record<CallEffect, () => void> = {
     markBusy(TARGET, 'call', false);
     listenChime(false);
     report(sendWs, false, true);
-    useCall.setState({ chatTucked: false });
+    useCall.setState({ chatTucked: false, managerSpeaking: false });
     useStore.getState().openOverlay({ kind: 'phone', tab: 'chat' }); // the chat comes back, with the call's turns in it
   },
 };
@@ -99,12 +99,18 @@ onCallStep((step, ev) => {
 
 /** What the mic heard on a call turn. */
 const EARS = {
-  speech: (text: string) => void dispatchCall({ type: 'speech', now: performance.now(), text }),
+  speech: (text: string) => {
+    useCall.setState({ managerSpeaking: true });
+    void voice().then((v) => v.stopLine()); // barge-in stops an ack or progress line too (#286)
+    dispatchCall({ type: 'speech', now: performance.now(), text });
+  },
   closed: () => {
+    useCall.setState({ managerSpeaking: false });
     tapping = false;
     soon();
   },
   problem: (why: string) => {
+    useCall.setState({ managerSpeaking: false });
     tapping = false;
     dispatchCall({ type: 'mic-problem', why });
   },

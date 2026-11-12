@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { DEFAULT_FOLLOWUPS } from '../../shared/followups';
-import { DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AccountsView, type ProvidersView, type KeyScanView, type AgentView, type CeoChatView, type CeoInfo, type CliView, type ModelCatalogView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type ManagerChange, type NoticeView, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PreviewStatsView, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageCheckError, type UsageReading, type UsageShares, type UsageView, type VisitorView, type VoiceCacheView } from '../../shared/types';
+import { DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AccountsView, type ProvidersView, type KeyScanView, type AgentView, type CeoChatView, type CeoInfo, type CliView, type ModelCatalogView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type ManagerChange, type NoticeView, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PreviewStatsView, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageCheckError, type UsageReading, type UsageShares, type UsageView, type VisitorView, type VoiceCacheView, type VoiceLine } from '../../shared/types';
 import type { PastCareer } from '../../shared/careers';
 import { blockers } from '../../shared/issues';
 import { OUTSIDE_PR, UNTRUSTED_ISSUE } from '../../shared/trust';
@@ -12,6 +12,7 @@ import type { ServerNow } from '../../shared/serverLoad';
 import { DEFAULT_TEST_LAB, type TestLabView } from '../../shared/testLab';
 import type { ItDeskView } from '../../shared/itDesk';
 import { IT_DEPT_DEFAULTS, type ItView } from '../../shared/itDept';
+import type { ItWatchView } from '../../shared/itWatch';
 import type { ItTicket } from '../../shared/itTickets';
 import { DEFAULT_CEO_AWAKE } from '../../shared/ceoAwake';
 import { DEFAULT_CLOUD, EMPTY_CLOUD } from '../../shared/cloud';
@@ -161,6 +162,7 @@ export interface State {
   testLab: TestLabView | null; // the test lab desk (#56); null: a server without it, or a replay
   itDesk: ItDeskView | null; // the CEO's IT desk (#506); null: a server without it, or a replay
   it: ItView | null; // the IT department's chat (#524); null: a server without it, or a replay
+  itWatch: ItWatchView | null; // IT monitoring (#525): the health checks and recommendations; null until the first check
   itTickets: ItTicket[]; // office problems reported to IT (#542), newest first
   claudeUsage: UsageReading[]; // Claude's latest reading per usage limit (empty until a session reports)
   claudeUsageCheck: UsageCheckError | null; // why the office's idle check couldn't read it (#89), null when it could
@@ -173,6 +175,7 @@ export interface State {
   progress: ProgressView; // coins, decorations and achievements (#210)
   pastCareers: PastCareer[]; // careers of people let go (#205): the Team tab's Past agents
   voiceSpeaking: number | null; // the phone message being read aloud in this tab (ui/voiceMessages.ts)
+  voiceLine: VoiceLine | null; // the CEO's latest ack or progress line while it works (#286), shown as a chip
   weather: WeatherView; // the real local weather's place and latest reading (Settings → Weather)
   ticker: TickerItem[]; // the floors' recent activity lines, oldest first (world/ActivityTicker.tsx)
   notifyChannels: NotifyChannelsView; // which chat apps have a webhook saved (hints only) and how many devices get push
@@ -294,7 +297,7 @@ export const useStore = create<State>((set, get) => ({
     mainPreviewIdleMin: 1, prPreviewIdleMin: 1, previewMaxLifeHours: 0,
     dailyLogDir: '',
     historyDays: 90,
-    voice: { provider: 'off', voiceId: '', voiceName: '', model: '', speakOffice: false, keepDays: 7, speed: 1, favourites: [], agentsSpeak: true },
+    voice: { provider: 'off', voiceId: '', voiceName: '', model: '', speakOffice: false, keepDays: 7, speed: 1, favourites: [], talk: 'off', agentsSpeak: true },
     themes: { mode: 'auto', disabled: [], birthday: null },
     weather: DEFAULT_WEATHER,
     worldEvents: DEFAULT_WORLD_EVENTS,
@@ -335,6 +338,7 @@ export const useStore = create<State>((set, get) => ({
   testLab: null,
   itDesk: null,
   it: null,
+  itWatch: null,
   itTickets: [],
   claudeUsage: [],
   claudeUsageCheck: null,
@@ -347,6 +351,7 @@ export const useStore = create<State>((set, get) => ({
   progress: { floors: {}, achievements: [], coffees: 0, merges: 0 },
   pastCareers: [],
   voiceSpeaking: null,
+  voiceLine: null,
   weather: EMPTY_WEATHER_VIEW,
   ticker: [],
   notifyChannels: {

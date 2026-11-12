@@ -323,7 +323,8 @@ export class TelegramBot {
     } else if (body.kind === 'approve' || body.kind === 'decline') {
       const b = this.lastButtons;
       if (!b) throw new HttpError(409, 'The bot has sent no team change with buttons yet.');
-      inject({ callback_query: { id: `demo-${this.now()}`, data: b.rows[0][body.kind === 'approve' ? 0 : 1].callback_data, message: { message_id: b.messageId, chat } } });
+      const button = b.rows.flat().find((x) => x.callback_data.startsWith(body.kind === 'approve' ? 'a:' : 'd:'))!; // the first approve, or the decline
+      inject({ callback_query: { id: `demo-${this.now()}`, data: button.callback_data, message: { message_id: b.messageId, chat } } });
     } else if (body.kind === 'outage' || body.kind === 'online') {
       this.deps.api.outage?.(body.kind === 'outage');
       if (body.kind === 'online') this.retryWake?.();

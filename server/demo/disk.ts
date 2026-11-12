@@ -8,9 +8,12 @@ import { HOME_DIR } from '../config.ts';
 import { registerDemo } from './registry.ts';
 
 const GB = 1024;
+let low = false;
+
+/** A change the demo's IT desk ran freed space (#525): the made-up low disk has room again. */
+export const demoDiskRoom = () => void (low = false);
 
 registerDemo('disk', () => {
-  let low = false;
   const gone = new Set<string>();
   const sizes: Record<string, number> = { ghost01: 3.4 * GB, ghost02: 1.9 * GB, ghost03: 2.6 * GB };
   const machine = (name: string, unpushed: boolean): MachineScan => {

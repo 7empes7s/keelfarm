@@ -45,7 +45,7 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
   }
 
   /** The live office's own folders and state, which no proposal may touch. */
-  private get itProtected() {
+  protected get itProtected() {
     return [...new Set([OFFICE_DIR, '/root/Projects/keelfarm', '/root/keelfarm', HOME_DIR, path.join(os.homedir(), '.cubefarm')].map((d) => path.posix.normalize(d.replace(/\\/g, '/'))))];
   }
 
