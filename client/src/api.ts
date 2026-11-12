@@ -183,6 +183,7 @@ export const api = {
   itUndo: (logId: string) => call<{ ok: boolean }>('POST', `/api/it/undo/${encodeURIComponent(logId)}`),
   // The IT department (#524): its chat, and its own Telegram bot (no toasts on the token: the card shows why).
   messageIt: (text: string, replyTo?: number) => call<{ id: number }>('POST', '/api/it/message', { text, replyTo }),
+  reactToItMessage: (id: number, emoji: string) => call('POST', `/api/it/messages/${id}/react`, { emoji }),
   setItTelegram: (token: string) => call<{ view: TelegramView; startUrl: string }>('PUT', '/api/it/telegram', { token }, false),
   itTelegramLink: () => call<{ startUrl: string }>('POST', '/api/it/telegram/link', {}, false),
   removeItTelegram: () => call<TelegramView>('DELETE', '/api/it/telegram'),
