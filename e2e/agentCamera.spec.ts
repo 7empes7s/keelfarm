@@ -100,7 +100,7 @@ test('the 3D office keeps its frame rate with the camera tile open', async ({ pa
     requestAnimationFrame(tick);
   }));
   await expect(page.locator('.cam-tile canvas')).toBeVisible({ timeout: 30_000 });
-  await page.waitForTimeout(3000);
+  await page.waitForTimeout(10_000); // its shaders compile first, slowly in software WebGL
   const withTile = await frames();
   expect(await page.evaluate(() => (window as unknown as CamWindow).__swarmAgentCam.frames), 'the tile draws').toBeGreaterThan(5);
   await page.evaluate(() => document.exitPointerLock()); // looking around holds the mouse, as Esc frees it
