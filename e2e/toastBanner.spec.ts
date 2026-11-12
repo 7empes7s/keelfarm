@@ -24,7 +24,6 @@ async function ownToasts(page: Page) {
 const NOTICE = { id: 'e2e-banner', kind: 'ceo', at: Date.now(), level: 'info', title: 'From the CEO', text: 'A word about floor 1', read: false };
 
 async function check(page: Page, send: (ev: object) => void, composer: Locator) {
-  await composer.click();
   await composer.fill('half a thought');
   send({ level: 'success', text: 'Merged #12' });
   send({ level: 'error', text: 'The push failed' });
@@ -86,7 +85,7 @@ for (const width of [390, 1280]) {
     await page.setViewportSize({ width, height: width === 390 ? 844 : 800 });
     const send = await ownToasts(page);
     await office(page);
-    await page.getByTitle(/^Your phone/).click();
+    await page.keyboard.press('p'); // the canvas would take a click on the phone's button
     const phone = dialog(page, /Your phone/);
     if (!(await phone.locator('.chat-input').isVisible())) await phone.locator('.phone-tab').first().click(); // it opens on Team when a team change waits there
     await check(page, send, phone.locator('.chat-input textarea'));
