@@ -165,9 +165,9 @@ const same = (a: Box | null, b: Box | null) => a === b || (!!a && !!b && a.left 
 const tourSelectors = (ids: readonly string[]) => ids.map((t) => `[data-tour="${t}"]`).join('\n');
 
 /**
- * Where to ring the step's control (`selectors`, one per line), in the px of the box the card is drawn in (inside the pocket, the UI scale's), so
- * the ring sits under the card in its stacking order; following it on resize, scroll and layout changes, null when it
- * isn't on screen.
+ * Where to ring the step's control (`selectors`, one per line), in the px of the box the card is drawn in (inside the
+ * pocket, the UI scale's), so the ring sits under the card in its stacking order; following it on resize, scroll and
+ * layout changes, null when it isn't on screen.
  */
 export function useSpot(selectors: string): Box | null {
   const [rect, setRect] = useState<Box | null>(null);
