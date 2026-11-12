@@ -3,7 +3,10 @@
 // CEO), lets the manager talk over the CEO (barge-in), steers the voice (voiceMessages.ts: stop, pause, skip), keeps
 // the office's sounds, toasts and notifications for after the call, holds back the office's new client, and takes
 // Space, →, M and Esc. The call screens (CallScreens.tsx) only draw useCall. window.__swarmCall is the probe.
+// With the Jarvis voice (#534, agentCallStore.ts) ElevenLabs Agents listens and talks instead (agentCallEngine.ts);
+// without a key, over the monthly cap or when it can't connect, the call is exactly as before.
 import { report } from '../attention';
+import { agentCallWhy, agentOn, callAudio, useAgentCall } from './agentCallStore';
 import { sendWs } from '../net';
 import { useStore } from '../store';
 import { markBusy } from '../updateGate';
@@ -17,6 +20,7 @@ import { callOn, dispatchCall, onCallStep, useCall } from './voiceCallStore';
 
 const TARGET = 'voice-call';
 const voice = () => import('./voiceMessages');
+const agent = () => import('./agentCallEngine');
 
 let unregister: (() => void) | null = null;
 /** A tap-to-talk turn is open: the call doesn't close it for not wanting the mic. */
@@ -34,6 +38,10 @@ function micReason(): string {
 /** Starts a call, or brings the one that's on back to the front. Call it from a click: the browser lets sound start then. */
 export function startCall() {
   unlockAudio();
+  if (!callOn() && !agentCallWhy(useStore.getState())) {
+    callAudio(); // inside the tap: iPhones only start sound (and the mic's audio session) from one
+    useAgentCall.setState({ mode: 'connecting', saying: '' });
+  }
   useCall.setState({ minimised: false });
   dispatchCall({ type: 'start', now: Date.now(), id: Date.now() });
 }
@@ -45,6 +53,13 @@ export const skipSentence = () => void dispatchCall({ type: 'skip' });
 export const toggleCaptions = () => useCall.setState((s) => ({ captions: !s.captions }));
 export const toggleSpeaker = () => useCall.setState((s) => ({ speaker: !s.speaker }));
 export const setMinimised = (minimised: boolean) => useCall.setState({ minimised });
+
+/** The orb, tapped after "that's all": the Jarvis voice listens again. */
+export function tapOrb() {
+  if (!callOn() || useAgentCall.getState().mode !== 'idle') return;
+  callAudio();
+  void agent().then((a) => a.connectAgent(() => useAgentCall.setState({ mode: 'idle' })));
+}
 
 /** Tap-to-talk, when the mic can't listen by itself: one turn, sent when you stop talking. */
 export function talkOnce() {
@@ -58,22 +73,22 @@ export function talkOnce() {
 
 const EFFECTS: Record<CallEffect, () => void> = {
   greet: () => {
-    unregister?.();
-    unregister = registerTarget({ id: TARGET, kind: 'call', form: () => null, text: () => '', setText: (heard) => useCall.setState({ heard }), send: turn, disabled: () => false });
-    setCallEars(EARS);
     setCallQuiet(true);
     markBusy(TARGET, 'call', true);
     useCall.setState({ heard: '', managerSpeaking: false, chatTucked: useStore.getState().chatDocked }); // a docked chat tucks away behind the call
     if (useStore.getState().overlay?.kind === 'phone') useStore.getState().openOverlay(null); // and so does the phone's
-    listenChime(true);
     report(sendWs, false, true);
+    if (agentOn()) return void agent().then((a) => a.connectAgent(ownVoice));
+    ownEars();
+    listenChime(true);
     setTimeout(() => dispatchCall({ type: 'connected', tapToTalk: micReason() }), CHIME_MS);
   },
-  'stop-voice': () => void voice().then((v) => v.stopSpeaking()),
-  'pause-voice': () => void voice().then((v) => v.pauseVoice()),
-  'resume-voice': () => void voice().then((v) => v.resumeVoice()),
-  'skip-voice': () => void voice().then((v) => v.skipSentence()),
+  'stop-voice': () => void (agentOn() ? agent().then((a) => a.stopAgentVoice()) : voice().then((v) => v.stopSpeaking())),
+  'pause-voice': () => void (agentOn() ? agent().then((a) => a.pauseAgent()) : voice().then((v) => v.pauseVoice())),
+  'resume-voice': () => void (agentOn() ? agent().then((a) => a.resumeAgent()) : voice().then((v) => v.resumeVoice())),
+  'skip-voice': () => void (agentOn() ? agent().then((a) => a.skipAgent()) : voice().then((v) => v.skipSentence())),
   release: () => {
+    if (agentOn()) void agent().then((a) => a.releaseAgent());
     tapping = false;
     stopListening(TARGET);
     unregister?.();
@@ -87,6 +102,21 @@ const EFFECTS: Record<CallEffect, () => void> = {
     useStore.getState().openOverlay({ kind: 'phone', tab: 'chat' }); // the chat comes back, with the call's turns in it
   },
 };
+
+/** Today's call: the mic through mic.ts into a message box of its own that sends to the CEO. */
+function ownEars() {
+  unregister?.();
+  unregister = registerTarget({ id: TARGET, kind: 'call', form: () => null, text: () => '', setText: (heard) => useCall.setState({ heard }), send: turn, disabled: () => false });
+  setCallEars(EARS);
+}
+
+/** The Jarvis voice couldn't take the call: today's voice mode carries it, and the manager hears why. */
+function ownVoice(why: string) {
+  ownEars();
+  useStore.getState().pushToast('info', `Using the office's own voice: ${why}`);
+  dispatchCall({ type: 'connected', tapToTalk: micReason() });
+  soon();
+}
 
 onCallStep((step, ev) => {
   for (const e of step.effects) EFFECTS[e]();
@@ -136,6 +166,8 @@ function soon() {
 
 function sync() {
   timer = null;
+  if (agentOn()) return; // the Jarvis voice has its own mic
+
   const want = wantsMic(useCall.getState().call);
   const m = useMic.getState();
   if (want && m.state === 'idle') listen(TARGET, 'call');
@@ -190,5 +222,11 @@ if (typeof window !== 'undefined') {
     position: () => voice().then((v) => v.voicePosition()),
     start: startCall,
     end: endCall,
+    /** The Jarvis voice (#534): its mode, and a turn typed to it (the demo's fake mic); agentProbe() its timings. */
+    get agent() {
+      return useAgentCall.getState().mode;
+    },
+    say: (text: string) => agent().then((a) => a.sayToAgent(text)),
+    agentProbe: () => agent().then((a) => a.agentProbe()),
   };
 }

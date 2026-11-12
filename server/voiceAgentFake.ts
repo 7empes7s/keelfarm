@@ -9,7 +9,7 @@ const RATE = 16_000;
 const CHUNK_S = 0.5;
 
 /** "Speech" for `text`: a soft tone with a syllable-like wobble, as base64 PCM16 chunks (about 14 characters a second, at most 8 s). */
-export function fakeSpeech(text: string): { chunks: string[]; ms: number } {
+function fakeSpeech(text: string): { chunks: string[]; ms: number } {
   const seconds = Math.min(0.5 + text.length / 14, 8);
   const n = Math.round(RATE * seconds);
   const pcm = Buffer.alloc(n * 2);

@@ -11,10 +11,10 @@ export interface BrainFacts {
   floors: { floor: number; name: string; open: number; prs: number; mergedToday: number; agents: { name: string; status: string; doing: string }[] }[];
   ceoJob: string | null; // what the CEO is doing, in words, or null when free
   decisions: BrainDecision[]; // open ones, newest asked first
-  it: { label: string; level: 'ok' | 'warn' | 'bad' | string; line: string }[] | null; // null: no health checks yet
+  it: { label: string; level: string; line: string }[] | null; // IT's checks (level 'ok' or worse); null: none yet
 }
 
-export interface BrainDecision {
+interface BrainDecision {
   id: string;
   kind: string; // shared/decisions.ts' kinds: team and charter are approve/reject, the others are answered with an option
   question: string;

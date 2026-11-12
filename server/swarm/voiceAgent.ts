@@ -172,12 +172,17 @@ export abstract class SwarmVoiceAgent extends SwarmLiveLeases {
 
   /** What the manager said yes to (or asked the CEO): done as the chat's buttons would. */
   private async voiceAct(act: BrainAct) {
-    if (act.kind === 'ceo') return void (await this.messageCeo(act.text, undefined, 'voice'));
+    if (act.kind === 'ceo') {
+      await this.messageCeo(act.text, undefined, 'voice');
+      return;
+    }
     const d = this.state.decisions.list.find((x) => x.id === act.id && x.status === 'open');
     if (!d) throw new Error('that decision is no longer open');
-    if (d.kind === 'team') return void (act.approve ? this.approveRequest(d.id.slice('team:'.length)) : this.rejectRequest(d.id.slice('team:'.length)));
-    if (d.kind === 'charter') return void this.decideCharter(d.repoIds[0], !!act.approve);
-    await this.messageCeo(act.option, d.messageId ?? undefined, 'voice');
+    if (d.kind === 'team') {
+      if (act.approve) this.approveRequest(d.id.slice('team:'.length));
+      else this.rejectRequest(d.id.slice('team:'.length));
+    } else if (d.kind === 'charter') this.decideCharter(d.repoIds[0], !!act.approve);
+    else await this.messageCeo(act.option, d.messageId ?? undefined, 'voice');
   }
 
   /** What a turn can answer from: floors, people, the CEO's job, open decisions and IT's checks. */

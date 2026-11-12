@@ -21,6 +21,7 @@ import { hintMuted, useVoiceList, VoicePicker, type Playing } from './VoiceChoos
 import { clampSpeed, modelPrice, SPEED_MAX, SPEED_MIN, SPEED_STEP, speedLabel, VOICE_MODELS } from '../../../shared/voices';
 import { SecretInput } from './SecretInput';
 import { chooseVoicePatch } from './voiceQuickRules';
+import { JarvisSettings } from './JarvisSettings';
 
 const DOCS = 'https://github.com/leonvanzyl/cubefarm/blob/main/docs/voice.md';
 
@@ -399,6 +400,7 @@ export function VoiceSettings() {
         </span>
       </label>
       {(eleven || cache.clips > 0) && <SavedClips voice={voice} save={save} />}
+      <JarvisSettings />
       <Listening keyShown={eleven} />
     </div>
   );

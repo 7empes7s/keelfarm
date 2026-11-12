@@ -4,12 +4,12 @@
 
 /** ElevenLabs Agents' price per minute of conversation (elevenlabs.io/pricing/agents, November 2026), for the estimate. */
 export const AGENT_USD_PER_MIN = 0.08;
-export const AGENT_CAP_HOURS_DEFAULT = 15;
+const AGENT_CAP_HOURS_DEFAULT = 15;
 const CAP_HOURS_MAX = 200;
 /** Days of minutes kept: this month and the last. */
 const KEEP_DAYS = 62;
 /** A call longer than this is counted as this (a tab that never said it ended). */
-export const SESSION_MAX_S = 4 * 3600;
+const SESSION_MAX_S = 4 * 3600;
 
 /** Settings → Voice → Jarvis voice. */
 export interface VoiceAgentSettings {
@@ -68,7 +68,7 @@ export function parseUsage(raw: unknown): AgentUsage {
 export function agentWhy(a: { settings: VoiceAgentSettings; keySet: boolean; officeUrl: string; minutesMonth: number; fake: boolean }): string {
   if (!a.settings.on) return 'The Jarvis voice is off.';
   if (!a.keySet) return 'Add an ElevenLabs key to use the Jarvis voice.';
-  if (!a.fake && !/^https:\/\//.test(a.officeUrl)) return "ElevenLabs needs the office's https address (Settings → Notifications → Office address) to reach it.";
+  if (!a.fake && !a.officeUrl.startsWith('https://')) return "ElevenLabs needs the office's https address (Settings → Notifications → Office address) to reach it.";
   if (a.minutesMonth >= a.settings.capHours * 60) return `This month's ${hoursLabel(a.settings.capHours)} of Jarvis voice are used: calls use the office's own voice until next month.`;
   return '';
 }
