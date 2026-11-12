@@ -85,6 +85,7 @@ export interface RepoView extends FloorPracticeView {
   floor: number; // 1-based floor number in the building
   color: string; // accent color for the floor
   theme?: FloorTheme; // how the floor is dressed in the 3D office (#370); the server always sends it, an old journal may not (the office)
+  themeByHand?: true; // the manager picked it; else a confirmed use case picks it (#528)
   autoAssign: boolean;
   autoMerge: boolean; // PRs merge themselves once QA passes and GitHub's checks are green
   folderSync: string | null; // how the floor's main checkout stands against GitHub: "in sync", "updated to abc1234", "2 behind: local changes" …
