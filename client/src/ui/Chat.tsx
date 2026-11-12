@@ -42,6 +42,7 @@ import { hasVersionsSheet } from '../../../shared/messageEdits';
 import { MessageVersions } from './MessageEdits';
 import { ChatTextPill, useChatPinch } from './ChatZoom';
 import { Bubble, placeTools } from './ChatBubble';
+import { tapReplay, wholeVoice } from './voiceTap';
 import { attempt, Avatar } from './phoneParts';
 import { isKey } from './controls';
 import { togglesFull, useChatFull } from './chatFull';
@@ -296,7 +297,7 @@ export function Chat({ autoFocus = true, onFloor, tools, fullButton = true, away
       remember: () => void attempt(() => api.addMemory(excerpt(m.text, MEMORY_NOTE_MAX))).then((ok) => ok !== undefined && useStore.getState().pushToast('success', `${ceo.name} will remember it (open What they remember to see or edit)`)),
       removal: removals.action(m),
       // The voice reads the CEO's short summary (#282); this reads all of it.
-      readWhole: useStore.getState().settings.voice.provider !== 'off' ? () => void import('./voiceMessages').then((v) => v.replayMessage(m, 'whole')) : undefined,
+      readWhole: wholeVoice() ? () => tapReplay(m, 'whole', wholeVoice() === 'browser') : undefined,
       commands: messageCommands(m.text),
       copy: (t) => void copyText(t).then((ok) => useStore.getState().pushToast(ok ? 'success' : 'error', ok ? 'Copied all commands' : "Couldn't reach the clipboard")),
     });
