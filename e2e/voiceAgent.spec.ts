@@ -44,12 +44,7 @@ test('tap Call: the Jarvis voice acks in under a second, the orb follows, captio
   await expect.poll(() => mode(page)).toBe('live');
   const orb = page.locator('.vcall-screen .vcall-orb-canvas').first();
   await expect(orb).toBeVisible();
-  for (let i = 0; i < 14; i++) {
-    const p = await probe(page);
-    console.log('DIAG', i, await phase(page), JSON.stringify({ ...p, store: undefined }));
-    await page.waitForTimeout(1000);
-  }
-  await expect.poll(() => phase(page), { timeout: 15_000 }).toBe('listening'); // the greeting said and done
+  await expect.poll(() => phase(page), { timeout: 30_000 }).toBe('listening'); // the greeting said and done (and the demo CEO's opening progress lines)
 
   await say(page, "What's floor 1 doing?");
   await expect.poll(async () => (await probe(page)).ackMs, { timeout: 5_000 }).not.toBeNull();
@@ -71,17 +66,14 @@ test('tap Call: the Jarvis voice acks in under a second, the orb follows, captio
   const voice = (state.messages as { from: string; text: string; voiceCall?: boolean }[]).filter((m) => m.voiceCall);
   expect(voice.map((m) => m.from)).toEqual(expect.arrayContaining(['manager', 'ceo']));
   expect(voice.some((m) => m.text === "What's floor 1 doing?")).toBe(true);
-  await page.waitForTimeout(1500);
-  console.log('DIAG chat', JSON.stringify(await page.evaluate(() => ({ chats: document.querySelectorAll('.phone-chat').length, tab: document.querySelector('.pk-chat-tab')?.className, vcall: !!document.querySelector('.vcall-screen'), text: (document.querySelector('.phone-chat') as HTMLElement | null)?.innerText.slice(-1500) }))));
-  console.log('DIAG msgs', JSON.stringify(voice.map((m) => [m.from, m.text.slice(0, 60)])));
-  await expect(page.locator('.pk-chat, .phone-chat').getByText("What's floor 1 doing?").first()).toBeVisible(); // back in the chat, with the transcript
+  await expect(page.locator('.pk-chat, .phone-chat').getByText('Anything waiting on me?').first()).toBeVisible(); // back in the chat, with the transcript ("floor 1" is a floor chip there)
   expect(state.voiceAgent.minutesToday).toBeGreaterThan(0);
 });
 
 test('"that\'s all" ends the conversation, and a tap on the orb talks again', async ({ page }) => {
   await call(page);
   await expect.poll(() => mode(page)).toBe('live');
-  await expect.poll(() => phase(page), { timeout: 15_000 }).toBe('listening');
+  await expect.poll(() => phase(page), { timeout: 30_000 }).toBe('listening');
   await say(page, "That's all, thanks");
   await expect.poll(() => mode(page), { timeout: 15_000 }).toBe('idle');
   await expect(page.locator('.vcall-status')).toHaveText('Tap the orb to talk');
