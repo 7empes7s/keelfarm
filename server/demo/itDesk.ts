@@ -2,7 +2,7 @@
 // manager taps Run on (the disk's free space grows with it), and a scripted IT lead (itSession) that answers in IT's
 // chat through the real IT tools: "how much disk is free?" reads df; "free up space" reads du and journalctl, then puts
 // two changes on cards; after a Run it checks df again and reports; a ticket (#542) gets an answer and a close; a health
-// check gone bad gets a recommendation of three ranked clean-ups (#525). The demo CEO hands "check the machine" to IT.
+// check gone bad gets a recommendation of three ranked clean-ups (#525); the weekly review proposes a fix (#543). The demo CEO hands "check the machine" to IT.
 // Now and then a demo agent reports a lost lab result with it_report (withItReport).
 import { describeOfficeTool, type LogEntry, type SessionCallbacks, type SessionHandle, type SessionOptions } from '../agentRunner.ts';
 import { logStreamed, writeReply } from '../demoChat.ts';
@@ -89,8 +89,17 @@ export function itSession(opts: SessionOptions, cb: SessionCallbacks): SessionHa
       const job = p.match(/\bjob ([\w-]+)/)?.[1];
       await use('it_health', {});
       const tell = ticket[2] === 'lab' ? `Run ${job ? `job ${job}` : 'it'} again once: the lab restarted and lost its result. lab_status shows your place.` : ticket[2] === 'ports' ? 'The port is free again: start your dev server and carry on.' : 'Checked on my side: carry on, and report again if it comes back.';
-      await use('it_ticket', { id, tell, close: `Looked at the evidence; told the reporter: ${tell}`, ...(ticket[2] === 'lab' && { code_fix: 'The lab drops a run\'s result when the office restarts mid-run: keep finished results for the agent.' }) });
+      await use('it_ticket', { id, tell, close: `Looked at the evidence; told the reporter: ${tell}`, cause: ticket[2] === 'lab' ? 'Test lab: lost result' : ticket[2] === 'ports' ? 'Port taken for my dev server' : 'Checked, nothing wrong', ...(ticket[2] === 'lab' && { code_fix: 'The lab drops a run\'s result when the office restarts mid-run: keep finished results for the agent.' }) });
       return `Ticket #${id}: answered the reporter and closed it.`;
+    }
+    // The weekly review (#543), or "what keeps going wrong?": the ranked causes, then a card for the top one not fixed.
+    if (/The weekly review of IT's tickets|keeps going wrong/i.test(p)) {
+      const brief = await use('it_review', { days: 28 });
+      const top = brief.match(/\[(?:new|recurring)\] cause "([^"]+)" \(([^)]*)\): (\d+) tickets?[^,]*, (\d+) min, (\$[\d.]+)/);
+      const floor = Number(brief.match(/^Floors: (\d+)/m)?.[1]);
+      if (!top || !floor) return 'Nothing keeps going wrong: no open causes in the last four weeks.';
+      const out = await use('it_improve', { proposals: [{ cause: top[1], kind: 'issue', floor, title: `Stop "${top[2]}" coming back`.slice(0, 120), why: `${top[3]} tickets, ${top[4]} agent-minutes, ${top[5]} wasted in four weeks.`, body: `What: "${top[2]}" keeps coming back (IT tickets).\nWhere: the office code that sets it up.\nAcceptance: no new ticket for it in two weeks; a test covers the case.` }] });
+      return out.startsWith('Refused') ? `I couldn't put it on a card: ${out}` : `The costliest problem is "${top[2]}" (${top[3]} tickets, ${top[4]} min, ${top[5]}). A fix is on the card: approve it and I'll file it.`;
     }
     const ran = p.match(/The manager ran `([^`]+)`: (exit \d+|did not finish)/);
     const disk = rootDisk(await use('it_run', { command: 'df -h' }));

@@ -15,6 +15,7 @@ import { DaySeparator } from './ChatCards';
 import { ItDeskCards } from './ItDeskCards';
 import { ItHealth, ItRecCards } from './ItHealth';
 import { ItTickets } from './ItTickets';
+import { ItImprove, ItImproveCards } from './ItImprove';
 import { MessageBox } from './MessageBox';
 import { MicButton } from './MicButton';
 import { ModelPicker } from './ModelPicker';
@@ -79,6 +80,7 @@ function ItChat() {
         ))}
         <ItDeskCards />
         <ItRecCards />
+        <ItImproveCards />
       </div>
       <form
         className="chat-input"
@@ -255,7 +257,7 @@ function ItTelegram() {
   );
 }
 
-/** Console → The CEO → IT department: the chat beside its health checks and setup (stacked when narrow), and its tickets (#542) under them. */
+/** Console → The CEO → IT department: the chat beside its health checks and setup (stacked when narrow), its tickets (#542) and improvements (#543) under them. */
 export function ItDept() {
   return (
     <div className="it-dept">
@@ -267,6 +269,7 @@ export function ItDept() {
         </div>
       </div>
       <ItTickets />
+      <ItImprove />
     </div>
   );
 }
