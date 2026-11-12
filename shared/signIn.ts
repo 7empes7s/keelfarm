@@ -35,6 +35,8 @@ export function signInEnd(mode: SignInMode, code: number, tail: readonly string[
   if (code === 0) return { ok: true, note: mode === 'setup-token' ? 'Token made: copy it from the terminal before you close this.' : 'Signed in.' };
   const missing = code < 0 && [...tail].reverse().map((l) => /(Claude Code|Codex|Gemini CLI|OpenCode) isn't installed/.exec(l)?.[1]).find(Boolean);
   if (missing) return { ok: false, note: `${missing} isn't installed. Tap Install.` }; // #493
+  // Gemini CLI refuses its sign-in when run non-interactively (#540): plain words, not its stack.
+  if (tail.some((l) => /Manual authorization is required but the current session is non-interactive/i.test(l))) return { ok: false, note: 'Gemini CLI needs an interactive sign-in. Tap Try again to sign in that way.' };
   const said = [...tail].reverse().find((l) => /fail|error|invalid|expired/i.test(l))?.trim();
   const status = said && /status code (\d{3})/.exec(said)?.[1];
   const what = mode === 'setup-token' ? 'Making a token failed' : 'Sign-in failed';
@@ -84,7 +86,9 @@ export function signInScreen(text: string): SignInScreen {
   const deviceCode = /one-time code[^\n]*\n\s*([A-Z0-9]{4,}-[A-Z0-9]{4,})\s*$/m.exec(body)?.[1] ?? null;
   const ok = /Login successful|Successfully logged in|Logged in (?:as|using)|Authentication succeeded/i;
   const bad = /Login failed|OAuth error|Error logging in|Invalid (?:code|authorization)|Authentication failed|Failed to authenticate/i;
-  const last = [...mine].reverse().find((l) => ok.test(l) || bad.test(l));
+  // Gemini CLI's "Failed to authenticate with user code. Retrying..." asks again with a new link: only what follows counts.
+  const tries = mine.slice(mine.findLastIndex((l) => /Retrying/i.test(l)) + 1);
+  const last = [...tries].reverse().find((l) => ok.test(l) || bad.test(l));
   const result = last ? (ok.test(last) ? 'ok' : 'failed') : null;
   const found = result ? null : menuOf(mine);
   // A menu with the link or the prompt under it was answered already (the CLI left it on screen).
