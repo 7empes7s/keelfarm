@@ -245,6 +245,8 @@ Client (`client/`, Vite root; React 19, R3F, drei, zustand):
   `bloomMarks.ts` marks it), the other people viewing the office (`presence/`: visitors, pings, the profile),
   holiday themes (`themes/`: which one is on from `shared/themes.ts`, their data and decoration slots in `themes.ts`
   and `layout.ts`, each theme's scene in one lazy chunk loaded only while a theme is on; `?theme=` and `?date=` for QA).
+  A floor's project props (`projectProps/`, #536): its set (`shared/floorProps.ts`, from its profile or Floor settings) in spots
+  the walkways keep clear (`spots.ts`), live screens (`screens.ts`), desk tools, CC0 models from `client/public/models/` (`glb.ts`, listed in its `LICENSES.md`).
 - `src/ui/`: HTML overlays: HUD, terminal (`LiveTerminal.tsx`: xterm.js on `/ws/term`), Kanban, manager's console,
   phone (`Phone.tsx`; its chat in `Chat.tsx` / `ChatBubble.tsx`, team changes in `TeamChanges.tsx`, mini-games in `games/`: pure logic in `tetris.ts` / `snake.ts` / `pet.ts`), elevator panel, app
   viewer, sounds (`sfx.ts`), key bindings (`keymap.ts`, pure; `controls.ts` keeps the player's own, and every
