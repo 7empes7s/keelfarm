@@ -290,9 +290,9 @@ option. It feels like a conversation rather than messages read out:
 - **The screens stay:** the call screen, captions, Mute, Speaker, Pause, Skip and End work as before. The orb is
   [ElevenLabs UI's Orb](https://ui.elevenlabs.io/docs/components/orb) (MIT), ported to plain WebGL2 so a phone never
   loads three.js (`client/src/ui/AgentOrb.tsx`); it leads the phone's call screen and moves with listening, thinking
-  and talking. **"That's all"** (or "bye") ends the conversation but not the call: tap the orb to talk again, or
-  say the wake word (below). An iPhone browser can't listen in the background, so a hidden tab ends the conversation
-  and a new one starts when you're back.
+  and talking. **"That's all"** (or "bye") ends the conversation but not the call: tap the orb to talk again. An
+  iPhone browser can't listen in the background, so a hidden tab ends the conversation and a new one starts when
+  you're back.
 - **Transcripts:** your words and the voice's answers go into the CEO chat as messages marked `voiceCall` (never read
   aloud again); a hand-off is your message to the CEO, as if typed.
 - **iPhone:** the call's audio starts inside the tap on Call (iOS only plays sound from a tap), the audio session is
@@ -323,7 +323,7 @@ ElevenLabs' protocol and "speaks" a soft tone; `__swarmCall.agent` is the conver
 
 Settings → Voice → **Wake word**: say **"Hey Mimoun"** (or the stock **"Hey Jarvis"**) while the office is open on
 screen and the call starts, no tap: a soft chime, the orb, and the Jarvis voice (or today's voice mode without it), as
-if you'd tapped Call. During a call after "that's all", the word talks again like a tap on the orb.
+if you'd tapped Call. It's paused for the whole call (its mic is the call's), so during one, tap the orb to talk again.
 
 - **On this device only, off by default.** It's this device's mic, so the switch, the word and the **Sensitivity**
   (Strict · Balanced · Easy) are saved in this browser (`localStorage` `cubefarm:wake`). Turning it on asks for the mic

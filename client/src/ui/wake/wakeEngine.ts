@@ -1,11 +1,11 @@
 // Listens for the wake word in the browser (#537, docs/voice.md "Wake word"), loaded only once it's turned on: the mic
 // through an AudioWorklet, down to 16 kHz, into wakePipeline.ts on onnxruntime-web (WASM, one thread). Nothing
-// leaves the device. On a wake: a soft chime, then the call starts (or the Jarvis voice talks again) as if tapped.
+// leaves the device. On a wake: a soft chime, then the call starts as if Call was tapped.
 // WakeRunner (WakeRunner.tsx) decides when it listens; this only starts and stops.
-import { callAudio, useAgentCall } from '../agentCallStore';
+import { callAudio } from '../agentCallStore';
 import { downsample } from '../agentCall';
 import { listenChime } from '../sfx';
-import { startCall, tapOrb } from '../voiceCallEngine';
+import { startCall } from '../voiceCallEngine';
 import { callOn } from '../voiceCallStore';
 import { loadWakeModels } from './wakeModels';
 import { WakePipeline, WAKE_RATE } from './wakePipeline';
@@ -110,7 +110,6 @@ function wake() {
   useWake.setState({ wakes: useWake.getState().wakes + 1 });
   listenChime(true);
   if (!callOn()) startCall();
-  else if (useAgentCall.getState().mode === 'idle') tapOrb();
 }
 
 function stopMic() {

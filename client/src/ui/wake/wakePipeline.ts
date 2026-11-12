@@ -123,7 +123,6 @@ export class WakePipeline {
     this.hold--;
     const score = await this.features(chunk);
     this.remember(chunk);
-    if (this.hold === 0) this.backlog = [];
     if (score === null) return false;
     this.stats.scored++;
     this.stats.score = score;

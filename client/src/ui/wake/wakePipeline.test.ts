@@ -77,6 +77,11 @@ describe('the wake word pipeline', () => {
     expect((await wakes(mimoun, join(phrase, silence(2), phrase))).n).toBe(2);
   });
 
+  it('wakes on "Hey Mimoun" said soon after other talk, once the earlier speech has stopped scoring', async () => {
+    const talk = join(wav('hey-simon-lessac'), wav('sentence-lessac'));
+    for (const gap of [0.1, 0.5]) expect((await wakes(mimoun, join(talk, silence(gap), wav('hey-mimoun-lessac')))).n, `${gap} s`).toBe(1);
+  });
+
   it('hears it over a noisy room', async () => {
     const phrase = wav('hey-mimoun-alan');
     const noise = room(phrase.length / WAKE_RATE, 0.01, 7);
