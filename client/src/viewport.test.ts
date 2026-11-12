@@ -15,6 +15,16 @@ describe('appViewport', () => {
     expect(appViewport(844, { height: 300, offsetTop: 200, scale: 2.5 })).toEqual({ height: 844, top: 0 });
     expect(appViewport(700, null)).toEqual({ height: 700, top: 0 });
   });
+
+  it('is the whole page once no field can hold the keyboard up, whatever height iOS still reports (#584)', () => {
+    // keyboard closed (or the app back from the background) and the visual viewport still at the keyboard's height
+    expect(appViewport(844, { height: 508, offsetTop: 0, scale: 1 }, false)).toEqual({ height: 844, top: 0 });
+    expect(appViewport(844, { height: 508, offsetTop: 336, scale: 1 }, false)).toEqual({ height: 844, top: 0 });
+    // the browser's own bars still count
+    expect(appViewport(800, { height: 800, offsetTop: 0, scale: 1 }, false)).toEqual({ height: 800, top: 0 });
+    // a field with focus: still on the keyboard
+    expect(appViewport(844, { height: 508, offsetTop: 0, scale: 1 }, true)).toEqual({ height: 508, top: 0 });
+  });
 });
 
 describe('chatDock', () => {

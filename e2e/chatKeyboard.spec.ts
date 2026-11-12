@@ -72,6 +72,37 @@ test('pocket mode: the message box above the keyboard, full screen filling the s
   await aboveKeyboard(page, root);
 });
 
+// #584: iOS can go on reporting the keyboard's height after it closed or the app came back, with no resize after. The chat
+// still fills the screen down to the tab bar, no empty band, the composer right on it.
+test('pocket mode: the whole screen once the keyboard closes, after going to the background and back', async ({ page }) => {
+  await page.goto('/?pocket=1&tab=chat');
+  const root = page.locator('.pocket');
+  const textarea = root.locator('.chat-input textarea');
+  await expect(root.locator('.chat-log')).toBeVisible();
+  const fills = async () => {
+    await expect.poll(() => root.boundingBox().then((b) => Math.round(b!.y + b!.height)), { message: 'the chat ends at the bottom' }).toBe(844);
+    const [input, tabs] = await Promise.all([root.locator('.chat-input').boundingBox(), root.locator('.pk-tabs').boundingBox()]);
+    expect(tabs!.y + tabs!.height, 'the tab bar at the bottom').toBeGreaterThanOrEqual(843);
+    expect(tabs!.y - (input!.y + input!.height), 'the composer right on the tab bar').toBeLessThanOrEqual(12);
+  };
+  await textarea.focus();
+  await keyboard(page, KEYBOARD);
+  await aboveKeyboard(page, root);
+  await textarea.blur();
+  await page.waitForTimeout(400);
+  await fills(); // the visual viewport still says the keyboard is up
+  await page.evaluate(() => {
+    for (const state of ['hidden', 'visible']) {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state });
+      document.dispatchEvent(new Event('visibilitychange'));
+    }
+  });
+  await page.waitForTimeout(1100); // the re-measures after coming back
+  await fills();
+  await keyboard(page, 0);
+  await fills();
+});
+
 test("the 3D office's phone: the message box above the keyboard, full screen filling the screen", async ({ page }) => {
   await page.goto('/?pocket=0');
   await enterOffice(page, { loaded: true });
