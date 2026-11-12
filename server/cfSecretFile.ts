@@ -50,7 +50,8 @@ export function envPathRefusal(p: string, protectedDirs: readonly string[]): str
 
 const read = (file: string) => fs.readFile(file, 'utf8').catch(() => null);
 
-async function put(file: string, text: string) {
+/** One owner-only write: a temp file, then a rename (#609's install_key writes the same way). */
+export async function put(file: string, text: string) {
   await fs.mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
   const tmp = `${file}.${process.pid}-${randomUUID().slice(0, 8)}.tmp`;
   await fs.writeFile(tmp, text, { mode: 0o600 });

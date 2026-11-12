@@ -331,8 +331,8 @@ app.post('/api/usage/:id/notify-back', route((req) => swarm.watchUsageBack(Strin
 app.post(
   '/api/providers',
   route((req) => {
-    const body = parse(z.object({ provider: z.string().max(40), key: z.string().max(400), label: z.string().max(60).optional(), accountId: z.string().max(64).optional() }), req.body);
-    return swarm.providers.add(body.provider, body.key, body.label, '', body.accountId);
+    const body = parse(z.object({ provider: z.string().max(40), key: z.string().max(400), label: z.string().max(60).optional(), accountId: z.string().max(64).optional(), usedBy: z.string().max(200).optional() }), req.body);
+    return swarm.providers.add(body.provider, body.key, body.label, '', body.accountId, { usedBy: body.usedBy });
   }),
 );
 // Providers by what they do (#533): each capability's default and fallback, and one sign-in per company.

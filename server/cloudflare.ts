@@ -58,7 +58,7 @@ type Envelope = { success?: boolean; errors?: { code?: number; message?: string 
 const DENIED = new Set([1001, 9109, 10000, 10001]);
 
 /** One call: its result, or a CfError naming the permission when Cloudflare turned it away. */
-async function cf<T>(call: Call, req: CfRequest, perm: string): Promise<T> {
+export async function cf<T>(call: Call, req: CfRequest, perm: string): Promise<T> {
   const r = await call(req);
   if (r.status === 0) throw new CfError("Couldn't reach Cloudflare's API.");
   const b = (r.body && typeof r.body === 'object' ? r.body : {}) as Envelope;

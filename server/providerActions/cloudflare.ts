@@ -5,6 +5,7 @@ import { applyWrite, CfError, ingressGet, planWrite, tokenScopes } from '../clou
 import { envSecretFile } from '../cfSecretFile.ts';
 import type { CfChange } from '../../shared/cloudflare.ts';
 import type { ActionCtx, ActionPlan, ProviderModule } from './types.ts';
+import { applyTokenCreate, planTokenCreate, tokenCreateArgs } from './cfTokens.ts';
 
 const host = z.string().min(4).max(253);
 const tunnel = z.string().min(1).max(100).optional();
@@ -50,8 +51,10 @@ export const cloudflareModule: ProviderModule = {
       args: z.object({ hostname: host, name: z.string().min(1).max(100), duration: z.string().min(2).max(10).optional(), env_file: z.string().min(2).max(500).optional() }),
       plan: (ctx, a) => plan(ctx, { ...a, op: 'access_service_token_ensure', hostname: String(a.hostname) }),
     },
+    token_create: { args: tokenCreateArgs, plan: (ctx, a) => planTokenCreate(ctx, tokenCreateArgs.parse(a)) },
   },
   apply: (ctx, c) => {
+    if (c.op === 'token_create') return applyTokenCreate(ctx, c);
     const change = c.data as unknown as CfChange;
     return applyWrite(ctx.keys, ctx.cloudflareApi, change, change.op === 'access_service_token_ensure' ? envSecretFile(change.envFile) : undefined);
   },

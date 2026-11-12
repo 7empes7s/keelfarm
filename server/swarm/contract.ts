@@ -150,6 +150,7 @@ export abstract class SwarmContract {
   protected abstract itRan(...a: Parameters<Swarm['itRan']>): ReturnType<Swarm['itRan']>;
   protected abstract itAutoPosted(...a: Parameters<Swarm['itAutoPosted']>): ReturnType<Swarm['itAutoPosted']>;
   protected abstract itAutoUndone(...a: Parameters<Swarm['itAutoUndone']>): ReturnType<Swarm['itAutoUndone']>;
+  protected abstract itMaskPasted(...a: Parameters<Swarm['itMaskPasted']>): ReturnType<Swarm['itMaskPasted']>;
   protected abstract itRunbookPosted(...a: Parameters<Swarm['itRunbookPosted']>): ReturnType<Swarm['itRunbookPosted']>;
 
   // itTickets.ts

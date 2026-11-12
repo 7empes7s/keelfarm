@@ -33,6 +33,8 @@ export const PROVIDER_ACTIONS: Record<string, ActionOp[]> = {
     { op: 'access_app_ensure', risk: 'change', does: 'put a hostname behind Access', args: '{ hostname, emails, bypass? }' },
     // it can rotate a secret a service runs on, so it always asks
     { op: 'access_service_token_ensure', risk: 'destructive', does: 'make an Access service token', args: '{ hostname, name, duration?, env_file? }' },
+    // #609: a narrow API token, saved as the office's own key and renewed before it expires
+    { op: 'token_create', risk: 'change', does: 'make narrow API tokens and renew them', args: '{ name, permissions: ["DNS Write", …] as the dashboard names them, days? }' },
   ],
   github: [
     { op: 'key_scopes', risk: 'read', does: 'check its repo permissions', args: '{ repo? }' },
