@@ -13,3 +13,6 @@ The files are compressed with `npx @gltf-transform/cli optimize <in> <out> --com
 | `kenney/pottedPlant.glb` | https://kenney.nl/assets/furniture-kit | CC0 | Kenney Furniture Kit 2.0 |
 | `kenney/cardboardBoxClosed.glb` | https://kenney.nl/assets/furniture-kit | CC0 | Kenney Furniture Kit 2.0 |
 | `kenney/trashcan.glb` | https://kenney.nl/assets/furniture-kit | CC0 | Kenney Furniture Kit 2.0 |
+| `kenney/bookcaseClosedWide.glb` | https://kenney.nl/assets/furniture-kit | CC0 | Kenney Furniture Kit 2.0 |
+| `kenney/desk.glb` | https://kenney.nl/assets/furniture-kit | CC0 | Kenney Furniture Kit 2.0 |
+| `kenney/table.glb` | https://kenney.nl/assets/furniture-kit | CC0 | Kenney Furniture Kit 2.0 |

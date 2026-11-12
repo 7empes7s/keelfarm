@@ -68,7 +68,7 @@ import {
   TERMINAL_SAVE_MS,
   clampMaxAgents,
 } from './swarm/model.ts';
-import { FLOOR_THEMES, lookFor, LOOKS, upgradeFloorTheme } from './swarm/flavour.ts';
+import { FLOOR_THEMES, lookFor, LOOKS, PROP_SETS, propSetOf, upgradeFloorTheme } from './swarm/flavour.ts';
 import { loadScreen } from './swarm/screens.ts';
 import { SwarmProblems } from './swarm/problems.ts';
 import { loadDecisions } from '../shared/decisions.ts';
@@ -100,7 +100,7 @@ export class Swarm extends SwarmProblems {
           qaBrief: r.qaBrief ?? '',
           playbook: r.playbook ?? '',
           localPath: r.localPath ?? null,
-          preview: { command: r.preview?.command ?? null, env: { ...r.preview?.env } }, ...upgradeFloorTheme(r), // before #528 a use case didn't pick the theme
+          preview: { command: r.preview?.command ?? null, env: { ...r.preview?.env } }, ...upgradeFloorTheme(r), props: propSetOf(r.props), // before #528 a use case didn't pick the theme; an unknown prop set is no pick (#536)
           charter: loadRecord(r.charter), // before #48 there's none: the brief above stays the mission, as it was
         })),
         // Developers and QA testers became agents (docs/agents.md): testers keep their seats, now the east-wall desks.
@@ -284,7 +284,7 @@ export class Swarm extends SwarmProblems {
         const size = Math.min(this.backend.demoTeam?.(repo.floor) ?? 4, FLOOR_SEATS);
         if (size > this.state.settings.maxAgents) this.state.settings.maxAgents = size; // the big-company demo fills its floors
         for (let i = 1; i < size; i++) this.hireAgent(repo.id, repo.floor === 1 && i >= size - 2 ? { cli: i === size - 1 ? 'gemini' : 'codex' } : {}); // connecting hired the first; floor 1's last runs Gemini CLI (#365), the one before Codex on a long task (#409)
-        this.updateRepo(repo.id, { autoAssign: true, theme: FLOOR_THEMES[repo.floor - 1], ...(repo.floor === 1 ? { practices: { busyFiles: true, liveLeases: true } } : {}) }); // floor 1 shows conflict-aware scheduling (#256) and live leases (#398); floor N the Nth floor theme (#370, #371)
+        this.updateRepo(repo.id, { autoAssign: true, theme: FLOOR_THEMES[repo.floor - 1], props: PROP_SETS[(repo.floor - 1) % PROP_SETS.length], ...(repo.floor === 1 ? { practices: { busyFiles: true, liveLeases: true } } : {}) }); // floor 1 shows conflict-aware scheduling (#256) and live leases (#398); floor N the Nth floor theme (#370, #371) and prop set (#536)
         const charter = this.backend.demoCharter?.(repo.fullName).charter;
         if (charter) this.setCharter(repo.id, charter);
       }
