@@ -1,5 +1,5 @@
 // The test lab's tools (#56) for builders, fixers and QA: an `office` MCP server with lab_screenshot,
-// lab_browser_check, lab_run and lab_status, served like the CEO's office tools. The office binds them to the session's
+// lab_browser_check, lab_run, lab_status and lab_result, served like the CEO's office tools. The office binds them to the session's
 // agent, floor and worktree; the requests wait in the lab's queue (server/testLab.ts), with MCP progress notifications
 // while they do (#560), so the CLI never gives up on a silent call.
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
@@ -8,9 +8,11 @@ import type { OfficeTools } from './ceo.ts';
 import type { LabJobInput, LabProgress } from './testLab.ts';
 
 export interface LabHandlers {
-  /** progress: null when the call carried no progressToken (TestLab.submit). */
-  submit(input: LabJobInput, progress: LabProgress | null): Promise<string>;
+  /** progress: null when the call carried no progressToken (TestLab.submit). signal: the call's, aborted when the client gives up on it (#562). */
+  submit(input: LabJobInput, progress: LabProgress | null, signal?: AbortSignal): Promise<string>;
   status(): string;
+  /** A finished job's kept report (#562). */
+  result(jobId: string): string;
 }
 
 /** A tool call's heartbeat as MCP progress notifications on its progressToken; null when the client sent none (#560). */
@@ -60,6 +62,10 @@ const STEP = z.object({
   value: z.number().optional().describe('viewport_scale: expected scale (default 1); scroll: pixels; wait: ms'),
 });
 
+/** Every lab tool's description ends with this: the answer to a call that was cut off (#562). */
+const AFTER_ABORT = ' If the call is cut off, the job still finishes: call lab_status, then lab_result with its job id, instead of asking again.';
+const signalOf = (extra: unknown) => (extra as { signal?: AbortSignal } | undefined)?.signal;
+
 const text = (fn: () => string | Promise<string>) =>
   Promise.resolve()
     .then(fn)
@@ -72,7 +78,7 @@ export function createLabTools(h: LabHandlers): OfficeTools {
   const defs = [
     tool(
       'lab_screenshot',
-      "Screenshots from the office's test lab (one shared browser for everyone): the page at each viewport width, saved in your worktree's .lab/ folder (never committed), with console errors, page errors and failed requests. Waits in the lab's queue. Use this instead of starting a browser of your own.",
+      "Screenshots from the office's test lab (one shared browser for everyone): the page at each viewport width, saved in your worktree's .lab/ folder (never committed), with console errors, page errors and failed requests. Waits in the lab's queue. Use this instead of starting a browser of your own." + AFTER_ABORT,
       {
         ...TARGET,
         viewports: z.array(z.number().int().min(240).max(3840)).min(1).max(4).optional().describe('Widths, e.g. [390, 1280]; default [1280]'),
@@ -83,11 +89,11 @@ export function createLabTools(h: LabHandlers): OfficeTools {
         actions: z.array(ACTION).max(10).optional().describe('Done in order before the screenshot'),
         full_page: z.boolean().optional(),
       },
-      (a, extra) => text(() => h.submit({ kind: 'screenshot', url: a.url, preview: a.preview, viewports: a.viewports ?? [1280], profile: a.profile ?? 'desktop', theme: a.theme ?? 'light', graphics: a.graphics, waitFor: a.wait_for, actions: a.actions ?? [], fullPage: !!a.full_page }, labProgress(extra))),
+      (a, extra) => text(() => h.submit({ kind: 'screenshot', url: a.url, preview: a.preview, viewports: a.viewports ?? [1280], profile: a.profile ?? 'desktop', theme: a.theme ?? 'light', graphics: a.graphics, waitFor: a.wait_for, actions: a.actions ?? [], fullPage: !!a.full_page }, labProgress(extra), signalOf(extra))),
     ),
     tool(
       'lab_browser_check',
-      'A scripted browser check in the test lab: steps and assertions run in order, each reported pass/fail, with a screenshot of every failure. Assertions: expect_visible (selector), expect_text (text, optional selector), no_horizontal_scroll, no_console_errors, viewport_scale (value), axe (serious/critical accessibility violations).',
+      'A scripted browser check in the test lab: steps and assertions run in order, each reported pass/fail, with a screenshot of every failure. Assertions: expect_visible (selector), expect_text (text, optional selector), no_horizontal_scroll, no_console_errors, viewport_scale (value), axe (serious/critical accessibility violations).' + AFTER_ABORT,
       {
         ...TARGET,
         viewport: z.number().int().min(240).max(3840).optional().describe('Width, default 1280'),
@@ -96,19 +102,25 @@ export function createLabTools(h: LabHandlers): OfficeTools {
         graphics: GRAPHICS,
         steps: z.array(STEP).min(1).max(30),
       },
-      (a, extra) => text(() => h.submit({ kind: 'check', url: a.url, preview: a.preview, viewport: a.viewport ?? 1280, profile: a.profile ?? 'desktop', theme: a.theme ?? 'light', graphics: a.graphics, steps: a.steps }, labProgress(extra))),
+      (a, extra) => text(() => h.submit({ kind: 'check', url: a.url, preview: a.preview, viewport: a.viewport ?? 1280, profile: a.profile ?? 'desktop', theme: a.theme ?? 'light', graphics: a.graphics, steps: a.steps }, labProgress(extra), signalOf(extra))),
     ),
     tool(
       'lab_run',
-      "A heavy command (full test suite, build, e2e spec) in the test lab, on a clean checkout of your committed HEAD (or a branch on GitHub), one at a time across the office. Only the floor's allowlist runs, e.g. npm test, npm run build, npx playwright test <spec>. Returns the exit code, duration, the last 200 lines and the artifacts.",
+      "A heavy command (full test suite, build, e2e spec) in the test lab, on a clean checkout of your committed HEAD (or a branch on GitHub), one at a time across the office. Only the floor's allowlist runs, e.g. npm test, npm run build, npx playwright test <spec>. Returns the exit code, duration, the last 200 lines and the artifacts." + AFTER_ABORT,
       {
         command: z.string().min(1).max(300).describe('e.g. "npm test" or "npx playwright test e2e/smoke.spec.ts"'),
         branch: z.string().max(200).regex(/^[\w./-]+$/).optional().describe('A branch on origin; default: your committed HEAD (no push needed)'),
         timeout_min: z.number().int().min(1).max(30).optional().describe('Default 15'),
       },
-      (a, extra) => text(() => h.submit({ kind: 'run', command: a.command, branch: a.branch, timeoutMin: a.timeout_min }, labProgress(extra))),
+      (a, extra) => text(() => h.submit({ kind: 'run', command: a.command, branch: a.branch, timeoutMin: a.timeout_min }, labProgress(extra), signalOf(extra))),
     ),
-    tool('lab_status', "The test lab's queue: what runs, your jobs' places and the estimated wait.", {}, () => text(() => h.status())),
+    tool('lab_status', "The test lab's queue: what runs, your jobs' places and the estimated wait, and your finished jobs' ids.", {}, () => text(() => h.status())),
+    tool(
+      'lab_result',
+      'A finished lab job\'s report, kept a day in your .lab/<job id>/result.json: for a lab call that was cut off before it answered. lab_status lists your job ids.',
+      { job_id: z.string().min(1).max(40).regex(/^[\w-]+$/).describe('From lab_status, e.g. "mwd8tyd8a"') },
+      (a) => text(() => h.result(a.job_id)),
+    ),
   ];
   return {
     server: createSdkMcpServer({ name: 'office', version: '1.0.0', tools: defs }),

@@ -53,6 +53,11 @@
   outline: 2px solid var(--ds-focus);
   outline-offset: -2px;
 }
+.model-option[aria-disabled] {
+  /* a model the bundled Claude Code is too old for (#546) */
+  color: var(--ds-text-muted);
+  cursor: not-allowed;
+}
 .model-option-text {
   flex: 1;
   min-width: 0;

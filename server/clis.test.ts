@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { sessionTools } from '../shared/tooling.ts';
 import { boxVersions, CODEX_HOOK_EVENTS, codexHookCommand, CROSS_TURN_TOOLS, hookReviewKey, interruptions, launchArgs, localUrl, lostLogin, oneAtATime, signedOutScreen, trustKey, unwrapCmdShim, type LaunchContext } from './clis.ts';
 import { LOCAL_PROVIDERS } from '../shared/models.ts';
+import { modelNeedsNewerClaude, versionAtLeast } from '../shared/claudeCode.ts';
 import { describeOfficeTool, describeTool, newScreenshots, screenshotFile, summariseResult } from './agentRunner.ts';
 
 const dir = path.join(os.tmpdir(), 'npm-global');
@@ -310,5 +311,10 @@ describe('boxVersions', () => {
     expect(v.claude).toMatch(/^\d+\.\d+\.\d+/);
     expect(v.playwrightMcp).toMatch(/^\d+\.\d+\.\d+/);
     expect(v.codex).toMatch(/^\d+\.\d+\.\d+/);
+  });
+
+  it('bundles a Claude Code new enough for every model the office knows (#546: Fable 5.2 needs 2.1.290)', () => {
+    expect(versionAtLeast(boxVersions().claude, '2.1.290')).toBe(true);
+    expect(modelNeedsNewerClaude('claude-fable-5-2', boxVersions().claude)).toBeNull();
   });
 });

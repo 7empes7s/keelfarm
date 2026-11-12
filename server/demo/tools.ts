@@ -48,7 +48,7 @@ function demoTooling(projects: string[]): ToolInventory {
  * SWARM_DEMO_MODELS=fail shows Claude Code's built-in list, as when its login can't read Anthropic's.
  */
 export function demoCatalog(now: number) {
-  const claude = ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5', 'claude-fable-5-1', 'claude-opus-5', 'claude-sonnet-5'].map((id) => ({ id }));
+  const claude = ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5', 'claude-fable-5-2', 'claude-fable-5-1', 'claude-opus-5', 'claude-sonnet-5'].map((id) => ({ id }));
   return mergeCatalog(
     [
       { cli: 'claude', models: process.env.SWARM_DEMO_MODELS === 'fail' ? null : claude },
