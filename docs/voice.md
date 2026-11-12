@@ -272,6 +272,53 @@ else it still closes what's open).
 - **No mic:** when the mic is refused or the browser can't listen, the call says why in one line and falls back to
   tap-to-talk: a **Talk** button (or Space) for each turn.
 
+### The Jarvis voice: ElevenLabs Agents (#534)
+
+With an ElevenLabs key, a call talks through [ElevenLabs Agents](https://elevenlabs.io/docs/eleven-agents/overview)
+instead: ElevenLabs listens, decides when you've finished, lets you talk over it and speaks, and the office is the
+agent's brain through ElevenLabs' [custom LLM](https://elevenlabs.io/docs/eleven-agents/customization/llm/custom-llm)
+option. It feels like a conversation rather than messages read out:
+
+- **Answers at once** from the office's own data, with no model call: the company's status ("how are we doing?"),
+  a floor's board ("what's floor 4 doing?"), the decisions waiting on you ("anything for me?") and IT's health checks
+  ("how's the server?"). Rules in `shared/voiceBrain.ts`.
+- **Real work goes to the CEO** like a typed message: "On it, I'm asking Mimoun…" is said within a second, the
+  CEO's progress lines (Talk while working) are said as they come, then its answer (its ```spoken summary, plus
+  "the full answer's in the chat" when there's more).
+- **Asks before changing anything:** "approve it" (the decision last read out, or "the second one") and requests like
+  "file an issue…" or "hire…" get "Should I…?", and happen only on a spoken yes.
+- **The screens stay:** the call screen, captions, Mute, Speaker, Pause, Skip and End work as before. The orb is
+  [ElevenLabs UI's Orb](https://ui.elevenlabs.io/docs/components/orb) (MIT), ported to plain WebGL2 so a phone never
+  loads three.js (`client/src/ui/AgentOrb.tsx`); it leads the phone's call screen and moves with listening, thinking
+  and talking. **"That's all"** (or "bye") ends the conversation but not the call: tap the orb to talk again. There's
+  no wake word: an iPhone browser can't listen in the background, so a hidden tab ends the conversation and a new one
+  starts when you're back.
+- **Transcripts:** your words and the voice's answers go into the CEO chat as messages marked `voiceCall` (never read
+  aloud again); a hand-off is your message to the CEO, as if typed.
+- **iPhone:** the call's audio starts inside the tap on Call (iOS only plays sound from a tap), the audio session is
+  set to play-and-record (Safari 16.4+), the mic asks for echo cancellation, a new route (AirPods, a car) gets a new mic
+  stream, and audio iOS interrupts (a phone call, Siri) wakes on the next tap.
+
+**Cost:** ElevenLabs Agents costs about **$0.08 a minute** ([pricing](https://elevenlabs.io/pricing/agents)).
+Settings → Voice shows the minutes used today and this month with the estimate, and **Monthly limit** (15 h by default)
+caps it: past it, calls use today's voice mode until the next month. A call is counted from its start to its end (a
+started minute counts); a tab that vanished is counted to its last turn.
+
+**What it needs:** the key (with the **ElevenLabs Agents** permission if you restrict it), and the office reachable by
+ElevenLabs at an https address, set in Settings → Notifications → Office address (a Tailscale Funnel or Cloudflare
+Tunnel URL, for example): ElevenLabs calls `<address>/v1/chat/completions` with a bearer token the office made, kept
+in `<SWARM_HOME>/voice-agent.json` (mode 600) with the agent's id and the minutes. The office creates the agent
+("<company> office voice", the CEO's voice, Flash v2) and its secret on your ElevenLabs workspace on the first call,
+and updates it when the voice or address changes. The browser gets only a short-lived signed URL for each conversation,
+never the key. Without a key or address, over the limit, with the switch off, or when ElevenLabs can't be reached,
+the call is exactly today's voice mode (a toast says why when it falls back).
+
+The demo office talks to a fake agent socket on itself (`/ws/voice-agent`, `server/voiceAgentFake.ts`) that speaks
+ElevenLabs' protocol and "speaks" a soft tone; `__swarmCall.agent` is the conversation's mode (`off`, `connecting`,
+`live`, `idle`), `__swarmCall.say(text)` types a turn to it (there's no mic in a headless browser) and
+`__swarmCall.agentProbe()` gives the last turn's `ackMs`, what was said and heard, and interruptions.
+`e2e/voiceAgent.spec.ts` walks it through at 390 px (Chromium, and WebKit where installed).
+
 ### The meeting room (#369)
 
 Every call happens in the meeting room, the glass room in the lobby's west wing (south of the manager's office, round
@@ -352,9 +399,12 @@ for after the call so nothing talks over the CEO.
 | `POST /api/voice/lines/:agent` `{ hour }` | a clicked agent's line (`hour`: the manager's local hour) → `{ text, clip }`; `clip` says ElevenLabs will say it. The same line within 20 s |
 | `GET /api/voice/lines/:agent` | that line as `audio/mpeg` in their voice (the CEO's: the office voice), cached; 404 when agents aren't voiced by ElevenLabs or nothing was said yet |
 | `GET /api/voice/standup?n=3&part=morning` | the CEO's line at a stand-up in the 3D office ("Morning team, three new features today!"; `part` is `morning`, `afternoon` or `evening`), made once per wording and cached; 404 when the voice isn't ElevenLabs |
+| `POST /api/voice/agent/start` | a Jarvis call (#534): makes or updates the office's ElevenLabs agent, then `{ session, url }` (a signed URL for one conversation); 409 without a key or address, over the limit or switched off, 502 when ElevenLabs fails |
+| `POST /api/voice/agent/:session/end` | the conversation ended: its minutes are counted (again is harmless) |
+| `POST /v1/chat/completions` | ElevenLabs' custom LLM: OpenAI's chat completion (streamed with `stream: true`) for the call's latest turn; 401 without the agent's bearer token |
 
 Settings travel in `settings.voice` (`PATCH /api/settings`): `{ provider: 'off' | 'browser' | 'elevenlabs', voiceId,
-voiceName, model, speakOffice, keepDays, speed, favourites, agentsSpeak, talk: 'off' | 'milestones' | 'regular' }`, and listening in `settings.listen`: `{ provider: 'off' | 'browser' |
+voiceName, model, speakOffice, keepDays, speed, favourites, agentsSpeak, talk: 'off' | 'milestones' | 'regular', agent: { on, capHours } }`, and listening in `settings.listen`: `{ provider: 'off' | 'browser' |
 'elevenlabs', autoSend, handsFree }`. The snapshot has `voiceKeySet`, `voiceKeyHint` and `voiceCache`
 (`{ clips, bytes, saved, charsToday }`, `saved` being the message ids the ▶ can replay, `charsToday` the characters sent to ElevenLabs today); a `voiceKey` event follows every key change
 and a `voiceCache` event every change to the cache. A phone message's `voice` says who read it when it arrived. One clip is made at a time (20 s timeout); requests for a clip that's being made share that call.

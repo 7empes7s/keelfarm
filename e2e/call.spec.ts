@@ -3,7 +3,7 @@ import { enterOffice, expect, test } from './helpers';
 
 // A voice call with the CEO (#287, docs/voice.md "Calling the CEO"): one session whatever is on screen. Headless
 // Chromium has no microphone: __swarmMic.fake() stands in for the recognition, and the demo's voice reads each reply as
-// a chime about as long as reading it would take.
+// a chime about as long as reading it would take. The Jarvis voice is off here: voiceAgent.spec.ts calls with it (#534).
 
 interface CallProbe {
   state: { id: number; phase: string; muted: boolean; paused: boolean; held: number; minimised: boolean; reply: { id: number; sentence: number } | null };
@@ -13,7 +13,7 @@ type CallWindow = { __swarmCall: CallProbe; __swarmMic: { fake(): void; say(text
 
 test.beforeAll(async ({ request }) => {
   expect((await request.put('/api/voice/key', { data: { key: 'demo-voice-key-1234' } })).ok()).toBe(true);
-  await request.patch('/api/settings', { data: { voice: { provider: 'elevenlabs', voiceId: 'demoVoiceAvery00001', voiceName: 'Avery' }, listen: { provider: 'browser', autoSend: false, handsFree: false } } });
+  await request.patch('/api/settings', { data: { voice: { provider: 'elevenlabs', voiceId: 'demoVoiceAvery00001', voiceName: 'Avery', agent: { on: false, capHours: 15 } }, listen: { provider: 'browser', autoSend: false, handsFree: false } } });
 });
 
 test.afterAll(async ({ request }) => {
