@@ -87,7 +87,7 @@ export function TelegramSettings() {
           <Icon name="plane" /> Telegram
         </b>
         {view.set && (
-          <label className="toggle small">
+          <label className="toggle small" data-tour="telegram-on">
             <input type="checkbox" role="switch" aria-checked={view.on} checked={view.on} onChange={(e) => turn(e.target.checked)} /> {view.on ? 'On' : 'Off'}
           </label>
         )}
@@ -139,7 +139,7 @@ export function TelegramSettings() {
                     void saveToken();
                   }}
                 >
-                  <label className="field">
+                  <label className="field" data-tour="telegram-token">
                     <span>Bot token</span>
                     <SecretInput
                       name="telegram-token"
@@ -156,7 +156,7 @@ export function TelegramSettings() {
                 </form>
               )}
               {s.id === 'start' && s.state === 'todo' && (
-                <div className="row wrap">
+                <div className="row wrap" data-tour="telegram-start">
                   {startUrl && view.linking ? (
                     <a className="btn btn-good telegram-go" href={startUrl} target="_blank" rel="noreferrer">
                       Open @{view.bot} and press Start

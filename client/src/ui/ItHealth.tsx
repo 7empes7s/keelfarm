@@ -6,6 +6,7 @@ import { api } from '../api';
 import { useStore } from '../store';
 import { openRecs, type ItCheck, type ItCheckLevel, type ItRecommendation } from '../../../shared/itWatch';
 import type { ItRisk } from '../../../shared/itDesk';
+import { labQueueLine } from '../../../shared/testLab';
 import { agoText } from './peekFacts';
 import { Icon } from './Icon';
 import type { IconName } from './icons';
@@ -79,7 +80,7 @@ export function ItRecCards() {
   );
 }
 
-function CheckRow({ c }: { c: ItCheck }) {
+function CheckRow({ c }: { c: Pick<ItCheck, 'label' | 'level' | 'line' | 'trend'> }) {
   const l = LEVEL[c.level];
   return (
     <li className={`it-check it-check-${c.level}`}>
@@ -101,6 +102,7 @@ export function ItHealth() {
   const w = useStore((x) => x.itWatch);
   const demo = useStore((x) => x.demo);
   const checks = w?.checks ?? NONE;
+  const lab = labQueueLine(useStore((x) => x.testLab), Date.now()); // refreshed by the lab's own events, never polled
   const snoozed = (w?.recs ?? NONE).filter((r) => r.snoozedUntil && r.snoozedUntil > Date.now());
   const [busy, setBusy] = useState(false);
   const wrong = checks.filter((c) => c.level === 'warn' || c.level === 'bad').length;
@@ -137,11 +139,12 @@ export function ItHealth() {
           <Icon name="moon" /> Not now until {clock(r.snoozedUntil!)}: {r.title}
         </p>
       ))}
-      {checks.length > 0 && (
+      {(checks.length > 0 || lab) && (
         <ul className="it-checks" aria-label="Health checks">
           {checks.map((c) => (
             <CheckRow key={c.id} c={c} />
           ))}
+          {lab && <CheckRow c={{ label: 'Test lab queue', ...lab }} />}
         </ul>
       )}
     </section>

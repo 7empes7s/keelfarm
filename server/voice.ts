@@ -401,7 +401,11 @@ export class Voice {
    * ⋯ menu's "Read the whole message"): its whole text, cached by its words but never the clip the ▶ replays.
    * `tapped` (?tap=1, #532): the manager asked for it, so any CEO message is made, also with the voice off.
    */
-  async messageAudio(id: number, whole = false, tapped = false): Promise<Buffer> {
+  messageAudio(id: number, whole = false, tapped = false): Promise<Buffer> {
+    return this.logged(`message ${id}`, () => this.makeMessageAudio(id, whole, tapped));
+  }
+
+  private async makeMessageAudio(id: number, whole: boolean, tapped: boolean): Promise<Buffer> {
     const s = this.deps.settings();
     if (s.provider !== 'elevenlabs' && !(tapped && s.provider === 'off')) throw new HttpError(404, "Messages aren't read by ElevenLabs right now.");
     const m = this.message(id);
@@ -470,7 +474,11 @@ export class Voice {
    * POST /api/voice/transcribe: the manager's recorded speech (`ms` long, by the browser's clock) as text, by
    * ElevenLabs Speech to Text. Only while ElevenLabs is the 🎙's provider, and at most 60 s / 5 MB a clip.
    */
-  async transcribe(audio: Buffer, contentType: string | undefined, ms: number): Promise<string> {
+  transcribe(audio: Buffer, contentType: string | undefined, ms: number): Promise<string> {
+    return this.logged('speech to text', () => this.makeTranscript(audio, contentType, ms), "couldn't turn speech into text");
+  }
+
+  private async makeTranscript(audio: Buffer, contentType: string | undefined, ms: number): Promise<string> {
     if (this.deps.listen().provider !== 'elevenlabs') throw new HttpError(409, "ElevenLabs isn't turning speech into text: pick it under Settings → Voice → Talk instead of type.");
     const bad = clipProblem({ bytes: audio.length, ms, type: contentType });
     if (bad) throw new HttpError(bad.status, bad.message);
@@ -487,16 +495,18 @@ export class Voice {
   }
 
   /** GET /api/voice/sample: the settings' Test button, in `voiceId` (default: the chosen voice). */
-  async sampleAudio(voiceId?: string): Promise<Buffer> {
+  sampleAudio(voiceId?: string): Promise<Buffer> {
     const s = this.deps.settings();
-    return this.audio('sample', { voiceId: voiceId || s.voiceId, model: s.model, speed: s.speed, text: SAMPLE_LINE });
+    return this.logged('the Test line', () => this.audio('sample', { voiceId: voiceId || s.voiceId, model: s.model, speed: s.speed, text: SAMPLE_LINE }));
   }
 
   /** GET /api/voice/standup: the CEO's line at a stand-up in the 3D office, made once per wording and cached. */
-  async standupAudio(count: number, part: DayPart): Promise<Buffer> {
-    const s = this.deps.settings();
-    if (s.provider !== 'elevenlabs') throw new HttpError(404, "The CEO isn't voiced by ElevenLabs right now.");
-    return this.audio('standup', { voiceId: s.voiceId, model: s.model, speed: s.speed, text: standupLine(count, part) });
+  standupAudio(count: number, part: DayPart): Promise<Buffer> {
+    return this.logged('the stand-up line', async () => {
+      const s = this.deps.settings();
+      if (s.provider !== 'elevenlabs') throw new HttpError(404, "The CEO isn't voiced by ElevenLabs right now.");
+      return this.audio('standup', { voiceId: s.voiceId, model: s.model, speed: s.speed, text: standupLine(count, part) });
+    });
   }
 
   /** A line the CEO says while it works (#286, shared/voiceTalk.ts): kept for GET /api/voice/talk/:id. */
@@ -511,12 +521,14 @@ export class Voice {
   }
 
   /** GET /api/voice/talk/:id: an ack or progress line as mp3, cached by its words (so each fixed ack is made once). */
-  async talkAudio(id: number): Promise<Buffer> {
-    const s = this.deps.settings();
-    if (s.provider !== 'elevenlabs') throw new HttpError(404, "The CEO isn't voiced by ElevenLabs right now.");
-    const text = this.talkLines.get(id);
-    if (!text) throw new HttpError(404, `No spoken line ${id}`);
-    return this.audio('talk', { voiceId: s.voiceId, model: s.model, speed: s.speed, text });
+  talkAudio(id: number): Promise<Buffer> {
+    return this.logged(`spoken line ${id}`, async () => {
+      const s = this.deps.settings();
+      if (s.provider !== 'elevenlabs') throw new HttpError(404, "The CEO isn't voiced by ElevenLabs right now.");
+      const text = this.talkLines.get(id);
+      if (!text) throw new HttpError(404, `No spoken line ${id}`);
+      return this.audio('talk', { voiceId: s.voiceId, model: s.model, speed: s.speed, text });
+    });
   }
 
   /** Clicked agents' lines are spoken by ElevenLabs now: it's the provider, the setting is on and a key works. */
@@ -526,9 +538,24 @@ export class Voice {
   }
 
   /** GET /api/voice/lines/:agent: a clicked agent's line (lineRequest), cached by voice, model, speed and words. */
-  async lineAudio(voiceId: string, line: string): Promise<Buffer> {
-    if (!this.speaksLines()) throw new HttpError(404, "Agents aren't voiced by ElevenLabs right now.");
-    return this.audio('line', lineRequest(this.deps.settings(), voiceId, line));
+  lineAudio(voiceId: string, line: string): Promise<Buffer> {
+    return this.logged("an agent's line", async () => {
+      if (!this.speaksLines()) throw new HttpError(404, "Agents aren't voiced by ElevenLabs right now.");
+      return this.audio('line', lineRequest(this.deps.settings(), voiceId, line));
+    });
+  }
+
+  /**
+   * Every failed clip or transcription in the server log, with the plain words the client gets (#545): a voice that
+   * goes quiet always leaves a line saying why. Never the key or what was said.
+   */
+  private async logged<T>(what: string, make: () => Promise<T>, failed = "couldn't make clip"): Promise<T> {
+    try {
+      return await make();
+    } catch (err) {
+      this.deps.log?.(`voice: ${failed} (${what}): ${(err as Error).message}`);
+      throw err;
+    }
   }
 
   private async audio(name: string, req: SynthRequest, m?: PhoneMessage): Promise<Buffer> {

@@ -1,0 +1,83 @@
+/* ui/TaskTutorial.tsx (#517): the task tutorials' card over the pages it opens, and the hub's rows. */
+
+/* the card and its ring stay above the panels a step opens, even where the tour sits under them (the 3D office on a phone) */
+@media (max-width: 760px) {
+  html:not(.pocket-mode) .tour.tour-task {
+    z-index: var(--ds-z-tour);
+  }
+  html:not(.pocket-mode) :is(.tour-ring, .tour-dim).tour-task-ring {
+    z-index: calc(var(--ds-z-tour) - 1);
+  }
+}
+
+.tut-hub-h {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  margin: var(--ds-space-3) 0 var(--ds-space-1);
+  font-size: var(--ds-text-md);
+}
+.tut-list {
+  list-style: none;
+  margin: var(--ds-space-2) 0 0;
+  padding: 0;
+  display: grid;
+  gap: var(--ds-space-2);
+}
+.tut-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--ds-space-2) var(--ds-space-3);
+  padding: var(--ds-space-3);
+  border: 2px solid var(--ds-outline);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-raised);
+}
+.tut-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface-sunken);
+}
+.tut-icon svg {
+  width: 20px;
+  height: 20px;
+}
+.tut-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.tut-bar {
+  display: block;
+  height: 4px;
+  margin-top: var(--ds-space-1);
+  border-radius: 2px;
+  background: var(--ds-surface-sunken);
+  overflow: hidden;
+}
+.tut-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--ds-good-fill);
+}
+.tut-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-weight: 700;
+  color: var(--ds-text-muted);
+}
+.tut-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--ds-space-2);
+}
+.tut-actions .btn {
+  min-height: var(--ds-target);
+}

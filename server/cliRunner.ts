@@ -29,6 +29,7 @@ import {
   type SessionResult,
 } from './agentRunner.ts';
 import type { OfficeTools } from './ceo.ts';
+import { progressStream } from './testLabTools.ts';
 import { consultDeny } from './consult.ts';
 import type { AgentTerminal } from './terminal.ts';
 import type { AgentCli } from '../shared/types.ts';
@@ -100,7 +101,7 @@ export async function handleMcp(token: string, req: Request, res: Response) {
   const office = routes.get(token)?.office;
   if (!office) return mcpGone(res, routes.has(token));
   const server = office.serve();
-  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
+  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: !progressStream(req.body) });
   res.on('close', () => {
     void transport.close();
     void server.close();

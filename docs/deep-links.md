@@ -22,7 +22,7 @@ links and keeps the address up to date.
 | `#phone/<chat\|hires\|company\|games>`, `#help/<office\|controls>` | the phone or help on a tab | 3D |
 | `#tour/<step id>` | one tour step on its own (ids in `client/src/ui/tourSteps.ts`) | both |
 | `#3d/floor/<N>[/whiteboard]`, `#3d/desk/<name>` | the camera on a floor, at its whiteboard, at an agent's desk | 3D |
-| `#3d/<manager\|ceo\|maproom\|lobby\|screens>` | the manager's or CEO's office, the map room, the lobby, the lobby's screens | 3D |
+| `#3d/<manager\|ceo\|maproom\|lobby\|screens\|it>` | the manager's or CEO's office, the map room, the lobby, the lobby's screens, the IT office's help desk | 3D |
 
 ## For QA
 

@@ -1,14 +1,37 @@
 // The test lab's tools (#56) for builders, fixers and QA: an `office` MCP server with lab_screenshot,
 // lab_browser_check, lab_run and lab_status, served like the CEO's office tools. The office binds them to the session's
-// agent, floor and worktree; the requests wait in the lab's queue (server/testLab.ts).
+// agent, floor and worktree; the requests wait in the lab's queue (server/testLab.ts), with MCP progress notifications
+// while they do (#560), so the CLI never gives up on a silent call.
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 import type { OfficeTools } from './ceo.ts';
-import type { LabJobInput } from './testLab.ts';
+import type { LabJobInput, LabProgress } from './testLab.ts';
 
 export interface LabHandlers {
-  submit(input: LabJobInput): Promise<string>;
+  /** progress: null when the call carried no progressToken (TestLab.submit). */
+  submit(input: LabJobInput, progress: LabProgress | null): Promise<string>;
   status(): string;
+}
+
+/** A tool call's heartbeat as MCP progress notifications on its progressToken; null when the client sent none (#560). */
+export function labProgress(extra: unknown): LabProgress | null {
+  const x = extra as { _meta?: { progressToken?: string | number }; sendNotification?: (n: { method: 'notifications/progress'; params: { progressToken: string | number; progress: number; message: string } }) => Promise<void> } | undefined;
+  const token = x?._meta?.progressToken;
+  const send = x?.sendNotification;
+  if (token === undefined || !send) return null;
+  let n = 0;
+  return (b) => void send({ method: 'notifications/progress', params: { progressToken: token, progress: ++n, message: b.message } }).catch(() => undefined);
+}
+
+/**
+ * Should an office MCP request be answered as a stream (SSE) rather than one JSON body? Only a tool call with a
+ * progressToken: its progress notifications can only travel on a stream, and such a client asked for them.
+ */
+export function progressStream(body: unknown): boolean {
+  return (Array.isArray(body) ? body : [body]).some((m) => {
+    const msg = m as { method?: unknown; params?: { _meta?: { progressToken?: unknown } } } | null;
+    return msg?.method === 'tools/call' && msg.params?._meta?.progressToken !== undefined;
+  });
 }
 
 const PROFILE = z.enum(['desktop', 'phone', 'iphone']).optional().describe('desktop (default), phone (Android Chromium) or iphone (iPhone size, touch, 3× pixels)');
@@ -60,7 +83,7 @@ export function createLabTools(h: LabHandlers): OfficeTools {
         actions: z.array(ACTION).max(10).optional().describe('Done in order before the screenshot'),
         full_page: z.boolean().optional(),
       },
-      (a) => text(() => h.submit({ kind: 'screenshot', url: a.url, preview: a.preview, viewports: a.viewports ?? [1280], profile: a.profile ?? 'desktop', theme: a.theme ?? 'light', graphics: a.graphics, waitFor: a.wait_for, actions: a.actions ?? [], fullPage: !!a.full_page })),
+      (a, extra) => text(() => h.submit({ kind: 'screenshot', url: a.url, preview: a.preview, viewports: a.viewports ?? [1280], profile: a.profile ?? 'desktop', theme: a.theme ?? 'light', graphics: a.graphics, waitFor: a.wait_for, actions: a.actions ?? [], fullPage: !!a.full_page }, labProgress(extra))),
     ),
     tool(
       'lab_browser_check',
@@ -73,7 +96,7 @@ export function createLabTools(h: LabHandlers): OfficeTools {
         graphics: GRAPHICS,
         steps: z.array(STEP).min(1).max(30),
       },
-      (a) => text(() => h.submit({ kind: 'check', url: a.url, preview: a.preview, viewport: a.viewport ?? 1280, profile: a.profile ?? 'desktop', theme: a.theme ?? 'light', graphics: a.graphics, steps: a.steps })),
+      (a, extra) => text(() => h.submit({ kind: 'check', url: a.url, preview: a.preview, viewport: a.viewport ?? 1280, profile: a.profile ?? 'desktop', theme: a.theme ?? 'light', graphics: a.graphics, steps: a.steps }, labProgress(extra))),
     ),
     tool(
       'lab_run',
@@ -83,7 +106,7 @@ export function createLabTools(h: LabHandlers): OfficeTools {
         branch: z.string().max(200).regex(/^[\w./-]+$/).optional().describe('A branch on origin; default: your committed HEAD (no push needed)'),
         timeout_min: z.number().int().min(1).max(30).optional().describe('Default 15'),
       },
-      (a) => text(() => h.submit({ kind: 'run', command: a.command, branch: a.branch, timeoutMin: a.timeout_min })),
+      (a, extra) => text(() => h.submit({ kind: 'run', command: a.command, branch: a.branch, timeoutMin: a.timeout_min }, labProgress(extra))),
     ),
     tool('lab_status', "The test lab's queue: what runs, your jobs' places and the estimated wait.", {}, () => text(() => h.status())),
   ];

@@ -6,6 +6,7 @@ import { go, useFinder } from './goTo';
 import { dismissGuide, guideDismissed, guideItems, guideProgress, type GuideItem } from './guide';
 import { Sheet } from './Sheet';
 import { CloseButton, Icon } from './Icon';
+import { TutorialsHub } from './TaskTutorial';
 
 const installed = () => {
   try {
@@ -102,6 +103,7 @@ export function GuideCard() {
           <Icon name="check" /> {p.done} done: {items.filter((i) => i.done).map((i) => i.title.toLowerCase()).join(' · ')}
         </p>
       )}
+      <TutorialsHub onStart={() => useFinder.setState({ guide: false })} />
     </section>
   );
 }
@@ -137,7 +139,10 @@ export function GuideSheet() {
         <span className="muted small grow">It ticks itself as you go.</span>
         <Progress items={items} />
       </div>
-      <Checklist items={items} onGo={close} />
+      <div data-tour="guide">
+        <Checklist items={items} onGo={close} />
+      </div>
+      <TutorialsHub onStart={close} />
     </Sheet>
   );
 }

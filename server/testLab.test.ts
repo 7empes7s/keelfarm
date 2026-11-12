@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_TEST_LAB, testLabSettings, type TestLabView } from '../shared/testLab.ts';
 import type { SessionKind } from '../shared/health.ts';
 import { browsersPath, estimateWaitMs, labArgv, labCommand, labFile, labOutDir, labPattern, labProblem, pickNext, silenceMs, TestLab, type LabRunner, type Requester, type RunResult, type TestLabHost } from './testLab.ts';
-import { createLabTools } from './testLabTools.ts';
+import { createLabTools, labProgress, progressStream } from './testLabTools.ts';
 import { demoLabRunner, fakeShot } from './demoTestLab.ts';
 import { devSystemPrompt, qaSystemPrompt } from './prompts.ts';
 
@@ -36,6 +36,13 @@ describe('pickNext', () => {
     const q = [job('a', 'run', 'A', 1), job('b', 'run', 'B', 2)];
     expect(pickNext(q, [job('r', 'run', 'A', 0)], { browser: 1, heavy: 2 }, new Map()).map((j) => j.id)).toEqual(['b']);
     expect(pickNext([q[0]], [job('r', 'run', 'A', 0)], { browser: 1, heavy: 2 }, new Map())).toEqual([]);
+  });
+
+  it('caps the whole lab: with a total of one, a browser job waits while a heavy run runs (#560)', () => {
+    const q = [job('a', 'run', 'A', 1), job('b', 'screenshot', 'B', 2), job('c', 'check', 'C', 3)];
+    expect(pickNext(q, [], { ...LIMITS, total: 1 }, new Map()).map((j) => j.id)).toEqual(['a']);
+    expect(pickNext(q.slice(1), [q[0]], { ...LIMITS, total: 1 }, new Map())).toEqual([]);
+    expect(pickNext(q, [], { browser: 2, heavy: 1, total: 2 }, new Map()).map((j) => j.id)).toEqual(['a', 'b']);
   });
 
   it('estimates the wait from the place in the lane', () => {
@@ -145,13 +152,13 @@ function fakeRunner(log: string[], ms = 0, runs: Partial<RunResult>[] = []): Lab
 const who = (agentId: string, repoId = 'r1', floor = 1): Requester => ({ agentId, agent: agentId.toUpperCase(), repoId, floor, fullName: `o/${repoId}`, defaultBranch: 'main', worktree: path.join(os.tmpdir(), 'labdesk', agentId), pr: 7, labCommands: [] });
 const shot = (url: string) => ({ kind: 'screenshot' as const, url, viewports: [375, 390, 1280], profile: 'phone' as const, theme: 'light' as const, actions: [], fullPage: false });
 
-function lab(runner: LabRunner, refusal: (k: SessionKind) => string | null = () => null, updateGate?: () => readonly string[] | null) {
+function lab(runner: LabRunner, refusal: (k: SessionKind) => string | null = () => null, updateGate?: () => readonly string[] | null, settings = DEFAULT_TEST_LAB) {
   const views: TestLabView[] = [];
   const shots: string[] = [];
   const pages: string[] = [];
   const host: TestLabHost = {
     runner: () => runner,
-    settings: () => DEFAULT_TEST_LAB,
+    settings: () => settings,
     refusal,
     forbidden: () => [path.join(os.tmpdir(), 'office')],
     previewUrl: async (repoId, pr) => `http://localhost:6300/${repoId}/${pr}`,
@@ -276,6 +283,63 @@ describe('TestLab', () => {
   });
 });
 
+describe('never silent while queued (#560)', () => {
+  afterEach(() => vi.useRealTimers());
+  const busy = () => {
+    const runner = fakeRunner([], -1);
+    const l = lab(runner, () => null, undefined, { ...DEFAULT_TEST_LAB, totalJobs: 1 }).lab;
+    void l.submit(who('a'), shot('http://localhost:9/'));
+    return { runner, l };
+  };
+
+  it('sends a heartbeat with the place and the reason every 20 s while a job waits, and stops once it starts', async () => {
+    vi.useFakeTimers();
+    const { runner, l } = busy();
+    const beats: { position: number; message: string }[] = [];
+    const ask = l.submit(who('b', 'r2', 2), { kind: 'run', command: 'npm test' }, Date.now(), (b) => beats.push(b));
+    await vi.advanceTimersByTimeAsync(19_000);
+    expect(beats).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(beats).toEqual([{ position: 1, message: expect.stringMatching(/^Queued: position 1 in the lab's heavy queue \(the lab is busy with screenshot localhost:9\/ × 3\)/) }]);
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(beats).toHaveLength(2);
+    runner.release();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(l.view().recent.map((j) => j.agentId)).toEqual(['b', 'a']); // started, and done
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(beats).toHaveLength(2);
+    expect(await ask).toMatch(/^npm test: exit code 1/);
+  });
+
+  it('answers at once with the place and when to retry when the caller cannot take progress, and queues nothing', () => {
+    const { runner, l } = busy();
+    expect(() => l.submit(who('b', 'r2', 2), { kind: 'run', command: 'npm test' }, Date.now(), null)).toThrow(/^Queued, position 1 in the lab's heavy queue \(the lab is busy with screenshot localhost:9\/ × 3\): nothing ran\. Retry in \d+ s\.$/);
+    expect(l.view().queue).toEqual([]);
+    runner.release();
+  });
+
+  it('runs at once without progress when the lab is free', async () => {
+    const { lab: l } = lab(fakeRunner([]));
+    expect(await l.submit(who('a'), shot('http://localhost:1/'), Date.now(), null)).toMatch(/^3 screenshots/);
+  });
+
+  it("turns the MCP call's progress token into progress notifications, and asks for a stream only when there is one", async () => {
+    const sent: unknown[] = [];
+    const beat = labProgress({ _meta: { progressToken: 'p1' }, sendNotification: async (n: unknown) => void sent.push(n) });
+    beat!({ position: 2, message: 'Queued: position 2' });
+    beat!({ position: 1, message: 'Queued: position 1' });
+    expect(sent).toEqual([
+      { method: 'notifications/progress', params: { progressToken: 'p1', progress: 1, message: 'Queued: position 2' } },
+      { method: 'notifications/progress', params: { progressToken: 'p1', progress: 2, message: 'Queued: position 1' } },
+    ]);
+    expect(labProgress({ _meta: {}, sendNotification: async () => undefined })).toBeNull();
+    expect(labProgress(undefined)).toBeNull();
+    expect(progressStream({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'lab_run', _meta: { progressToken: 3 } } })).toBe(true);
+    expect(progressStream({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'lab_run' } })).toBe(false);
+    expect(progressStream({ jsonrpc: '2.0', id: 1, method: 'tools/list' })).toBe(false);
+  });
+});
+
 describe('lab problems (#189)', () => {
   it('runs Playwright with the line reporter, and gives it longer to be quiet', () => {
     expect(labArgv(['npx', 'playwright', 'test', 'e2e/overflow.spec.ts'])).toEqual(['npx', 'playwright', 'test', 'e2e/overflow.spec.ts', '--reporter=line']);
@@ -355,7 +419,8 @@ describe('the demo lab', () => {
 
 describe('settings and prompts', () => {
   it('keeps valid settings and clamps counts', () => {
-    expect(testLabSettings(DEFAULT_TEST_LAB, { enabled: false, browserJobs: 9, heavyJobs: 'x' })).toEqual({ enabled: false, browserJobs: 4, heavyJobs: 1 });
+    expect(testLabSettings(DEFAULT_TEST_LAB, { enabled: false, browserJobs: 9, heavyJobs: 'x' })).toEqual({ enabled: false, browserJobs: 4, heavyJobs: 1, totalJobs: 1 });
+    expect(testLabSettings(DEFAULT_TEST_LAB, { totalJobs: 3 }).totalJobs).toBe(3);
   });
 
   it('tells lab sessions to use the lab tools instead of their own browser', () => {

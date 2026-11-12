@@ -325,12 +325,49 @@ export const CEO_ROOM = { minX: 6.5, maxX: HALF_W, minZ: -HALF_D, maxZ: -3.5, do
 export const CEO_DESK = { x: 12, z: -7.4 };
 // The map table (#137) in the CEO's office, west of the desk and clear of the door: E walks into the map room.
 export const MAP_TABLE = { x: 8.2, z: -8.6, r: 0.6, h: 1.0 };
+// The IT office (#535), right next to the CEO's: from the CEO office's south wall to just short of the east door, its
+// glass west wall (door towards its north end) facing the lobby, a solid south wall holding the ticket board, and the
+// east window. Inside: the help-desk counter running north-south with the IT lead behind it facing the door's side, the
+// tool cabinet, wall screen and server rack along the north wall, boxes by the rack and a plant in the far corner.
+export const IT_ROOM = { minX: 10.6, maxX: HALF_W, minZ: CEO_ROOM.maxZ, maxZ: 1.2, doorMinZ: -2.6, doorMaxZ: -0.8 };
+/** The help desk: w along x, d along z. */
+export const IT_DESK = { x: 12.7, z: 0.05, w: 0.6, d: 1.9, h: 1.05 };
+/** The IT lead's chair, behind the counter facing west; a visitor stands across the counter from them. */
+export const IT_LEAD = { x: 13.55, z: IT_DESK.z };
+export const IT_VISITOR = { x: 11.75, z: IT_DESK.z };
+const IT_BACK = IT_ROOM.minZ + 0.12; // the north wall's inner face
+export const IT_RACK = { x: 14.6, z: IT_BACK + 0.45, w: 0.8, d: 0.9, h: 2.0 };
+export const IT_CABINET = { x: 11.25, z: IT_BACK + 0.25, w: 0.9, d: 0.5, h: 1.75 };
+export const IT_BOXES = { x: 15.5, z: IT_BACK + 0.3, w: 0.5, d: 0.5, h: 0.62 };
+export const IT_PLANT = { x: HALF_W - 0.55, z: IT_ROOM.maxZ - 0.6 };
+export const IT_BIN = { x: 14.35, z: IT_ROOM.maxZ - 0.4 };
+/** The wall screen on the north wall and the ticket board on the south wall (y: their middles). */
+export const IT_SCREEN = { x: 12.9, y: 1.95, z: IT_BACK + 0.03, w: 2.0, h: 1.15 };
+export const IT_TICKETS = { x: 14.4, y: 1.8, z: IT_ROOM.maxZ - 0.15, w: 1.9, h: 1.1 };
+
+/** The IT office's walls and furniture. Its north wall is the CEO office's south wall, which has its own. */
+export function itColliders(): Rect[] {
+  const r = IT_ROOM;
+  const t = 0.12;
+  return [
+    { minX: r.minX - t, maxX: r.minX + t, minZ: r.minZ, maxZ: r.doorMinZ, h: SOLID_H.glass }, // glass west wall, north of the door
+    { minX: r.minX - t, maxX: r.minX + t, minZ: r.doorMaxZ, maxZ: r.maxZ, h: SOLID_H.glass }, // and south of it
+    { minX: r.minX - t, maxX: r.maxX, minZ: r.maxZ - t, maxZ: r.maxZ + t, h: SOLID_H.glass }, // the south wall
+    rect(IT_DESK.x, IT_DESK.z, IT_DESK.w, IT_DESK.d, IT_DESK.h),
+    rect(IT_LEAD.x, IT_LEAD.z, 0.7, 0.7, SOLID_H.seated),
+    rect(IT_RACK.x, IT_RACK.z, IT_RACK.w, IT_RACK.d, IT_RACK.h),
+    rect(IT_CABINET.x, IT_CABINET.z, IT_CABINET.w, IT_CABINET.d, IT_CABINET.h),
+    rect(IT_BOXES.x, IT_BOXES.z, IT_BOXES.w, IT_BOXES.d, IT_BOXES.h),
+    rect(IT_PLANT.x, IT_PLANT.z, 0.6, 0.6, 1.2),
+    rect(IT_BIN.x, IT_BIN.z, 0.4, 0.4, 0.5),
+  ];
+}
 // Candidates the CEO wants to hire wait on six chairs along the east wall, facing into the lobby, three either side of
 // a little coffee table, between the sofa and the corner plant. Declined, they leave by the glass door just north.
 export const WAITING = { x: HALF_W - 1.4, seats: [4.7, 5.65, 6.6, 8.5, 9.45, 10.4] };
 export const WAITING_ROTATION = Math.PI / 2;
 export const WAITING_TABLE = { x: HALF_W - 1.4, z: 7.55, w: 0.62, d: 0.9 };
-// The big rug in front of reception; the manager's and CEO's offices are carpeted wall to wall.
+// The big rug in front of reception; the manager's, CEO's and IT offices are carpeted wall to wall.
 export const LOBBY_RUG = rect(3, 3, 14, 9);
 // The lobby's coffee corner: a short counter against the south wall, east of the elevator and the directory, in
 // view of the waiting sofa. w runs along the wall, d sticks out into the room; the machine and mugs face north.
@@ -454,6 +491,7 @@ export function lobbyFurnitureColliders(): Rect[] {
   out.push(rect(KIOSK.x, KIOSK.z, KIOSK.w, KIOSK.d, KIOSK.h));
   out.push(rect(TROPHY_SHELF.x, TROPHY_SHELF.z, TROPHY_SHELF.w, TROPHY_SHELF.d, TROPHY_SHELF.h));
   out.push(...meetingColliders());
+  out.push(...itColliders());
   return out;
 }
 
@@ -630,7 +668,7 @@ export function roofColliders(): Rect[] {
 export type Surface = 'wood' | 'rug' | 'lobby' | 'cabin';
 
 const OFFICE_RUGS: Rect[] = DESK_RUGS;
-const LOBBY_RUGS: Rect[] = [LOBBY_RUG, MANAGER_ROOM, CEO_ROOM, MEETING_ROOM];
+const LOBBY_RUGS: Rect[] = [LOBBY_RUG, MANAGER_ROOM, CEO_ROOM, MEETING_ROOM, IT_ROOM];
 
 /** The floor under (x, z), for footsteps. A rug's edge counts as rug; past the doorway is the elevator cabin, and
  * outside, a balcony's (or the patio's) paving sounds like the lobby's tiles. On the roof, the decking is wood and
