@@ -12,6 +12,7 @@ import { Icon } from './Icon';
 import type { IconName } from './icons';
 import { orbState } from './agentCall';
 import { useAgentCall } from './agentCallStore';
+import { toggleCamera, useCamera } from './agentCameraStore';
 import { agentStatus, useCallCaptions } from './callCaptions';
 import { callClock, callStatus, inCall, type Call } from './voiceCall';
 import { endCall, setMinimised, skipSentence, talkOnce, tapOrb, toggleCaptions, toggleMute, togglePause, toggleSpeaker } from './voiceCallEngine';
@@ -162,6 +163,16 @@ function useStatus(call: Call, ceo: string) {
   return agentStatus(mode) ?? callStatus(call, ceo);
 }
 
+/** The 📷 button (#539): asks the CEO to turn their camera on, or off again. */
+function CameraButton({ ceo }: { ceo: string }) {
+  const on = useCamera((s) => s.agent === CEO_ID);
+  return (
+    <button type="button" className={`ds-btn ds-btn-ghost ds-btn-icon ${on ? 'vcall-key-on' : ''}`} aria-pressed={on} aria-label={on ? `Turn off ${ceo}'s camera` : `Ask ${ceo} to turn on their camera`} title={on ? 'Camera off' : 'Camera on'} data-key="camera" onClick={() => toggleCamera(CEO_ID)}>
+      <Icon name="video" />
+    </button>
+  );
+}
+
 function openChat() {
   setMinimised(true);
   useCall.setState({ chatTucked: false });
@@ -192,9 +203,12 @@ function PhoneCall() {
           <Icon name="chevron-down" />
         </button>
         <span className="vcall-clock">{clock}</span>
-        <button type="button" className="ds-btn ds-btn-ghost ds-btn-icon" aria-label="Open chat" title="The chat, while the call goes on" onClick={openChat}>
-          <Icon name="message-circle" />
-        </button>
+        <span className="vcall-top-end">
+          <CameraButton ceo={ceo} />
+          <button type="button" className="ds-btn ds-btn-ghost ds-btn-icon" aria-label="Open chat" title="The chat, while the call goes on" onClick={openChat}>
+            <Icon name="message-circle" />
+          </button>
+        </span>
       </header>
       <div className={`vcall-middle ${jarvis ? 'vcall-middle-agent' : ''}`}>
         {jarvis && <Orb call={call} initial={ceo.charAt(0)} size="big" />}
@@ -283,6 +297,7 @@ function CallOrb() {
                 {status} · <span className="vcall-clock">{clock}</span>
               </span>
             </div>
+            <CameraButton ceo={ceo} />
             <button type="button" className="ds-btn ds-btn-ghost ds-btn-icon" aria-label="Fold the call card" title="Fold to the orb; the call goes on" onClick={() => setMinimised(true)}>
               <Icon name="chevron-down" />
             </button>

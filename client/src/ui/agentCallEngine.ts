@@ -4,6 +4,8 @@
 // Speaker and End work as before. The office's LLM answers each turn (server/swarm/voiceAgent.ts); the CEO's replies
 // and progress lines are said on the same voice through markers. "That's all" ends the conversation (the call stays:
 // tap the orb to talk again); a hidden tab ends it too and the next visit starts a new one.
+import { CEO_ID } from '../../../shared/types';
+import { cameraWords } from './agentCameraStore';
 import { marker, wantsToEnd } from '../../../shared/voiceBrain';
 import { api } from '../api';
 import { useStore } from '../store';
@@ -150,6 +152,7 @@ function onMessage(raw: string) {
 /** The manager's turn, as ElevenLabs heard it (or typed by the demo's probe): captions, thinking, and "that's all". */
 function heard(text: string) {
   useCall.setState({ heard: text });
+  cameraWords(text, CEO_ID); // "turn on your camera" (#539)
   if (wantsToEnd(text)) endAfterReply = true;
   if (useCall.getState().call.phase === 'listening') dispatchCall({ type: 'sent' });
 }
