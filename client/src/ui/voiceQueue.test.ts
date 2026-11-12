@@ -97,21 +97,30 @@ describe('claimWinner', () => {
 
 describe('replayKind', () => {
   const m = (voice?: PhoneMessage['voice'], from: PhoneMessage['from'] = 'ceo'): PhoneMessage => ({ ...msg(1, from), ...(voice ? { voice } : {}) });
+  const eleven = { provider: 'elevenlabs', keySet: true } as const;
+  const off = { provider: 'off', keySet: false } as const;
 
   it("plays a saved clip, whoever read it and whatever the voice is now", () => {
-    expect(replayKind(m('elevenlabs'), true, true)).toBe('clip');
-    expect(replayKind(m(), true, false)).toBe('clip');
+    expect(replayKind(m('elevenlabs'), true, eleven, true)).toBe('clip');
+    expect(replayKind(m(), true, off, false)).toBe('clip');
   });
 
-  it("says a browser-voice message again, and disables an ElevenLabs one whose clip is gone", () => {
-    expect(replayKind(m('browser'), false, true)).toBe('browser');
-    expect(replayKind(m('browser'), false, false)).toBeNull();
-    expect(replayKind(m('elevenlabs'), false, true)).toBe('gone');
+  it('gives every CEO message a ▶ (#532): one that arrived with the voice off, or lost its clip, makes it on the tap', () => {
+    expect(replayKind(m(), false, eleven, true)).toBe('make');
+    expect(replayKind(m('elevenlabs'), false, eleven, false)).toBe('make');
+    expect(replayKind(m(), false, { provider: 'off', keySet: true }, true)).toBe('make'); // voice off, key saved
+    expect(replayKind(m('elevenlabs'), false, off, true)).toBe('browser'); // no key: the phone's own voice
+    expect(replayKind(m(), false, { provider: 'browser', keySet: true }, true)).toBe('browser');
   });
 
-  it('has no button for a message nobody read aloud, or for anyone but the CEO', () => {
-    expect(replayKind(m(), false, true)).toBeNull();
-    expect(replayKind(m('elevenlabs', 'office'), true, true)).toBeNull();
-    expect(replayKind(m(undefined, 'manager'), true, true)).toBeNull();
+  it("says a browser-voice message again in the browser's voice, free", () => {
+    expect(replayKind(m('browser'), false, eleven, true)).toBe('browser');
+    expect(replayKind(m('browser'), false, eleven, false)).toBe('make');
+    expect(replayKind(m('browser'), false, off, false)).toBeNull();
+  });
+
+  it('has no button for anyone but the CEO', () => {
+    expect(replayKind(m('elevenlabs', 'office'), true, eleven, true)).toBeNull();
+    expect(replayKind(m(undefined, 'manager'), true, eleven, true)).toBeNull();
   });
 });
