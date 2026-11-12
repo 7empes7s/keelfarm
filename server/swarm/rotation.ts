@@ -415,13 +415,13 @@ export abstract class SwarmRotation extends SwarmUsage {
 
   /**
    * Other coding agents a session may fall back to (terminal runtime only, installed here): the CEO's the manager
-   * allowed; an agent's, ones the office already uses (an agent runs it, or it has an account added), never onto Gemini
+   * allowed; an agent's, ones the office already uses (an agent runs it, it has an account added, or its built-in login is on), never onto Gemini
    * CLI, which isn't a builder (#365). Consults never do.
    */
   private fallbackClis(a: PersistedAgent, opts: SessionOptions): AccountCli[] {
     if (!opts.terminal || opts.readOnly) return [];
     const r = this.accounts.rotation();
-    const inUse = (c: AccountCli) => this.state.agents.some((x) => x.host !== 'box' && x.role !== 'ceo' && (x.cli || this.state.settings.defaultCli) === c) || this.accounts.list().some((x) => x.cli === c && !x.builtIn);
+    const inUse = (c: AccountCli) => this.state.agents.some((x) => x.host !== 'box' && x.role !== 'ceo' && (x.cli || this.state.settings.defaultCli) === c) || this.accounts.list().some((x) => x.cli === c && (!x.builtIn || x.enabled));
     const allowed = a.role === 'ceo' ? r.ceoClis : r.agentsSwitchCli ? ACCOUNT_CLIS.filter((c) => c !== 'gemini' && inUse(c)) : [];
     return allowed.filter((c) => this.clis.some((x) => x.id === c && x.installed));
   }
