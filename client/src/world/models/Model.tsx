@@ -85,20 +85,20 @@ function Instances({ part, matrices }: { part: Part; matrices: THREE.Matrix4[] }
 
 /**
  * A registry model at each of `at`, scaled to fit `size` (x, y, z; proportions kept), its middle on x and z and its
- * bottom on the floor. `fallback` draws one placement in shapes, for while it loads or if it can't.
+ * bottom on the floor (`stretch`: filling `size` on every axis). `fallback` draws one placement in shapes, for while it loads or if it can't.
  */
-export function Model({ name, at, size, fallback }: { name: ModelName; at: Placement[]; size: V3; fallback: (p: Placement, i: number) => ReactNode }) {
+export function Model({ name, at, size, fallback, stretch }: { name: ModelName; at: Placement[]; size: V3; fallback: (p: Placement, i: number) => ReactNode; stretch?: boolean }) {
   const loaded = useLoaded(name);
   const per = useMemo(() => {
     if (!loaded) return null;
-    const fit = fitModel(loaded.box, size);
+    const fit = fitModel(loaded.box, size, stretch);
     const local = new THREE.Matrix4().compose(new THREE.Vector3(...fit.offset), new THREE.Quaternion(), new THREE.Vector3(...fit.scale));
     const turn = new THREE.Quaternion();
     const places = at.map((p) => new THREE.Matrix4().compose(new THREE.Vector3(p.x, p.y ?? 0, p.z), turn.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, p.rotY ?? 0).clone(), new THREE.Vector3(1, 1, 1)).multiply(local));
     return loaded.parts.map((part) => ({ part, matrices: places.map((m) => m.clone().multiply(part.matrix)) }));
     // size and at are literals at the call sites: their contents are what matter
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded, JSON.stringify(size), JSON.stringify(at)]);
+  }, [loaded, JSON.stringify(size), JSON.stringify(at), stretch]);
   if (!per) return <>{at.map((p, i) => <Fragment key={i}>{fallback(p, i)}</Fragment>)}</>;
   return (
     <>
