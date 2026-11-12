@@ -88,34 +88,26 @@ for (const width of [390, 1280]) {
   });
 }
 
-test('the 3D office keeps its frame rate with the camera tile open, as with the meeting room view', async ({ page }) => {
+test('the 3D office keeps its frame rate with the camera tile open', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
-  await page.goto('/?meeting=call');
-  await enterOffice(page, { loaded: true });
-  // the main view's frames over 6 s. Software WebGL in the lab pays for every canvas on the page, so the budget is the
-  // meeting room's live view (#369), the same kind of small second renderer the call card already shows.
+  await enterOffice(page);
+  // the main view's frames over 6 s, each measured once its scene is warm (software WebGL in the lab compiles slowly)
   const frames = () => page.evaluate(() => new Promise<number>((done) => {
     let n = 0;
     const end = performance.now() + 6000;
     const tick = () => (performance.now() < end ? (n++, requestAnimationFrame(tick)) : done(n));
     requestAnimationFrame(tick);
   }));
-  await expect(page.locator('.vcall-card .vcall-tile canvas')).toBeVisible({ timeout: 30_000 });
   await page.waitForTimeout(10_000);
-  const meeting = await frames();
-  await page.evaluate(() => document.exitPointerLock()); // looking around holds the mouse, as Esc frees it
-  await page.getByRole('button', { name: 'Fold the call card' }).click();
-  await expect(page.locator('.vcall-tile')).toHaveCount(0);
-  await page.waitForTimeout(2000);
-  const none = await frames();
+  const without = await frames();
   await page.evaluate(() => (window as unknown as CamWindow).__swarmAgentCam.on('ceo'));
   await expect.poll(() => cam(page)).toBe('ceo');
   await expect(page.locator('.cam-tile canvas')).toBeVisible({ timeout: 30_000 });
-  await page.waitForTimeout(10_000); // its shaders compile first, slowly in software WebGL
-  const camera = await frames();
-  console.log(`main view frames in 6 s: ${none} with no tile, ${meeting} with the meeting room's, ${camera} with the camera's`);
+  await page.waitForTimeout(10_000);
+  const withTile = await frames();
   expect(await page.evaluate(() => (window as unknown as CamWindow).__swarmAgentCam.frames), 'the tile draws').toBeGreaterThan(5);
-  expect(camera, 'the camera tile costs the office no more than the meeting room view').toBeGreaterThanOrEqual(Math.floor(meeting * 0.7));
+  expect(withTile, `main view frames in 6 s with the tile vs ${without} without`).toBeGreaterThanOrEqual(Math.floor(without * 0.7));
+  await page.evaluate(() => document.exitPointerLock()); // looking around holds the mouse, as Esc frees it
   await page.getByRole('button', { name: /^Turn off .+'s camera$/ }).click();
   await expect(page.locator('.cam-tile')).toHaveCount(0);
 });
