@@ -12,14 +12,14 @@ import { isClaudeModel, modelLabel } from '../../shared/models.ts';
 import type { WorldSnapshot } from '../../shared/types.ts';
 import type { SessionResult } from '../agentRunner.ts';
 import type { PersistedAgent, PersistedRepo } from './model.ts';
-import { SwarmLiveLeases } from './liveLeases.ts';
+import { SwarmProblems } from './problems.ts';
 
 /** Picked models are looked at this often (no network unless one can't run). */
 const PICKED_EVERY_MS = 60_000;
 /** A model that needs a newer Claude Code asks the registry at most this often (the latest may not run it either). */
 const URGENT_EVERY_MS = 3600_000;
 
-export abstract class SwarmAgentSdk extends SwarmLiveLeases {
+export abstract class SwarmAgentSdk extends SwarmProblems {
   private sdk: SdkUpdateState | null = null;
   private sdkChecking = false;
   private sdkRun: Promise<unknown> = Promise.resolve();

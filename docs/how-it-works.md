@@ -65,6 +65,10 @@ When a PR needs you, or an agent has been stuck on an error for more than 10 min
 
 The server works the numbers out from what it already knows plus a rolling week of merges, QA verdicts, check runs and session costs kept in the state file, and pushes them to the browser when they change.
 
+## Problems
+
+The console → Company → **Problems** is one register of everything that went wrong, recorded in plain code (no model call per entry): work (failed QA rounds by cause, merge conflicts, red CI, PRs that need a human or failed QA 3+ times, agents stuck on errors, issues blocked by dependencies over a day, sessions that ended without a result), infrastructure (IT's tickets) and process (what the CEO or IT notes with `note_problem`). Each entry has its floor, PR, issue and agent, the time and dollars lost, an owner (you, the CEO, the floor's agents or IT) and a state. They're grouped by cause and floor, worst first, with recurring ones flagged; a PR merging or closing resolves its entries. What needs your decision sits on top. Every day at the hour set there (09:00 by default) a digest card lands in the CEO chat and on Telegram: new and resolved problems, the worst cause, and the items, yours first. The CEO reads it with `problems`.
+
 ## Models and usage
 
 - Agents default to **Claude Code with Claude Opus 5.5 (`claude-opus-5-5`) at medium effort**. In the manager's console, Settings sets the default coding agent, its model and the effort; the Team tab overrides any of them per agent. The default model belongs to the default coding agent: an agent on another one uses that agent's own default unless you name a model for them. The CEO runs Claude Code unless you pick another coding agent on its card (CEO tab; Real terminals only): the switch applies from its next job, the chat says so with Undo, and on Codex, Gemini CLI or OpenCode it gets the office's tools over MCP, while Tools & skills and Model per job stay Claude Code's. Claude's usage pause doesn't hold a CEO picked onto another coding agent or account with room.

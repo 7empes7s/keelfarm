@@ -10,7 +10,7 @@ describe('floor themes', () => {
 
   it('refuses an unknown theme with the ones it could be', () => {
     expect(cleanFloorTheme('trading')).toBe('trading');
-    expect(() => cleanFloorTheme('casino')).toThrow(/office, game-studio, trading, design-studio, media-studio, research-lab, ops-control/);
+    expect(() => cleanFloorTheme('casino')).toThrow(/office, game-studio, trading, design-studio, media-studio, research-lab, ops-control, newsroom/);
   });
 
   it('has a card for every theme', () => {
@@ -23,8 +23,18 @@ describe('floor themes', () => {
     expect(themeForUseCase('design')).toBe('design-studio');
     expect(themeForUseCase('research')).toBe('research-lab');
     expect(themeForUseCase('ops')).toBe('ops-control');
-    for (const u of ['web-app', 'api', 'static-site', 'cli-library', 'mobile', 'marketing'] as const) expect(themeForUseCase(u)).toBe('office');
+    expect(themeForUseCase('marketing')).toBe('newsroom');
+    for (const u of ['web-app', 'api', 'static-site', 'cli-library', 'mobile'] as const) expect(themeForUseCase(u)).toBe('office');
     for (const u of USE_CASES) expect(FLOOR_THEMES).toContain(themeForUseCase(u.id));
+  });
+
+  it('dresses a news site, an editorial tool or a blog as the newsroom when its use case has no look of its own (#570)', () => {
+    expect(themeForUseCase('static-site', { fullName: 'acme/dev-blog' })).toBe('newsroom');
+    expect(themeForUseCase('web-app', { fullName: 'acme/site', description: 'The editorial calendar for our news desk' })).toBe('newsroom');
+    expect(themeForUseCase('web-app', { fullName: 'acme/shop', mission: 'Sell more socks' })).toBe('office');
+    expect(themeForUseCase('game-3d', { fullName: 'acme/news-game' })).toBe('game-studio'); // a use case's own look wins
+    expect(themeAfterUseCase({ fullName: 'acme/daily-headlines', themeByHand: false }, 'static-site')).toBe('newsroom');
+    expect(upgradeFloorTheme({ fullName: 'acme/newsletter', setup: { useCase: 'web-app', guessed: false } })).toEqual({ theme: 'newsroom', themeByHand: false });
   });
 
   it("follows the use case until the manager picks a theme by hand", () => {

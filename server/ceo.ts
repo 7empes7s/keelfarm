@@ -22,6 +22,7 @@ import { reactTools, type ReactHandlers } from './ceoReactTools.ts';
 import { setupTools, type SetupHandlers } from './ceoSetupTool.ts';
 import { ASKED_IN, askTools, type AskHandlers } from './ceoAskTools.ts';
 import { askItTools, reportTools, type AskItHandlers, type ReportHandlers } from './ceoItTools.ts';
+import { problemTools, type ProblemHandlers } from './ceoProblemTools.ts';
 
 // The CEO: a Claude Code session in the lobby that runs the company instead of writing code.
 // It studies each floor's repo, sizes its team of interchangeable agents from its throughput (team changes the
@@ -159,7 +160,7 @@ export function qaReportText(
   return JSON.stringify(report, null, 1);
 }
 
-export interface OfficeHandlers extends WaitHandlers, ReactHandlers, SetupHandlers, AskHandlers, AskItHandlers, ReportHandlers {
+export interface OfficeHandlers extends WaitHandlers, ReactHandlers, SetupHandlers, AskHandlers, AskItHandlers, ReportHandlers, ProblemHandlers {
   companyStatus(a: { full?: boolean }): string;
   floorDetail(a: { floor: number }): string;
   agentDetail(a: { agent_id: string }): string;
@@ -544,6 +545,7 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
     ...askTools(h, run),
     ...askItTools(h, run),
     ...reportTools(h, run),
+    ...problemTools(h, run),
   ];
   return toolServer(defs);
 }

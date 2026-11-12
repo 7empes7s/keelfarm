@@ -1,6 +1,7 @@
 import { FLOOR_D, FLOOR_W, HALF_D, HALF_W, PLAYER_RADIUS, SIDES, elevatorDoorway, lobbyColliders, officeColliders, rect, sideDoorway, WALL_T, type Rect } from '../layout';
 import type { ToyFloor } from './balls';
 import { reservedDecorRects } from '../decor/decor';
+import { reservedSetRects } from '../floorThemes/placement';
 import { reservedProjectRects } from '../projectProps/spots';
 
 // The roomba's brain: a pure state machine over the 2D layout rects, stepped once per physics step by Roomba.tsx.
@@ -99,7 +100,7 @@ export function roombaRects(floor: ToyFloor): Rect[] {
   for (const side of SIDES) out.push(sideDoorway(floor, side));
   for (const [x, z, s] of PLANTS[floor]) out.push(rect(x, z, 0.6 * s, 0.6 * s));
   out.push(dockFor(floor).rect);
-  if (floor === 'office') out.push(...reservedDecorRects(), ...reservedProjectRects()); // decorations can be placed there at any time; project props stand on every floor (#536)
+  if (floor === 'office') out.push(...reservedDecorRects(), ...reservedProjectRects(), ...reservedSetRects()); // decorations can be placed there at any time; project props and theme set pieces stand on every floor (#536, #570)
   return out;
 }
 

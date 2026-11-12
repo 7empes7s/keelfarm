@@ -46,5 +46,9 @@ describe("a floor's project props (#536)", () => {
     expect(deskToolFor('design', 'devices')).toBe('tablet');
     expect(deskToolFor(null, 'arcade')).toBe('controller');
     expect(deskToolFor(undefined, 'broadcast')).toBe('camera');
+    // a theme with a tool of its own puts it on every desk, whatever the use case (#570)
+    expect(deskToolFor('api', 'servers', 'game-studio')).toBe('controller');
+    expect(deskToolFor('web-app', 'devices', 'newsroom')).toBe('notebook');
+    expect(deskToolFor('api', 'servers', 'trading')).toBe('terminal');
   });
 });

@@ -9,6 +9,7 @@ import { ItDeskSettings } from './ItDeskCards';
 import { ItDept } from './ItDept';
 import { AboutOffice, AgentsSettings, CeoSettings, CompanySettings, PreviewsSettings, RuntimeSettings } from './SettingsSections';
 import { OpsTab } from './MissionConsole';
+import { ProblemsPage } from './ProblemsPage';
 import { CharterTab } from './CharterTab';
 import { ToolsTab } from './ToolsSettings';
 import { HistorySettings, HistoryTab, type HistoryFocus } from './HistoryTab';
@@ -73,6 +74,8 @@ export function SectionBody({ id, where, focus = {} }: { id: SectionId; where: W
       return <TeamTab focusRepo={focus.repoId} />;
     case 'ops':
       return <OpsTab card={focus.card} />;
+    case 'problems':
+      return <ProblemsPage />;
     case 'charter':
       return <CharterTab initialRepo={focus.repoId} />;
     case 'map':
