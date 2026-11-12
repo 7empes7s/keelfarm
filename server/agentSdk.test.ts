@@ -57,7 +57,7 @@ describe('the daily Agent SDK check (#569)', () => {
     const { swarm, i, repo, filed } = await office(async () => NEW);
     const view = await swarm.checkAgentSdk();
     expect(filed).toEqual([`${OWN}: Bump the Agent SDK to 0.3.330 (Claude Code 2.1.330)`]);
-    expect(view).toMatchObject({ behind: true, latest: NEW, error: null, alarm: null, bump: { floor: repo.floor } });
+    expect(view).toMatchObject({ behind: true, latest: NEW, error: null, alarm: null, bump: { floor: repo.floor, merged: false } });
     expect(i.repoRt.get(repo.id)!.issues.some((x) => x.number === view.bump!.issue)).toBe(true);
     await swarm.checkAgentSdk();
     expect(filed).toHaveLength(1);

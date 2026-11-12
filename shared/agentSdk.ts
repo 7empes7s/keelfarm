@@ -126,7 +126,7 @@ export interface SdkUpdateView {
   error: string | null;
   checking: boolean;
   behind: boolean;
-  /** The open bump issue on the office's own floor. */
-  bump: { issue: number; floor: number } | null;
+  /** The bump on the office's own floor: its issue still open, or merged and waiting for the office's self-update. */
+  bump: { issue: number; floor: number; merged: boolean } | null;
   alarm: string | null;
 }

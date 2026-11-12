@@ -35,7 +35,7 @@ export function BundledClaude({ version }: { version: string | null }) {
       </div>
       {v?.bump && (
         <p className="acc-flag" role="status">
-          <Icon name="refresh-cw" /> Updating: #{v.bump.issue} on floor {v.bump.floor} goes live with the office's next update.
+          <Icon name="refresh-cw" /> Updating: #{v.bump.issue} on floor {v.bump.floor} {v.bump.merged ? 'is merged and goes live with the office’s next update' : 'goes live once it’s built, checked and merged'}.
         </p>
       )}
       {v?.alarm && (

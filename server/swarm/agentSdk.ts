@@ -90,7 +90,7 @@ export abstract class SwarmAgentSdk extends SwarmLiveLeases {
       error: s.error,
       checking: this.sdkChecking,
       behind: isBehind(input.installed, s.latest),
-      bump: open && own ? { issue: open.number, floor: own.floor } : null,
+      bump: !own ? null : open ? { issue: open.number, floor: own.floor, merged: false } : s.bump && input.inFlight ? { issue: s.bump.issue, floor: own.floor, merged: true } : null,
       alarm: sdkAlarm(input),
     };
   }
