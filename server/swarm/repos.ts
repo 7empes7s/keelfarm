@@ -59,6 +59,7 @@ export abstract class SwarmRepos extends SwarmCore {
       qaBrief: '',
       playbook: '',
       preview: { ...DEFAULT_PREVIEW, env: {} },
+      themeByHand: false,
       addedAt: Date.now(),
       charter: newRecord(),
     };
@@ -166,6 +167,7 @@ export abstract class SwarmRepos extends SwarmCore {
     if (patch.theme !== undefined) {
       try {
         repo.theme = cleanFloorTheme(patch.theme);
+        repo.themeByHand = true; // a hand pick always wins over the use case (#528)
       } catch (err) {
         throw new HttpError(400, (err as Error).message);
       }

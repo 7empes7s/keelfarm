@@ -7,53 +7,40 @@ import { CEO_ID } from '../../../shared/types';
 import { floorRows, type FloorRow } from './floorRows';
 import { Icon } from './Icon';
 import { Panel } from './Panel';
+import { Avatar } from './phoneParts';
+import './floorList.css';
 
 function People({ rows, caption }: { rows: FloorRow[]; caption: string }) {
   const openOverlay = useStore((s) => s.openOverlay);
   if (!rows.length) return <p className="muted">Nobody works here yet.</p>;
   return (
-    // its own box scrolls sideways on a narrow screen, never the panel (#149)
-    <div className="ops-table-wrap" tabIndex={0} role="region" aria-label={caption}>
-      <table className="floor-table">
-        <caption className="sr-only">{caption}</caption>
-        <thead>
-          <tr>
-            <th scope="col">Name</th>
-            <th scope="col">Agent</th>
-            <th scope="col">Status</th>
-            <th scope="col">Doing</th>
-            <th scope="col">
-              <span className="sr-only">Actions</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.id}>
-              <th scope="row">{r.name}</th>
-              <td>{r.agent}</td>
-              <td>
-                <span className={`status-kind status-kind-${r.kind}`}>
-                  <Icon name={r.icon} /> {r.status}
-                </span>
-              </td>
-              <td>{r.doing}</td>
-              <td>
-                <button className="btn btn-small" onClick={() => openOverlay({ kind: 'terminal', agentId: r.id })} aria-label={r.signIn ? `Sign ${r.name}'s ${r.signIn} in, in their terminal` : `Open ${r.name}'s terminal`}>
-                  {r.signIn ? (
-                    <>
-                      <Icon name="key-round" /> Sign in
-                    </>
-                  ) : (
-                    'Terminal'
-                  )}
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    // a row per person, stacking on a narrow screen instead of a table squeezing its words (#527)
+    <ul className="fl-rows" aria-label={caption}>
+      {rows.map((r) => (
+        <li key={r.id} className="ds-row fl-person">
+          <Avatar name={r.name} color={r.color} />
+          <div className="ds-row-main">
+            <div className="fl-person-head">
+              <span className="ds-row-title">{r.name}</span>
+              <span className="ds-row-meta">{r.agent}</span>
+              <span className={`status-kind status-kind-${r.kind}`}>
+                <Icon name={r.icon} /> {r.status}
+              </span>
+            </div>
+            <div className="ds-row-meta">{r.doing}</div>
+          </div>
+          <button className="btn btn-small" onClick={() => openOverlay({ kind: 'terminal', agentId: r.id })} aria-label={r.signIn ? `Sign ${r.name}'s ${r.signIn} in, in their terminal` : `Open ${r.name}'s terminal`}>
+            {r.signIn ? (
+              <>
+                <Icon name="key-round" /> Sign in
+              </>
+            ) : (
+              'Terminal'
+            )}
+          </button>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -64,13 +51,14 @@ export function FloorList() {
   const qa = useStore((s) => s.qa);
   const settings = useStore((s) => s.settings);
   const clis = useStore((s) => s.clis);
+  const ceoJob = useStore((s) => s.ceo.job);
   const openOverlay = useStore((s) => s.openOverlay);
   const goToFloor = useStore((s) => s.goToFloor);
   const [shown, setShown] = useState(floor);
   const repo = repos.find((r) => r.floor === shown) ?? null;
   const rows = useMemo(
-    () => floorRows(repo ? agentsOnRepo(agents, repo.id) : agents[CEO_ID] ? [agents[CEO_ID]] : [], settings, clis),
-    [repo, agents, settings, clis],
+    () => floorRows(repo ? agentsOnRepo(agents, repo.id) : agents[CEO_ID] ? [agents[CEO_ID]] : [], settings, clis, ceoJob),
+    [repo, agents, settings, clis, ceoJob],
   );
   const counts = repo ? floorPrCounts(repo, qa) : null;
   const busy = rows.filter((r) => r.kind === 'busy' || r.kind === 'waiting').length;
@@ -123,18 +111,22 @@ export function FloorList() {
       {!repo && repos.length > 0 && (
         <>
           <h3>Floors</h3>
-          <ul className="floor-floors">
+          <ul className="fl-rows">
             {repos.map((r) => {
               const team = agentsOnRepo(agents, r.id);
               const working = team.filter((a) => a.status === 'working' || a.status === 'preparing').length;
               return (
                 <li key={r.id}>
-                  <button className="linkish" onClick={() => setShown(r.floor)}>
-                    Floor {r.floor}: {r.fullName}
-                  </button>{' '}
-                  <span className="muted">
-                    · {team.length} people, {working} working
-                  </span>
+                  <button type="button" className="ds-row fl-floor" style={{ ['--accent' as string]: r.color }} onClick={() => goToFloor(r.floor)} aria-label={`Go to floor ${r.floor}: ${r.fullName}`}>
+                    <span className="floor-badge">{r.floor}</span>
+                    <span className="ds-row-main">
+                      <span className="ds-row-title">{r.fullName}</span>
+                      <span className="ds-row-meta">
+                        {team.length} {team.length === 1 ? 'person' : 'people'} · {working} working
+                      </span>
+                    </span>
+                    <Icon name="chevron-right" />
+                  </button>
                 </li>
               );
             })}

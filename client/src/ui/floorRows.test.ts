@@ -70,4 +70,13 @@ describe('floorRows', () => {
     const rows = floorRows([agent({ status: 'done', waiting: 'manager' }), agent({ status: 'working', blocked: 'a prompt' }), agent({ status: 'done' })], terminals, []);
     expect(rows.map((r) => [r.status, r.kind])).toEqual([['Needs you', 'attention'], ['Needs you', 'attention'], ['Free', 'idle']]);
   });
+
+  it("shows the CEO working while a CEO job runs, free when idle (#527)", () => {
+    const ceo = agent({ id: 'ceo', name: 'Mimoun', role: 'ceo', status: 'done' });
+    const [busy] = floorRows([ceo], terminals, [], { label: 'Answering the manager' });
+    expect([busy.status, busy.kind, busy.doing]).toEqual(['Working', 'busy', 'Answering the manager']);
+    const [free] = floorRows([ceo], terminals, [], null);
+    expect([free.status, free.kind, free.doing]).toEqual(['Free', 'idle', 'Free for a chat']);
+    expect(floorRows([agent({ status: 'done' })], terminals, [], { label: 'Planning' })[0].status).toBe('Free'); // only the CEO
+  });
 });

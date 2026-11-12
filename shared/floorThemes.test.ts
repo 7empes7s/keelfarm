@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { cleanFloorTheme, FLOOR_THEME_INFO, FLOOR_THEMES, floorThemeOf } from './floorThemes.ts';
+import { cleanFloorTheme, FLOOR_THEME_INFO, FLOOR_THEMES, floorThemeOf, themeAfterUseCase, themeForUseCase, upgradeFloorTheme } from './floorThemes.ts';
+import { USE_CASES } from './useCases.ts';
 
 describe('floor themes', () => {
   it('reads missing, old or corrupt themes as the plain office', () => {
@@ -14,5 +15,32 @@ describe('floor themes', () => {
 
   it('has a card for every theme', () => {
     expect(Object.keys(FLOOR_THEME_INFO).sort()).toEqual([...FLOOR_THEMES].sort());
+  });
+
+  it('maps each use case to its theme, the rest to the office (#528)', () => {
+    expect(themeForUseCase('video')).toBe('media-studio');
+    expect(themeForUseCase('game-3d')).toBe('game-studio');
+    expect(themeForUseCase('design')).toBe('design-studio');
+    expect(themeForUseCase('research')).toBe('research-lab');
+    expect(themeForUseCase('ops')).toBe('ops-control');
+    for (const u of ['web-app', 'api', 'static-site', 'cli-library', 'mobile', 'marketing'] as const) expect(themeForUseCase(u)).toBe('office');
+    for (const u of USE_CASES) expect(FLOOR_THEMES).toContain(themeForUseCase(u.id));
+  });
+
+  it("follows the use case until the manager picks a theme by hand", () => {
+    expect(themeAfterUseCase({ theme: 'office', themeByHand: false }, 'video')).toBe('media-studio');
+    expect(themeAfterUseCase({ theme: 'media-studio', themeByHand: false }, 'api')).toBe('office');
+    expect(themeAfterUseCase({ theme: 'office', themeByHand: true }, 'video')).toBe('office');
+    expect(themeAfterUseCase({ theme: 'trading', themeByHand: true }, 'game-3d')).toBe('trading');
+  });
+
+  it('upgrades old floors once: a saved theme was a hand pick, a confirmed use case maps, a guess is skipped', () => {
+    expect(upgradeFloorTheme({ setup: { useCase: 'video', guessed: false } })).toEqual({ theme: 'media-studio', themeByHand: false });
+    expect(upgradeFloorTheme({ setup: { useCase: 'game-3d', guessed: true } })).toEqual({ theme: undefined, themeByHand: false });
+    expect(upgradeFloorTheme({})).toEqual({ theme: undefined, themeByHand: false });
+    expect(upgradeFloorTheme({ theme: 'office', setup: { useCase: 'video', guessed: false } })).toEqual({ theme: 'office', themeByHand: true });
+    // already upgraded: left alone, so a later restart never re-maps or re-marks it
+    expect(upgradeFloorTheme({ theme: 'media-studio', themeByHand: false, setup: { useCase: 'api', guessed: false } })).toEqual({ theme: 'media-studio', themeByHand: false });
+    expect(upgradeFloorTheme({ themeByHand: true, setup: { useCase: 'video', guessed: false } })).toEqual({ theme: undefined, themeByHand: true });
   });
 });

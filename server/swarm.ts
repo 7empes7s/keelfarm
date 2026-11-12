@@ -68,7 +68,7 @@ import {
   TERMINAL_SAVE_MS,
   clampMaxAgents,
 } from './swarm/model.ts';
-import { FLOOR_THEMES, lookFor, LOOKS } from './swarm/flavour.ts';
+import { FLOOR_THEMES, lookFor, LOOKS, upgradeFloorTheme } from './swarm/flavour.ts';
 import { loadScreen } from './swarm/screens.ts';
 import { SwarmVoiceAgent } from './swarm/voiceAgent.ts';
 import { loadDecisions } from '../shared/decisions.ts';
@@ -100,7 +100,7 @@ export class Swarm extends SwarmVoiceAgent {
           qaBrief: r.qaBrief ?? '',
           playbook: r.playbook ?? '',
           localPath: r.localPath ?? null,
-          preview: { command: r.preview?.command ?? null, env: { ...r.preview?.env } },
+          preview: { command: r.preview?.command ?? null, env: { ...r.preview?.env } }, ...upgradeFloorTheme(r), // before #528 a use case didn't pick the theme
           charter: loadRecord(r.charter), // before #48 there's none: the brief above stays the mission, as it was
         })),
         // Developers and QA testers became agents (docs/agents.md): testers keep their seats, now the east-wall desks.
