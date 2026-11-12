@@ -328,7 +328,7 @@ function FloorBrief({ repo, focused }: { repo: RepoView; focused: boolean }) {
           )}
         </button>
       </div>
-      <details className="small" open={focused}>
+      <details className="small" open={focused} data-tour="qa-brief">
         <summary>QA brief{repo.qaBrief ? '' : ' (none yet)'}</summary>
         <textarea
           key={repo.qaBrief}

@@ -16,8 +16,9 @@ import { screenMat, staticTexture } from '../floorThemes/screenKit';
 import { useCanvasTexture } from '../interact';
 import { deskPosition, deskRotation, DESK_TOP } from '../layout';
 import { glow } from '../materials';
+import { Model } from '../models/Model';
+import type { ModelName } from '../models/registry';
 import * as D from './draw';
-import { useModel, type Fit, type ModelName } from './glb';
 import * as M from './models';
 import { ago, clipsApproved, floorBoard, gitLog, latestMerge, launchCountdown, notices, teamStatus, tenantStatus } from './screens';
 import { CAMERA_CORNERS, hasCameras, PROJECT_SPOTS, projectItems, type PlacedItem } from './spots';
@@ -49,10 +50,9 @@ function Piece({ at, geometry }: { at: Pose; geometry: THREE.BufferGeometry }) {
   return <mesh geometry={geometry} material={vertexToon} position={[at.x, at.y, at.z]} rotation={[0, at.rotY, 0]} castShadow receiveShadow />;
 }
 
-/** A CC0 model fitted to its box, or its stand-in until (or unless) it loads. */
-function Model({ at, name, fit, standIn }: { at: Pose; name: ModelName; fit: Fit; standIn: () => THREE.BufferGeometry }) {
-  const geo = useModel(name, fit);
-  return <Piece at={at} geometry={geo ?? standIn()} />;
+/** A CC0 model (models/registry.ts) filling its box, or its plain stand-in while it loads, or if it can't. */
+function Furniture({ at, name, size, standIn }: { at: Pose; name: ModelName; size: [number, number, number]; standIn: () => THREE.BufferGeometry }) {
+  return <Model name={name} at={[at]} size={size} stretch fallback={() => <Piece at={at} geometry={standIn()} />} />;
 }
 
 /** The housing behind a wall screen or poster. */
@@ -211,7 +211,7 @@ function FloorItem({ at }: { at: PlacedItem }) {
     case 'backup-shelf':
       return (
         <>
-          <Model at={at} name="shelf" fit={{ w, h, d }} standIn={() => M.shelfBase(w, h, d)} />
+          <Furniture at={at} name="shelf" size={[w, h, d]} standIn={() => M.shelfBase(w, h, d)} />
           <Piece at={at} geometry={M.backupTapesModel(w, h, d)} />
         </>
       );
@@ -227,14 +227,14 @@ function FloorItem({ at }: { at: PlacedItem }) {
     case 'blueprint-table':
       return (
         <>
-          <Model at={at} name="table" fit={{ w, h: TABLE_TOP, d }} standIn={() => M.tableBase(w, TABLE_TOP, d)} />
+          <Furniture at={at} name="table" size={[w, TABLE_TOP, d]} standIn={() => M.tableBase(w, TABLE_TOP, d)} />
           <Piece at={at} geometry={M.miniBuildingModel(TABLE_TOP)} />
         </>
       );
     case 'robot-bench':
       return (
         <>
-          <Model at={at} name="desk" fit={{ w, h: BENCH_TOP, d }} standIn={() => M.tableBase(w, BENCH_TOP, d, '#6c757d')} />
+          <Furniture at={at} name="desk" size={[w, BENCH_TOP, d]} standIn={() => M.tableBase(w, BENCH_TOP, d, '#6c757d')} />
           <Piece at={at} geometry={M.robotModel(BENCH_TOP)} />
         </>
       );
@@ -250,7 +250,7 @@ function FloorItem({ at }: { at: PlacedItem }) {
     case 'phone-bay':
       return (
         <>
-          <Model at={at} name="desk" fit={{ w, h: BENCH_TOP, d }} standIn={() => M.tableBase(w, BENCH_TOP, d, '#343a40')} />
+          <Furniture at={at} name="desk" size={[w, BENCH_TOP, d]} standIn={() => M.tableBase(w, BENCH_TOP, d, '#343a40')} />
           <Piece at={at} geometry={M.phoneStandsModel(BENCH_TOP)} />
           {M.PHONES.x.map((x, i) => (
             <Face key={x} at={local(at, x, BENCH_TOP + 0.08 + M.PHONES.h / 2, -0.1, M.PHONES.rotY[i])} w={M.PHONES.w} h={M.PHONES.h} map={clipTex(i)} out={0.014} />
@@ -260,7 +260,7 @@ function FloorItem({ at }: { at: PlacedItem }) {
     case 'device-table':
       return (
         <>
-          <Model at={at} name="table" fit={{ w, h: TABLE_TOP, d }} standIn={() => M.tableBase(w, TABLE_TOP, d)} />
+          <Furniture at={at} name="table" size={[w, TABLE_TOP, d]} standIn={() => M.tableBase(w, TABLE_TOP, d)} />
           <Piece at={at} geometry={M.devicesModel(TABLE_TOP)} />
           {M.DEVICES.map((v) => {
             const p = local(at, v.x, TABLE_TOP + 0.014, v.z, v.rotY);

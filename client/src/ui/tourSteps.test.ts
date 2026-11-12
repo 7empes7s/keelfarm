@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { ACTION_IDS } from './keymap';
+import { PAGE_TARGETS, TARGET_TRACKS, resolves } from './tourTargets';
 import { TOUR, isStep, markSeen, newSince, seenIds, stepsFor, textParts, trackFor, whatsNew, type Track } from './tourSteps';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -40,6 +41,18 @@ describe('the tour', () => {
     const targets = tourTargets();
     const missing = steps.flatMap((s) => (s.targets ?? []).filter((t) => !targets.has(t)).map((t) => `${s.id} → ${t}`));
     expect(missing).toEqual([]);
+  });
+
+  it('rings a control drawn on every track it shows on, or opens the page that has it', () => {
+    const missing = steps.flatMap((s) => s.tracks.filter((t) => !resolves(s, t)).map((t) => `${s.id} on ${t}`));
+    expect(missing).toEqual([]);
+  });
+
+  it('registers only controls the client renders', () => {
+    const targets = tourTargets();
+    const ids = [...Object.keys(TARGET_TRACKS), ...Object.values(PAGE_TARGETS).flat()];
+    expect(ids.filter((t) => !targets.has(t))).toEqual([]);
+    expect(steps.flatMap((s) => s.targets ?? []).filter((t) => !(t in TARGET_TRACKS) && !Object.values(PAGE_TARGETS).flat().includes(t))).toEqual([]);
   });
 
   it('only uses key bindings that exist', () => {

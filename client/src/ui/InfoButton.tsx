@@ -5,6 +5,7 @@ import { Sheet } from './Sheet';
 import { openWhatsNew } from './tour';
 import { Icon } from './Icon';
 import { XLabel } from './HoverCard';
+import { TutorialsHub } from './TaskTutorial';
 
 /** `className`: the button's look, e.g. a back bar's shared icon button (docs/design.md) instead of the bare glyph. */
 export function InfoButton({ screen, className = 'info-btn' }: { screen: ScreenId; className?: string }) {
@@ -47,6 +48,7 @@ export function InfoButton({ screen, className = 'info-btn' }: { screen: ScreenI
               <Icon name="sparkles" /> What's new
             </button>
           </div>
+          <TutorialsHub onStart={() => setOpen(false)} />
         </Sheet>
       )}
     </>

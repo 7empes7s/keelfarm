@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { linkedSection, overlayRoute, parseRoute, routeHash, routeKind, routeTarget, ROUTES, sampleLinks, type Mode, type World } from './routes';
+import { followsBack, linkedSection, overlayRoute, parseRoute, routeHash, routeKind, routeTarget, ROUTES, sampleLinks, type Mode, type World } from './routes';
 import { standPose, yawFor } from './world/routeStand';
 
 const world: World = {
@@ -67,6 +67,7 @@ describe('the route table (#413)', () => {
     expect(office('#floor/2/kanban')).toMatchObject({ overlay: { kind: 'kanban', repoId: 'r2' }, stand: { floor: 2, at: 'board' } });
     expect(office('#3d/maproom')).toMatchObject({ overlay: { kind: 'mapRoom' }, stand: { floor: 0, at: 'ceo' } });
     expect(office('#3d/desk/mimoun')?.stand).toEqual({ floor: 0, at: 'ceo' });
+    expect(office('#3d/it')).toMatchObject({ overlay: null, stand: { floor: 0, at: 'it' } }); // the IT office (#535)
     expect(office('#settings/providers')?.overlay).toEqual({ kind: 'manager', tab: 'providers' });
     expect(pocket('#settings/providers')).toMatchObject({ native: true, ready: '.pk-settings' });
   });
@@ -93,6 +94,15 @@ describe('the route table (#413)', () => {
   });
 });
 
+describe('Back and links', () => {
+  it("takes the hashchange after a Back as Back, however late it comes, and any other as a link", () => {
+    expect(followsBack('#help/office', '#help/office', true)).toBe(true); // closing Help went back to its entry: don't reopen it
+    expect(followsBack('#help/office', '#help/office', false)).toBe(false); // a hash link fires popstate too: open it
+    expect(followsBack(null, '#help/office', true)).toBe(false);
+    expect(followsBack('#help/office', '#notices', true)).toBe(false);
+  });
+});
+
 describe('where a 3D place stands the camera', () => {
   it('looks the way the spot faces', () => {
     expect(yawFor(-Math.PI / 2)).toBeCloseTo(0); // north: along -z, the camera's yaw 0
@@ -102,5 +112,10 @@ describe('where a 3D place stands the camera', () => {
     expect(board.yaw).toBeCloseTo(0);
     expect(board.z).toBeLessThan(0);
     for (const s of ['elevator', 'manager', 'ceo', 'reception', 'screens', { desk: 0 }, { desk: 13 }] as const) expect(Number.isFinite(standPose(s).x + standPose(s).z + standPose(s).yaw), JSON.stringify(s)).toBe(true);
+  });
+  it('#3d/it looks down at the IT lead across the counter, so E opens their chat at once (#535)', () => {
+    const it = standPose('it');
+    expect(it.yaw).toBeCloseTo(-Math.PI / 2); // east, at the help desk
+    expect(it.pitch).toBeCloseTo(-0.12);
   });
 });

@@ -15,7 +15,7 @@ async function firstSession(enabled: boolean) {
   const start = backend.startSession;
   backend.startSession = (opts, cb) => (seen.push(opts), start(opts, cb));
   const swarm = new Swarm(backend);
-  swarm.updateSettings({ testLab: { enabled, browserJobs: 1, heavyJobs: 1 } });
+  swarm.updateSettings({ testLab: { enabled, browserJobs: 1, heavyJobs: 1, totalJobs: 1 } });
   await swarm.connectRepo('demo-co/pixel-todo');
   let issue: number | undefined;
   for (let i = 0; i < 100 && !issue; i++) {

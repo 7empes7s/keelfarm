@@ -195,7 +195,7 @@ function ToastItem({ t, pocket }: { t: Toast; pocket: boolean }) {
 export function NoticeToasts({ max }: { max: number }) {
   const all = useStore((s) => s.toasts);
   const pocket = useMode((s) => s.mode) === 'pocket';
-  const tour = useTour((s) => s.on); // they wait behind the tour, their time starting once it's done (#408)
+  const tour = useTour((s) => s.on || s.task); // they wait behind the tour, their time starting once it's done (#408)
   useNoticeSync();
   const toasts = tour ? [] : all;
   const { shown, more } = toastStack(toasts, max);

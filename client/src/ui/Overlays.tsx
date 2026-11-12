@@ -26,6 +26,7 @@ import { effectiveTier, setGraphicsPreset, useGfx } from '../world/gfx/useGraphi
 import { hitchSummary, performanceReport } from '../hitches';
 import { setReplay, usePhotoGate } from '../photo/gate';
 import { Icon } from './Icon';
+import { TutorialsHub } from './TaskTutorial';
 
 export { closeOverlay, Panel } from './Panel';
 
@@ -203,6 +204,7 @@ function Help({ tab: initial }: { tab?: HelpTab }) {
         <ControlsSettings />
       ) : (
         <div className="help">
+          <TutorialsHub onStart={() => useStore.getState().openOverlay(null)} />
           <h3>Moving around</h3>
           <p>
             <MoveKeys /> (or the arrow keys) walk · <Key action="run" /> run · mouse to look · <Key action="interact" /> or left click interacts with whatever the crosshair is on (the first click only grabs the mouse) ·{' '}

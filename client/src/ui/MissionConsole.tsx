@@ -95,7 +95,7 @@ function UsageCard({ hot }: { hot: boolean }) {
         </div>
       )}
       <div className="dp-meta">{why}</div>
-      <div className="row wrap small">
+      <div className="row wrap small" data-tour="usage-warn">
         <span>
           When Claude warns: <b>{USAGE_WARNING_CHOICES.find((c) => c.value === choice)?.label}</b>
         </span>

@@ -189,7 +189,7 @@ function Card({ repo, card, col, allAgents, ceo }: { repo: RepoView; card: Kanba
           </Stat>
         )}
         {pull?.state === 'OPEN' && !pull.untrusted && (
-          <Stat icon={<Icon name="play" />} title="Preview" onTap={() => go({ kind: 'overlay', overlay: prPreview(repo, pull.number) })}>
+          <Stat icon={<Icon name="play" />} title="Preview" tour="pr-preview" onTap={() => go({ kind: 'overlay', overlay: prPreview(repo, pull.number) })}>
             Run PR #{pull.number} beside {repo.defaultBranch}
           </Stat>
         )}
@@ -280,7 +280,7 @@ const checksWord = (p: Pick<PullInfo, 'checks' | 'mergeable'>) =>
   `${p.checks === 'passing' ? 'checks pass' : p.checks === 'failing' ? 'checks failing' : p.checks === 'pending' ? 'checks running' : 'no checks'}${p.mergeable === 'CONFLICTING' ? ' · conflicts' : ''}`;
 
 /** One card of the status strip: a 44 px button or link to what it's about. */
-function Stat({ icon, title, tone, onTap, href, label, children }: { icon: ReactNode; title: string; tone?: 'warn' | 'bad'; onTap?: () => void; href?: string; label?: string; children: ReactNode }) {
+function Stat({ icon, title, tone, onTap, href, label, tour, children }: { icon: ReactNode; title: string; tone?: 'warn' | 'bad'; onTap?: () => void; href?: string; label?: string; tour?: string; children: ReactNode }) {
   const inner = (
     <>
       <span className="cardview-stat-icon" aria-hidden>
@@ -301,7 +301,7 @@ function Stat({ icon, title, tone, onTap, href, label, children }: { icon: React
     );
   if (onTap)
     return (
-      <button type="button" className={cls} onClick={onTap} aria-label={label}>
+      <button type="button" className={cls} onClick={onTap} aria-label={label} data-tour={tour}>
         {inner}
       </button>
     );

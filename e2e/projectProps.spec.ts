@@ -4,7 +4,7 @@ import { enterOffice, expect, startAt, test } from './helpers';
 
 // Project props (#536): each floor shows its project's things and a live board screen whose numbers match the API, in
 // the 3D office on a desktop and at 390 px, with few extra draws, every desk still reachable (projectProps.test.ts
-// checks the walkways), and a model that won't load falling back to its plain shape without a console error.
+// checks the walkways), and a model that won't load falling back to its plain shape without a console error (models/Model.tsx).
 // The demo gives floor N the Nth set: vault, civic, workshop; floor 1 is switched to the video studio as the 4th.
 
 type Found = { name: string; userData: Record<string, unknown>; meshes: number };

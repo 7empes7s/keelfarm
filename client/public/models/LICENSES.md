@@ -1,13 +1,18 @@
 # 3D models
 
-Every model in this folder is public domain (CC0 1.0, https://creativecommons.org/publicdomain/zero/1.0/). New models
-must be CC0 too (Kenney, Quaternius, KayKit, Poly Pizza's CC0 ones) and get a line here: `client/src/world/projectProps/licenses.test.ts`
-fails for a file that isn't listed as CC0. They were shrunk with glTF-Transform (dedup, weld, quantize); the office
-draws a plain-shape stand-in while one loads, or if it never does.
+Every model here is CC0 (public domain): only CC0 kits go in this folder. Each file is listed in
+`client/src/world/models/registry.ts`, and `registry.test.ts` checks this table against the folder.
+The files are compressed with `npx @gltf-transform/cli optimize <in> <out> --compress meshopt --join false --flatten false`.
 
-| File | Model | Author | Source | License |
-| --- | --- | --- | --- | --- |
-| kenney/bookcaseClosedWide.glb | Bookcase (closed, wide), Furniture Kit 2.0 | Kenney | https://kenney.nl/assets/furniture-kit | CC0 |
-| kenney/computerScreen.glb | Computer screen, Furniture Kit 2.0 | Kenney | https://kenney.nl/assets/furniture-kit | CC0 |
-| kenney/desk.glb | Desk, Furniture Kit 2.0 | Kenney | https://kenney.nl/assets/furniture-kit | CC0 |
-| kenney/table.glb | Table, Furniture Kit 2.0 | Kenney | https://kenney.nl/assets/furniture-kit | CC0 |
+| File | Source | Licence | Kit |
+| --- | --- | --- | --- |
+| `kenney/chairDesk.glb` | https://kenney.nl/assets/furniture-kit | CC0 | Kenney Furniture Kit 2.0 |
+| `kenney/computerScreen.glb` | https://kenney.nl/assets/furniture-kit | CC0 | Kenney Furniture Kit 2.0 |
+| `kenney/computerKeyboard.glb` | https://kenney.nl/assets/furniture-kit | CC0 | Kenney Furniture Kit 2.0 |
+| `kenney/bookcaseClosedDoors.glb` | https://kenney.nl/assets/furniture-kit | CC0 | Kenney Furniture Kit 2.0 |
+| `kenney/pottedPlant.glb` | https://kenney.nl/assets/furniture-kit | CC0 | Kenney Furniture Kit 2.0 |
+| `kenney/cardboardBoxClosed.glb` | https://kenney.nl/assets/furniture-kit | CC0 | Kenney Furniture Kit 2.0 |
+| `kenney/trashcan.glb` | https://kenney.nl/assets/furniture-kit | CC0 | Kenney Furniture Kit 2.0 |
+| `kenney/bookcaseClosedWide.glb` | https://kenney.nl/assets/furniture-kit | CC0 | Kenney Furniture Kit 2.0 |
+| `kenney/desk.glb` | https://kenney.nl/assets/furniture-kit | CC0 | Kenney Furniture Kit 2.0 |
+| `kenney/table.glb` | https://kenney.nl/assets/furniture-kit | CC0 | Kenney Furniture Kit 2.0 |
