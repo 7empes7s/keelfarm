@@ -6,10 +6,11 @@ import type { ItDeskState } from '../shared/itDesk.ts';
 import type { PhoneMessage } from '../shared/types.ts';
 
 // #506 through the office: it_run reads at once, it_propose waits for the manager's Run, the never-list holds at Run.
+// The tools are the IT department's since #524 (itTools); results land in IT's chat.
 type Internals = {
   ensureCeo(interrupted: unknown[]): void;
-  officeTools(): OfficeTools;
-  state: { itDesk: ItDeskState; messages: PhoneMessage[] };
+  itTools(): OfficeTools;
+  state: { itDesk: ItDeskState; it: { messages: PhoneMessage[] } };
 };
 
 function office() {
@@ -23,7 +24,7 @@ function office() {
   const swarm = new Swarm(backend);
   const o = swarm as unknown as Internals;
   o.ensureCeo([]);
-  return { swarm, o, ran, tools: o.officeTools() };
+  return { swarm, o, ran, tools: o.itTools() };
 }
 
 describe('the IT desk', () => {
@@ -54,7 +55,7 @@ describe('the IT desk', () => {
     expect(ran).toEqual([['journalctl', '--vacuum-size=500M']]);
     expect(o.state.itDesk.waiting).toEqual([]);
     expect(o.state.itDesk.log[0]).toMatchObject({ kind: 'change', code: 0, argv: ['journalctl', '--vacuum-size=500M'] });
-    const posted = o.state.messages.at(-1)!;
+    const posted = o.state.it.messages.at(-1)!;
     expect(posted.text).toMatch(/Ran `journalctl --vacuum-size=500M`/);
     expect(posted.notice?.details).toMatch(/freed 3.4G/);
     await expect(swarm.itRunProposals([card.id])).rejects.toThrow(/run or gone/);
@@ -77,7 +78,7 @@ describe('the IT desk', () => {
     await swarm.itRunProposals(['old']);
     expect(ran).toEqual([]);
     expect(o.state.itDesk.log[0]).toMatchObject({ code: null, argv: ['docker', 'volume', 'prune', '-f'] });
-    expect(o.state.messages.at(-1)!.text).toMatch(/Refused `docker volume prune -f`/);
+    expect(o.state.it.messages.at(-1)!.text).toMatch(/Refused `docker volume prune -f`/);
   });
 
   it('does nothing while switched off', async () => {

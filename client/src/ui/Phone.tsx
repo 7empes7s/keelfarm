@@ -16,6 +16,7 @@ import { CloseButton, Icon } from './Icon';
 import { badgeCount } from './badgeCount';
 import type { IconName } from './icons';
 import { chatDock, VIEWPORT_EVENT } from '../viewport';
+import { isTouch } from '../world/touch/touchState';
 
 // The manager's phone: text the CEO, decide on team changes, see the whole company at a glance
 // without walking anywhere, and play a game while the team works. Press P anywhere in the office.
@@ -306,7 +307,8 @@ export function Phone({ tab: initialTab, requestId }: { tab?: PhoneTab; requestI
         <HolidayStrip />
         <div className="phone-screen">
           {tab !== 'games' && <LobbyNudge />}
-          {tab === 'chat' && <Chat />}
+          {/* on a touch screen the keyboard waits for a tap, as in pocket mode: focus would hide the phone's tabs */}
+          {tab === 'chat' && <Chat autoFocus={!isTouch} />}
           {tab === 'hires' && <TeamChanges focusId={requestId} />}
           {tab === 'company' && <Company />}
           {tab === 'games' && <Games game={game} onGame={setGame} />}

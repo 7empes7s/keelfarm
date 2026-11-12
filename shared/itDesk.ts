@@ -13,6 +13,7 @@ export interface ItProposal {
   undo: string; // how to undo it, or "backed up to X"
   risk: ItRisk;
   at: number;
+  by?: string; // who proposed it: the IT lead (#524); absent: the CEO, before the IT department
 }
 
 /** One command the IT desk ran (or refused at Run). */

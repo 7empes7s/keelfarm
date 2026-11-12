@@ -142,6 +142,13 @@ export abstract class SwarmContract {
   protected abstract settleChanges(...a: Parameters<Swarm['settleChanges']>): ReturnType<Swarm['settleChanges']>;
   protected abstract takeChanges(...a: Parameters<Swarm['takeChanges']>): ReturnType<Swarm['takeChanges']>;
 
+  // itDept.ts
+  protected abstract itBotSecret(...a: Parameters<Swarm['itBotSecret']>): ReturnType<Swarm['itBotSecret']>;
+  protected abstract askIt(...a: Parameters<Swarm['askIt']>): ReturnType<Swarm['askIt']>;
+  protected abstract itDecide(...a: Parameters<Swarm['itDecide']>): ReturnType<Swarm['itDecide']>;
+  protected abstract itProposed(...a: Parameters<Swarm['itProposed']>): ReturnType<Swarm['itProposed']>;
+  protected abstract itRan(...a: Parameters<Swarm['itRan']>): ReturnType<Swarm['itRan']>;
+
   // sessions.ts
   protected abstract closeTestLab(...a: Parameters<Swarm['closeTestLab']>): ReturnType<Swarm['closeTestLab']>;
   protected abstract labSessions(...a: Parameters<Swarm['labSessions']>): ReturnType<Swarm['labSessions']>;

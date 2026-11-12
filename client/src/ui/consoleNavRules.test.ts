@@ -73,7 +73,7 @@ describe('the console map', () => {
     for (const where of ['office', 'pocket'] as const) {
       const oneTap = new Set([...sectionRow('settings', where), ...sectionRow('work', where), ...GROUPS.map((g) => sectionsIn(g.id, where)[0])].map((s) => s.id));
       // Each of these is its top tab plus one tap in that tab's row, as it was in the side column before #224.
-      const tabThenRow = ['charter', 'map', 'ceo-settings', 'tools', 'daily-log', 'timelapse'];
+      const tabThenRow = ['charter', 'map', 'ceo-settings', 'it-dept', 'tools', 'daily-log', 'timelapse'];
       for (const s of SECTIONS) {
         if (s.only && s.only !== where) continue;
         if (oneTap.has(s.id)) continue;

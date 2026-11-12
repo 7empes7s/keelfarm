@@ -154,11 +154,11 @@ export class Swarm extends SwarmLiveLeases {
         officeId: typeof loaded.officeId === 'string' && /^[a-z0-9]{6}$/.test(loaded.officeId) ? loaded.officeId : this.state.officeId,
         claudeUsage: Array.isArray(loaded.claudeUsage) ? mergeReadings([], loaded.claudeUsage.filter((r) => r && typeof r.type === 'string' && Number.isFinite(r.pct) && Number.isFinite(r.at))) : [],
         diskAlert: loadDiskAlert(loaded.diskAlert),
-        itDesk: loadItDesk(loaded.itDesk),
+        itDesk: loadItDesk(loaded.itDesk), it: this.loadItState(loaded.it),
         usageWaiver: keptWaiver(loaded.usageWaiver, loaded.settings?.usageWarnings, Date.now()),
         experiments: loadLab(loaded.experiments, Date.now()), taskAccounts: loadTaskAccounts(loaded.taskAccounts),
       };
-      for (const m of this.state.messages) this.messageSeq = Math.max(this.messageSeq, m.id + 1);
+      for (const m of [...this.state.messages, ...this.state.it.messages]) this.messageSeq = Math.max(this.messageSeq, m.id + 1);
       void this.ceoChat.backfill(this.state.ceo.chats, unfilled(loaded.ceo?.chats)).then((n) => n && this.broadcast({ type: 'ceoChat', conversations: conversationsView(this.state.ceo.chats) })); // threads from before #132
       if (!EFFORTS.includes(this.state.settings.defaultEffort)) this.state.settings.defaultEffort = 'medium';
       if (this.state.settings.runtime !== 'sdk') this.state.settings.runtime = 'terminal';
@@ -702,6 +702,7 @@ export class Swarm extends SwarmLiveLeases {
     for (const k of ['autoUpdate', 'statusReactions', 'itDesk'] as const) if (typeof patch[k] === 'boolean') s[k] = patch[k];
     if (patch.updateSettleMin !== undefined) s.updateSettleMin = settleMinutes(patch.updateSettleMin);
     this.pacingSettings(patch);
+    this.itSettings(patch);
     if (patch.stuckRecheckMin !== undefined) s.stuckRecheckMin = clampStuckRecheckMin(patch.stuckRecheckMin);
     if (patch.trimIdleDesksMin !== undefined) {
       s.trimIdleDesksMin = clampTrimIdleMin(patch.trimIdleDesksMin);
