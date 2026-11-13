@@ -6,6 +6,7 @@ import { cardPlan } from './accounts.ts';
 import { secretMismatch } from './secretFormats.ts';
 import { USE_CASES } from './useCases.ts';
 import { INSTALL_TARGETS, RENEW_NOTE } from './keyInstall.ts';
+import { parseServiceAccount } from './gcloud.ts';
 import type { AccountView, AgentCli, CloudView, CliView, KeyCheck, McpServerConfig, ProviderAuth, ProviderCategory, ProvidersView, ProviderTest, ProviderUse, UsageProvider, UsageSource, UsageWindow } from './types.ts';
 
 /** Where a provider's key or login lives: its old store (whose settings stay where they were) or the Providers page. */
@@ -69,6 +70,8 @@ export const PROVIDERS: ProviderDef[] = [
   // No OpenAI Sora: its API was removed on 2026-09-24 with no successor. Don't add it back.
   { id: 'upstash', name: 'Upstash Box', category: 'cloud', auth: 'api-key', home: 'cloud', docsUrl: 'https://upstash.com/docs/box', usage: 'upstash', blurb: 'Cloud machines for cloud agents' },
   { id: 'cloudflare', name: 'Cloudflare', category: 'cloud', auth: 'api-key', home: 'providers', keyEnv: 'CLOUDFLARE_API_TOKEN', placeholder: 'API token', docsUrl: 'https://developers.cloudflare.com/fundamentals/api/', blurb: 'DNS, tunnels and Workers' },
+  // #622: a service account's JSON key file, saved by the office from the file sent to it (save_provider_key's file)
+  { id: 'gcloud', name: 'Google Cloud', category: 'cloud', auth: 'api-key', home: 'providers', placeholder: "the service account's JSON", docsUrl: 'https://cloud.google.com/iam/docs/service-account-overview', blurb: 'A service account the office enables APIs and makes restricted API keys with', note: 'Send the JSON key file to the office in chat: it saves it here and deletes the file.' },
   { id: 'github', name: 'GitHub token', category: 'cloud', auth: 'api-key', home: 'providers', keyEnv: 'GITHUB_TOKEN', placeholder: 'ghp_… or github_pat_…', docsUrl: 'https://docs.github.com/en/rest', blurb: 'A personal access token for the GitHub API' },
   { id: 'entra', name: 'Microsoft Entra', category: 'cloud', auth: 'api-key', home: 'providers', placeholder: 'client id:client secret', docsUrl: 'https://developers.cloudflare.com/cloudflare-one/identity/idp-integration/entra-id/', icon: 'id-card', blurb: 'Entra ID sign-in for Cloudflare Access, set up by the office', note: 'Only the tenant you enter here is used.' },
   // #609: keys services on this machine use; IT installs them into the services' env files (install_key)
@@ -302,6 +305,10 @@ export function keyProblem(provider: string, raw: string): string | null {
   if (!key) return 'Paste the key first.';
   if (provider === 'twitch' && !/^[^:]+:[^:]+$/.test(key)) return 'Paste the client ID, a colon, then the client secret.';
   if (provider === 'kling' && key.split(':').length > 2) return 'Paste the access key, a colon, then the secret key (or one API key).';
+  if (provider === 'gcloud') {
+    const sa = parseServiceAccount(key);
+    return typeof sa === 'string' ? sa : null;
+  }
   if (key.length > 400 || /\s/.test(key)) return "That doesn't look like a key.";
   if (provider === 'anthropic') return secretMismatch('anthropic', key);
   if (provider === 'openai' || provider === 'openai-audio' || provider === 'openai-images') return key.startsWith('sk-ant-') || key.startsWith('sk-or-') ? 'This looks like another provider’s key, not an OpenAI one.' : secretMismatch('openai', key);
@@ -309,7 +316,12 @@ export function keyProblem(provider: string, raw: string): string | null {
   return null;
 }
 
-export const keyHint = (key: string) => (key ? key.slice(-4) : '');
+/** A key's last 4 characters; a service account's JSON (#622): its private key id's. */
+export function keyHint(key: string): string {
+  const sa = key.startsWith('{') ? parseServiceAccount(key) : null;
+  if (sa && typeof sa !== 'string') return sa.privateKeyId.slice(-4);
+  return key ? key.slice(-4) : '';
+}
 
 // ---------- cards ----------
 

@@ -71,3 +71,11 @@ export function envSecretFile(file: string): CfSecretFile {
     },
   };
 }
+
+/** An env file's Access service token as "client id:secret" (#622: the office's calls to an app behind Access). */
+export function envAccessPair(text: string): string | undefined {
+  const get = (name: string) => text.match(new RegExp(`^\\s*(?:export\\s+)?${name}\\s*=\\s*["']?([^"'\\s#]+)`, 'm'))?.[1];
+  const id = get(ID_VAR);
+  const secret = get(SECRET_VAR);
+  return id && secret ? `${id}:${secret}` : undefined;
+}

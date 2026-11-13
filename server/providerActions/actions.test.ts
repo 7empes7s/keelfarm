@@ -6,6 +6,7 @@ import { envSecretFile } from '../cfSecretFile.ts';
 import { ACTION_PROVIDERS, autoApplies, keyAbilities, PROVIDER_ACTIONS } from '../../shared/providerActions.ts';
 import { DEMO_REPO, fakeBoxes, fakeProviderHttp } from '../demo/providerActions.ts';
 import { fakeCloudflare } from '../demo/cloudflare.ts';
+import { demoServiceAccount } from '../demo/gcloud.ts';
 import { applyAction, MODULES, runAction } from './index.ts';
 import type { ActionCtx, ActionKey, EntraCred } from './types.ts';
 
@@ -39,18 +40,22 @@ const SAMPLE: Record<string, Record<string, Record<string, unknown>>> = {
     branch_protection_set: { checks: ['ci'] },
     secret_delete: { name: 'DEPLOY_KEY' },
   },
+  gcloud: { services_enable: { services: ['youtube.googleapis.com'] }, api_key_ensure: { name: 'office key', apis: ['apikeys.googleapis.com'] }, api_key_delete: { name: 'old key' } },
   upstash: { boxes: {}, box_resume: { id: 'box-old' }, box_pause: { id: 'box-ada' }, box_delete: { id: 'box-old' } },
 };
 const sample = (provider: string, op: string) => SAMPLE[provider]?.[op] ?? {};
+const SA = demoServiceAccount();
+const SA_PRIVATE = (JSON.parse(SA) as { private_key: string }).private_key.split('\n')[1];
 
-function ctxFor(provider: string, keys: ActionKey[] = [{ id: 'dead', label: 'Old key', key: DEAD, ok: false }, { id: 'live', label: 'Live key', key: SECRET, ok: true }]) {
+function ctxFor(provider: string, keys: ActionKey[] = [{ id: 'dead', label: 'Old key', key: DEAD, ok: false }, { id: 'live', label: 'Live key', key: provider === 'gcloud' ? SA : SECRET, ok: true }]) {
   const net = fakeProviderHttp();
   const cf = fakeCloudflare({ access: true });
   const boxes = fakeBoxes();
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cubefarm-actions-'));
   let cred: EntraCred | undefined = { tenant: TENANT, appObjectId: 'obj-x', clientId: 'client-x', keyId: 'key-x', secret: STORED, expiresAt: Date.now() + 400 * 86_400_000 };
   const entraKeys = keys.map((k) => ({ ...k, key: `admin-client:${k.key}`, accountId: TENANT }));
-  const ctx: ActionCtx = { keys: provider === 'entra' ? entraKeys : keys, http: net.http, cloudflareApi: cf.api, boxes, repo: DEMO_REPO, secretFile: (_f, name) => envSecretFile(path.join(dir, `${name.replace(/\W+/g, '-')}.env`)), cfKeys: [{ id: 'cf', label: 'Cloudflare', key: 'cf-live' }], entra: { get: () => cred, set: async (c) => void (cred = c) } };
+  const ctx: ActionCtx = { keys: provider === 'entra' ? entraKeys : keys, http: net.http, cloudflareApi: cf.api, boxes, repo: DEMO_REPO, secretFile: (_f, name) => envSecretFile(path.join(dir, `${name.replace(/\W+/g, '-')}.env`)), cfKeys: [{ id: 'cf', label: 'Cloudflare', key: 'cf-live' }], entra: { get: () => cred, set: async (c) => void (cred = c) }, saveKey: async (k) => k.label };
+  if (provider === 'gcloud') net.google.keys.push({ name: 'projects/clipfarm-demo/locations/global/keys/old', uid: 'old', displayName: 'old key', keyString: 'AIzaSyDEMOoldkey000000000000000000000' });
   return { ctx, net, cf, boxes, provider };
 }
 
@@ -74,8 +79,8 @@ describe('the provider-action layer', () => {
         } else expect(risk, `${provider} ${op}`).toBe('read');
         expect(seen.join('\n'), `${provider} ${op}`).not.toContain(SECRET);
         expect(seen.join('\n'), `${provider} ${op}`).not.toContain(DEAD);
-        for (const x of [STORED, ...graphSecrets, ctx.entra!.get()!.secret]) expect(seen.join('\n'), `${provider} ${op}`).not.toContain(x);
-        if (provider !== 'upstash') expect(net.calls.some((c) => c.key.endsWith(SECRET)) || cf.calls.length > 0, `${provider} ${op} reached the provider`).toBe(true);
+        for (const x of [STORED, ...graphSecrets, ctx.entra!.get()!.secret, SA_PRIVATE, ...net.google.keys.map((k) => k.keyString)]) expect(seen.join('\n'), `${provider} ${op}`).not.toContain(x);
+        if (provider !== 'upstash') expect(net.calls.some((c) => c.key.endsWith(SECRET) || c.key === SA) || cf.calls.length > 0, `${provider} ${op} reached the provider`).toBe(true);
       }
     }
   });

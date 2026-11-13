@@ -19,7 +19,9 @@ import { OFFICE_DIR } from '../officeUpdate.ts';
 import { CfError } from '../cloudflare.ts';
 import { envPathRefusal, envSecretFile } from '../cfSecretFile.ts';
 import type { CloudflareArgs, InstallKeyArgs, ProviderActionArgs, SaveKeyArgs } from '../ceoItTools.ts';
-import { INSTALL_TARGETS, installLine, installRefusal, keyPart, maskPasted, renewDue, savedMark, type KeyInstall } from '../../shared/keyInstall.ts';
+import { appInstallRefusal, appTarget, INSTALL_TARGETS, installLine, installRefusal, keyPart, maskPasted, renewDue, savedMark, type AppTarget, type KeyInstall } from '../../shared/keyInstall.ts';
+import { appAccess, appSet, appTest, appWhere } from '../appInstall.ts';
+import { readFile } from 'node:fs/promises';
 import { keyHint } from '../../shared/providers.ts';
 import { installKeyFile, restoreKeyFile } from '../keyInstall.ts';
 import { renewMinted } from '../keyRenew.ts';
@@ -231,7 +233,7 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
   /** A provider's keys (ElevenLabs' is Voice's), the one network call, and the Box API: the keys stay on the server. */
   private actionCtx(provider: string): ActionCtx {
     const voice = provider === 'elevenlabs' && this.voice.secret() ? [{ id: 'voice', label: 'ElevenLabs (Voice)', key: this.voice.secret(), ok: true }] : [];
-    return { keys: [...voice, ...this.providers.keysFor(provider)], http: this.backend.providerHttp, cloudflareApi: this.backend.cloudflareApi, boxes: this.cloud.boxApi(), repo: this.state.repos[0]?.fullName, secretFile: (envFile, name) => envSecretFile(this.cfSecretPath(envFile, name)), saveMinted: async (k) => (await this.providers.add(k.provider, k.value, k.label, '', k.mint.accountId, { expiresAt: k.expiresAt, mint: k.mint, usedBy: 'Made by the office' })).label, cfKeys: this.providers.keysFor('cloudflare'), entra: this.entraStore };
+    return { keys: [...voice, ...this.providers.keysFor(provider)], http: this.backend.providerHttp, cloudflareApi: this.backend.cloudflareApi, boxes: this.cloud.boxApi(), repo: this.state.repos[0]?.fullName, secretFile: (envFile, name) => envSecretFile(this.cfSecretPath(envFile, name)), saveMinted: async (k) => (await this.providers.add(k.provider, k.value, k.label, '', k.mint.accountId, { expiresAt: k.expiresAt, mint: k.mint, usedBy: 'Made by the office' })).label, cfKeys: this.providers.keysFor('cloudflare'), entra: this.entraStore, saveKey: (k) => this.providers.saveByName(k.provider, k.value, k.label, k.usedBy), savedKey: (provider, label) => this.providers.view().connections.some((c) => c.provider === provider && c.label === label) };
   }
 
   private entraTried = 0;
@@ -381,22 +383,31 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
     const c = this.findKey(String(a.key ?? ''));
     const file = String(a.target ?? '').trim();
     const varName = String(a.var_name ?? '').trim();
-    const no = installRefusal(file, varName);
+    const app = appTarget(file);
+    const no = app ? appInstallRefusal(app, varName) : installRefusal(file, varName);
     if (no) throw new HttpError(403, no);
     const value = this.providers.keyValue(c.id);
     const part = value === undefined ? null : keyPart(value, a.part);
     if (part === null) throw new HttpError(400, value === undefined ? `${c.label} has no key saved: save it again.` : `${c.label} isn't an "id:secret" pair: leave part out.`);
-    const t = INSTALL_TARGETS.find((x) => x.file === file)!;
-    const ki: KeyInstall = { file, var: varName, ...(t.unit && { unit: t.unit }), ...(a.part && { part: a.part }) };
-    const line = installLine(varName, file, keyHint(part));
+    const hint = keyHint(part);
+    if (app) {
+      const access = await this.appAccessPair(app);
+      if (c.installs?.some((i) => i.file === file && i.var === varName && i.hint === hint)) {
+        const t = await appTest(this.backend.providerHttp, access, app, varName);
+        return this.itMask(`${varName} (ends …${hint}) is already set in ${appWhere(app, varName)}. ${t.text}. Nothing to approve.`);
+      }
+    }
+    const t = app ? { name: app.name, unit: undefined } : INSTALL_TARGETS.find((x) => x.file === file)!;
+    const ki: KeyInstall = { file, var: varName, ...(t.unit && { unit: t.unit }), ...(a.part && { part: a.part }), ...(app && { hint }) };
+    const line = installLine(varName, file, hint);
     const why = (a.why ?? '').trim();
     const level = this.state.settings.itDept.autoApprove;
     if (autoApplies('routine', level)) {
       if (this.itAuto.job !== this.state.it.job) this.itAuto = { job: this.state.it.job, steps: 0 };
       if (this.itAuto.steps < AUTO_STEPS_MAX) return this.keyAutoInstall(c.id, ki, line, why, by);
     }
-    const queued = this.itQueue({ argv: ['install_key', varName, file], why: why || `Install ${c.label} into ${t.name}.`, affects: `${line}${t.unit ? `, then restart ${t.unit}` : ''}`, undo: 'the file before is kept next to it as a backup', risk: 'low', by, ki: { keyId: c.id, ...ki } });
-    return `On the manager's card${level === 'off' ? '' : ` (auto-approve: ${AUTO_STEPS_MAX} automatic steps in this change already)`}: \`${queued}\`, ${line}. Nothing is written until they tap Approve; then the file is written (mode 600, its old copy kept)${t.unit ? ` and ${t.unit} restarted` : ''}.`;
+    const queued = this.itQueue({ argv: ['install_key', varName, file], why: why || `Install ${c.label} into ${t.name}.`, affects: `${line}${t.unit ? `, then restart ${t.unit}` : ''}`, undo: app ? 'install the key it had before the same way' : 'the file before is kept next to it as a backup', risk: 'low', by, ki: { keyId: c.id, ...ki } });
+    return `On the manager's card${level === 'off' ? '' : ` (auto-approve: ${AUTO_STEPS_MAX} automatic steps in this change already)`}: \`${queued}\`, ${line}. Nothing is written until they tap Approve; then ${app ? `it's set in ${appWhere(app, varName)} and its Test pressed` : `the file is written (mode 600, its old copy kept)${t.unit ? ` and ${t.unit} restarted` : ''}`}.`;
   }
 
   /** Writes a key's value into a target, notes it on the key, restarts the unit. Code 0 when it all went; never throws. */
@@ -404,6 +415,8 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
     const fail = (out: string) => ({ code: 1, out, err: '', wrote: null as null | { file: string; backup: string | null } });
     const part = value === undefined ? null : keyPart(value, ki.part);
     if (part === null) return fail('The key is gone from Settings → Providers, or is no longer an "id:secret" pair.');
+    const app = appTarget(ki.file);
+    if (app) return this.appApply(keyId, ki, app, part).catch((err: Error) => fail(this.itMask(err.message)));
     if (installRefusal(ki.file, ki.var)) return fail(installRefusal(ki.file, ki.var)!);
     const file = this.installPath(ki.file);
     let backup: string | null;
@@ -421,6 +434,23 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
       lines.push(r.code === 0 ? `Restarted ${ki.unit}.` : `Restarting ${ki.unit} failed (${r.code === null ? 'timed out' : `exit ${r.code}`}): ${this.itMask((r.err || r.out).trim()).slice(0, 300)}`);
     }
     return { code, out: lines.join('\n'), err: '', wrote: { file, backup } };
+  }
+
+  /** The app's Access service token, from the env file access_service_token_ensure writes for it by default. */
+  private async appAccessPair(app: AppTarget): Promise<string> {
+    const r = await appAccess(app, this.cfSecretPath(undefined, app.access));
+    if ('error' in r) throw new HttpError(400, r.error);
+    return r.pair;
+  }
+
+  /** An app install's Approve: set through its Settings API, noted on the key, then its Test read back (code 0: Working). */
+  private async appApply(keyId: string, ki: KeyInstall, app: AppTarget, value: string) {
+    const access = await this.appAccessPair(app);
+    const no = appInstallRefusal(app, ki.var) ?? (await appSet(this.backend.providerHttp, access, app, ki.var, value));
+    if (no) return { code: 1, out: this.itMask(no), err: '', wrote: null };
+    await this.providers.noteInstall(keyId, { file: ki.file, var: ki.var, hint: keyHint(value), ...(ki.part && { part: ki.part }) }).catch(() => undefined);
+    const t = await appTest(this.backend.providerHttp, access, app, ki.var);
+    return { code: t.ok ? 0 : 1, out: this.itMask(`Set ${ki.var} in ${appWhere(app, ki.var)} (ends …${keyHint(value)}).\n${t.text}`), err: '', wrote: null };
   }
 
   /** An auto-approved install: written, logged and posted as done automatically, with an Undo that puts the file back. */
@@ -449,11 +479,25 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
 
   /** save_provider_key: the pasted key saved in Providers, and masked wherever the chat kept it. */
   protected async saveProviderKey(a: SaveKeyArgs): Promise<string> {
+    if (a.file) return this.saveKeyFile(a, a.file);
     const value = String(a.value ?? '').trim();
+    if (!value) throw new HttpError(400, 'Give the pasted value, or file: the id of a file sent in chat.');
     const c = await this.providers.add(String(a.provider ?? ''), value, a.label ?? '', '', '', a.uses ? { usedBy: a.uses } : {});
     const n = this.maskPastedKey(value, c.label);
     const test = c.test ? ` Its test: ${c.test.note}.` : '';
     return this.itMask(`Saved in Settings → Providers as "${c.label}" (id ${c.id}, ends …${c.keyHint}).${test} ${n ? `The chat shows "${savedMark(c.label)}" where it was pasted (${n} message${n === 1 ? '' : 's'}).` : "It wasn't in the chat, so nothing there was masked."} Put it where it's used with install_key.`);
+  }
+
+  /** save_provider_key's file (#622: a service account's JSON sent in chat): saved as the key, then the file deleted. */
+  private async saveKeyFile(a: SaveKeyArgs, id: string): Promise<string> {
+    const f = this.files.get(id);
+    if (!f) throw new HttpError(404, `No file ${id} in the office's files: ask the manager to send it again.`);
+    const value = (await readFile(this.files.pathOf(id), 'utf8')).trim();
+    const c = await this.providers.add(String(a.provider ?? ''), value, a.label ?? '', '', '', a.uses ? { usedBy: a.uses } : {});
+    await this.files.remove(id);
+    const test = c.test ? ` Its test: ${c.test.note}.` : '';
+    const next = MODULES[c.provider] ? ` Use it with provider_action ${c.provider}.` : " Put it where it's used with install_key.";
+    return this.itMask(`Saved in Settings → Providers as "${c.label}" (id ${c.id}, ends …${c.keyHint}).${test} Read from the file ${f.name}, which is now deleted from the office's files.${next}`);
   }
 
   /** The value out of the CEO's and IT's stored chats and queued jobs. Returns the messages changed. */

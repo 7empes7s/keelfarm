@@ -7,6 +7,7 @@
 import type { ActionRequest, ActionResponse, ProviderHttp } from '../providerActions/types.ts';
 import type { BoxApi, BoxInfo } from '../box.ts';
 import { registerCeoReply, registerDemo } from './registry.ts';
+import { fakeClipfarm, fakeGoogle } from './gcloud.ts';
 
 export const DEMO_REPO = 'demo-co/storefront';
 
@@ -19,6 +20,8 @@ export function fakeProviderHttp() {
   const entra = { apps: [] as GraphApp[], sps: [{ id: 'sp-graph', appId: '00000003-0000-0000-c000-000000000000' }], grants: [] as { id: string; clientId: string; consentType: string; resourceId: string; scope: string }[], secrets: [] as string[], tenants: [] as string[] };
   Object.assign(world, { entra });
   const calls: (ActionRequest & { key: string })[] = [];
+  const google = fakeGoogle();
+  const clipfarm = fakeClipfarm();
   const ok = (body: unknown, status = 200): ActionResponse => ({ status, body });
   const denied = (perm: string): ActionResponse => ({ status: 403, body: { message: 'Resource not accessible by personal access token' }, headers: { 'x-accepted-github-permissions': perm } });
   const github = (key: string, req: ActionRequest): ActionResponse => {
@@ -114,6 +117,8 @@ export function fakeProviderHttp() {
   const http: ProviderHttp = async (key, req) => {
     calls.push({ ...req, key });
     await new Promise((r) => setTimeout(r, 5));
+    const other = google.handle(key, req) ?? clipfarm.handle(key, req); // before "bad": a private key's base64 may spell it
+    if (other) return other;
     if (/bad/i.test(key)) return { status: 401, body: { error: { message: 'Invalid API key' } } };
     const u = req.url;
     if (u.startsWith('https://api.github.com')) return github(key, req);
@@ -135,7 +140,7 @@ export function fakeProviderHttp() {
     if (u === 'https://api.elevenlabs.io/v1/user/subscription') return ok({ tier: 'starter', character_count: 12_480, character_limit: 30_000, next_character_count_reset_unix: 1_765_000_000 });
     return { status: 404, body: { message: 'No such route' } };
   };
-  return { http, calls, world };
+  return { http, calls, world, google: google.world, clipfarm: clipfarm.world };
 }
 
 /** A few Upstash boxes, two of them the office's. */
