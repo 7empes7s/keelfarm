@@ -239,7 +239,7 @@ export function cloudflareTools(h: CloudflareHandlers, run: Run) {
     ),
     tool(
       'install_key',
-      `Install a Settings → Providers key into a service's env file as VAR=value (the value never reaches you, a card or a log): a card with Approve / Not now, or at once with the manager's IT auto-approve; the file keeps its other lines, mode 600, a backup kept, then its unit restarts. The only way to write a credential file. Targets: ${INSTALL_TARGETS.map((t) => `${t.file} (${t.name})`).join(', ')}; or an app's own Settings, then its Test: ${APP_TARGETS.map((t) => `"${t.id}"`).join(', ')}.`,
+      `Install a Settings → Providers key into a service's env file as VAR=value (the value never reaches you, a card or a log): a card with Approve / Not now, or at once with the manager's IT auto-approve; the file keeps its other lines, mode 600, a backup kept, then its unit restarts. The way to put a Providers key into one. Targets: ${INSTALL_TARGETS.map((t) => `${t.file} (${t.name})`).join(', ')}; or an app's own Settings, then its Test: ${APP_TARGETS.map((t) => `"${t.id}"`).join(', ')}.`,
       {
         key: z.string().min(1).max(80).describe('The Providers key: its id, name, or provider when it has one key, e.g. "openai"'),
         target: z.string().min(2).max(300).describe('One of the targets above, e.g. "/etc/clipfarm/clipfarm.env" or "clipfarm app"'),
