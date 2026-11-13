@@ -286,6 +286,8 @@ export interface VoiceDeps {
   cacheChanged(view: VoiceCacheView): void;
   /** Server log lines (a new clip made, a clip transcribed), never the key or what was said. */
   log?(line: string): void;
+  /** Speech to Text failed for a reason other than the clip itself (#645): an IT ticket, with the real error. */
+  trouble?(problem: string): void;
   now?(): number;
 }
 
@@ -475,7 +477,11 @@ export class Voice {
    * ElevenLabs Speech to Text. Only while ElevenLabs is the 🎙's provider, and at most 60 s / 5 MB a clip.
    */
   transcribe(audio: Buffer, contentType: string | undefined, ms: number): Promise<string> {
-    return this.logged('speech to text', () => this.makeTranscript(audio, contentType, ms), "couldn't turn speech into text");
+    return this.logged('speech to text', () => this.makeTranscript(audio, contentType, ms), "couldn't turn speech into text").catch((err: unknown) => {
+      const status = err instanceof HttpError ? err.status : 500;
+      if (status !== 400 && status !== 413 && status !== 415) this.deps.trouble?.(`Speech to text failed (${status}): ${(err as Error).message}`);
+      throw err;
+    });
   }
 
   private async makeTranscript(audio: Buffer, contentType: string | undefined, ms: number): Promise<string> {

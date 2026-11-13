@@ -157,6 +157,7 @@ export abstract class SwarmContract {
   protected abstract autoTicket(...a: Parameters<Swarm['autoTicket']>): ReturnType<Swarm['autoTicket']>;
   protected abstract itReport(...a: Parameters<Swarm['itReport']>): ReturnType<Swarm['itReport']>;
   protected abstract itTicket(...a: Parameters<Swarm['itTicket']>): ReturnType<Swarm['itTicket']>;
+  protected abstract voiceProblem(...a: Parameters<Swarm['voiceProblem']>): ReturnType<Swarm['voiceProblem']>;
 
   // itImprove.ts
   protected abstract itImprove(...a: Parameters<Swarm['itImprove']>): ReturnType<Swarm['itImprove']>;

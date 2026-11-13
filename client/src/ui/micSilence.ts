@@ -55,6 +55,18 @@ export function heardLevel(e: Ears, level: number, now: number): Ears {
   return { ...e, levels, heard: e.heard + 1, lastSpeech: speech ? now : e.lastSpeech };
 }
 
+/** A mic that gave nothing but silence this long, nobody heard, can't hear you (#645): a muted or dead stream, audio that never ran. */
+export const SILENT_MIC_MS = 5000;
+/** Below this level (RMS) the mic gives pure silence: a working one always hears some room noise. */
+export const SILENT_LEVEL = 1e-5;
+
+/** The mic gives silence, not a quiet room: its track muted or ended, or every level since it opened pure silence. */
+export function deadMic(e: Ears, now: number, track?: { muted: boolean; readyState: string }): boolean {
+  if (now - e.start < SILENT_MIC_MS || e.lastSpeech !== null) return false;
+  if (track && (track.muted || track.readyState === 'ended')) return true;
+  return e.heard >= WARMUP_SAMPLES && Math.max(...e.levels) < SILENT_LEVEL;
+}
+
 /** When a session ends by itself: after this quiet once speech was heard, with no speech this long, or at the cap. */
 export interface ListenRules {
   silenceMs: number | null;

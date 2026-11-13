@@ -267,7 +267,7 @@ export abstract class SwarmCore extends SwarmContract {
       officeNote: (text) => this.postMessage('office', text),
       keyChanged: (view) => this.voiceKeyChanged(view),
       cacheChanged: (voiceCache) => this.broadcast({ type: 'voiceCache', voiceCache }),
-      log: (line) => console.log(line),
+      log: (line) => console.log(line), trouble: (problem) => this.voiceProblem(problem),
     });
     this.spend = new SessionCosts(new CostLedger(path.join(HOME_DIR, backend.demo ? 'demo-costs.jsonl' : 'costs.jsonl')), () => this.limited(), (line, run) => { this.lab.session(line); this.logSession(line, run); this.careerWork(line); this.problemSession(line); this.usageSharesSoon(); });
     // The machine's daily log folder only for the real office: never from the demo or the tests.

@@ -19,6 +19,7 @@ import { cantListen } from './micText';
 import { listenChime, setCallQuiet, unlockAudio } from './sfx';
 import { inCall, wantsMic, type CallEffect } from './voiceCall';
 import { callOn, dispatchCall, onCallStep, useCall } from './voiceCallStore';
+import { releaseWakeMic } from './wake/wakeStore';
 
 const TARGET = 'voice-call';
 const voice = () => import('./voiceMessages');
@@ -39,6 +40,7 @@ function micReason(): string {
 
 /** Starts a call, or brings the one that's on back to the front. Call it from a click: the browser lets sound start then. */
 export function startCall() {
+  releaseWakeMic(); // before the call's own mic opens, not when the wake word sees the call
   unlockAudio();
   if (!callOn() && !agentCallWhy(useStore.getState())) {
     callAudio(); // inside the tap: iPhones only start sound (and the mic's audio session) from one

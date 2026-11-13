@@ -443,6 +443,7 @@ app.get(
 // The Jarvis voice (#534): a signed URL for one ElevenLabs conversation (never the key), its end (minutes), and the
 // office as the agent's custom LLM: OpenAI's chat completions, streamed when asked, behind the agent's bearer token.
 app.post('/api/voice/agent/start', route(() => swarm.startVoiceAgent()));
+app.post('/api/voice/problem', route((req) => swarm.voiceProblem(str(req.body?.problem))));
 app.post('/api/voice/agent/:session/end', route((req) => swarm.endVoiceAgent(String(req.params.session))));
 app.post(
   '/v1/chat/completions',

@@ -105,6 +105,12 @@ export function micErrorLine(code: string): string | null {
   }
 }
 
+/** A call's mic that gives only silence (#645). */
+export const MIC_SILENT = "I can't hear you: the microphone is silent. Tap Talk to try again.";
+
+/** A call's turn the speech service couldn't turn into text (#645), with its reason. */
+export const speechFailed = (why: string) => `I can't hear you: the speech service failed (${why.trim().replace(/[.\s]+$/, '') || 'no reason given'}).`;
+
 /** What this browser can do: recognise speech itself, and record audio for ElevenLabs. */
 export interface MicCaps {
   recognition: boolean;

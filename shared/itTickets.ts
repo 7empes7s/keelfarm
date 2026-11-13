@@ -141,7 +141,8 @@ export type OfficeTrouble =
   | { kind: 'stalled'; agent: string; work: string; minutes: number }
   | { kind: 'preview'; floor: number; error: string }
   | { kind: 'ci'; repo: string; reason: string }
-  | { kind: 'disk'; title: string; body: string };
+  | { kind: 'disk'; title: string; body: string }
+  | { kind: 'voice'; problem: string };
 
 /** The office's own reports never block anyone: they wake IT when they repeat. */
 export function autoReport(e: OfficeTrouble): ItReport {
@@ -159,6 +160,8 @@ export function autoReport(e: OfficeTrouble): ItReport {
       return r("CI can't run", 'ci', `${e.repo}: ${e.reason}`);
     case 'disk':
       return r('The disk is nearly full', 'disk', `${e.title}: ${e.body}`);
+    case 'voice':
+      return r("A call can't hear the manager", 'other', e.problem);
   }
 }
 
