@@ -62,14 +62,14 @@ export function demoAccounts(signIn: AccountsDeps['signIn']): AccountsBackend {
     check: async (a) => {
       await new Promise((r) => setTimeout(r, 300));
       const now = Date.now();
+      // #637: a check that couldn't reach its provider is no news: the card stays as last known and says so, never Signed out.
+      if (a.id === 'claude-apikey') return { signedIn: true, auth: 'error', readings: [], note: "Couldn't reach Anthropic (503): try again in a minute." };
       if (a.kind !== 'subscription-login') return { signedIn: true, readings: [], note: '✓ The demo accepts any key.' };
       if (a.builtIn) return { signedIn: true, readings: a.cli === 'codex' ? codexReadings(codexLimits(now), now) : [], note: '✓ Signed in (demo).' };
       if (!signedIn.has(a.id)) return { signedIn: false, readings: [], note: 'Not signed in yet: tap Sign in.' };
       // #442: Ultra's token expired after its week reset (last week's 100% reads 0%); keelops is signed in with a Pro
       // account, the same one as the built-in login (#460: a mismatch and a same-subscription pair).
       if (a.id === 'claude-ultra') return { signedIn: true, refresh: true, plan: 'Max 20x', readings: [{ type: 'seven_day', pct: 100, resetsAt: now - 2 * HOUR, at: now - 30 * HOUR }], note: '✓ Signed in; its token refreshes on its next session.' };
-      // #637: a check that couldn't reach its provider is no news: the card stays as last known and says so, never Signed out.
-      if (a.id === 'gemini-plus') return { signedIn: true, auth: 'error', readings: [], note: "Couldn't check its sign-in just now: shown as last known." };
       if (a.id === 'claude-keelop') return { signedIn: true, plan: 'Pro', who: DEMO_OWNER, readings: [reading('five_hour', 18, 3 * HOUR, now), reading('seven_day', 63, 50 * HOUR, now)], note: '✓ Signed in; usage read (demo).' };
       return { signedIn: true, readings: a.cli === 'claude' ? [reading('five_hour', 42, 3 * HOUR, now), reading('seven_day', 63, 50 * HOUR, now)] : [], note: '✓ Signed in; usage read (demo).' };
     },
