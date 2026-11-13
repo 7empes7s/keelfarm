@@ -187,7 +187,7 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
     this.itDeskChanged();
     this.itProposed(p); // its card in IT's chat and on Telegram, with Run / Not now
     const words = approvalWords(p);
-    this.notice({ kind: 'it', title: words.title, text: words.text, requestId: p.id, actions: ['openIt'] }, { event: 'needsHuman' }, p.id);
+    this.notice({ kind: 'it', title: words.title, text: words.text, requestId: p.id, actions: ['openIt'] }, { event: 'needsHuman', line: words.text }, p.id);
     return line;
   }
 

@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createDemoBackend } from './demo.ts';
 import { Swarm } from './swarm.ts';
 import { HOME_DIR } from './config.ts';
+import type * as Config from './config.ts';
 import type { OfficeTools } from './ceo.ts';
 import type { NotifyRequest } from './notifier.ts';
 import type { ServerEvent } from '../shared/types.ts';
@@ -13,7 +14,7 @@ import { GRACE_MS, THREAD_GAP_MS } from './notify.ts';
 import { DEMO_REPO, fakeProviderHttp } from './demo/providerActions.ts';
 
 vi.mock('./config.ts', async (original) => {
-  const config = await original<typeof import('./config.ts')>();
+  const config = await original<typeof Config>();
   return { ...config, HOME_DIR: path.join(config.HOME_DIR, 'it-approval-flow') };
 });
 
@@ -57,7 +58,7 @@ async function office(push = true) {
 function decrypt(body: Buffer, ua: ReturnType<typeof crypto.createECDH>, auth: Buffer) {
   const salt = body.subarray(0, 16), end = 21 + body[20];
   const sender = body.subarray(21, end);
-  const ikm = crypto.hkdfSync('sha256', ua.computeSecret(sender), auth, Buffer.concat([Buffer.from('WebPush: info\0'), ua.getPublicKey(), sender]), 32);
+  const ikm = Buffer.from(crypto.hkdfSync('sha256', ua.computeSecret(sender), auth, Buffer.concat([Buffer.from('WebPush: info\0'), ua.getPublicKey(), sender]), 32));
   const key = crypto.hkdfSync('sha256', ikm, salt, Buffer.from('Content-Encoding: aes128gcm\0'), 16);
   const nonce = crypto.hkdfSync('sha256', ikm, salt, Buffer.from('Content-Encoding: nonce\0'), 12);
   const decipher = crypto.createDecipheriv('aes-128-gcm', Buffer.from(key), Buffer.from(nonce));
@@ -91,6 +92,19 @@ describe('pending IT approval notifications', () => {
     expect(swarm.snapshot().itDesk!.waiting[0].id).not.toBe(card.id);
     await flush();
     expect(sends).toHaveLength(2);
+  });
+
+  it('keeps safe action names when several approvals share a push thread', async () => {
+    const { swarm, o, propose, flush, sends, payload } = await office();
+    await propose();
+    await o.itTools().call('it_propose', { argv: ['docker', 'image', 'prune', '-af'], why: 'private reason', affects: 'private path', undo: 'private argument', risk: 'medium' });
+    await flush();
+    expect(sends).toHaveLength(1);
+    const push = payload(sends[0]);
+    expect(push.body).toContain('clear old system logs');
+    expect(push.body).toContain('remove unused container images');
+    expect(push.body).not.toMatch(/private|500M|-af/);
+    expect(push.url).toContain(`note=${swarm.snapshot().itDesk!.waiting[1].id}`);
   });
 
   it('covers provider cards while automatic actions do not ask for approval', async () => {

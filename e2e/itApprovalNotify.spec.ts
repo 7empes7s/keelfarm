@@ -3,6 +3,9 @@ import { office, pocket } from './layout/helpers';
 
 for (const mode of ['pocket', 'office'] as const) {
   test(`IT push opens its exact approval and settled state in ${mode}`, async ({ page, context }) => {
+    if (mode === 'office') test.setTimeout(180_000); // software WebGL includes two cold page loads
+    // Keep the full 3D scene with the office's supported software-rendering profile.
+    if (mode === 'office') await page.addInitScript(() => { (window as unknown as { __swarmLabGfx: boolean }).__swarmLabGfx = true; });
     await page.setViewportSize({ width: mode === 'pocket' ? 390 : 1280, height: 844 });
     if (mode === 'pocket') await pocket(page, 'chat');
     else await office(page);
