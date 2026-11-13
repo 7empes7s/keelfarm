@@ -8,6 +8,7 @@ import { existsSync } from 'node:fs';
 import { readdir } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { approvalWords } from '../../shared/itApproval.ts';
 import { argvLine, IT_LOG_KEPT, IT_LOG_SHOWN, type ItDeskView, type ItLogEntry, type ItProposal, type ItRisk } from '../../shared/itDesk.ts';
 import type { WorldSnapshot } from '../../shared/types.ts';
 import { HOME_DIR } from '../config.ts';
@@ -185,7 +186,8 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
     this.state.itDesk.waiting.push(p);
     this.itDeskChanged();
     this.itProposed(p); // its card in IT's chat and on Telegram, with Run / Not now
-    this.notifier.notify('decisions', `${p.by} asks to ${c.cf ? 'change Cloudflare' : c.pa ? `change ${MODULES[c.pa.provider]?.name ?? c.pa.provider}` : c.ki ? 'install a key' : 'run a command'}`, `${line}\n${p.why}`);
+    const words = approvalWords(p);
+    this.notice({ kind: 'it', title: words.title, text: words.text, requestId: p.id, actions: ['openIt'] }, { event: 'needsHuman', line: words.text }, p.id);
     return line;
   }
 

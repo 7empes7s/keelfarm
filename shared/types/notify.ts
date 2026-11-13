@@ -93,6 +93,6 @@ export interface NoticeView {
   floor?: number;
   target?: NoticeTarget; // where tapping it jumps (the chat's refs, #26)
   actions?: NoticeAction[]; // at most 2
-  requestId?: string; // the team change 'approve' approves
+  requestId?: string; // the team change 'approve' approves, or an IT card opened by 'openIt'
   read: boolean;
 }

@@ -8,8 +8,9 @@ import { useStore, type Toast } from '../store';
 import { useMode } from '../pocket/mode';
 import { ACTION_LABEL, NOTICE_KINDS, noteIdFrom, noticeGroups, noticeIcon, sticky, toastMs, toastStack, unreadCount } from '../../../shared/notices';
 import type { NoticeKind, NoticeView } from '../../../shared/types';
-import { noticeJump, noticeStep, type NoticeStep } from './noticeNav';
+import { itApprovalJump, noticeJump, noticeStep, type NoticeStep } from './noticeNav';
 import { openFrom } from './RefChips';
+import { ItApprovalSheet, useItApproval } from './ItDeskCards';
 import { Panel } from './Panel';
 import { Popover } from './Popover';
 import { XLabel } from './HoverCard';
@@ -42,6 +43,9 @@ function run(step: NoticeStep, pocket: boolean) {
       return pocket ? s.openOverlay({ kind: 'kanban', repoId: step.repoId }) : s.goToFloor(step.floor);
     case 'overlay':
       return openFrom(step.overlay, step.floor);
+    case 'itApproval':
+      useItApproval.setState({ id: step.id });
+      return;
     case 'chat':
       return s.openOverlay({ kind: 'phone', tab: 'chat' });
     case 'keys':
@@ -203,6 +207,7 @@ export function NoticeToasts({ max }: { max: number }) {
   const spot = useToastSpot(box, shown.length + (more > 0 ? 1 : 0)); // never over a header or a tab row (#230)
   return (
     <div className="toasts" ref={box} style={spot}>
+      <ItApprovalSheet />
       {more > 0 && (
         <button type="button" className="toast notice-more" onClick={() => useStore.getState().openOverlay({ kind: 'notices' })}>
           +{more} more
@@ -226,6 +231,8 @@ function useNoticeSync() {
       const id = noteIdFrom(url);
       const n = id && useStore.getState().notices.find((x) => x.id === id);
       if (n) read(n);
+      // IT notice ids are the durable card ids: even after notice retention, show its settled state.
+      if (id && /^it-[a-z0-9]+-[0-9]+$/.test(id)) run(itApprovalJump(id), false);
     };
     mark(location.href);
     const onOpen = (e: Event) => mark(String((e as CustomEvent<string>).detail ?? ''));
