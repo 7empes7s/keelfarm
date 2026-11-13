@@ -226,6 +226,28 @@ describe('account rotation', { timeout: 30_000 }, () => {
     expect(live() ?? null).toBeNull();
   });
 
+  it("falls back onto this computer's own Codex login while it's on, even with no agent on Codex; never once it's off", async () => {
+    const { swarm, repo, runs, i } = await office(['claude-login', 'claude-keelop', 'claude-apikey']);
+    swarm.updateSettings({ rotation: { on: true, apiLast: true, ceoClis: [], agentsSwitchCli: true } });
+    (swarm as unknown as { clis: unknown[] }).clis = ['claude', 'codex'].map((id) => ({ id, label: id, installed: true, version: 'demo', integrated: id === 'claude' }));
+    for (const a of i.state.agents as { cli?: string }[]) a.cli = ''; // nobody runs Codex, and no Codex account was added: only its built-in login is left
+    for (const id of ['codex-apikey', 'codex-pro']) await swarm.accounts.remove(id);
+    const ada = swarm.hireAgent(repo.id, { name: 'Ada', strict: true });
+    await wait(10_000);
+    const [issue] = swarm.snapshot().repos.find((r) => r.id === repo.id)!.issues;
+    void swarm.assign(ada.id, issue.number);
+    await wait(5_000);
+    expect(runs.filter((r) => r.role !== 'ceo').at(-1)).toMatchObject({ cli: 'codex', account: 'codex-login' });
+    swarm.stopAgent(ada.id);
+    await wait(1_000);
+    swarm.accounts.update('codex-login', { enabled: false });
+    const before = runs.length;
+    const [, next] = swarm.snapshot().repos.find((r) => r.id === repo.id)!.issues;
+    void swarm.assign(ada.id, next.number);
+    await wait(5_000);
+    expect(runs.slice(before).filter((r) => r.cli === 'codex')).toEqual([]);
+  });
+
   it("never moves an agent's task onto Gemini CLI, which isn't a builder (#365)", async () => {
     const { swarm, repo, runs } = await office(['claude-login', 'claude-keelop', 'claude-apikey']);
     const testing = swarm.accounts.test('gemini-plus'); // signed in, and ready
