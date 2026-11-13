@@ -33,7 +33,7 @@ export interface TeamChange {
 }
 
 const PLURAL: Record<NotifyEvent, string> = {
-  needsHuman: 'PRs need you',
+  needsHuman: 'approvals need you',
   question: 'questions wait for you',
   ceoMessage: 'messages from the CEO',
   hire: 'team changes wait for you',

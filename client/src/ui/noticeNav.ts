@@ -8,6 +8,7 @@ import { prPage } from './prNav';
 export type NoticeStep =
   | Jump
   | { kind: 'chat' }
+  | { kind: 'itApproval'; id: string }
   | { kind: 'approvals'; requestId?: string }
   | { kind: 'keys' } // Settings → Providers with the found keys' review open (#367)
   | { kind: 'call'; call: 'approve'; requestId: string }
@@ -15,7 +16,7 @@ export type NoticeStep =
   | null;
 
 /** IT's cards (#580): the IT department's page. */
-const OPEN_IT: NoticeStep = { kind: 'overlay', overlay: { kind: 'manager', tab: 'it-dept' } };
+export const itApprovalJump = (id?: string): NoticeStep => id ? { kind: 'itApproval', id } : { kind: 'overlay', overlay: { kind: 'manager', tab: 'it-dept' } };
 
 /** Tapping the notice itself: its target, else the chat (the CEO) or the approvals (a team change). */
 export function noticeJump(n: Pick<NoticeView, 'kind' | 'target' | 'requestId'>, mode: 'office' | 'pocket', w: RefWorld): NoticeStep {
@@ -25,7 +26,7 @@ export function noticeJump(n: Pick<NoticeView, 'kind' | 'target' | 'requestId'>,
   if (n.kind === 'ceo') return { kind: 'chat' };
   if (n.kind === 'approval') return { kind: 'approvals', ...(n.requestId && { requestId: n.requestId }) };
   if (n.kind === 'keys') return { kind: 'keys' };
-  if (n.kind === 'it') return OPEN_IT;
+  if (n.kind === 'it') return itApprovalJump(n.requestId);
   return n.target ? jumpFor({ ...n.target, start: 0, end: 0 }, mode, w) : null;
 }
 
@@ -63,6 +64,6 @@ export function noticeStep(a: NoticeAction, n: Pick<NoticeView, 'target' | 'requ
     case 'reviewKeys':
       return { kind: 'keys' };
     case 'openIt':
-      return OPEN_IT;
+      return itApprovalJump(n.requestId);
   }
 }
