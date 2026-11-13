@@ -119,6 +119,14 @@ describe('Accounts', () => {
     expect(accounts.view().accounts.find((a) => a.id === 'claude-login')?.limitSpans).toHaveLength(1);
   });
 
+  it("a limit doesn't outlive a new sign-in (the built-in login's too)", async () => {
+    const { accounts } = await office();
+    const until = () => accounts.view().accounts.find((a) => a.id === 'claude-login')!.limitedUntil;
+    accounts.limited('claude-login', Date.now() + 3600_000);
+    accounts.signIn('claude-login'); // signed in again, maybe as another account: a fresh start
+    await vi.waitFor(() => expect(until()).toBeNull());
+  });
+
   it('rotation off, or one account per coding agent: nothing to rotate to', async () => {
     const { accounts } = await office();
     expect(accounts.canRotate('claude', [])).toBe(false);

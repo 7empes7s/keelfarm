@@ -163,3 +163,21 @@ describe('the idle usage check', () => {
     await week.swarm.accounts.flushed();
   });
 });
+
+describe("the built-in Claude login's limit", () => {
+  it('ends once its sessions\' readings show room on every limit, not on one window alone', async () => {
+    const swarm = new Swarm(createDemoBackend());
+    const x = swarm as unknown as { recordUsage(r: { type: string; pct: number; resetsAt: number | null; at: number }[]): void };
+    const until = () => swarm.accounts.view().accounts.find((a) => a.builtIn && a.cli === 'claude')!.limitedUntil;
+    const id = swarm.accounts.view().accounts.find((a) => a.builtIn && a.cli === 'claude')!.id;
+    const now = Date.now();
+    const at = (type: string, pct: number, t = now) => ({ type, pct, resetsAt: now + 60 * MIN, at: t });
+    swarm.accounts.limited(id, now + 60 * MIN);
+    x.recordUsage([at('five_hour', 100), at('seven_day', 40)]);
+    expect(until()).toBeGreaterThan(now); // still full: still limited
+    x.recordUsage([at('seven_day', 20, now + 1)]);
+    expect(until()).toBeGreaterThan(now); // the five-hour window is still full
+    x.recordUsage([at('five_hour', 12, now + 2)]);
+    expect(until()).toBeNull(); // room on every limit: back in the rotation
+  });
+});
