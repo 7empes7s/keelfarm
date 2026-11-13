@@ -26,10 +26,12 @@ const ACCOUNT: [RegExp, MenuClass][] = [
   [/upgrade (?:to|your)/i, 'account/upgrade'],
 ];
 
+// A permission or approval prompt: its quoted command or file may say "login" or "billing", but it's no account menu.
+const PERMISSION = /Bash command|Do you want to (?:proceed|make this edit|create|run|allow)|Would you like to (?:run|make|apply)|Allow (?:this|command)|requires approval/i;
 const OPTION = /^\s*([❯›>]\s*)?(\d+)\.\s+\S/;
 const BORDER = /^[\s│┃|╭╮╰╯─━┌┐└┘═]*$/;
 const RESET = /(?:try again|resets?|available again|retry)\s+(?:at|in|on)\s+([^.,;\n)]+)/i;
-const TITLE_MAX = 4;
+const TITLE_MAX = 12;
 const LINE_MAX = 200;
 
 /** A screen row without the TUI's box borders, trimmed and clipped. */
@@ -37,6 +39,7 @@ const row = (l: string) => l.replace(/^[\s│┃|]+|[\s│┃|]+$/g, '').replace
 
 /** The class of a menu by its words. */
 export function menuClass(text: string): MenuClass {
+  if (PERMISSION.test(text)) return 'prompt';
   return ACCOUNT.find(([re]) => re.test(text))?.[1] ?? 'prompt';
 }
 
@@ -44,7 +47,8 @@ export const isAccountMenu = (m: Pick<MenuRead, 'class'> | null | undefined) => 
 
 /**
  * The last numbered menu on screen (options 1, 2… one of them marked), or null. Its title is up to two paragraphs
- * right above option 1; the last step is the line above that.
+ * right above option 1, each read whole (a message wrapped in a narrow terminal stays one, #400) and clipped to its
+ * last TITLE_MAX lines; the last step is the line above them.
  */
 export function readMenu(screen: string): MenuRead | null {
   const lines = screen.split(/\r?\n/);
@@ -63,7 +67,7 @@ export function readMenu(screen: string): MenuRead | null {
   if (options.length < 2 || !marked) return null;
   const title: string[] = [];
   let i = first - 1, paragraphs = 0, blank = true;
-  for (; i >= 0 && title.length < TITLE_MAX; i--) {
+  for (; i >= 0 && title.length < 2 * TITLE_MAX; i--) {
     if (BORDER.test(lines[i])) {
       if (!blank && ++paragraphs >= 2) break;
       blank = true;
@@ -74,9 +78,10 @@ export function readMenu(screen: string): MenuRead | null {
   }
   let lastStep: string | undefined;
   for (; i >= 0 && !lastStep; i--) if (!BORDER.test(lines[i])) lastStep = row(lines[i]);
-  const words = [...title, ...options].join('\n');
+  const words = [...title, ...options].join(' ');
   const cls = menuClass(words);
   const reset = cls === 'prompt' ? undefined : RESET.exec(words)?.[1]?.trim();
+  title.splice(0, title.length - TITLE_MAX);
   return { class: cls, title, options, ...(lastStep && { lastStep }), ...(reset && { reset }) };
 }
 
@@ -87,8 +92,8 @@ const question = (m: MenuRead) => m.title.findLast((l) => l.endsWith('?')) ?? m.
 export function menuReason(m: MenuRead): string {
   const ask = question(m);
   if (m.class === 'prompt') return `a menu on screen: "${ask.slice(0, 80)}"`;
-  const what = { 'account/usage limit': 'its usage limit', 'account/rate limit': 'a rate limit', 'account/credits': 'out of credits', 'account/sign-in': 'signed out', 'account/upgrade': 'its plan (an upgrade menu)' }[m.class];
-  return `the account is at ${what}${m.reset ? ` (resets ${m.reset})` : ''}`;
+  const what = { 'account/usage limit': 'is at its usage limit', 'account/rate limit': 'is rate-limited', 'account/credits': 'is out of credits', 'account/sign-in': 'is signed out', 'account/upgrade': 'needs a plan upgrade' }[m.class];
+  return `the account ${what}${m.reset ? ` (resets ${m.reset})` : ''}`;
 }
 
 /** The same menu for the same agent files into one ticket: an account menu by its class, a prompt by its question. */

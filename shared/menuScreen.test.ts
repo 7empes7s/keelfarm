@@ -23,6 +23,25 @@ const TRUST = ` Do you trust the files in this folder?
 
  Enter to confirm · Esc to exit`;
 
+// The same menu with its message wrapped in a narrow terminal (the rows of the #400 test in accountRotation.test.ts).
+const WRAPPED = ['■ You’ve hit your usage limit.', 'Upgrade to Pro (https://chatgpt.com/explore/pro),', 'visit https://chatgpt.com/settings/usage to', 'purchase more credits or try again at', '9:08 PM.'].flatMap((l) => l.match(/.{1,40}/gu) ?? []);
+const CODEX_WRAPPED = ['• Ran npm test -- --maxWorkers=2', '  └ 214 passed', '', ...WRAPPED, '', 'Switch to gpt-6-luna for lower credit usage?', '', '› 1. Switch to gpt-6-luna', '  2. Keep current model', '  3. Keep current model (never show again)'].join('\n');
+const BASH_LOGIN = ` Bash command
+
+   gh auth login --with-token
+   Sign in to GitHub with a token
+
+ Do you want to proceed?
+ ❯ 1. Yes
+   2. Yes, and don't ask again for gh auth login commands
+   3. No, and tell Claude what to do differently (esc)`;
+const EDIT_BILLING = ` Edit file
+
+ Do you want to make this edit to billing.ts?
+ ❯ 1. Yes
+   2. Yes, allow all edits during this session
+   3. No, and tell Claude what to do differently (esc)`;
+
 describe('readMenu', () => {
   it("reads Codex's usage-limit menu: its title, every option, the last step, the class and the reset", () => {
     const m = readMenu(CODEX_LIMIT)!;
@@ -37,6 +56,25 @@ describe('readMenu', () => {
     const details = menuDetails(m);
     expect(details).toContain('Class: account/usage limit');
     for (const line of [...m.title, ...m.options, 'Last step: └ 214 passed']) expect(details).toContain(line);
+  });
+
+  it("reads Codex's usage-limit menu wrapped in a narrow terminal as one message (#400)", () => {
+    const m = readMenu(CODEX_WRAPPED)!;
+    expect(m).toMatchObject({ class: 'account/usage limit', reset: '9:08 PM', lastStep: '└ 214 passed' });
+    expect(m.title).toEqual([...WRAPPED.map((l) => l.trim()), 'Switch to gpt-6-luna for lower credit usage?']);
+    expect(menuReason(m)).toBe('the account is at its usage limit (resets 9:08 PM)');
+  });
+
+  it("calls a permission prompt a prompt, whatever its command or file says about logins or billing", () => {
+    expect(readMenu(BASH_LOGIN)!.class).toBe('prompt');
+    expect(readMenu(EDIT_BILLING)!.class).toBe('prompt');
+    expect(menuReason(readMenu(EDIT_BILLING)!)).toBe('a menu on screen: "Do you want to make this edit to billing.ts?"');
+  });
+
+  it('words each account state plainly', () => {
+    const at = (cls: Parameters<typeof menuReason>[0]['class']) => menuReason({ class: cls, title: ['x'], options: [] });
+    expect(at('account/credits')).toBe('the account is out of credits');
+    expect(at('account/sign-in')).toBe('the account is signed out');
   });
 
   it('calls a folder-trust question a prompt, with its question as the reason', () => {
