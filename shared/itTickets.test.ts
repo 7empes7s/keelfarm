@@ -113,6 +113,20 @@ describe('automatic tickets', () => {
     expect(autoReport({ kind: 'ci', repo: 'acme/app', reason: 'billing' })).toMatchObject({ what: "CI can't run", where: 'ci', evidence: 'acme/app: billing' });
     expect(autoReport({ kind: 'disk', title: 'Disk 95% full', body: '3 GB free' })).toMatchObject({ what: 'The disk is nearly full', where: 'disk', evidence: 'Disk 95% full: 3 GB free' });
   });
+  it("files a menu on an agent's screen with its words and class, and updates one ticket per agent and menu (#640)", () => {
+    const s = emptyTickets();
+    const office = { id: 'office', name: 'The office' };
+    const limit = (reason: string) => autoReport({ kind: 'blocked', agent: 'Ada', state: 'menu', reason, menu: { key: 'menu:Ada:account/usage limit', account: true, details: 'Class: account/usage limit\n  › 1. Switch to gpt-6-luna\n  2. Keep current model' } });
+    expect(limit('the account is at its usage limit (resets 3:05 PM)')).toMatchObject({ what: 'Ada: the account is at its usage limit (resets 3:05 PM)', where: 'sign-in', evidence: expect.stringContaining('2. Keep current model'), key: 'menu:Ada:account/usage limit' });
+    const first = fileTicket(s, limit('the account is at its usage limit (resets 3:05 PM)'), office, 0, true).ticket;
+    const again = fileTicket(s, limit('the account is at its usage limit (resets 8:40 PM)'), office, 2 * TICKET_DUP_MS, true);
+    expect(again).toMatchObject({ joined: true, ticket: { id: first.id, count: 2, what: 'Ada: the account is at its usage limit (resets 8:40 PM)' } });
+    const grace = fileTicket(s, autoReport({ kind: 'blocked', agent: 'Grace', state: 'menu', reason: 'x', menu: { key: 'menu:Grace:account/usage limit', account: true, details: 'd' } }), office, 1, true);
+    expect(grace.joined).toBe(false);
+    const prompt = autoReport({ kind: 'blocked', agent: 'Ada', state: 'setup', reason: 'needs setup (the folder-trust screen)', menu: { key: 'menu:Ada:prompt:x', account: false, details: 'Class: prompt' } });
+    expect(prompt).toMatchObject({ what: 'Ada is held on needs setup (the folder-trust screen)', where: 'other', evidence: expect.stringContaining('Class: prompt') });
+  });
+
   it('joins repeats of the same lab problem into one ticket', () => {
     const s = emptyTickets();
     const office = { id: 'office', name: 'The office' };

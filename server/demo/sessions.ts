@@ -35,10 +35,8 @@ const SIGN_IN_SCREEN = ['Select login method:', '❯ 1. Claude account with subs
  * (cliScreens.ts reads it as one), so it ends signed out after a moment, the way cliRunner.ts ends a real one.
  */
 function signInSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandle | null {
-  const dir = opts.env?.CLAUDE_CONFIG_DIR ?? opts.env?.CODEX_HOME ?? '';
-  const id = /accounts[\\/]([^\\/]+)[\\/](?:claude|codex)$/.exec(dir)?.[1];
   const cli = opts.cli ?? 'claude';
-  if (!id || demoSignedIn.has(id) || screenStep(SIGN_IN_SCREEN.join('\n'), cli)?.do !== 'sign-in') return null;
+  if (!unsignedLogin(opts) || screenStep(SIGN_IN_SCREEN.join('\n'), cli)?.do !== 'sign-in') return null;
   const label = CLIS.find((c) => c.id === cli)?.label ?? 'Claude Code';
   cb.log(SIGN_IN_SCREEN.map((text) => ({ kind: 'system', text })));
   const timer = setTimeout(() => {
@@ -52,6 +50,13 @@ function signInSession(opts: SessionOptions, cb: SessionCallbacks): SessionHandl
       cb.finished({ ok: false, text: '', costUsd: 0, turns: 0, errors: ['Stopped by manager'] });
     },
   };
+}
+
+/** The session runs on a login account the demo hasn't signed in. */
+function unsignedLogin(opts: SessionOptions): boolean {
+  const dir = opts.env?.CLAUDE_CONFIG_DIR ?? opts.env?.CODEX_HOME ?? '';
+  const id = /accounts[\\/]([^\\/]+)[\\/](?:claude|codex)$/.exec(dir)?.[1];
+  return !!id && !demoSignedIn.has(id);
 }
 
 /** The demo's sessions and the CLI that made each: one it never made (before a restart) or another CLI's isn't there to resume (#401). */
@@ -286,8 +291,24 @@ const ANSI: Record<LogEntry['kind'], (text: string) => string> = {
   done: (t) => `\x1b[32m${t}\x1b[0m`,
 };
 
-/** How a fake session gets stuck (#359): left on its sign-in screen until the manager presses Enter there, or its result printed but never reported. */
-type DemoStuck = 'sign-in' | 'result' | null;
+/** How a fake session gets stuck (#359): left on its sign-in screen or an account menu (#640) until the manager presses Enter there, or its result printed but never reported. */
+type DemoStuck = 'sign-in' | 'limit' | 'result' | null;
+
+/** Codex's usage-limit menu, as it showed for real (#640): the watchdog reports it as the account's state. */
+const STUCK_LIMIT_SCREEN = [
+  '',
+  '\x1b[32m●\x1b[0m \x1b[1m$ npm test -- --maxWorkers=2\x1b[0m',
+  '',
+  " \x1b[31m■\x1b[0m You've hit your usage limit. Upgrade to Pro, or try again at 3:05 PM. (demo)",
+  '',
+  '  Switch to gpt-6-luna for lower credit usage?',
+  '',
+  ' \x1b[36m› 1. Switch to gpt-6-luna\x1b[0m',
+  '   2. Keep current model',
+  "   3. Keep current model (don't ask again)",
+  '',
+  ' \x1b[2mPress enter to confirm or esc to go back\x1b[0m',
+].join('\r\n');
 
 const STUCK_SIGN_IN_SCREEN = [
   '',
@@ -330,7 +351,7 @@ function inTerminal(opts: SessionOptions, cb: SessionCallbacks, start: (cb: Sess
     const now = Date.now();
     actOn(watch.tick({ now, begun: logged, screen: term.screen(), tail: term.tail(120), quietMs: now - lastWrite }), name, {
       log: (text, error) => cb.log([{ kind: error ? 'error' : 'system', text }]),
-      blocked: (s) => cb.blocked?.(s?.reason ?? null, s?.kind),
+      blocked: (s) => cb.blocked?.(s?.reason ?? null, s?.kind, s?.menu),
       retry: () => undefined, // a fake session starts by itself
       complete: (text) => end({ ok: true, text, costUsd: held?.costUsd ?? 0.4, turns: held?.turns ?? 12, errors: [] }),
     });
@@ -402,11 +423,11 @@ function inTerminal(opts: SessionOptions, cb: SessionCallbacks, start: (cb: Sess
       term.write(`\r\n${printedLines(r).join('\r\n')}\r\n\r\n\x1b[36m❯\x1b[0m `);
     },
   });
-  if (stuck === 'sign-in') {
-    term.write(STUCK_SIGN_IN_SCREEN);
+  if (stuck === 'sign-in' || stuck === 'limit') {
+    term.write(stuck === 'limit' ? STUCK_LIMIT_SCREEN : STUCK_SIGN_IN_SCREEN);
     signIn = () => {
       signIn = null;
-      term.write('\x1b[2J\x1b[H\x1b[32m✓ Signed in (demo)\x1b[0m\r\n');
+      term.write(`\x1b[2J\x1b[H\x1b[32m✓ ${stuck === 'limit' ? 'Kept the current model' : 'Signed in'} (demo)\x1b[0m\r\n`);
       handle = begin();
     };
     // Until then the office's Stop still ends it.
@@ -434,10 +455,12 @@ const USAGE_WARNING_MS = 5 * 60_000;
 let sessionsStarted = 0;
 const fakesStarted = { builds: 0, qa: 0 };
 
-/** Now and then a fake session gets stuck (#359): the 2nd of every 8 builders on its sign-in screen, the 2nd of every 8 QAs printing its report without reporting it. */
+/** Now and then a fake session gets stuck (#359): the 2nd of every 8 builders on its sign-in screen, the 5th on a usage-limit menu, the 2nd of every 8 QAs printing its report without reporting it. */
 function demoStuck(task: SessionOptions['task']): DemoStuck {
   if (task === 'qa') return ++fakesStarted.qa % 8 === 2 ? 'result' : null;
-  return task === 'issue' && ++fakesStarted.builds % 8 === 2 ? 'sign-in' : null;
+  if (task !== 'issue') return null;
+  const n = ++fakesStarted.builds % 8;
+  return n === 2 ? 'sign-in' : n === 5 ? 'limit' : null;
 }
 
 function fakeUsageWarning(cb: SessionCallbacks) {
@@ -487,7 +510,8 @@ registerDemo('sessions', ({ scale, deskRepo }) => ({
     // connectors and plugins unless the session is lean.
     if (!opts.resumeSessionId) cb.startup?.({ tokens: 23_500 + charTokens(opts.systemAppend.length + opts.prompt.length) + (opts.tools?.noConnectors ? 0 : 27_800), memoryChars: 24_000 });
     const fake = !opts.readOnly && opts.role !== 'ceo';
-    const stuck = fake && !scale && !opts.box && !opts.resumeSessionId && opts.terminal ? demoStuck(opts.task) : null; // a cloud agent's sign-in is the office's own (docs/cloud.md)
+    const picked = fake && !scale && !opts.box && !opts.resumeSessionId && opts.terminal ? demoStuck(opts.task) : null; // a cloud agent's sign-in is the office's own (docs/cloud.md)
+    const stuck = picked === 'limit' && unsignedLogin(opts) ? null : picked; // a login nobody signed in opens on its sign-in instead
     return inTerminal(opts, cb, (c) => (opts.readOnly ? demoConsultSession(opts, c) : opts.role === 'ceo' ? (signInSession(opts, c) ?? (opts.dept === 'it' ? itSession(opts, c) : ceoSession(opts, c))) : agentSession(opts, withDemoChat(opts, withLab(opts, withItReport(opts, c))), deskRepo.get(opts.cwd) ?? boxDeskRepo(opts.cwd) ?? [...repos.keys()][0])), fake, stuck);
   },
   sessionTranscript: (_cwd, sessionId, about) => demoTranscript(path.join(HOME_DIR, 'demo-transcripts'), sessionId, about),

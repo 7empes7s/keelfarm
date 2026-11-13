@@ -42,6 +42,7 @@ import {
 } from '../ledger.ts';
 import { careerTimeline, type TimelineView } from '../../shared/careerTimeline.ts';
 import { followupEvents } from '../../shared/followups.ts';
+import { isAccountMenu, menuKey } from '../../shared/menuScreen.ts';
 import { redact as scrub } from '../../shared/journal.ts';
 import { clip } from '../notify.ts';
 import { achievementDef, type ProgressView } from '../../shared/progress.ts';
@@ -618,9 +619,11 @@ export abstract class SwarmUpkeep extends SwarmCeoStuck {
     if (!rt || !b || !alertOnce(this.toldBlocked, blockedTask(a), b, now)) return;
     const repo = this.state.repos.find((r) => r.id === a.repoId);
     const n = stuckNotice(a.name, b, now, repo?.floor);
-    this.notice({ kind: 'stuck', title: n.title, text: n.body, target: { kind: 'agent', agentId: a.id, terminal: true }, actions: n.actions }, { event: 'agentError', line: n.who });
+    const details = n.details && scrub(n.details, this.secrets());
+    this.notice({ kind: 'stuck', title: n.title, text: n.body, ...(details && { details }), target: { kind: 'agent', agentId: a.id, terminal: true }, actions: n.actions }, { event: 'agentError', line: n.who });
     if (a.role === 'ceo') return;
-    this.autoTicket({ kind: 'blocked', agent: a.name, state: b.kind ?? 'prompt', reason: clip(scrub(b.reason, this.secrets()), 300) });
+    const menu = b.menu && details ? { key: menuKey(a.name, b.menu), account: isAccountMenu(b.menu), details } : undefined;
+    this.autoTicket({ kind: 'blocked', agent: a.name, state: b.kind ?? 'prompt', reason: clip(scrub(b.reason, this.secrets()), 300), ...(menu && { menu }) });
     const screen = scrub(rt.terminal?.tail(8).filter((l) => l.trim()).join(' / ') ?? '', this.secrets());
     this.followup(followupEvents.agentBlocked(a, b.kind ?? 'prompt', clip(scrub(b.reason, this.secrets()), 160), clip(screen, 400), repo?.id, repo && this.floorName(repo)));
   }

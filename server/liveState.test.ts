@@ -39,6 +39,19 @@ const PERMISSION = ` Bash command
  ❯ 1. Yes
    2. Yes, and don't ask again for npm commands in this folder
    3. No, and tell Claude what to do differently (esc)`;
+// Codex's usage-limit menu (#640): the account's state, not a prompt for the office to answer.
+const CODEX_LIMIT = `• Ran npm test
+  └ 214 passed
+
+  ■ You've hit your usage limit. Upgrade to Pro, or try again at 3:05 PM.
+
+  Switch to gpt-6-luna for lower credit usage?
+
+› 1. Switch to gpt-6-luna
+  2. Keep current model
+  3. Keep current model (never show again)
+
+  Press enter to confirm or esc to go back`;
 const WORKING = `● Running the tests.
 ✻ Pondering… (12s · ↑ 1.2k tokens · esc to interrupt)`;
 const CODEX_IDLE = `• Opened https://github.com/acme/app/pull/344
@@ -177,7 +190,24 @@ describe('SessionWatch', () => {
     const w = new SessionWatch(t0);
     tick(w, 1_000, WORKING, { quietMs: 0 });
     expect(tick(w, 2_000, PERMISSION, { quietMs: 1_000 })).toEqual({ do: 'none' });
-    expect(tick(w, 62_000, PERMISSION, { quietMs: 61_000 })).toMatchObject({ do: 'blocked', stuck: { kind: 'menu' } });
+    expect(tick(w, 62_000, PERMISSION, { quietMs: 61_000 })).toMatchObject({ do: 'blocked', stuck: { kind: 'menu', reason: 'a menu on screen: "Do you want to proceed?"' } });
+  });
+
+  it("reports Codex's usage-limit menu as the account's state, with every option, and never presses Enter on it", () => {
+    const w = new SessionWatch(t0);
+    tick(w, 1_000, CODEX_LIMIT);
+    const act = tick(w, 62_000, CODEX_LIMIT, { quietMs: 61_000 });
+    expect(act).toMatchObject({ do: 'blocked', stuck: { kind: 'menu', reason: 'the account is at its usage limit (resets 3:05 PM)', menu: { class: 'account/usage limit', lastStep: '└ 214 passed', reset: '3:05 PM' } } });
+    expect(act.do === 'blocked' && act.stuck.menu?.options).toEqual(['› 1. Switch to gpt-6-luna', '2. Keep current model', '3. Keep current model (never show again)']);
+    expect(canNudge(CODEX_LIMIT)).toBe(false);
+    const fresh = new SessionWatch(t0);
+    expect(tick(fresh, NOT_STARTED_MS, CODEX_LIMIT, { quietMs: 0 })).not.toEqual({ do: 'retry' });
+  });
+
+  it('carries a folder-trust prompt as class prompt', () => {
+    const w = new SessionWatch(t0);
+    tick(w, 1_000, TRUST);
+    expect(tick(w, 12_000, TRUST)).toMatchObject({ do: 'blocked', stuck: { kind: 'setup', menu: { class: 'prompt', options: ['❯ 1. Yes, proceed', '2. No, exit'] } } });
   });
 });
 
@@ -211,6 +241,15 @@ describe('alerts', () => {
       actions: ['terminal'],
     });
     expect(stuckNotice('Ken', { reason: 'x', since: at, told: false, kind: 'not-started' }, at).actions).toEqual(['terminal', 'retry']);
+    // An account menu is the account's state, with the menu's own words on the card (#640).
+    const w = new SessionWatch(0);
+    w.tick({ now: 1_000, begun: true, screen: CODEX_LIMIT, tail: [], quietMs: 0 });
+    const act = w.tick({ now: 62_000, begun: true, screen: CODEX_LIMIT, tail: [], quietMs: 61_000 });
+    const menu = act.do === 'blocked' ? act.stuck.menu : undefined;
+    const limit = stuckNotice('Ada', { reason: 'the account is at its usage limit (resets 3:05 PM)', since: at, told: false, kind: 'menu', menu }, at, 3);
+    expect(limit).toMatchObject({ title: "Ada's account: usage limit", who: 'Ada (floor 3)', actions: ['terminal'] });
+    expect(limit.body).toContain('usage limit (resets 3:05 PM)');
+    for (const line of ['Class: account/usage limit', 'Switch to gpt-6-luna for lower credit usage?', '› 1. Switch to gpt-6-luna', '2. Keep current model', '3. Keep current model (never show again)', 'Last step: └ 214 passed']) expect(limit.details).toContain(line);
     expect(stuckNotice('Ada', { reason: "a permission prompt the office couldn't answer.", since: at, told: false }, at + NOTIFY_PROMPT_MS, 2).body).toBe(
       "Waiting 5 minutes on a permission prompt the office couldn't answer on floor 2. Open their terminal to answer it.",
     );

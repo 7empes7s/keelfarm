@@ -90,6 +90,7 @@ export interface NoticeView {
   level: 'info' | 'success' | 'error';
   title: string;
   text: string;
+  details?: string; // lines shown as they are under More: a menu on an agent's screen (#640)
   floor?: number;
   target?: NoticeTarget; // where tapping it jumps (the chat's refs, #26)
   actions?: NoticeAction[]; // at most 2

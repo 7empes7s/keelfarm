@@ -557,8 +557,8 @@ export abstract class SwarmSessions extends SwarmRotation {
         usageWarning: (info) => this.paceForWarning(info),
         usage: (readings) => this.recordUsage(readings),
         startup: (st) => this.spend.startup(a.id, st.tokens, st.memoryChars),
-        blocked: (reason, kind) => {
-          rt.blocked = reason ? { reason, since: Date.now(), told: false, kind: kind ?? 'prompt' } : null;
+        blocked: (reason, kind, menu) => {
+          rt.blocked = reason ? { reason, since: Date.now(), told: false, kind: kind ?? 'prompt', ...(menu && { menu }) } : null;
           this.emitAgent(a);
           this.alertBlocked(a); // a sign-in, setup screen or the like: the manager and the CEO hear at once (#359)
         },

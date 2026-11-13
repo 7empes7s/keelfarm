@@ -12,6 +12,7 @@ export interface ItReport {
   where: TicketWhere;
   evidence: string; // error text, job id, command
   blocking: boolean; // the reporter can't go on without a fix
+  key?: string; // the same problem for as long as its ticket is open, whatever its words (a menu on an agent's screen, #640)
 }
 
 /** Who reported: an agent's id, 'ceo' or 'office'. */
@@ -39,6 +40,7 @@ export interface ItTicket {
   wokeAt?: number; // when IT was last woken for it
   auto?: boolean; // the office filed it
   cause?: string; // IT's cause on close, for the weekly review (#543)
+  key?: string; // ItReport.key
   lostMin?: number; // agent minutes blocked on it, set on close (#543)
 }
 
@@ -75,11 +77,12 @@ export function checkReport(raw: unknown): ItReport {
 /** Two reports are the same problem when their what matches, case, punctuation and numbers aside. */
 export const whatKey = (what: string) => what.toLowerCase().replace(/\d+/g, '#').replace(/[^a-z#]+/g, ' ').trim();
 
-/** Files a report: into the open ticket for the same what and where within the hour, else a new one. */
+/** Files a report: into the open ticket for the same key, or the same what and where within the hour, else a new one. */
 export function fileTicket(s: TicketsState, r: ItReport, who: { id: string; name: string }, now: number, auto = false): { ticket: ItTicket; joined: boolean } {
   const blocks = r.blocking && who.id !== 'office' && who.id !== 'ceo';
-  const open = s.list.find((t) => t.status === 'open' && t.where === r.where && whatKey(t.what) === whatKey(r.what) && now - t.lastAt < TICKET_DUP_MS);
+  const open = s.list.find((t) => t.status === 'open' && (r.key ? t.key === r.key : !t.key && t.where === r.where && whatKey(t.what) === whatKey(r.what) && now - t.lastAt < TICKET_DUP_MS));
   if (open) {
+    if (r.key) open.what = r.what; // its latest words (a new reset time)
     open.count++;
     open.lastAt = now;
     open.blocking ||= r.blocking;
@@ -88,7 +91,7 @@ export function fileTicket(s: TicketsState, r: ItReport, who: { id: string; name
     if (blocks && !open.waiting.includes(who.id)) open.waiting.push(who.id);
     return { ticket: open, joined: true };
   }
-  const ticket: ItTicket = { id: ++s.seq, what: r.what, where: r.where, evidence: [r.evidence], blocking: r.blocking, count: 1, by: [{ ...who, at: now }], waiting: blocks ? [who.id] : [], at: now, lastAt: now, status: 'open', ...(auto && { auto: true }) };
+  const ticket: ItTicket = { id: ++s.seq, what: r.what, where: r.where, evidence: [r.evidence], blocking: r.blocking, count: 1, by: [{ ...who, at: now }], waiting: blocks ? [who.id] : [], at: now, lastAt: now, status: 'open', ...(auto && { auto: true }), ...(r.key && { key: r.key }) };
   s.list.unshift(ticket);
   return { ticket, joined: false };
 }
@@ -137,7 +140,7 @@ export function pruneTickets(s: TicketsState, now: number): ItTicket[] {
 /** What the office sees by itself, as a report. */
 export type OfficeTrouble =
   | { kind: 'lab'; agent: string; job: string; problem: string; detail: string }
-  | { kind: 'blocked'; agent: string; state: string; reason: string }
+  | { kind: 'blocked'; agent: string; state: string; reason: string; menu?: { key: string; account: boolean; details: string } }
   | { kind: 'stalled'; agent: string; work: string; minutes: number }
   | { kind: 'preview'; floor: number; error: string }
   | { kind: 'ci'; repo: string; reason: string }
@@ -150,6 +153,7 @@ export function autoReport(e: OfficeTrouble): ItReport {
     case 'lab':
       return r(`Test lab: ${e.problem}`, 'lab', `${e.agent} · job ${e.job} · ${e.detail}`);
     case 'blocked':
+      if (e.menu) return { ...r(e.menu.account ? `${e.agent}: ${e.reason}` : `${e.agent} is held on ${e.reason}`, e.menu.account ? 'sign-in' : 'other', `${e.agent}: ${e.reason}\n${e.menu.details}`), key: e.menu.key };
       return e.state === 'sign-in' ? r('A session is held on its sign-in screen', 'sign-in', `${e.agent}: ${e.reason}`) : r(`The watchdog found a stuck agent (${e.state})`, 'other', `${e.agent}: ${e.reason}`);
     case 'stalled':
       return r('The watchdog put stalled work back in line', 'other', `${e.agent} · ${e.work} · quiet ${e.minutes} min`);
