@@ -33,6 +33,15 @@ test.afterAll(async ({ request }) => {
   await request.put('/api/voice/key', { data: { key: '' } });
 });
 
+type Trace = { mode: string; audio: string; meter: string; worklet: string; workletMsgs: number; rmsMax: number; nonZeroBytes: number; posts: { status: number }[]; events: { what: string }[] };
+
+/** The office's newest call trace (#650), as the real browser sent it; printed for the PR. */
+async function lastTrace(page: Page): Promise<Trace> {
+  const traces = (await (await page.request.get('/api/voice/traces')).json()) as Trace[];
+  console.log(`call trace: ${JSON.stringify(traces.at(-1))}`);
+  return traces.at(-1)!;
+}
+
 const state = (page: Page) => page.evaluate(() => ({ agent: (window as unknown as CallWindow).__swarmCall.agent, phase: (window as unknown as CallWindow).__swarmCall.phase }));
 
 async function dial(page: Page, jarvis: boolean) {
@@ -53,6 +62,12 @@ test('the Jarvis voice gets the spoken words as audio, and stays on', async ({ p
   expect(mic.peak).toBeGreaterThan(0.05);
   expect((await state(page)).agent).toBe('live'); // still ElevenLabs' voice
   await expect(page.locator('.vcall-why')).toHaveCount(0); // no "can't hear you" on a working mic
+  await expect.poll(async () => (await lastTrace(page)).nonZeroBytes, { timeout: 10_000 }).toBeGreaterThan(0); // sent every 5 s
+  const t = await lastTrace(page);
+  expect([t.mode, t.worklet, t.audio.split(' ')[0]]).toEqual(['jarvis', 'ok', 'running']);
+  expect(t.workletMsgs).toBeGreaterThan(0);
+  expect(t.rmsMax).toBeGreaterThan(0);
+  expect(t.events.some((e) => e.what.startsWith('voice switch'))).toBe(false);
   await page.getByRole('button', { name: 'End call' }).click();
 });
 
@@ -69,5 +84,9 @@ test("the office's own voice transcribes two turns in one call, and the CEO answ
   expect((await after()).some((m) => m.from === 'manager' && m.text === "What's everyone working on?")).toBe(true); // the second turn reached the chat
   await expect.poll(async () => (await after()).some((m) => m.from !== 'manager'), { timeout: 60_000 }).toBe(true); // and the CEO answered
   await expect(page.locator('.vcall-why')).toHaveCount(0);
+  await expect.poll(async () => (await lastTrace(page)).posts.some((p) => p.status === 200), { timeout: 10_000 }).toBe(true);
+  const t = await lastTrace(page);
+  expect([t.mode, t.meter.split(' ')[0]]).toEqual(['office', 'running']);
+  expect(t.rmsMax).toBeGreaterThan(0);
   await page.getByRole('button', { name: 'End call' }).click();
 });

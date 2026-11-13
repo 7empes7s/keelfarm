@@ -121,12 +121,3 @@ export function loadNow(ready: boolean, moment: LoadMoment, b: LoadBlockers): bo
   if (!ready || (moment.kind === 'visible' && moment.hiddenMs < HIDDEN_LOAD_MS)) return false;
   return loadBlocker(b) === null;
 }
-
-/** A failed chunk reloads the page at most this often when the tab hasn't heard of a new version, so it can't loop. */
-export const CHUNK_RELOAD_MS = 60_000;
-
-/**
- * A lazy chunk of this client failed to load (#651): reload when a new client is known to be ready, and also when it
- * isn't yet (the office restarted and the tab hasn't reconnected), unless this tab already reloaded for one lately.
- */
-export const chunkErrorLoads = (ready: string | null, lastReloadAt: number | null, now: number) => !!ready || lastReloadAt === null || now - lastReloadAt > CHUNK_RELOAD_MS;

@@ -22,11 +22,11 @@ import { seedDemoNotes } from './demoChat.ts';
 import { fileRoutes } from './fileRoutes.ts';
 import { parseRange } from './journal.ts';
 import { underLauncher } from './officeUpdate.ts';
-import { servesPage, serviceWorkerSource, swVersion } from './pwa.ts';
+import { serviceWorkerSource, swVersion } from './pwa.ts';
 import { screenStatus } from './screenReply.ts';
 import { parseSendBackNote } from './sendBack.ts';
 import { handleGateway, upgradeGateway } from './previewGateway.ts';
-import { completionEvents, completionJson } from './voiceAgent.ts';
+import { completionEvents, completionJson, voiceRouteLine } from './voiceAgent.ts';
 import { FAKE_AGENT_PATH, fakeAgent } from './voiceAgentFake.ts';
 import { PresenceHub } from './presence.ts';
 import { PUBLIC_DEMO_FILE_BYTES, RateLimiter, clientIp, demoUploadProblem, filesOverCap, pathScrubber, publicDemoBlock, publicDemoProblem, resetDue, routePath, scrubRoots } from './publicDemo.ts';
@@ -75,6 +75,15 @@ if (scrub) {
     next();
   });
 }
+// Every voice route's answer, as a log line (#650): what reached the office from a call, and what it said back.
+app.use((req, res, next) => {
+  const at = performance.now();
+  res.on('finish', () => {
+    const line = voiceRouteLine(req.method, req.originalUrl, res.statusCode, performance.now() - at);
+    if (line) console.log(line);
+  });
+  next();
+});
 // Previews through the office's own address, for browsers on other devices (server/previewGateway.ts). First: their
 // request bodies pass on untouched.
 const proxied = (port: number) => swarm.previewProxied(port);
@@ -444,6 +453,11 @@ app.get(
 // office as the agent's custom LLM: OpenAI's chat completions, streamed when asked, behind the agent's bearer token.
 app.post('/api/voice/agent/start', route(() => swarm.startVoiceAgent()));
 app.post('/api/voice/problem', route((req) => swarm.voiceProblem(str(req.body?.problem))));
+// A call's trace from the browser (#650, shared/callTrace.ts): logged as `voice: call trace {…}`, the last 20 calls kept.
+app.post('/api/voice/trace', route((req) => {
+  swarm.voiceTrace(req.body);
+}));
+app.get('/api/voice/traces', route(() => swarm.voiceTraces()));
 app.post('/api/voice/agent/:session/end', route((req) => swarm.endVoiceAgent(String(req.params.session))));
 app.post(
   '/v1/chat/completions',
@@ -626,7 +640,10 @@ if (fs.existsSync(dist)) {
     res.end(serviceWorkerSource(swVersion(html, VERSION, swarm.officeCommit())));
   });
   app.use(express.static(dist));
-  app.get(/^(?!\/api).*/, (req, res, next) => (servesPage(req.path) ? res.sendFile(path.join(dist, 'index.html'), { dotfiles: 'allow' }) : next())); // npx's copy sits under ~/.npm
+  // A bundle that isn't there (an old page's, after an update) is a 404, never the page: the import fails as missing
+  // (and the client loads the new one) instead of as HTML the service worker would keep as that bundle (#650).
+  app.use('/assets', (_req, res) => void res.status(404).type('text/plain').end('Not found'));
+  app.get(/^(?!\/api).*/, (_req, res) => res.sendFile(path.join(dist, 'index.html')));
 }
 
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {

@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
-import { agentBody, bearerOk, completionEvents, completionJson, sessionOf } from './voiceAgent.ts';
+import { agentBody, bearerOk, completionEvents, completionJson, sessionOf, voiceRouteLine } from './voiceAgent.ts';
 
 // The Jarvis voice (#534) in a demo office: its own folder, for the demo's secrets and voice-agent files.
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'cubefarm-voiceagent-'));
@@ -100,5 +100,27 @@ describe('the Jarvis voice: ElevenLabs plumbing', () => {
     expect(deltas.join('')).toBe('On it. Checking floor 4.');
     expect(deltas[0]).toBe('On it. '); // the first words go out at once
     expect(events.at(-1)).toBe('data: [DONE]\n\n');
+  });
+});
+
+describe('call traces and voice routes in the log (#650)', () => {
+  it('logs a trace as one line without the voice key, and keeps it for GET /api/voice/traces', async () => {
+    const swarm = await office();
+    const log = vi.mocked(console.log);
+    swarm.voiceTrace({ id: 'call1', mode: 'jarvis', gum: 'ok', workletMsgs: 50, rmsMax: 0.2, events: [{ ms: 3, what: 'the key sk_demo_key_1234 leaked' }] });
+    const line = log.mock.calls.map((c) => String(c[0])).find((l) => l.startsWith('voice: call trace {'));
+    expect(line).toContain('"workletMsgs":50');
+    expect(line).not.toContain('sk_demo_key_1234');
+    expect(swarm.voiceTraces().map((t) => t.id)).toEqual(['call1']);
+    expect(() => swarm.voiceTrace({ mode: 'jarvis' })).toThrow(/needs an id/);
+  });
+
+  it('names every voice route and its status, never a session id', () => {
+    expect(voiceRouteLine('POST', '/api/voice/transcribe', 200, 812.4)).toBe('voice: POST /api/voice/transcribe 200 (812 ms)');
+    expect(voiceRouteLine('POST', '/v1/chat/completions', 401, 3)).toBe('voice: POST /v1/chat/completions 401 (3 ms)');
+    expect(voiceRouteLine('POST', '/api/voice/agent/Xy_9abc/end', 200, 1)).toBe('voice: POST /api/voice/agent/:session/end 200 (1 ms)');
+    expect(voiceRouteLine('POST', '/api/voice/trace', 200, 1)).toBeNull(); // it logs itself
+    expect(voiceRouteLine('POST', '/api/voice/trace', 400, 1)).toBe('voice: POST /api/voice/trace 400 (1 ms)');
+    expect(voiceRouteLine('GET', '/api/state', 200, 1)).toBeNull();
   });
 });

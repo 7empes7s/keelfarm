@@ -467,6 +467,26 @@ for after the call so nothing talks over the CEO.
 6. ElevenLabs, Skip turn: https://elevenlabs.io/docs/eleven-agents/customization/tools/system-tools/skip-turn
 7. OpenAI, ChatGPT Voice: https://help.openai.com/en/articles/20001274-chatgpt-voice
 
+### Call traces (#650)
+
+Every call reports what the real browser did, so a call that can't hear is diagnosed from the device, not from
+fakes. The client (`client/src/ui/callTrace.ts`) sends one compact trace to `POST /api/voice/trace` as the call
+starts (before any mic code runs, so it arrives even when that code throws), every 5 s and at hang-up. The office
+(`shared/callTrace.ts` `cleanTrace`, the only way in) keeps known fields only, redacts secrets, logs one line
+`voice: call trace {…}` and keeps the last 20 calls (`GET /api/voice/traces`). Fields: the short user agent (` app`
+for the home-screen app), the mode (`jarvis`, `office`, `tap`) and listen provider, getUserMedia's result (`ok` or the
+error's name), the track (label, enabled, muted, readyState, sample rate, channels), the call's audio context and the
+office voice's meter (`state Hz`), the Jarvis worklet (`ok` or its error) and its message count, the mic's max and
+mean RMS, the user_audio_chunk count, bytes and non-zero bytes, the input format ElevenLabs asked for, the
+MediaRecorder's type, chunks and bytes, each transcribe answer's status and error, ElevenLabs' socket messages by
+type, its close code and reason, and `events`: every voice switch, silent-mic, tap-to-talk and fallback decision with
+its reason. Never audio, never a key. Every voice route's answer is logged too: `voice: POST /api/voice/transcribe
+200 (812 ms)` (a session id never), so a request that never reached the office shows as a missing line.
+
+When ElevenLabs closes the conversation in the middle of a call, the call dials it again once; a second close hands
+the call to the office's own voice, whose mic goes on hearing the manager, and the toast says ElevenLabs' code and
+reason. Before #650 the call rested deaf instead (its mic off, the CEO's replies in the backup voice).
+
 ## API
 
 | Route | What it does |
@@ -486,6 +506,8 @@ for after the call so nothing talks over the CEO.
 | `POST /api/voice/agent/start` | a Jarvis call (#534): makes or updates the office's ElevenLabs agent, then `{ session, url }` (a signed URL for one conversation); 409 without a key or address, over the limit or switched off, 502 when ElevenLabs fails |
 | `POST /api/voice/agent/:session/end` | the conversation ended: its minutes are counted (again is harmless) |
 | `POST /v1/chat/completions` | ElevenLabs' custom LLM: OpenAI's chat completion (streamed with `stream: true`) for the call's latest turn; 401 without the agent's bearer token |
+| `POST /api/voice/trace` | a call's trace from the browser (#650, below); 400 without an id |
+| `GET /api/voice/traces` | the last 20 calls' traces, newest last |
 
 Settings travel in `settings.voice` (`PATCH /api/settings`): `{ provider: 'off' | 'browser' | 'elevenlabs', voiceId,
 voiceName, model, speakOffice, keepDays, speed, favourites, agentsSpeak, talk: 'off' | 'milestones' | 'regular', agent: { on, capHours } }`, and listening in `settings.listen`: `{ provider: 'off' | 'browser' |

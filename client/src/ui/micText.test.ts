@@ -84,6 +84,8 @@ describe('micErrorLine', () => {
     expect(micErrorLine('not-allowed')).toMatch(/blocked.*Allow it/);
     expect(micErrorLine('NotAllowedError')).toBe(micErrorLine('not-allowed'));
     expect(micErrorLine('not-allowed')).not.toContain('\n');
+    expect(micErrorLine('NotAllowedError', true)).toMatch(/Settings → Safari → Microphone/); // an iPhone has no address-bar icon for it (#650)
+    expect(micErrorLine('NotAllowedError', false)).toMatch(/address bar/);
   });
 
   it('says nothing when listening simply stopped or nobody spoke', () => {

@@ -4,7 +4,7 @@
 
 /** What one message from the agent's socket means to the call. */
 export type AgentEvent =
-  | { kind: 'ready'; rate: number }
+  | { kind: 'ready'; rate: number; inFormat: string }
   | { kind: 'audio'; event: number; pcm: string }
   | { kind: 'said'; text: string } // the agent's reply, for the captions
   | { kind: 'heard'; text: string } // the manager's words, as ElevenLabs understood them
@@ -29,8 +29,10 @@ export function agentEvent(raw: string): AgentEvent {
   }
   const body = (key: string) => (m[key] && typeof m[key] === 'object' ? (m[key] as Record<string, unknown>) : {});
   switch (m.type) {
-    case 'conversation_initiation_metadata':
-      return { kind: 'ready', rate: formatRate(body('conversation_initiation_metadata_event').agent_output_audio_format) };
+    case 'conversation_initiation_metadata': {
+      const meta = body('conversation_initiation_metadata_event');
+      return { kind: 'ready', rate: formatRate(meta.agent_output_audio_format), inFormat: s(meta.user_input_audio_format) };
+    }
     case 'audio': {
       const a = body('audio_event');
       return { kind: 'audio', event: n(a.event_id), pcm: s(a.audio_base_64) };
@@ -51,6 +53,23 @@ export function agentEvent(raw: string): AgentEvent {
       return { kind: 'other' };
   }
 }
+
+/** The message's type, for the call trace (#650): '' when it has none. */
+export const eventType = (raw: string) => /"type"\s*:\s*"([a-z_]{1,40})"/.exec(raw)?.[1] ?? '';
+
+/**
+ * ElevenLabs closed the conversation's socket (not the office, #650): while dialling, today's voice mode takes the call;
+ * after the manager's "that's all" it rests (tap the orb); otherwise it dials again once, and a second drop in the same
+ * call hands it to today's voice mode, whose mic still hears the manager. Never a call left with no mic.
+ */
+export function afterClose(o: { dialling: boolean; ending: boolean; drops: number }): 'fallback' | 'idle' | 'redial' {
+  if (o.dialling) return 'fallback';
+  if (o.ending) return 'idle';
+  return o.drops < 1 ? 'redial' : 'fallback';
+}
+
+/** A closed socket's code and reason, in the words the call screen and the trace use. */
+export const closeWords = (code: number, reason: string) => `ElevenLabs closed the call (${code}${reason ? `: ${reason.slice(0, 120)}` : ''})`;
 
 /** The first message on the socket: the call's session, so the office's LLM knows which call a turn belongs to. */
 export const initMessage = (session: string) => JSON.stringify({ type: 'conversation_initiation_client_data', custom_llm_extra_body: { cubefarm_session: session } });

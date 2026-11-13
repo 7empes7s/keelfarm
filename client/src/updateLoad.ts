@@ -4,28 +4,18 @@
 // uploaded or sent, or a sheet is open. Drafts and the outbox are saved anyway (drafts.ts, chatSend.ts).
 import { useStore } from './store';
 import { useMode } from './pocket/mode';
-import { chunkErrorLoads, panelChangeLoads, type LoadMoment } from './officeUpdate';
+import { panelChangeLoads, type LoadMoment } from './officeUpdate';
 import { readyAfter, tryLoad } from './updateGate';
+import { callOn } from './ui/voiceCallStore';
 
 // The commit this tab last loaded the client for, so a new office commit loads it at most once.
 const LOADED_KEY = 'office-swarm:reloaded-for';
-// When this tab last reloaded for a lazy chunk that wouldn't load, so a missing one can't loop the page.
-const CHUNK_KEY = 'office-swarm:chunk-reload-at';
 // What's open over the page: a sheet, a menu or a confirmation (panels and the phone are pages, not sheets).
 const SHEETS = '.sheet, [role="alertdialog"], [role="menu"]';
 
 function loadedFor(): string | null {
   try {
     return sessionStorage.getItem(LOADED_KEY);
-  } catch {
-    return null;
-  }
-}
-
-function lastChunkReload(): number | null {
-  try {
-    const at = Number(sessionStorage.getItem(CHUNK_KEY));
-    return at > 0 ? at : null;
   } catch {
     return null;
   }
@@ -57,6 +47,19 @@ export function loadUpdate(moment: LoadMoment, before?: () => void): boolean {
   return loaded;
 }
 
+const CHUNK_RELOAD_KEY = 'office-swarm:chunk-reload';
+
+/** A reload for a missing bundle is due (and noted) unless one happened in the last minute: a bundle missing for good never loops. */
+function chunkReloadDue(now: number): boolean {
+  try {
+    if (now - Number(sessionStorage.getItem(CHUNK_RELOAD_KEY) ?? 0) < 60_000) return false;
+    sessionStorage.setItem(CHUNK_RELOAD_KEY, String(now));
+    return true;
+  } catch {
+    return false; // no storage, no guard: no reload
+  }
+}
+
 let installed = false;
 
 /** Watches for the safe moments: overlays opening and closing, and the app coming back from the background. */
@@ -73,19 +76,14 @@ export function installUpdateLoader() {
   // a lazy chunk of the old client is gone from the office: load the new one now (drafts are saved) rather than break
   window.addEventListener('vite:preloadError', (e) => {
     const ready = useStore.getState().updateReady;
-    const now = Date.now();
-    if (!chunkErrorLoads(ready, lastChunkReload(), now)) return;
     if (ready) {
       e.preventDefault();
       return load(ready);
     }
-    try {
-      sessionStorage.setItem(CHUNK_KEY, String(now));
-    } catch {
-      return; // without storage nothing would stop a loop: leave the error to the page
-    }
+    // Gone with no update seen (an update while this page slept, #650): the page loads again, once a minute at most.
+    if (callOn() || !chunkReloadDue(Date.now())) return; // never drops a call
     e.preventDefault();
-    window.dispatchEvent(new Event('cubefarm:unload')); // drafts.ts saves what's still waiting
+    window.dispatchEvent(new Event('cubefarm:unload'));
     location.reload();
   });
 }

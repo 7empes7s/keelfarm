@@ -9,6 +9,7 @@ import { CLIP_MAX_BYTES, clipProblem } from '../../../shared/clipLimits';
 import type { ListenProvider } from '../../../shared/types';
 import { api } from '../api';
 import { callAudio } from './agentCallStore';
+import { ctxLabel, trace, traceLevel, tracePost, traceTrack } from './callTrace';
 import { useStore } from '../store';
 import { isConfirmOpen } from './Confirm';
 import { bindings } from './controls';
@@ -407,10 +408,15 @@ async function recordClip(n: number) {
   try {
     stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
   } catch (err) {
+    if (live(n)?.mode === 'call') trace({ gum: (err as DOMException)?.name || 'error' });
     return fail(n, micErrorLine((err as DOMException)?.name || 'audio-capture'));
   }
   const off = () => stream.getTracks().forEach((t) => t.stop());
   const s = live(n);
+  if (s?.mode === 'call') {
+    trace({ gum: 'ok' });
+    traceTrack(stream.getAudioTracks()[0]);
+  }
   if (!s || s.finishing) return off(); // let go before the mic came on
   const type = RECORDER_TYPES.find((t) => MediaRecorder.isTypeSupported?.(t));
   let rec: MediaRecorder;
@@ -427,13 +433,17 @@ async function recordClip(n: number) {
   const shared = s.mode === 'call' ? callAudio() : null;
   const levels = meter(stream, shared, (level) => {
     const cur = live(n);
+    if (cur?.mode === 'call') traceLevel(level, false);
     const now = performance.now();
     if (cur?.ears) cur.ears = heardLevel(cur.ears, level, now);
     if (cur?.mode === 'call' && cur.ears?.lastSpeech === now) callEars?.speech('');
   });
+  const traced = s.mode === 'call';
+  if (traced) trace({ recorder: { mime: rec.mimeType || type || '', chunks: 0, bytes: 0 } });
   rec.ondataavailable = (e) => {
     chunks.push(e.data);
     bytes += e.data.size;
+    if (traced) trace({ recorder: { mime: rec.mimeType || type || '', chunks: chunks.length, bytes } });
     if (bytes > CLIP_MAX_BYTES * 0.95) finish(); // the cap is near: send what there is
   };
   rec.onstop = () => {
@@ -465,6 +475,7 @@ function meter(stream: MediaStream, shared: AudioContext | null, onLevel: (rms: 
   try {
     ctx = shared ?? new AudioContext();
     void ctx.resume().catch(() => undefined);
+    if (shared) trace({ meter: ctxLabel(ctx) });
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 1024;
     src = ctx.createMediaStreamSource(stream);
@@ -498,6 +509,7 @@ async function transcribe(s: Session, clip: Blob, ms: number) {
   try {
     const res = await fetch('/api/voice/transcribe', { method: 'POST', headers: { 'Content-Type': clip.type, 'X-Clip-Ms': String(Math.round(ms)), ...(s.mode === 'call' && { 'X-Voice-Call': '1' }) }, body: clip });
     const data = (await res.json().catch(() => ({}))) as { text?: unknown; error?: unknown };
+    if (s.mode === 'call') tracePost(res.status, typeof data.error === 'string' ? data.error : '');
     if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : `HTTP ${res.status}`);
     if (session !== s) return; // stopped meanwhile
     s.transcript = typeof data.text === 'string' ? data.text : '';
@@ -505,6 +517,7 @@ async function transcribe(s: Session, clip: Blob, ms: number) {
     if (record) record.transcript = s.transcript;
     deliver(s);
   } catch (err) {
+    if (s.mode === 'call' && err instanceof TypeError) tracePost(0, err.message); // never reached the office
     // The office files its own failures as an IT ticket, with the real error.
     if (session === s) fail(s.n, s.mode === 'call' ? speechFailed((err as Error).message) : (err as Error).message, true);
   }

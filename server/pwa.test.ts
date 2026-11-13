@@ -1,6 +1,6 @@
 import vm from 'node:vm';
 import { describe, expect, it } from 'vitest';
-import { servesPage, serviceWorkerSource, swVersion } from './pwa.ts';
+import { serviceWorkerSource, swVersion } from './pwa.ts';
 
 describe('the service worker version', () => {
   it('changes with every office update: a new build, a new package version or a new commit', () => {
@@ -48,6 +48,29 @@ describe('the service worker', () => {
     expect(handles('https://office.example/sw.js')).toBe(false);
     expect(handles('https://office.example/assets/index-abc123.js', { method: 'POST' })).toBe(false);
     expect(handles('https://fonts.googleapis.com/css2?family=Fredoka')).toBe(false);
+  });
+});
+
+describe('a bundle answered with the page (#650)', () => {
+  /** What the worker keeps for a bundle whose network answer has this Content-Type. */
+  async function kept(type: string) {
+    const handlers: Record<string, (e: unknown) => void> = {};
+    const put: string[] = [];
+    const self = { addEventListener: (t: string, fn: (e: unknown) => void) => (handlers[t] = fn), location: { origin: 'https://office.example' } };
+    const caches = { match: async () => undefined, has: async () => true, open: async () => ({ put: async (req: { url: string }) => void put.push(req.url) }) };
+    const res = { ok: true, headers: new Map([['content-type', type]]), clone: () => res };
+    vm.runInNewContext(serviceWorkerSource('v1'), { self, URL, caches, fetch: async () => res, Response: { error: () => null } });
+    const waits: Promise<unknown>[] = [];
+    let answer: Promise<unknown> = Promise.resolve();
+    handlers.fetch({ request: { url: 'https://office.example/assets/agentCallEngine-old.js', method: 'GET', mode: 'cors' }, respondWith: (p: Promise<unknown>) => (answer = p), waitUntil: (p: Promise<unknown>) => void waits.push(p) });
+    await answer;
+    await Promise.all(waits);
+    return put;
+  }
+
+  it('is never kept as that bundle; a real one is', async () => {
+    expect(await kept('text/html; charset=utf-8')).toEqual([]);
+    expect(await kept('text/javascript; charset=utf-8')).toEqual(['https://office.example/assets/agentCallEngine-old.js']);
   });
 });
 
@@ -107,16 +130,4 @@ it('routes an approval click to the exact card in an existing window or a newly 
     expect(messages).toEqual(existing ? [{ type: 'cubefarm:open', url }] : []);
     expect(focused).toBe(existing);
   }
-});
-
-describe('what gets the page (#651)', () => {
-  it('gives the app its routes and deep links', () => {
-    expect(servesPage('/')).toBe(true);
-    expect(servesPage('/floor/2')).toBe(true);
-  });
-  it('never answers a missing bundle with the page: an old tab after an update gets a 404 it can recover from', () => {
-    expect(servesPage('/assets/Office-OldHash1.js')).toBe(false);
-    expect(servesPage('/assets/index-OldHash2.css')).toBe(false);
-    expect(servesPage('/api/nope')).toBe(false);
-  });
 });

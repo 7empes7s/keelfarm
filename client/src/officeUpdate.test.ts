@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canPostpone, canUpdateNow, chunkErrorLoads, CHUNK_RELOAD_MS, drainDeadline, DRAIN_TIMEOUT_MS, HIDDEN_LOAD_MS, loadBlocker, loadNow, officeUpdateChip, officeUpdateText, panelChangeLoads, restartExpected, shouldReload, type LoadBlockers } from './officeUpdate';
+import { canPostpone, canUpdateNow, drainDeadline, DRAIN_TIMEOUT_MS, HIDDEN_LOAD_MS, loadBlocker, loadNow, officeUpdateChip, officeUpdateText, panelChangeLoads, restartExpected, shouldReload, type LoadBlockers } from './officeUpdate';
 import type { OfficeUpdateView } from '../../shared/types';
 
 const u = (over: Partial<OfficeUpdateView>): OfficeUpdateView => ({ state: 'none', behind: 0, launcher: true, drainingSince: null, running: 0, updateAt: null, holds: false, detail: null, ...over });
@@ -122,18 +122,5 @@ describe('loadNow (#216)', () => {
     }
     expect(loadBlocker(free)).toBeNull();
     expect(loadBlocker({ ...free, uploading: true })).toBe('the upload finishes');
-  });
-});
-
-describe('chunkErrorLoads (#651)', () => {
-  it('reloads for a missing chunk even before the tab hears of the new version', () => {
-    expect(chunkErrorLoads(null, null, 1_000_000)).toBe(true);
-    expect(chunkErrorLoads('abc123', null, 1_000_000)).toBe(true);
-  });
-  it('never loops: once a minute at most without a known new version', () => {
-    const now = 1_000_000;
-    expect(chunkErrorLoads(null, now - 5_000, now)).toBe(false);
-    expect(chunkErrorLoads(null, now - CHUNK_RELOAD_MS - 1, now)).toBe(true);
-    expect(chunkErrorLoads('abc123', now - 5_000, now)).toBe(true); // a new version loads once per commit (LOADED_KEY)
   });
 });

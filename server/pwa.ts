@@ -10,13 +10,6 @@ export function swVersion(indexHtml: string, packageVersion: string, commit: str
   return crypto.createHash('sha256').update(`${packageVersion}\n${commit ?? ''}\n${indexHtml}`).digest('hex').slice(0, 12);
 }
 
-/**
- * Whether a GET the built client has no file for gets the page (the app's own routes, deep links) rather than a 404.
- * Never a bundle: after an update an open tab's old /assets/ names are gone, and the page in their place came back as
- * a "module" of HTML, which the worker then kept as that bundle (#651). A 404 fails cleanly and the tab reloads.
- */
-export const servesPage = (urlPath: string) => !urlPath.startsWith('/api') && !urlPath.startsWith('/assets/');
-
 /** The worker itself. Only `version` changes between offices. */
 export function serviceWorkerSource(version: string): string {
   return `// cubefarm's service worker (server/pwa.ts). Version ${version}.
@@ -41,9 +34,10 @@ function isShell(url) {
   return url.pathname.startsWith('/assets/') || url.pathname.startsWith('/icons/') || url.pathname === '/manifest.webmanifest';
 }
 
-/** Keeps a response in this version's cache, unless a newer worker has already deleted it (it then stays deleted). */
+/** Keeps a response in this version's cache, unless a newer worker has already deleted it (it then stays deleted). A page served for a bundle is never kept as it (#650). */
 async function keep(req, res) {
-  if (res.ok && (await caches.has(CACHE))) await (await caches.open(CACHE)).put(req, res);
+  const page = (res.headers.get('content-type') || '').includes('text/html');
+  if (res.ok && !page && (await caches.has(CACHE))) await (await caches.open(CACHE)).put(req, res);
 }
 
 self.addEventListener('fetch', (event) => {

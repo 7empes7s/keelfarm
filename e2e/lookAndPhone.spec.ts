@@ -3,7 +3,7 @@ import { enterOffice, expect, phoneButton, savedView, test } from './helpers';
 
 // The 3D office once the tour is over (#651): a click grabs the mouse and keeps it (a tutorial's "give the mouse back"
 // listener had freed every grab two milliseconds later), the phone opens on screen (the chat's wide rows had widened
-// its overlay's grid and put it off to the right), and an old tab asking for a bundle that's gone gets a 404.
+// its overlay's grid and put it off to the right). An old tab after an update recovers through #650's reload.
 
 const locked = (page: Page) => page.evaluate(() => document.pointerLockElement?.tagName ?? null);
 /** What the browser's own Esc does to a grab: Playwright's key presses never reach the browser's handling of it. */
@@ -69,11 +69,4 @@ test('pocket mode at 390px: the chat fits the screen (#651)', async ({ page }) =
   await page.goto('/?pocket=1&tab=chat');
   await expect(page.locator('.chat-input textarea')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
-});
-
-test('a bundle that is gone after an update is a 404, never the page (#651)', async ({ page }) => {
-  const res = await page.request.get('/assets/Office-gone0000.js');
-  expect(res.status()).toBe(404);
-  expect(res.headers()['content-type'] ?? '').not.toMatch(/javascript/);
-  expect((await page.request.get('/floor/1')).status()).toBe(200); // deep links still get the page
 });
