@@ -13,8 +13,14 @@ export interface KnownScreen {
   clis: readonly AgentCli[];
   /** How the log names it. */
   what: string;
-  /** The key that moves toward its answer or takes it; null: not this screen. */
-  key(screen: string): ScreenKey | null;
+  /** The key that moves toward its answer or takes it; null: not this screen (or not one to answer now). */
+  key(screen: string, ctx: ScreenContext): ScreenKey | null;
+}
+
+/** What the session knows that its screen doesn't. */
+export interface ScreenContext {
+  /** The office's own hooks are trusted in this Codex home (#638): a hooks review on screen is only someone else's. */
+  officeHooksTrusted?: boolean;
 }
 
 /** A menu's options as on screen: `❯ 1. Yes` / `  2. No` (the number is optional), and which one is selected. */
@@ -45,7 +51,8 @@ const KNOWN_SCREENS: readonly KnownScreen[] = [
   { id: 'notes', clis: ['claude'], what: 'security notes (continued)', key: (s) => (/Security notes:/i.test(s) && /Press Enter to continue/i.test(s) ? 'enter' : null) },
   { id: 'login-done', clis: ['claude'], what: 'signed-in screen (continued)', key: (s) => (/Login successful/i.test(s) && /Press Enter to continue/i.test(s) ? 'enter' : null) },
   { id: 'update', clis: ['codex'], what: 'update offer (skipped: the office updates its CLIs)', key: (s) => (/Update available!?/i.test(s) ? pick(s, /^Skip$/i) : null) },
-  { id: 'hooks', clis: ['codex'], what: "hooks review (went on without them: trusting them is the manager's call)", key: hookReviewKey },
+  // Only past others' hooks: going on without the office's own would silently lose its steps (#638), so then it's the manager's.
+  { id: 'hooks', clis: ['codex'], what: "hooks review (went on without the hooks it doesn't trust: trusting them is the manager's call, in /hooks)", key: (s, ctx) => (ctx.officeHooksTrusted ? hookReviewKey(s) : null) },
 ];
 
 /**
@@ -69,10 +76,10 @@ const SIGN_IN_HINT = /Not logged in|run \/login|Select login method|Sign in with
 export type ScreenStep = { do: 'keys'; screen: KnownScreen; key: ScreenKey } | { do: 'sign-in' } | { do: 'sign-in-hint' } | null;
 
 /** What a CLI's screen asks for while it starts: a known screen's key, its sign-in nobody here can do, a sign-in phrase, or nothing. */
-export function screenStep(screen: string, cli: AgentCli): ScreenStep {
+export function screenStep(screen: string, cli: AgentCli, ctx: ScreenContext = {}): ScreenStep {
   for (const s of KNOWN_SCREENS) {
     if (!s.clis.includes(cli)) continue;
-    const key = s.key(screen);
+    const key = s.key(screen, ctx);
     if (key) return { do: 'keys', screen: s, key };
   }
   if (SIGN_IN[cli].some((test) => test(screen))) return { do: 'sign-in' };

@@ -34,8 +34,9 @@ export type ScreenState = 'sign-in' | 'setup' | 'menu' | 'error' | 'ended' | 'wo
 const SIGN_IN = /Select login method|Not logged in|run \/login|Sign in with ChatGPT|Please login|Invalid API key|OAuth token has expired|Paste code here if prompted|401 Unauthorized/i;
 const SETUP: [RegExp, string][] = [
   [/Choose the text style/i, 'the theme screen'],
-  [/Do you trust the files in this folder|Is this a project you created or one you trust|allow Codex to work in this folder|Do you trust the contents of this directory/i, 'the folder-trust screen'],
+  [/Trust this folder\?|Do you trust the files in this folder|Is this a project you created or one you trust|allow Codex to work in this folder|Do you trust the contents of this directory/i, 'the folder-trust screen'],
   [/Bypass Permissions mode|Settings Error|Press Enter to continue/i, 'a first-run screen'],
+  [/Hooks need review/i, "Codex's hooks review: open their terminal and pick Review hooks"],
 ];
 const ENDED = /To continue this session, run codex resume/i;
 const WORKING = /esc to interrupt/i;
