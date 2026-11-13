@@ -599,9 +599,7 @@ export class Accounts {
     if (!file) return; // a keychain or a token in the environment: nothing to judge by
     // A token in it counts from when the file was written: a session's sign-in failure after that still stands (#579).
     if (file.state === 'out') this.evidence(id, { kind: 'out', from: 'file', at: Math.max(Date.now(), file.changedAt) });
-    else this.evidence(id, { kind: file.state === 'in' ? 'ok' : 'refresh', from: 'file', at: file.changedAt });
-    // A session's sign-in failure the file can't settle (it hasn't changed since): the usage endpoint can.
-    if (this.auth.get(id)?.state === 'signed-out' && file.state !== 'out') void this.test(id).catch(() => undefined);
+    else this.evidence(id, { kind: file.state === 'in' ? 'ok' : 'refresh', from: 'file', at: file.changedAt }); // no request: only a rewrite or a sign-in brings it back
   }
 
   /** The terminal a login signs in in (/ws/term?agent=account:<id>), made when it's first asked for. */
