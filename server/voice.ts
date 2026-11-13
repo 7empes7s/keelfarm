@@ -286,6 +286,8 @@ export interface VoiceDeps {
   cacheChanged(view: VoiceCacheView): void;
   /** Server log lines (a new clip made, a clip transcribed), never the key or what was said. */
   log?(line: string): void;
+  /** Speech to Text failed for a reason other than the clip itself (#645): an IT ticket, with the real error. */
+  trouble?(problem: string): void;
   now?(): number;
 }
 
@@ -472,14 +474,19 @@ export class Voice {
 
   /**
    * POST /api/voice/transcribe: the manager's recorded speech (`ms` long, by the browser's clock) as text, by
-   * ElevenLabs Speech to Text. Only while ElevenLabs is the 🎙's provider, and at most 60 s / 5 MB a clip.
+   * ElevenLabs Speech to Text. Only while ElevenLabs is the 🎙's provider or for a voice call's turn (`call`: a call
+   * always listens through the office when it has a key, #645), and at most 60 s / 5 MB a clip.
    */
-  transcribe(audio: Buffer, contentType: string | undefined, ms: number): Promise<string> {
-    return this.logged('speech to text', () => this.makeTranscript(audio, contentType, ms), "couldn't turn speech into text");
+  transcribe(audio: Buffer, contentType: string | undefined, ms: number, call = false): Promise<string> {
+    return this.logged('speech to text', () => this.makeTranscript(audio, contentType, ms, call), "couldn't turn speech into text").catch((err: unknown) => {
+      const status = err instanceof HttpError ? err.status : 500;
+      if (status !== 400 && status !== 413 && status !== 415) this.deps.trouble?.(`Speech to text failed (${status}): ${(err as Error).message}`);
+      throw err;
+    });
   }
 
-  private async makeTranscript(audio: Buffer, contentType: string | undefined, ms: number): Promise<string> {
-    if (this.deps.listen().provider !== 'elevenlabs') throw new HttpError(409, "ElevenLabs isn't turning speech into text: pick it under Settings → Voice → Talk instead of type.");
+  private async makeTranscript(audio: Buffer, contentType: string | undefined, ms: number, call: boolean): Promise<string> {
+    if (!call && this.deps.listen().provider !== 'elevenlabs') throw new HttpError(409, "ElevenLabs isn't turning speech into text: pick it under Settings → Voice → Talk instead of type.");
     const bad = clipProblem({ bytes: audio.length, ms, type: contentType });
     if (bad) throw new HttpError(bad.status, bad.message);
     if (!this.key) throw new HttpError(409, 'Add your ElevenLabs API key in Settings → Voice to talk instead of type, or pick the browser there.');

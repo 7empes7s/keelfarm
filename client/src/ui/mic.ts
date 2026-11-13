@@ -8,14 +8,15 @@ import { create } from 'zustand';
 import { CLIP_MAX_BYTES, clipProblem } from '../../../shared/clipLimits';
 import type { ListenProvider } from '../../../shared/types';
 import { api } from '../api';
+import { callAudio } from './agentCallStore';
 import { useStore } from '../store';
 import { isConfirmOpen } from './Confirm';
 import { bindings } from './controls';
 import { HANDS_FREE_IDLE, handsFree, type HandsFree, type HandsFreeEvent, type Room } from './handsFree';
 import { closesMic, HOLD_MS, isTalkKey, type KeyPlace } from './micKeys';
 import { useMicPause } from './micPause';
-import { drainOf, freshEars, heardLevel, heardWords, listenRules, sendsWhenDone, verdict, type Drain, type Ears, type MicMode } from './micSilence';
-import { cantListen, joinHeard, micErrorLine, phrasesText, withoutTrailingFillers, withTranscript, type MicCaps, type Phrase } from './micText';
+import { deadMic, drainOf, freshEars, heardLevel, heardWords, listenRules, sendsWhenDone, verdict, type Drain, type Ears, type MicMode } from './micSilence';
+import { callListens, cantListen, joinHeard, MIC_NO_START, MIC_SILENT, micErrorLine, phrasesText, speechFailed, withoutTrailingFillers, withTranscript, type MicCaps, type Phrase } from './micText';
 import { FakeRecognition, fakeLive, type Recognition, type RecognitionClass } from './micFake';
 import { holdMusicDuck } from './music';
 import { getAudioPrefs, listenChime, setMicOpen, subscribeAudio } from './sfx';
@@ -81,6 +82,9 @@ export function micCaps(): MicCaps {
 
 const listening = () => useStore.getState().settings.listen ?? { provider: 'off' as ListenProvider, autoSend: false, handsFree: false };
 
+/** How a voice call listens, whatever Talk instead of type says (#645). */
+export const callProvider = () => callListens(useStore.getState().voiceKeySet, micCaps());
+
 /** Why the 🎙 can't listen now, or '' when it can. */
 export function micProblem(): string {
   const { provider } = listening();
@@ -94,6 +98,8 @@ interface Hearing {
   stop(): void;
   /** Drop it all. */
   abort(): void;
+  /** The recording's mic track, to tell a dead mic from a quiet room. */
+  track?: MediaStreamTrack;
 }
 
 interface Session {
@@ -143,8 +149,7 @@ const set = (patch: Partial<MicView>) => useMic.setState(patch);
 export function listen(id: string, mode: MicMode) {
   const target = targets.get(id);
   if (!target || session || target.disabled()) return;
-  // A call listens with the browser's recognition when Talk instead of type is off.
-  const provider = mode === 'call' && listening().provider === 'off' ? 'browser' : listening().provider;
+  const provider = mode === 'call' ? callProvider() : listening().provider;
   if (provider === 'off') return;
   const why = cantListen(provider, micCaps(), useStore.getState().voiceKeySet);
   if (why) return void (mode === 'call' ? callEars?.problem(why) : explain(why, id));
@@ -200,9 +205,13 @@ function check(n: number) {
   if (!s || s.finishing) return;
   const now = performance.now();
   if (!s.ears) {
-    if (now - s.began > STARTUP_MS) cancel('stopped');
+    if (now - s.began > STARTUP_MS) {
+      if (s.mode === 'call') fail(n, MIC_NO_START); // a call says so, and offers Talk
+      else cancel('stopped');
+    }
     return;
   }
+  if (s.mode === 'call' && deadMic(s.ears, now, s.hearing?.track)) return fail(n, MIC_SILENT);
   const rules = listenRules(s.mode, listening().autoSend, useMicPause.getState().ms);
   const v = verdict(s.ears, now, rules, s.transcript);
   const drain = drainOf(s.ears, now, rules, s.transcript);
@@ -268,8 +277,8 @@ function cancel(why: 'stopped' | 'gone' | 'nothing') {
   close(why === 'nothing' ? 'nothing' : 'stopped');
 }
 
-/** Listening went wrong: `line` says why, or null when it simply stopped (what was heard still counts). */
-function fail(n: number, line: string | null) {
+/** Listening went wrong: `line` says why, or null when it simply stopped (what was heard still counts). A call's problem is reported to the office unless the office said it (`fromOffice`). */
+function fail(n: number, line: string | null, fromOffice = false) {
   const s = live(n);
   if (!s) return;
   if (!line) {
@@ -281,6 +290,7 @@ function fail(n: number, line: string | null) {
   s.hearing?.abort();
   lastError = line;
   if (s.mode === 'call') callEars?.problem(line); // the call screen says it, and falls back to tap-to-talk
+  if (s.mode === 'call' && !fromOffice) void api.voiceProblem(line).catch(() => undefined); // an IT ticket (#645)
   close('error');
   if (s.mode !== 'call') useStore.getState().pushToast('error', line);
   set({ state: 'error', target: s.target.id });
@@ -410,7 +420,8 @@ async function recordClip(n: number) {
   const chunks: Blob[] = [];
   let bytes = 0;
   let aborted = false;
-  const levels = meter(stream, (level) => {
+  // A call's levels on the call's own audio, woken in the tap that started it: one made now (no tap) stays suspended on iPhones.
+  const levels = meter(stream, s.mode === 'call' ? callAudio() : null, (level) => {
     const cur = live(n);
     const now = performance.now();
     if (cur?.ears) cur.ears = heardLevel(cur.ears, level, now);
@@ -429,6 +440,7 @@ async function recordClip(n: number) {
     void transcribe(cur, new Blob(chunks, { type: rec.mimeType || type || 'audio/webm' }), performance.now() - (cur.ears?.start ?? cur.began));
   };
   s.hearing = {
+    track: stream.getAudioTracks()[0],
     stop: () => rec.state !== 'inactive' && rec.stop(),
     abort: () => {
       aborted = true;
@@ -440,16 +452,18 @@ async function recordClip(n: number) {
   started(n);
 }
 
-/** Microphone levels (RMS) about 20 times a second, for the silence detector. Returns its stop. */
-function meter(stream: MediaStream, onLevel: (rms: number) => void): () => void {
+/** Microphone levels (RMS) about 20 times a second, for the silence detector, on `shared` or an audio context of its own. Returns its stop. */
+function meter(stream: MediaStream, shared: AudioContext | null, onLevel: (rms: number) => void): () => void {
   let ctx: AudioContext | null = null;
+  let src: MediaStreamAudioSourceNode | null = null;
   let timer: ReturnType<typeof setInterval> | null = null;
   try {
-    ctx = new AudioContext();
+    ctx = shared ?? new AudioContext();
     void ctx.resume().catch(() => undefined);
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 1024;
-    ctx.createMediaStreamSource(stream).connect(analyser); // never to the speakers
+    src = ctx.createMediaStreamSource(stream);
+    src.connect(analyser); // never to the speakers
     const buf = new Float32Array(analyser.fftSize);
     timer = setInterval(() => {
       analyser.getFloatTimeDomainData(buf);
@@ -462,7 +476,8 @@ function meter(stream: MediaStream, onLevel: (rms: number) => void): () => void 
   }
   return () => {
     if (timer) clearInterval(timer);
-    void ctx?.close().catch(() => undefined);
+    src?.disconnect();
+    if (!shared) void ctx?.close().catch(() => undefined);
   };
 }
 
@@ -474,7 +489,7 @@ async function transcribe(s: Session, clip: Blob, ms: number) {
   s.release?.(); // the mic is off: sounds come back while the text is on its way
   s.release = null;
   try {
-    const res = await fetch('/api/voice/transcribe', { method: 'POST', headers: { 'Content-Type': clip.type, 'X-Clip-Ms': String(Math.round(ms)) }, body: clip });
+    const res = await fetch('/api/voice/transcribe', { method: 'POST', headers: { 'Content-Type': clip.type, 'X-Clip-Ms': String(Math.round(ms)), ...(s.mode === 'call' && { 'X-Voice-Call': '1' }) }, body: clip });
     const data = (await res.json().catch(() => ({}))) as { text?: unknown; error?: unknown };
     if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : `HTTP ${res.status}`);
     if (session !== s) return; // stopped meanwhile
@@ -483,7 +498,8 @@ async function transcribe(s: Session, clip: Blob, ms: number) {
     if (record) record.transcript = s.transcript;
     deliver(s);
   } catch (err) {
-    if (session === s) fail(s.n, (err as Error).message);
+    // The office files its own failures as an IT ticket, with the real error.
+    if (session === s) fail(s.n, s.mode === 'call' ? speechFailed((err as Error).message) : (err as Error).message, true);
   }
 }
 

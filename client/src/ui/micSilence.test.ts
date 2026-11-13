@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CLIP_MAX_MS } from '../../../shared/clipLimits';
 import {
+  deadMic,
   DRAIN_SHOW_MS,
   drainOf,
   FLOOR_SAMPLES,
@@ -14,6 +15,7 @@ import {
   PAUSE_CHOICES,
   sendsWhenDone,
   SILENCE_MS,
+  SILENT_MIC_MS,
   UNFINISHED_CAP_MS,
   verdict,
   WARMUP_SAMPLES,
@@ -151,5 +153,21 @@ describe('listenRules', () => {
     expect(sendsWhenDone('hold', false)).toBe(false);
     expect(sendsWhenDone('hold', true)).toBe(true);
     expect(sendsWhenDone('tap', true)).toBe(true);
+  });
+});
+
+describe('deadMic (#645)', () => {
+  const after = (levels: number[]) => levels.reduce((e, l, i) => heardLevel(e, l, i * 50), freshEars(0));
+  it('a mic giving pure silence for 5 s is dead; a quiet room is not', () => {
+    const silent = after(Array(110).fill(0));
+    expect(deadMic(silent, SILENT_MIC_MS - 1)).toBe(false);
+    expect(deadMic(silent, SILENT_MIC_MS)).toBe(true);
+    expect(deadMic(after(Array(110).fill(0.0008)), SILENT_MIC_MS)).toBe(false);
+  });
+  it('a muted or ended track is dead after the wait; speech heard never is', () => {
+    const quiet = after(Array(110).fill(0.004));
+    expect(deadMic(quiet, SILENT_MIC_MS, { muted: true, readyState: 'live' })).toBe(true);
+    expect(deadMic(quiet, SILENT_MIC_MS, { muted: false, readyState: 'ended' })).toBe(true);
+    expect(deadMic(heardWords(quiet, 100), SILENT_MIC_MS, { muted: true, readyState: 'live' })).toBe(false);
   });
 });

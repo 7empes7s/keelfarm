@@ -9,7 +9,7 @@ import { startCall } from '../voiceCallEngine';
 import { callOn } from '../voiceCallStore';
 import { loadWakeModels } from './wakeModels';
 import { WakePipeline, WAKE_RATE } from './wakePipeline';
-import { useWake } from './wakeStore';
+import { onWakeStop, useWake } from './wakeStore';
 import { wakeThreshold, wakeWord, type WakePrefs, type WakeWordId } from './wakeWord';
 
 // The mic's samples in blocks of 2048 (about 43 ms at 48 kHz), so the page wakes ~23 times a second, not ~375.
@@ -128,6 +128,7 @@ export function stopWake() {
   stopMic();
   pipeline?.p.reset();
 }
+onWakeStop(stopWake);
 
 /** What the probe shows (window.__swarmWake.stats): chunks heard, quiet, scored, wakes, the last score. */
 export const wakeStats = () => (pipeline ? { word: pipeline.word, ...pipeline.p.stats } : null);

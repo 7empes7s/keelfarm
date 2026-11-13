@@ -43,3 +43,9 @@ export function setWakePrefs(patch: Partial<WakePrefs>) {
 
 /** The header's mic light shows: it's listening, or about to. */
 export const micLit = (s: WakeStatus) => s === '' || s === 'starting' || s === 'tap';
+
+let stopEngine: (() => void) | null = null;
+/** The engine, once loaded, gives its stop here. */
+export const onWakeStop = (stop: () => void) => void (stopEngine = stop);
+/** A call lets go of the wake word's mic before opening its own (#645): on iPhones a second stream is silent while the first is live. */
+export const releaseWakeMic = () => stopEngine?.();

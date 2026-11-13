@@ -11,6 +11,8 @@ import { api } from '../api';
 import { useStore } from '../store';
 import { agentEvent, downsample, floatToPcm, initMessage, level, pcmToFloat, replyLeftMs, type AgentMode } from './agentCall';
 import { callAudio, onAgentRelay, releaseCallAudio, useAgentCall } from './agentCallStore';
+import { SILENT_LEVEL, SILENT_MIC_MS } from './micSilence';
+import { MIC_SILENT } from './micText';
 import { wantsMic } from './voiceCall';
 import { callOn, dispatchCall, useCall } from './voiceCallStore';
 
@@ -38,7 +40,8 @@ let wallEnd = 0; // when the queued audio ends, on the wall clock
 let clockAt = 0; // the audio clock at the last look: one that stands still isn't playing
 let endAfterReply = false;
 let markers: string[] = []; // the CEO's replies and progress lines, said when the voice is free
-let mic: { stream: MediaStream; node: AudioWorkletNode; src: MediaStreamAudioSourceNode; buf: Float32Array[]; len: number } | null = null;
+let mic: { stream: MediaStream; node: AudioWorkletNode; src: MediaStreamAudioSourceNode; buf: Float32Array[]; len: number; heard: boolean; check: ReturnType<typeof setTimeout> } | null = null;
+let fallbackTo: ((why: string) => void) | null = null; // today's voice mode, when this conversation can't hear
 let wasLive = false; // the conversation was on when the tab was hidden: it starts again on return
 
 /** What the probe shows (window.__swarmCall.agent): the mode, the last turn's timing, the events seen. */
@@ -51,6 +54,7 @@ const send = (m: unknown) => ws?.readyState === WebSocket.OPEN && ws.send(typeof
 /** Starts a conversation (the call's first, or after "that's all" from a tap on the orb). Falls back to today's voice mode on failure. */
 export async function connectAgent(fallback: (why: string) => void) {
   if (ws) return;
+  fallbackTo = fallback;
   setMode('connecting');
   const ctx = callAudio();
   if (!ctx) return fail(fallback, "This browser can't play the Jarvis voice");
@@ -289,16 +293,26 @@ async function startMic(ctx: AudioContext) {
   }
   const src = ctx.createMediaStreamSource(stream);
   const node = new AudioWorkletNode(ctx, 'cubefarm-mic');
-  mic = { stream, node, src, buf: [], len: 0 };
+  // A mic that gives only silence (#645): the office's own voice takes the call, and the office hears why.
+  const check = setTimeout(() => {
+    if (!mic || mic.heard || mode() !== 'live') return;
+    void api.voiceProblem(`${MIC_SILENT} (the Jarvis voice's mic)`).catch(() => undefined);
+    closeConversation('off');
+    if (fallbackTo) fail(fallbackTo, MIC_SILENT);
+  }, SILENT_MIC_MS);
+  mic = { stream, node, src, buf: [], len: 0, heard: false, check };
   node.port.onmessage = (e: MessageEvent<Float32Array>) => onMic(downsample(e.data, ctx.sampleRate, MIC_RATE));
   src.connect(node);
+  node.connect(ctx.destination); // silent: it outputs nothing, but Safari only runs a node something pulls on
 }
 
 function onMic(samples: Float32Array) {
   if (!mic) return;
   const c = useCall.getState().call;
   const open = mode() === 'live' && wantsMic(c);
-  useAgentCall.setState({ input: open ? level(samples) : 0 });
+  const heard = level(samples);
+  if (heard >= SILENT_LEVEL) mic.heard = true;
+  useAgentCall.setState({ input: open ? heard : 0 });
   if (!open) return; // muted, paused or away: nothing leaves the phone
   mic.buf.push(samples);
   mic.len += samples.length;
@@ -313,6 +327,7 @@ function onMic(samples: Float32Array) {
 
 function stopMic() {
   if (!mic) return;
+  clearTimeout(mic.check);
   mic.node.port.onmessage = null;
   mic.src.disconnect();
   mic.node.disconnect();

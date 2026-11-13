@@ -4,7 +4,9 @@
 // burst, at most once per ticket per 15 minutes, and answers with it_ticket (tell the reporters, ask the CEO for a code
 // fix, close with what was done). An agent blocked on a ticket shows "Waiting on IT #N". Rules in shared/itTickets.ts.
 import { autoReport, checkReport, closeTicket, fileTicket, loadTickets, pruneTickets, ticketBrief, ticketsView, waitingOn, wakeFor, type ItTicket, type OfficeTrouble } from '../../shared/itTickets.ts';
+import { redact } from '../../shared/journal.ts';
 import type { AgentView, WorldSnapshot } from '../../shared/types.ts';
+import { HttpError } from '../httpError.ts';
 import type { ItTicketArgs } from '../ceoItTools.ts';
 import { ticketSample, wantsTicketSample } from '../itTicketSample.ts';
 import type { PersistedAgent, PersistedRepo } from './model.ts';
@@ -101,6 +103,13 @@ export abstract class SwarmItTickets extends SwarmItDept {
     const closed = pruneTickets(this.state.itTickets, now);
     this.ticketFiled(fileTicket(this.state.itTickets, autoReport(e), OFFICE, now, true).ticket, now, closed);
     this.recordTickets(closed);
+  }
+
+  /** A call that couldn't hear the manager (#645): Speech to text failing here, or what the browser saw (POST /api/voice/problem: a silent mic, its recognition failing). */
+  voiceProblem(problem: string) {
+    const p = problem.trim();
+    if (!p) throw new HttpError(400, 'Say what went wrong.');
+    this.autoTicket({ kind: 'voice', problem: redact(p, this.secrets()).slice(0, 300) });
   }
 
   /** it_ticket: IT tells the reporters, asks the CEO for a code fix and/or closes the ticket. */

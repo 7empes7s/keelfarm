@@ -14,11 +14,12 @@ import { useStore } from '../store';
 import { markBusy } from '../updateGate';
 import { sendToCeo } from './chatSend';
 import { CHIME_MS } from './handsFree';
-import { listen, micCaps, registerTarget, setCallEars, stopListening, useMic } from './mic';
+import { callProvider, listen, micCaps, registerTarget, setCallEars, stopListening, useMic } from './mic';
 import { cantListen } from './micText';
 import { listenChime, setCallQuiet, unlockAudio } from './sfx';
 import { inCall, wantsMic, type CallEffect } from './voiceCall';
 import { callOn, dispatchCall, onCallStep, useCall } from './voiceCallStore';
+import { releaseWakeMic } from './wake/wakeStore';
 
 const TARGET = 'voice-call';
 const voice = () => import('./voiceMessages');
@@ -30,15 +31,14 @@ let tapping = false;
 
 /** Why the call can't listen by itself, or ''. */
 function micReason(): string {
-  const st = useStore.getState();
-  const provider = st.settings.listen?.provider ?? 'off';
-  return cantListen(provider === 'off' ? 'browser' : provider, micCaps(), st.voiceKeySet);
+  return cantListen(callProvider(), micCaps(), useStore.getState().voiceKeySet);
 }
 
 // ---------- controls (the call screens and the keys) ----------
 
 /** Starts a call, or brings the one that's on back to the front. Call it from a click: the browser lets sound start then. */
 export function startCall() {
+  releaseWakeMic(); // before the call's own mic opens, not when the wake word sees the call
   unlockAudio();
   if (!callOn() && !agentCallWhy(useStore.getState())) {
     callAudio(); // inside the tap: iPhones only start sound (and the mic's audio session) from one
