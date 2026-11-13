@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { parseRoute } from '../routes';
-import { doneOf, moveTo, neverStarted, NO_PROGRESS, pauseTutorial, pickAgent, pickPr, readProgress, sentCount, startTutorial, stepBlocked, stepLink, tapUses, TUTORIALS, type World } from './tutorials';
+import { doneOf, freesMouse, moveTo, neverStarted, NO_PROGRESS, pauseTutorial, pickAgent, pickPr, readProgress, sentCount, startTutorial, stepBlocked, stepLink, tapUses, TUTORIALS, type World } from './tutorials';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -137,5 +137,16 @@ describe('tutorial progress', () => {
     expect(readProgress('{')).toEqual(NO_PROGRESS);
     expect(readProgress(JSON.stringify({ at: { start: { step: 99 }, gone: { step: 1 } }, running: 'gone' }))).toEqual({ at: { start: { step: 4, done: false } }, running: null });
     expect(neverStarted(NO_PROGRESS)).toBe(true);
+  });
+});
+
+describe('freesMouse (#651)', () => {
+  it('lets the 3D office keep its mouse grab when no tutorial step is on screen', () => {
+    expect(freesMouse(false, false, 'office')).toBe(false);
+  });
+  it('gives the mouse back only while a step shows in the 3D office', () => {
+    expect(freesMouse(true, false, 'office')).toBe(true);
+    expect(freesMouse(true, true, 'office')).toBe(false); // the tour or the start screen comes first
+    expect(freesMouse(true, false, 'pocket')).toBe(false);
   });
 });
