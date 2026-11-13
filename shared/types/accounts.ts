@@ -64,6 +64,7 @@ export interface AccountView extends ProviderAccount {
   planWarning?: string; // that plan isn't the one its name, plan field or tags say
   sameAs?: string; // the label of another login on the same subscription (same plan and owner), whose limits it shares (#460)
   tokenRefresh?: boolean; // its access token expired: still signed in, its next session refreshes it
+  authNote?: string; // its sign-in being checked, out after repeated failures, or not checkable just now (#637, shared/accountAuth.ts)
   shareMissing?: string[]; // a Claude login with its own folder (#377): what it doesn't share yet with this computer's login ([] all)
 }
 

@@ -9,7 +9,7 @@ import { HttpError } from '../httpError.ts';
 import { builtInPrefs, prepareLogin } from '../cliSetup.ts';
 import { cliLabel } from '../clis.ts';
 import { backText, defaultAccount, defaultsBack, defaultText, pruneTaskAccounts, switchNow, taskKey, tasksLeft } from '../../shared/accountDefault.ts';
-import { allOutText, detectLimit, fallbackText, LIMIT_TAIL_LINES, noneSignedIn, noSignInText, pinnedWaits, pinOut, sessionEnd, switchesForCeo, switchHandover, switchText, waitText, type LimitHit, type PinOut } from '../../shared/accountRotation.ts';
+import { allOutText, detectLimit, fallbackText, LIMIT_TAIL_LINES, noneSignedIn, noSignInText, pinnedWaits, pinOut, sessionEnd, stickyAccount, switchesForCeo, switchHandover, switchText, waitText, type LimitHit, type PinOut } from '../../shared/accountRotation.ts';
 import { ACCOUNT_CLIS, LOGIN_ENV } from '../../shared/accounts.ts';
 import { sessionRun } from '../../shared/sessionRun.ts';
 import { readingOf, usedPercent } from '../../shared/usage.ts';
@@ -104,7 +104,7 @@ export abstract class SwarmRotation extends SwarmUsage {
     const rec = key ? this.state.taskAccounts[key] : undefined;
     if (rec?.move) opts = { ...opts, resumeSessionId: undefined, prompt: this.freshPrompt(a, { ...opts, resumeSessionId: undefined }) };
     // Else a session to resume goes back to the account holding it while it's usable (#401).
-    const first = this.accounts.use(a.account, cli, rec && !rec.move ? rec.account : opts.resumeSessionId ? a.sessionAccount : undefined);
+    const first = this.accounts.use(a.account, cli, stickyAccount(a.role, rec, !!opts.resumeSessionId, a.sessionAccount));
     opts = this.resumable(a, opts, cli, first?.id);
     // Pinned to one account that's out and allowed to fall back (#579): it runs elsewhere, and says why.
     const out = a.role === 'ceo' ? null : pinOut(a.account, this.accounts.view().accounts);
@@ -128,9 +128,28 @@ export abstract class SwarmRotation extends SwarmUsage {
         const why = result.ok || stopped || result.interrupted ? null : (hit ?? sessionEnd(result, o.terminal?.tail(LIMIT_TAIL_LINES, true) ?? [], Date.now()));
         if (sw?.api) sw.usd += result.costUsd;
         if (!use || !why) return cb.finished(result);
-        // A sign-in screen is signed out, the built-in login's too (#579): polled, it's back once its login file changes.
-        if (why.kind === 'signed-out') this.accounts.signedOut(use.id);
-        else if (!hit) this.accounts.limited(use.id, why.until);
+        // A sign-in failure is re-probed before it counts (#637): a login that still has a token (another session's
+        // refresh won the race, a blip) gets this task once more on the same account; else it reads signed out and the
+        // rotation goes on. Bounded: SESSION_TRIES failures in a row are Signed out whatever the probe says.
+        if (why.kind === 'signed-out') {
+          void this.accounts.sessionSignedOut(use.id, !!result.signedOut).then((usable) => {
+            if (stopped) return cb.finished(result);
+            const same = usable ? this.accounts.again(use.id) : null;
+            if (same) {
+              this.appendLog(a, [{ kind: 'system', text: `↻ ${this.accounts.label(use.id)} is still signed in: trying it once more.` }]);
+              return attempt({ ...o, resumeSessionId: conversation, typed: false, reattach: false, prompt: conversation ? (a.role === 'ceo' || opts.readOnly ? opts.prompt : RESUMED_NOTE) : o.prompt }, oc, c, same, null);
+            }
+            if (result.signedOut) this.signInLost(a, use, oc, others);
+            settle(result, why, use, o, oc, c);
+          });
+          return;
+        }
+        if (!hit) this.accounts.limited(use.id, why.until);
+        settle(result, why, use, o, oc, c);
+      });
+    };
+    /** After a session's account was out: wait for it, the next account, or every account is out. */
+    const settle = (result: SessionResult, why: LimitHit, use: AccountUse, o: SessionOptions, oc: AccountCli, c: SessionCallbacks) => {
         // Told not to fall back: the task goes back in line and they wait for their account (#579).
         if (stays && use.id === a.account) return cb.finished({ ...result, ok: false, ...(why.kind === 'signed-out' && { signedOut: true }) });
         const until = why.kind === 'limited' ? why.until : null;
@@ -147,7 +166,6 @@ export abstract class SwarmRotation extends SwarmUsage {
         const retry: SessionOptions = { ...o, resumeSessionId: resumeId, typed: false, reattach: false, prompt: resumeId ? (a.role === 'ceo' || opts.readOnly ? opts.prompt : RESUMED_NOTE) : this.freshPrompt(a, opts) };
         if (!crossed) return attempt(retry, oc, c, next.use, s);
         cross(retry, c, next, s);
-      });
     };
     /** On another coding agent, with its model and tools. */
     const cross = (o: SessionOptions, c: SessionCallbacks, next: { use: AccountUse; cli: AccountCli }, sw: AccountSwitch | null) => {
@@ -302,9 +320,11 @@ export abstract class SwarmRotation extends SwarmUsage {
         },
         finished: (result) => {
           live.delete(simulate);
+          if (result.ok) this.accounts.ran(use.id); // it signed in and worked: earlier sign-in failures are over (#637)
           use.release();
           done();
-          if (result.signedOut) this.signInLost(a, use, cli, this.fallbackClis(a, opts));
+          // Rotation's sessions re-probe first (rotating); a lone account's is re-probed here, and told only if it's really out.
+          if (result.signedOut && !ended) void this.accounts.sessionSignedOut(use.id, true).then((ok) => ok || this.signInLost(a, use, cli, this.fallbackClis(a, opts)));
           if (ended) ended(result, hit);
           else cb.finished(result);
         },
@@ -400,7 +420,6 @@ export abstract class SwarmRotation extends SwarmUsage {
 
   /** A session showed its CLI's sign-in (cliRunner.ts): the account reads signed out, and the manager hears once. */
   private signInLost(a: PersistedAgent, use: AccountUse, cli: AgentCli, others: AccountCli[]) {
-    this.accounts.signedOut(use.id);
     if (a.role !== 'ceo' && cli !== 'opencode' && this.noneIn([cli, ...others])) return this.tellNoSignIn(a, cli); // the last one: one card for all
     const now = Date.now();
     if (now - (this.signInTold.get(use.id) ?? 0) < SIGN_IN_NOTICE_MS) return;

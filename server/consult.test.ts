@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CONSULT_ANSWER_MAX, consultAnswer, consultDeny, consultPrompt, consultRefusal, consultSessions, nextConsult, type Consult } from './consult.ts';
+import { CONSULT_ANSWER_MAX, consultAnswer, consultCli, consultDeny, consultPrompt, consultRefusal, consultSessions, nextConsult, type Consult } from './consult.ts';
 
 const consult = (o: Partial<Consult>): Consult => ({ id: 'c', repoId: 'r1', floor: 1, agentId: null, question: 'How?', hint: null, at: 0, runningOn: null, startedAt: null, dir: null, ...o });
 const yes = () => true;
@@ -66,5 +66,14 @@ describe('consult prompt and answer', () => {
   it('says who answered, capped', () => {
     expect(consultAnswer('Ada', 1, 'See engine/approvals.mjs:120')).toBe('Ada on floor 1 says:\nSee engine/approvals.mjs:120');
     expect(consultAnswer('Ada', 1, 'x'.repeat(10_000)).length).toBeLessThanOrEqual(CONSULT_ANSWER_MAX + 30);
+  });
+});
+
+describe('consultCli (#637)', () => {
+  it("runs on the agent's own coding agent, never Claude Code for a Codex agent", () => {
+    expect(consultCli('codex', 'claude', true)).toBe('codex');
+    expect(consultCli('', 'codex', true)).toBe('codex'); // the office default, as their tasks
+    expect(consultCli(undefined, 'claude', true)).toBe('claude');
+    expect(consultCli('codex', 'claude', false)).toBeNull(); // the Agent SDK: Claude Code only, as every task then
   });
 });

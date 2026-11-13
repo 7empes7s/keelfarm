@@ -2,10 +2,11 @@
 import type { SessionHandle, SessionResult } from '../agentRunner.ts';
 import { stillOpen } from '../closeCleanup.ts';
 import { CeoHolds } from '../ceoHold.ts';
-import { CONSULT_DISALLOWED, consultAnswer, consultPrompt, nextConsult, type Consult } from '../consult.ts';
+import { CONSULT_DISALLOWED, consultAnswer, consultCli, consultPrompt, nextConsult, type Consult } from '../consult.ts';
 import { clip } from '../notify.ts';
 import { ONE_TURN } from '../prompts.ts';
 import { resolveEffort } from '../../shared/costs.ts';
+import { fullWindowPause } from '../../shared/accountRotation.ts';
 import { redact as scrub } from '../../shared/journal.ts';
 import { mergeSwitches, sessionTools } from '../../shared/tooling.ts';
 import { fixGoesTo, pickTester, pipelineQueue, prepHeld, runnerFor, runsHere, WORK_PHASES } from '../handOut.ts';
@@ -497,7 +498,8 @@ export abstract class SwarmScheduling extends SwarmQa {
         // unless rotation has another Claude account to start it on: then only that login is out (its status already
         // says limited, from these readings). With every account out, the pause lasts until the first one is back.
         const full = res.readings.find((r) => (r.type === 'five_hour' || r.type === 'seven_day') && r.pct >= 100 && r.resetsAt && r.resetsAt > Date.now());
-        if (full && !this.accounts.hasFree('claude')) this.pauseForLimit(this.accounts.rotation().on ? (this.accounts.firstBack('claude') ?? full.resetsAt) : full.resetsAt);
+        const pause = full && fullWindowPause(full.resetsAt!, this.accounts.hasFree('claude'), this.accounts.rotation().on, this.accounts.firstBack('claude'));
+        if (pause) this.pauseForLimit(pause.until, false, pause.allOut);
       })
       .finally(() => (this.usagePolling = false));
   }
@@ -649,10 +651,11 @@ export abstract class SwarmScheduling extends SwarmQa {
     Object.assign(c, { startedAt, dir: cwd });
     this.appendLog(a, [{ kind: 'system', text: '' }, { kind: 'system', text: `━━━ 🔎 consult · ${this.ceo().name} asks: ${clip(c.question, 200)} ━━━` }]);
     this.emitAgent(a);
-    const run = this.spend.start(a.id, { kind: 'consult', effort: resolveEffort(a.effort, 'consult', this.state.settings.taskEffort, this.state.settings.defaultEffort), model: this.modelFor(a, 'claude') || a.model, startedAt, round: null });
+    // On the agent's own coding agent and account (#637), as their tasks run: never Claude Code for a Codex agent.
+    const cli = consultCli(a.cli, this.state.settings.defaultCli, this.state.settings.runtime === 'terminal' && this.backend.terminals);
+    const run = this.spend.start(a.id, { kind: 'consult', effort: resolveEffort(a.effort, 'consult', this.state.settings.taskEffort, this.state.settings.defaultEffort), model: this.modelFor(a, cli ?? 'claude') || a.model, startedAt, round: null });
     const t = this.state.settings.tools;
     const tools = sessionTools(this.tooling.items, 'agent', mergeSwitches(t.everyone, a.tools));
-    const inTerminal = this.state.settings.runtime === 'terminal' && this.backend.terminals;
     let handle: SessionHandle | undefined;
     let done = false;
     const finished = (result: SessionResult) => {
@@ -683,10 +686,10 @@ export abstract class SwarmScheduling extends SwarmQa {
         browserTesting: false,
         additionalDirectories: [],
         role: a.role,
-        tools: { ...tools, disallowed: [...tools.disallowed, ...CONSULT_DISALLOWED] },
+        ...(cli === null || cli === 'claude' ? { tools: { ...tools, disallowed: [...tools.disallowed, ...CONSULT_DISALLOWED] } } : {}),
         readOnly: true,
         agentId: a.id,
-        ...(inTerminal ? { terminal: this.terminalFor(a), cli: 'claude' as const, label: `${a.name} · consult` } : {}),
+        ...(cli ? { terminal: this.terminalFor(a), cli, label: `${a.name} · consult` } : {}),
       },
       {
         log: (entries) => this.appendLog(a, entries),

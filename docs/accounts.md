@@ -135,6 +135,32 @@ the account shows Limited until midnight. The ⋯ menu has Sign in again, Test, 
 tags, daily cap, the billing page (claude.ai, console.anthropic.com, platform.openai.com) and Remove. Removing waits:
 sessions running on the account finish first, and no new ones start on it meanwhile.
 
+## How the office knows an account is signed in (#637)
+
+One record per account (`shared/accountAuth.ts`) feeds its card, `company_status`, whether a session may start on it
+and the rotation. Everything that learns about a sign-in adds to it, and the newest word wins: a check that started
+before a session's sign-in failure can't overwrite it.
+
+- **Checks never refresh or write a login.** Claude: its `.credentials.json` and the usage endpoint. Codex: its
+  `auth.json` read (an API key, or ChatGPT tokens; an expired access token with a refresh token is fine). Gemini CLI:
+  `<GEMINI_CLI_HOME>/.gemini/oauth_creds.json` (or its encrypted `gemini-credentials.json` under
+  `GEMINI_FORCE_ENCRYPTED_FILE_STORAGE`), the same folder its sessions get. Missing, empty or malformed: signed out.
+- **A check that can't reach the provider** (network, 429, 5xx) is no news: the card stays as it was and says so,
+  never Signed out and never a made-up Ready. A setup token's 403 on the usage endpoint is that endpoint's scope, not a
+  dead token; a key's 401/403 on the model list is.
+- **A session that ends on "authentication failed" or an expired token** is checked before it counts: if its login
+  still has a token (another session's refresh won the race, a blip), the task gets one more session on the same
+  account. Two in a row and it reads Signed out with one card. A CLI that shows its own sign-in screen is signed out at
+  once.
+- **Back in by itself**: a sign-in, a session that ran on it, or its login file rewritten after the failure (its CLI's
+  refresh, a sign-in in a terminal) clears every earlier sign-out.
+- **The CEO** isn't held on a fallback: between turns its chat goes back to the first account with room (Claude logins
+  share its conversation). A reply that runs out of every account fails at once with ⚠️ and Retry; automated jobs
+  wait for the first one back.
+- **Consults** run on the agent's own coding agent and account, read-only: Claude Code's hooks refuse edits, Codex runs
+  in its `read-only` sandbox, Gemini CLI in its `plan` mode. Without terminals every session, consults too, is Claude
+  Code through the Agent SDK.
+
 ## A separate Linux user per account
 
 Separate config folders are enough for Claude Code and Codex to keep separate logins on one machine, so the office

@@ -41,3 +41,14 @@ export interface CeoRunsOn {
 export function ceoRunsText(name: string, cli: AgentCli, model: string, busy: boolean): string {
   return `🔀 ${name} now runs on ${CLI_NAMES[cli]}${model ? ` (${modelLabel(model)})` : ''}${busy ? ' from the next job: the one running now finishes where it started' : ''}.`;
 }
+
+/**
+ * The chat's "is stuck" card now (#637): over once the CEO said anything after it (it made progress), and Switch back
+ * only while the CEO isn't on that account already: not its pin (`binding`), not the account its live session runs on,
+ * nor, with none running, the one its next session starts on (`next`).
+ */
+export function stuckCardNow(o: { cardAt: number; lastCeoAt: number | null; back: string | null; binding: string; runningOn: string | null; next: string | null }): { over: boolean; showBack: boolean } {
+  const over = o.lastCeoAt !== null && o.lastCeoAt > o.cardAt;
+  const on = o.runningOn || o.next;
+  return { over, showBack: !over && o.back !== null && o.back !== o.binding && (o.back === '' || o.back !== on) };
+}

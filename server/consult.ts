@@ -1,5 +1,6 @@
 // The CEO's consults (#28), pure: a question for an agent on a floor, answered in a short read-only session. Which
 // queued consult a free agent takes, the cap on how many run at once, what the session may not do, and its prompt.
+import type { AgentCli } from '../shared/types.ts';
 
 export interface Consult {
   id: string;
@@ -69,4 +70,12 @@ export function consultPrompt(c: Pick<Consult, 'question' | 'hint' | 'floor'>, f
 export function consultAnswer(name: string, floor: number, text: string): string {
   const t = text.trim() || '(no answer)';
   return `${name} on floor ${floor} says:\n${t.length > CONSULT_ANSWER_MAX ? `${t.slice(0, CONSULT_ANSWER_MAX - 1)}…` : t}`;
+}
+
+/**
+ * The coding agent a consult runs on (#637): the agent's own, else the office default, as their tasks do; null without
+ * terminals (the Agent SDK runs Claude Code only). Each CLI keeps it read-only its own way (clis.ts readOnly).
+ */
+export function consultCli(own: AgentCli | '' | undefined, defaultCli: AgentCli, terminals: boolean): AgentCli | null {
+  return terminals ? own || defaultCli : null;
 }
