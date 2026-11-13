@@ -1,6 +1,7 @@
 // A call's mic on an iPhone-like browser (#645): the wake word on, a call starts, and the manager's speech must reach
 // the CEO. The fakes behave like iOS WebKit: a second mic stream is silent while an earlier one is live, an
-// AudioContext made outside a tap stays suspended, and an AudioWorklet only runs when something pulls on it.
+// AudioContext made outside a tap stays suspended, and an AudioWorklet only runs when something pulls on it. With
+// `interrupt` on, opening the mic stops the audio that's running (#648), as iOS does when it switches the audio session.
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as Store from '../store';
 import type * as AgentStore from './agentCallStore';
@@ -27,8 +28,12 @@ let gesture = false;
 let brokenMic = false;
 /** The manager speaks between these times (performance.now()). */
 let speech = { from: 0, to: 0 };
+/** Opening the mic stops running audio (the first time for each context): 'capture' lets audio restart while the mic is live, 'tap' only from a tap. */
+let interrupt: 'off' | 'capture' | 'tap' = 'off';
+const contexts: Ctx[] = [];
+const capturing = () => tracks.some((t) => t.readyState === 'live' && !t.muted);
 let transcribeReply: { status: number; body: unknown } = { status: 200, body: { text: 'Ship the login page today' } };
-const posts: { url: string; body: unknown; call?: string }[] = [];
+const posts: { url: string; body: unknown; call?: string; type?: string }[] = [];
 
 class Track {
   readyState: 'live' | 'ended' = 'live';
@@ -88,8 +93,12 @@ class Ctx {
   currentTime = 0;
   destination = { kind: 'destination' };
   audioWorklet = { addModule: async () => undefined };
+  interrupted = false; // once per context: the audio session switches to talking both ways
+  constructor() {
+    contexts.push(this);
+  }
   resume() {
-    if (gesture && this.state !== 'closed') this.state = 'running';
+    if ((gesture || (interrupt === 'capture' && capturing())) && this.state !== 'closed') this.state = 'running';
     return Promise.resolve();
   }
   suspend() {
@@ -155,7 +164,7 @@ class Sock {
 async function fakeFetch(url: string, init?: { method?: string; body?: unknown; headers?: Record<string, string> }) {
   const json = (status: number, body: unknown) => ({ ok: status < 300, status, statusText: '', json: async () => body }); // not undici's Response: it needs real microtasks
   if (init?.method === 'POST' && typeof init.body === 'string') posts.push({ url, body: JSON.parse(init.body) });
-  else if (init?.method === 'POST') posts.push({ url, body: null, call: init.headers?.['X-Voice-Call'] });
+  else if (init?.method === 'POST') posts.push({ url, body: null, call: init.headers?.['X-Voice-Call'], type: init.headers?.['Content-Type'] });
   if (url === '/api/voice/transcribe') return json(transcribeReply.status, transcribeReply.body);
   if (url === '/api/voice/agent/start') return json(200, { session: 's1', url: '/fake-agent' });
   return json(200, {});
@@ -172,6 +181,7 @@ beforeAll(async () => {
   vi.stubGlobal('window', { addEventListener() {}, removeEventListener() {}, location: { search: '' } });
   vi.stubGlobal('document', { addEventListener() {}, visibilityState: 'visible' });
   vi.stubGlobal('location', { protocol: 'http:', host: 'office.test' });
+  vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener() {}, removeEventListener() {} })); // pocket mode's pick, on store import
   vi.stubGlobal('navigator', {
     language: 'en-US',
     mediaDevices: {
@@ -179,6 +189,7 @@ beforeAll(async () => {
       getUserMedia: async () => {
         const t = new Track(brokenMic || tracks.some((x) => x.readyState === 'live'));
         tracks.push(t);
+        if (interrupt !== 'off') for (const c of contexts) if (c.state === 'running' && !c.interrupted) Object.assign(c, { state: 'suspended', interrupted: true });
         return { getTracks: () => [t], getAudioTracks: () => [t] };
       },
     },
@@ -229,6 +240,14 @@ async function wakeWordStartsCall() {
   expect(call.callOn()).toBe(true);
 }
 
+/** ElevenLabs says the conversation is on. */
+const agentReady = () => sockets.at(-1)!.onmessage?.({ data: JSON.stringify({ type: 'conversation_initiation_metadata', conversation_initiation_metadata_event: { agent_output_audio_format: 'pcm_16000' } }) });
+/** Some of the mic's audio sent to ElevenLabs isn't silence. */
+const heardChunks = () =>
+  sockets
+    .at(-1)!
+    .sent.filter((m) => m.includes('user_audio_chunk'))
+    .some((m) => Buffer.from((JSON.parse(m) as { user_audio_chunk: string }).user_audio_chunk, 'base64').some((b) => b !== 0));
 const ceoGot = () => posts.filter((p) => p.url === '/api/ceo/message').map((p) => (p.body as { text: string }).text);
 const problems = () => posts.filter((p) => p.url === '/api/voice/problem').map((p) => (p.body as { problem: string }).problem);
 
@@ -239,6 +258,8 @@ beforeEach(async () => {
   for (const t of tracks) t.stop();
   posts.length = 0;
   brokenMic = false;
+  interrupt = 'off';
+  for (const c of contexts) c.interrupted = false; // the call's audio lives on between calls
   transcribeReply = { status: 200, body: { text: 'Ship the login page today' } };
 });
 
@@ -279,7 +300,7 @@ describe('a call listens through the office (#645)', () => {
     const now = performance.now();
     speech = { from: now + 600, to: now + 2600 };
     await wait(7000);
-    expect(posts.filter((p) => p.url === '/api/voice/transcribe').map((p) => p.call)).toEqual(['1']);
+    expect(posts.filter((p) => p.url === '/api/voice/transcribe').map((p) => [p.call, p.type])).toEqual([['1', 'audio/mp4']]); // Safari's recorder makes MP4 (server/callStt.test.ts takes it from there)
     expect(ceoGot()).toEqual(['Ship the login page today']);
   });
 
@@ -319,20 +340,19 @@ describe('never failing silently (#645)', () => {
     expect(ceoGot()).toEqual([]);
   });
 
-  it("a silent Jarvis mic hands the call to the office's own voice, and tells the office", async () => {
+  it('a silent Jarvis mic says so on the call screen and tells the office, but the Jarvis voice stays on (#648)', async () => {
     settings(true);
     brokenMic = true;
     gesture = true;
     engine.startCall();
     gesture = false;
     await wait(100);
-    sockets.at(-1)!.onmessage?.({ data: JSON.stringify({ type: 'conversation_initiation_metadata', conversation_initiation_metadata_event: { agent_output_audio_format: 'pcm_16000' } }) });
-    expect(agentStore.useAgentCall.getState().mode).toBe('live');
+    agentReady();
     await wait(6000);
-    expect(agentStore.useAgentCall.getState().mode).toBe('off');
+    expect(agentStore.useAgentCall.getState().mode).toBe('live');
+    expect(agentStore.useAgentCall.getState().micWhy).toMatch(/microphone is silent/);
     expect(problems()).toEqual([expect.stringMatching(/microphone is silent.*Jarvis/)]);
-    await wait(6000); // the office's own mic is silent too: the call screen says so
-    expect(call.useCall.getState().call.tapToTalk).toMatch(/microphone is silent/);
+    expect(call.useCall.getState().call.tapToTalk).toBe('');
   });
 
   it('a failed transcription says the speech service failed, with its reason', async () => {
@@ -347,5 +367,63 @@ describe('never failing silently (#645)', () => {
     await wait(7000);
     expect(call.useCall.getState().call.tapToTalk).toBe("I can't hear you: the speech service failed (ElevenLabs didn't answer).");
     expect(ceoGot()).toEqual([]);
+  });
+});
+
+describe("an iPhone stops the call's audio as the mic opens (#648)", () => {
+  it('the Jarvis voice starts it again and its mic reaches ElevenLabs', async () => {
+    settings(true);
+    interrupt = 'capture';
+    gesture = true;
+    engine.startCall();
+    gesture = false;
+    await wait(100);
+    agentReady();
+    const now = performance.now();
+    speech = { from: now, to: now + 2000 };
+    await wait(6000);
+    expect(agentStore.useAgentCall.getState().mode).toBe('live');
+    expect(heardChunks()).toBe(true);
+    expect(agentStore.useAgentCall.getState().micWhy).toBe('');
+    expect(problems()).toEqual([]);
+  });
+
+  it('when only a tap starts it, the call says tap the screen, keeps the Jarvis voice, and a tap hears the manager', async () => {
+    settings(true);
+    interrupt = 'tap';
+    gesture = true;
+    engine.startCall();
+    gesture = false;
+    await wait(100);
+    agentReady();
+    await wait(6000);
+    expect(agentStore.useAgentCall.getState().mode).toBe('live');
+    expect(agentStore.useAgentCall.getState().micWhy).toMatch(/tap the screen/);
+    gesture = true;
+    agentStore.callAudio(); // the tap anywhere (agentCallEngine's pointerdown)
+    gesture = false;
+    const now = performance.now();
+    speech = { from: now, to: now + 2000 };
+    await wait(1000);
+    expect(heardChunks()).toBe(true);
+    expect(agentStore.useAgentCall.getState().micWhy).toBe('');
+  });
+
+  it("the office's own voice says tap, not a silent mic, and Talk hears the manager", async () => {
+    settings(false);
+    interrupt = 'tap';
+    gesture = true;
+    engine.startCall();
+    gesture = false;
+    await wait(10_000);
+    expect(call.useCall.getState().call.tapToTalk).toMatch(/tap the screen/);
+    expect(problems()).toEqual([expect.stringMatching(/tap the screen/)]);
+    gesture = true;
+    engine.talkOnce();
+    gesture = false;
+    const now = performance.now();
+    speech = { from: now + 600, to: now + 2600 };
+    await wait(7000);
+    expect(ceoGot()).toEqual(['Ship the login page today']);
   });
 });

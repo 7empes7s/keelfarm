@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 // A call's speech to text through the office (#645): a recorded clip against the demo's fake provider gives words;
 // a failure says why, and the office files an IT ticket with the real error, never the key.
@@ -10,6 +10,7 @@ process.env.SWARM_HOME = home;
 const { createDemoBackend } = await import('./demo.ts');
 const { Swarm } = await import('./swarm.ts');
 const { VoiceApiError } = await import('./voice.ts');
+const { elevenLabs } = await import('./elevenlabs.ts');
 afterAll(() => fs.rmSync(home, { recursive: true, force: true, maxRetries: 5 }));
 
 /** One second of a 440 Hz tone, 16 kHz mono WAV: what a phone's recorder might send. */
@@ -37,7 +38,8 @@ describe("a call's speech to text (#645)", () => {
   let failing: Error | null = null;
   const backend = createDemoBackend();
   const fake = backend.voice;
-  backend.voice = { ...fake, transcribe: (k, req, signal) => (failing ? Promise.reject(failing) : fake.transcribe(k, req, signal)) };
+  const types: string[] = [];
+  backend.voice = { ...fake, transcribe: (k, req, signal) => (types.push(req.type), failing ? Promise.reject(failing) : fake.transcribe(k, req, signal)) };
   const swarm = new Swarm(backend);
   const tickets = () => swarm.snapshot().itTickets ?? [];
 
@@ -49,6 +51,26 @@ describe("a call's speech to text (#645)", () => {
   it('turns a recorded clip into the words', async () => {
     expect(await swarm.voice.transcribe(toneWav(), 'audio/wav', 1000)).toBe("What's everyone working on?");
     expect(tickets()).toEqual([]);
+  });
+
+  it("an iPhone's recording (Safari's MediaRecorder: audio/mp4) is taken and sent to ElevenLabs as an MP4 file (#648)", async () => {
+    // What Safari's recorder makes: an MP4 (ftyp box first) labelled with its codec.
+    const mp4 = Buffer.concat([Buffer.from([0, 0, 0, 0x18]), Buffer.from('ftypM4A '), Buffer.alloc(4000, 1)]);
+    types.length = 0;
+    swarm.updateSettings({ listen: { provider: 'browser', autoSend: true, handsFree: false } });
+    expect(await swarm.voice.transcribe(mp4, 'audio/mp4;codecs=mp4a.40.2', 2400, true)).toBe("What's everyone working on?");
+    expect(types).toEqual(['audio/mp4']);
+    swarm.updateSettings({ listen: { provider: 'elevenlabs', autoSend: true, handsFree: false } });
+
+    const sent: FormData[] = [];
+    vi.stubGlobal('fetch', async (_url: string, init: RequestInit) => (sent.push(init.body as FormData), new Response(JSON.stringify({ text: ' Ship it ' }), { status: 200 })));
+    try {
+      expect(await elevenLabs.transcribe(key, { audio: mp4, type: types[0] }, AbortSignal.timeout(5000))).toBe(' Ship it ');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    const file = sent[0].get('file') as File;
+    expect([file.name, file.type, file.size]).toEqual(['speech.mp4', 'audio/mp4', mp4.length]);
   });
 
   it('a failure surfaces with a message and becomes an IT ticket, without the key', async () => {

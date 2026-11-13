@@ -24,15 +24,25 @@ function fakeSpeech(text: string): { chunks: string[]; ms: number } {
   return { chunks, ms: Math.round(seconds * 1000) };
 }
 
+/** The loudest sample in a base64 PCM16 chunk, 0..1. */
+function chunkPeak(b64: string): number {
+  const pcm = Buffer.from(b64, 'base64');
+  let peak = 0;
+  for (let i = 0; i + 1 < pcm.length; i += 2) peak = Math.max(peak, Math.abs(pcm.readInt16LE(i)));
+  return peak / 0x8000;
+}
+
 type Llm = (session: string, messages: { role: 'user' | 'assistant'; content: string }[]) => Promise<string>;
 
 /** One conversation on the fake agent socket; `llm` is the office's /v1/chat/completions, called in process. */
-export function fakeAgent(ws: WebSocket, llm: Llm, firstMessage: () => string) {
+export function fakeAgent(ws: WebSocket, llm: Llm, firstMessage: () => string, log: (line: string) => void = () => undefined) {
   const history: { role: 'user' | 'assistant'; content: string }[] = [];
   let session = '';
   let event = 0;
   let speakingUntil = 0;
   let started = false;
+  const mic = { chunks: 0, sound: 0, peak: 0 }; // the manager's audio, for the log (#648): a call that can't hear shows here
+  ws.on('close', () => mic.chunks && log(`voice agent (demo): the call's mic sent ${mic.chunks} audio chunks, ${mic.sound} with sound (peak ${mic.peak.toFixed(2)})`));
   const send = (m: unknown) => ws.readyState === ws.OPEN && ws.send(JSON.stringify(m));
 
   const speak = (text: string) => {
@@ -45,7 +55,7 @@ export function fakeAgent(ws: WebSocket, llm: Llm, firstMessage: () => string) {
   };
 
   ws.on('message', (raw) => {
-    let m: { type?: string; text?: string; custom_llm_extra_body?: { cubefarm_session?: unknown } };
+    let m: { type?: string; text?: string; user_audio_chunk?: unknown; custom_llm_extra_body?: { cubefarm_session?: unknown } };
     try {
       m = JSON.parse(String(raw));
     } catch {
@@ -58,7 +68,14 @@ export function fakeAgent(ws: WebSocket, llm: Llm, firstMessage: () => string) {
       speak(firstMessage());
       return;
     }
-    if (m.type !== 'user_message' || typeof m.text !== 'string' || !m.text.trim()) return; // user_audio_chunk, pong, user_activity: nothing to hear in a demo
+    if (typeof m.user_audio_chunk === 'string') {
+      const peak = chunkPeak(m.user_audio_chunk);
+      mic.chunks++;
+      if (peak > 0.01 && ++mic.sound === 1) log(`voice agent (demo): the call's mic audio arrives (peak ${peak.toFixed(2)})`);
+      mic.peak = Math.max(mic.peak, peak);
+      return;
+    }
+    if (m.type !== 'user_message' || typeof m.text !== 'string' || !m.text.trim()) return; // pong, user_activity: nothing to answer
     if (Date.now() < speakingUntil) send({ type: 'interruption', interruption_event: { event_id: event } });
     speakingUntil = 0;
     if (!m.text.startsWith('[[cubefarm:')) send({ type: 'user_transcript', user_transcription_event: { user_transcript: m.text } });

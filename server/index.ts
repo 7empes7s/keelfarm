@@ -646,7 +646,7 @@ const wss = new WebSocketServer({ noServer: true });
 const terms = new WebSocketServer({ noServer: true });
 // The demo's ElevenLabs agent (#534, server/voiceAgentFake.ts): the client's Jarvis call with no network.
 const fakeAgents = DEMO ? new WebSocketServer({ noServer: true }) : null;
-fakeAgents?.on('connection', (ws) => fakeAgent(ws, (session, messages) => swarm.voiceLlm({ cubefarm_session: session, messages }, undefined, true), () => swarm.agentGreeting()));
+fakeAgents?.on('connection', (ws) => fakeAgent(ws, (session, messages) => swarm.voiceLlm({ cubefarm_session: session, messages }, undefined, true), () => swarm.agentGreeting(), (line) => console.log(line)));
 // The public demo's scrubber sees everything a tab is sent.
 const scrubbed = (ws: WebSocket) => {
   if (!scrub) return ws;

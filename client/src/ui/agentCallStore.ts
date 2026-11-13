@@ -13,9 +13,11 @@ export interface AgentCallView {
   /** The mic's and the voice's levels (0..1), for the orb. */
   input: number;
   output: number;
+  /** Why the conversation may not hear the manager (a silent mic, #648), shown on the call; '' when it hears. */
+  micWhy: string;
 }
 
-export const useAgentCall = create<AgentCallView>(() => ({ mode: 'off', saying: '', input: 0, output: 0 }));
+export const useAgentCall = create<AgentCallView>(() => ({ mode: 'off', saying: '', input: 0, output: 0, micWhy: '' }));
 
 /** The Jarvis voice drives the call now. */
 export const agentOn = () => useAgentCall.getState().mode !== 'off';
