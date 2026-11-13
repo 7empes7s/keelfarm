@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { createDemoBackend } from './demo.ts';
 import { Swarm } from './swarm.ts';
 import { HOME_DIR } from './config.ts';
+import { DEMO_ACCESS } from './demo/gcloud.ts';
 import { headersFor } from './providerActions/http.ts';
 import type { ActionRequest } from './providerActions/types.ts';
 import type { OfficeTools } from './ceo.ts';
@@ -20,9 +21,8 @@ type Internals = {
   state: { itDesk: ItDeskState; it: { messages: PhoneMessage[] } };
 };
 
-const TOKEN_ID = 'f00dcafe1234.access';
-const TOKEN_SECRET = 'clipRunnerSecretValue77';
-const TOKEN_FILE = path.join(HOME_DIR, 'secrets', 'cf-access-clipfarm-office-runner.env');
+const [TOKEN_ID, TOKEN_SECRET] = DEMO_ACCESS.split(':'); // what the demo's clipfarm lets through
+const TOKEN_FILE = path.join(HOME_DIR, 'secrets', 'cf-access-clipfarm.env');
 const DB_PASSWORD = 'hunter2hunter2';
 const STORED = 'plainstoredvalue42';
 

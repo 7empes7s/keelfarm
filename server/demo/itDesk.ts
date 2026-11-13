@@ -17,6 +17,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { HOME_DIR } from '../config.ts';
 import { put } from '../cfSecretFile.ts';
+import { DEMO_ACCESS } from './gcloud.ts';
 
 /** The demo machine's files for runbook jobs: in memory, never this computer's. */
 const demoFiles = memoryFiles({
@@ -74,8 +75,9 @@ const DONE: Record<string, { out: string; gb: number }> = {
 
 // app_call's service token file (#625), in the demo's own secrets folder: what access_service_token_ensure would write.
 registerDemo('app call', () => {
-  const token = path.join(HOME_DIR, 'secrets', 'cf-access-clipfarm-office-runner.env');
-  if (!existsSync(token)) void put(token, 'CF_ACCESS_CLIENT_ID=demo1234abcd.access\nCF_ACCESS_CLIENT_SECRET=demoSecretValue0123456789\n').catch(() => undefined);
+  const token = path.join(HOME_DIR, 'secrets', 'cf-access-clipfarm.env');
+  const [id, secret] = DEMO_ACCESS.split(':');
+  if (!existsSync(token)) void put(token, `CF_ACCESS_CLIENT_ID=${id}\nCF_ACCESS_CLIENT_SECRET=${secret}\n`).catch(() => undefined);
   return {};
 });
 

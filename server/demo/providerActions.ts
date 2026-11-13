@@ -2,11 +2,12 @@
 // few Upstash boxes. A key with "bad" in it is turned away (401); a GitHub token with "noadmin" lacks Administration
 // (write), one with "nosecrets" Secrets (read). Microsoft Entra (#621): the token exchange and Graph's app registrations,
 // service principals and consent grants; an admin app with "noconsent" can't grant consent. `world.entra.secrets` holds
-// every client secret Graph handed out, so tests can look for them. A live app behind Access answers app_call (#625). `calls` records each request and whether its key came with it (the
+// every client secret Graph handed out, so tests can look for them. `calls` records each request and whether its key came with it (the
 // tests check the key reached the provider and nothing else). The demo CEO shows a read and a write card.
 import type { ActionRequest, ActionResponse, ProviderHttp } from '../providerActions/types.ts';
 import type { BoxApi, BoxInfo } from '../box.ts';
 import { registerCeoReply, registerDemo } from './registry.ts';
+import { fakeClipfarm, fakeGoogle } from './gcloud.ts';
 
 export const DEMO_REPO = 'demo-co/storefront';
 
@@ -19,6 +20,8 @@ export function fakeProviderHttp() {
   const entra = { apps: [] as GraphApp[], sps: [{ id: 'sp-graph', appId: '00000003-0000-0000-c000-000000000000' }], grants: [] as { id: string; clientId: string; consentType: string; resourceId: string; scope: string }[], secrets: [] as string[], tenants: [] as string[] };
   Object.assign(world, { entra });
   const calls: (ActionRequest & { key: string })[] = [];
+  const google = fakeGoogle();
+  const clipfarm = fakeClipfarm();
   const ok = (body: unknown, status = 200): ActionResponse => ({ status, body });
   const denied = (perm: string): ActionResponse => ({ status: 403, body: { message: 'Resource not accessible by personal access token' }, headers: { 'x-accepted-github-permissions': perm } });
   const github = (key: string, req: ActionRequest): ActionResponse => {
@@ -114,11 +117,11 @@ export function fakeProviderHttp() {
   const http: ProviderHttp = async (key, req) => {
     calls.push({ ...req, key });
     await new Promise((r) => setTimeout(r, 5));
+    const other = google.handle(key, req) ?? clipfarm.handle(key, req); // before "bad": a private key's base64 may spell it
+    if (other) return other;
     if (/bad/i.test(key)) return { status: 401, body: { error: { message: 'Invalid API key' } } };
     const u = req.url;
     if (u.startsWith('https://api.github.com')) return github(key, req);
-    // app_call (#625): a live app behind Access; the settings echo a secret-looking field, which the office masks.
-    if (req.auth === 'cf-access') return key.includes(':') ? ok({ ok: true, url: u, channels: 3, clipsToday: 7, webhookSecret: 'whsec_DemoAppSecret0123456789abcdef' }) : { status: 403, body: 'Forbidden' };
     const login = u.match(/^https:\/\/login\.microsoftonline\.com\/([^/]+)\/oauth2\/v2\.0\/token$/);
     if (login && req.auth === 'entra-token') {
       entra.tenants.push(login[1]);
@@ -137,7 +140,7 @@ export function fakeProviderHttp() {
     if (u === 'https://api.elevenlabs.io/v1/user/subscription') return ok({ tier: 'starter', character_count: 12_480, character_limit: 30_000, next_character_count_reset_unix: 1_765_000_000 });
     return { status: 404, body: { message: 'No such route' } };
   };
-  return { http, calls, world };
+  return { http, calls, world, google: google.world, clipfarm: clipfarm.world };
 }
 
 /** A few Upstash boxes, two of them the office's. */

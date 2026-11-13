@@ -8,8 +8,12 @@ import type { CfSecretFile } from '../cfSecretFile.ts';
 import type { ProviderChange } from '../../shared/providerActions.ts';
 import type { KeyMint } from '../../shared/types.ts';
 
-/** How the key goes on a request: a bearer token, ElevenLabs' header, GitHub's bearer with its API headers, or (#621) an Entra "client id:secret" as a client-credentials form, or (#625) an Access service token "id:secret" as CF-Access-Client-Id/Secret. */
-type ActionAuth = 'bearer' | 'xi-api-key' | 'github' | 'entra-token' | 'cf-access';
+/**
+ * How the key goes on a request: a bearer token, ElevenLabs' header, GitHub's bearer with its API headers, (#621) an
+ * Entra "client id:secret" as a client-credentials form, a Google service account's JSON (an access token minted from
+ * it, #622) or a Cloudflare Access service token "id:secret".
+ */
+type ActionAuth = 'bearer' | 'xi-api-key' | 'github' | 'entra-token' | 'google-sa' | 'cf-access';
 
 export interface ActionRequest {
   method: 'GET' | 'HEAD' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -50,6 +54,10 @@ export interface ActionCtx {
   secretFile?: (envFile: string | undefined, name: string) => CfSecretFile;
   /** Saves a key the office made (#609) as its own Providers key; returns its name. */
   saveMinted?: (k: { provider: string; value: string; label: string; expiresAt: number; mint: KeyMint }) => Promise<string>;
+  /** Saves (or replaces by name) a key the office got from a provider (#622: a Google API key); returns its name. */
+  saveKey?: (k: { provider: string; label: string; value: string; usedBy: string }) => Promise<string>;
+  /** Whether Providers has a key of that provider by that name. */
+  savedKey?: (provider: string, label: string) => boolean;
   /** Cloudflare's keys, for the Entra app's callback (its team domain) (#621). */
   cfKeys?: readonly ActionKey[];
   /** The office's own Entra app secret (#621), in secrets.json: written by entra_app_ensure, read by access_idp_ensure. */

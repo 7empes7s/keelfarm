@@ -1,7 +1,7 @@
 // app_call (#625): IT calls a floor's live app over HTTPS past Cloudflare Access, with the service token from its env
 // file (CF_ACCESS_CLIENT_ID / CF_ACCESS_CLIENT_SECRET) read in-process and put only in the request's headers
-// (providerActions/http.ts, auth 'cf-access'). Pure: the allow-list, the env file's token and the reply's shape.
-import { envClientId } from './cfSecretFile.ts';
+// (providerActions/http.ts, auth 'cf-access'; read with cfSecretFile.ts' envAccessPair). Pure: the allow-list, which
+// token file fits a host, and the reply's shape.
 
 type Method = 'GET' | 'HEAD' | 'POST' | 'PUT' | 'PATCH';
 
@@ -25,13 +25,6 @@ export function appCallRefusal(url: string, method: string): string | null {
   if (!methods) return `${u.hostname} isn't on app_call's list (${Object.keys(APP_CALL_HOSTS).join(', ')}).`;
   if (!methods.includes(method as Method)) return `${method} isn't allowed on ${u.hostname} (${methods.join(', ')}).`;
   return null;
-}
-
-/** The service token an env file holds, as "id:secret", or null when either half is missing. */
-export function accessToken(text: string): string | null {
-  const id = envClientId(text);
-  const secret = text.match(/^\s*(?:export\s+)?CF_ACCESS_CLIENT_SECRET\s*=\s*["']?([^"'\s#]+)/m)?.[1];
-  return id && secret ? `${id}:${secret}` : null;
 }
 
 /** Of the office's secrets folder, the Access token files for this host: the ones naming its first label (clip → cf-access-clipfarm-…). */

@@ -7,6 +7,7 @@
 import type { ProbeRequest, ProbeResult } from '../../shared/providers.ts';
 import type { RawKey } from '../../shared/keyScan.ts';
 import { registerCeoReply, registerDemo } from './registry.ts';
+import { demoServiceAccount } from './gcloud.ts';
 
 const LITELLM = 'LiteLLM litellm.env';
 /** The made-up archive's keys: one live, dead, out of credit or unreachable each, a duplicate, one already saved, one unknown. */
@@ -69,6 +70,7 @@ registerDemo('providers', () => ({
       { provider: 'cloudflare', key: 'demo-cf-token-00004d5e', label: 'Cloudflare' },
       { provider: 'cloudflare', key: 'demo-cf-bad-old-token-00008a1c', label: 'Cloudflare (old)' }, // a dead duplicate (#523)
       { provider: 'github', key: 'ghp_demo-token-00002b7f', label: 'GitHub token' },
+      { provider: 'gcloud', key: demoServiceAccount(), label: 'Google Cloud (clipfarm)' }, // #622
       { provider: 'runway', key: 'key_demo-runway-00001e2f', label: 'Runway' },
       { provider: 'gemini-video', key: 'AIza-demo-video-00003a4b', label: 'Google video' },
       { provider: 'luma', key: 'luma-demo-00005c6d', label: 'Luma' },
