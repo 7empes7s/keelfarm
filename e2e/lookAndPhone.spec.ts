@@ -6,6 +6,12 @@ import { enterOffice, expect, phoneButton, savedView, test } from './helpers';
 // its overlay's grid and put it off to the right), and an old tab asking for a bundle that's gone gets a 404.
 
 const locked = (page: Page) => page.evaluate(() => document.pointerLockElement?.tagName ?? null);
+/** What the browser's own Esc does to a grab: Playwright's key presses never reach the browser's handling of it. */
+const freeMouse = async (page: Page) => {
+  await page.evaluate(() => document.exitPointerLock());
+  await expect.poll(() => locked(page)).toBeNull();
+  await page.waitForTimeout(1200); // the browser refuses a new grab just after one is let go
+};
 
 /** The phone's box inside the window, or what's wrong with it. */
 const phoneOnScreen = (page: Page) =>
@@ -19,11 +25,9 @@ test.beforeEach(async ({ page }) => {
   await page.request.patch('/api/settings', { data: { tutorialStep: -1 } }); // the first-run tour is over, as on the live office
 });
 
-test('a click on the 3D view keeps the mouse grabbed and turns the camera; Esc frees it (#651)', async ({ page }) => {
+test('a click on the 3D view keeps the mouse grabbed and turns the camera (#651)', async ({ page }) => {
   await enterOffice(page);
-  await page.keyboard.press('Escape'); // free whatever the Enter click grabbed
-  await expect.poll(() => locked(page)).toBeNull();
-  await page.waitForTimeout(1200); // the browser refuses a new grab just after Esc
+  await freeMouse(page); // whatever the Enter click grabbed
   await page.locator('canvas').first().click();
   await expect.poll(() => locked(page)).toBe('CANVAS');
   await page.waitForTimeout(1000);
@@ -32,8 +36,7 @@ test('a click on the 3D view keeps the mouse grabbed and turns the camera; Esc f
   const before = (await savedView(page))!.yaw;
   for (let i = 1; i <= 40; i++) await page.mouse.move(400 + i * 4, 225); // small steps: the look filter drops spikes
   await expect.poll(async () => Math.abs((await savedView(page))!.yaw - before), { timeout: 30_000 }).toBeGreaterThan(0.05);
-  await page.keyboard.press('Escape');
-  await expect.poll(() => locked(page)).toBeNull();
+  await freeMouse(page);
 });
 
 for (const width of [1280, 390]) {
@@ -48,8 +51,7 @@ for (const width of [1280, 390]) {
     await page.keyboard.press('Escape');
     await expect(page.locator('.phone')).toBeHidden();
     await expect.poll(() => locked(page)).toBe('CANVAS'); // closing it grabs the mouse again, and the grab holds
-    await page.keyboard.press('Escape'); // free it to reach the button
-    await expect.poll(() => locked(page)).toBeNull();
+    await freeMouse(page); // to reach the button
     await phoneButton(page).click();
     await expect.poll(() => phoneOnScreen(page)).toBe('on screen');
     await page.waitForTimeout(20_000);
