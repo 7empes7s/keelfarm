@@ -89,6 +89,7 @@ export const api = {
     patch: {
       autoAssign?: boolean;
       autoMerge?: boolean;
+      leaveOwnPrs?: boolean;
       browserTesting?: boolean;
       color?: string;
       theme?: FloorTheme;

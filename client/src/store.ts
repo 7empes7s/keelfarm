@@ -3,7 +3,8 @@ import { DEFAULT_FOLLOWUPS } from '../../shared/followups';
 import { DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AccountsView, type ProvidersView, type KeyScanView, type AgentView, type CeoChatView, type CeoInfo, type CliView, type ModelCatalogView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type ManagerChange, type NoticeView, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PreviewStatsView, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageCheckError, type UsageReading, type UsageShares, type UsageView, type VisitorView, type VoiceCacheView, type VoiceLine } from '../../shared/types';
 import type { PastCareer } from '../../shared/careers';
 import { blockers } from '../../shared/issues';
-import { OUTSIDE_PR, UNTRUSTED_ISSUE } from '../../shared/trust';
+import { UNTRUSTED_ISSUE } from '../../shared/trust';
+import { pullSkip, SKIP_NOTES } from '../../shared/officePulls';
 import type { ChatItem } from '../../shared/agentChat';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS, EMPTY_WEATHER_VIEW, type WeatherView } from '../../shared/outside';
 import { DEFAULT_NOTIFY } from '../../shared/notify';
@@ -567,7 +568,8 @@ export function kanbanFor(repo: RepoView, agents: Agent[], qaRecords: Record<str
     const dev = (rec?.devAgentId ? byId.get(rec.devAgentId) : undefined) ?? authorOf(p.number, p.headRefName);
     const tester = rec?.qaAgentId ? byId.get(rec.qaAgentId) : undefined;
     const base = { key: `pr-${p.number}`, number: p.number, prNumber: p.number, closes: p.closesIssues, title: p.title, url: p.url, qa: rec, untrusted: p.untrusted };
-    const card = { ...base, ...(p.untrusted ? { note: OUTSIDE_PR, tone: 'warn' as const } : qaCardNote(rec, p, repo.autoMerge)) };
+    const skip = pullSkip(p, !!repo.leaveOwnPrs); // why the office leaves it alone, said on the card (#632)
+    const card = { ...base, ...(skip && (skip === 'outside' || !rec) ? { note: SKIP_NOTES[skip], tone: 'warn' as const } : qaCardNote(rec, p, repo.autoMerge)) };
     if (rec?.status === 'passed') ready.push({ ...card, agent: dev });
     else qa.push({ ...card, agent: rec?.status === 'testing' ? tester : dev });
   }

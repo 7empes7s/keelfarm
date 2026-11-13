@@ -89,6 +89,7 @@ seed('demo-co/weather-api', 'Tiny weather REST API', [
   ['Rate limit anonymous callers', '60 requests per minute per IP.\n\nObjective: O3'],
   ['OpenAPI spec', 'Publish an OpenAPI 3.1 document at /openapi.json.\n\nObjective: O2'],
 ], ['Cache city lookups for an hour', 'Health check at /healthz'], true);
+managersFix('demo-co/weather-api');
 seed('demo-co/recipe-box', 'Recipes with a shopping list', [
   ['Shopping list from a recipe', 'Add every ingredient of a recipe to the shopping list in src/list.ts.\n\nObjective: O1'],
   ['Scale servings', 'Halve or double a recipe and its amounts follow. Touches src/recipe.ts.\n\nObjective: O1'],
@@ -126,6 +127,12 @@ function strangers(fullName: string) {
   r.pulls.push({ ...shippedPull(fullName, pr, 'Fix typos in the README', 0), headRefName: 'swarm/readme-typos', state: 'OPEN', mergedAt: null, author: 'drive-by-dev', isCrossRepository: true });
 }
 
+/** The manager's own PR from a fix/ branch (#632): the office takes it on like its own, QA first, then auto-merge. */
+function managersFix(fullName: string) {
+  const r = repos.get(fullName)!;
+  const n = r.nextNumber++;
+  r.pulls.push({ ...shippedPull(fullName, n, 'Answer 404 for an unknown city', 0), headRefName: 'fix/unknown-city-404', state: 'OPEN', mergedAt: null, author: 'demo-manager', summary: 'An unknown city got a 500 and a stack trace; it gets a 404 with a short message now.' });
+}
 
 /** A plan the CEO filed together hours ago (#140's plan bars): its `open` issues still open, `merged` already shipped. */
 function seedPlan(fullName: string, name: string, open: string[], merged: string[]) {
