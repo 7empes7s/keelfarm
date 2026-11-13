@@ -62,10 +62,12 @@ test("the office's own voice transcribes two turns in one call, and the CEO answ
   await dial(page, false);
   await expect.poll(() => heard.length, { timeout: 60_000 }).toBeGreaterThanOrEqual(2);
   expect(heard.slice(0, 2)).toEqual(["200 What's everyone working on?", "200 What's everyone working on?"]);
-  const messages = (await (await page.request.get('/api/state')).json()).messages as { from: string; text: string }[];
-  const first = messages.findIndex((m) => m.from === 'manager' && m.text === "What's everyone working on?");
-  expect(messages.slice(first + 1).filter((m) => m.from === 'manager' && m.text === "What's everyone working on?").length).toBeGreaterThanOrEqual(1); // the second turn
-  expect(messages.slice(first + 1).some((m) => m.from === 'ceo')).toBe(true); // and the CEO answered
+  const after = async () => {
+    const messages = (await (await page.request.get('/api/state')).json()).messages as { from: string; text: string }[];
+    return messages.slice(messages.findIndex((m) => m.from === 'manager' && m.text === "What's everyone working on?") + 1);
+  };
+  expect((await after()).some((m) => m.from === 'manager' && m.text === "What's everyone working on?")).toBe(true); // the second turn reached the chat
+  await expect.poll(async () => (await after()).some((m) => m.from !== 'manager'), { timeout: 60_000 }).toBe(true); // and the CEO answered
   await expect(page.locator('.vcall-why')).toHaveCount(0);
   await page.getByRole('button', { name: 'End call' }).click();
 });

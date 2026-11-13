@@ -25,7 +25,7 @@ function fakeSpeech(text: string): { chunks: string[]; ms: number } {
 }
 
 /** The loudest sample in a base64 PCM16 chunk, 0..1. */
-export function chunkPeak(b64: string): number {
+function chunkPeak(b64: string): number {
   const pcm = Buffer.from(b64, 'base64');
   let peak = 0;
   for (let i = 0; i + 1 < pcm.length; i += 2) peak = Math.max(peak, Math.abs(pcm.readInt16LE(i)));
