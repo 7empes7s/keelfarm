@@ -501,7 +501,7 @@ export abstract class SwarmRotation extends SwarmUsage {
     const first = this.accounts.firstBack(cli);
     const key = this.accounts.pausedKey(cli);
     if (!this.limited()) this.postMessage('office', allOutText(cliLabel(cli), first, clock, key?.label ?? null), undefined, { switch: { from: this.accounts.label(lastId), to: null, until: first, ...(key && { useKey: key.id }) } });
-    this.pauseForLimit(first, true);
+    this.pauseForLimit(first, true, true);
     cb.finished({ ...result, ok: false, outOfAccounts: true });
   }
 

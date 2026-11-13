@@ -119,6 +119,27 @@ describe('Accounts', () => {
     expect(accounts.view().accounts.find((a) => a.id === 'claude-login')?.limitSpans).toHaveLength(1);
   });
 
+  it("a 5-hour limit on a login Anthropic says has no 5-hour window (verified Ultra) is dropped; a real one (Pro) stays", async () => {
+    const at = Date.now();
+    const week = { type: 'seven_day', pct: 51, resetsAt: at + 5 * 86_400_000, at };
+    const proFull = { type: 'five_hour', pct: 100, resetsAt: at + 3_600_000, at };
+    const { accounts } = await office({
+      check: async (a) => (a.label === 'Claude Ultra' ? { signedIn: true, readings: [week], noFiveHour: true, note: 'ok' } : { signedIn: true, readings: [proFull, week], note: 'ok' }),
+    });
+    const ultra = await accounts.add({ cli: 'claude', kind: 'subscription-login', label: 'Claude Ultra' });
+    const pro = await accounts.add({ cli: 'claude', kind: 'subscription-login', label: 'Claude Pro' });
+    const card = (id: string) => accounts.view().accounts.find((a) => a.id === id)!;
+    for (const id of [ultra.id, pro.id]) {
+      accounts.readings(id, [{ type: 'five_hour', pct: 99, resetsAt: at + 3_600_000, at }]);
+      accounts.limited(id, at + 3_600_000); // a session said "You've hit your 5-hour limit"
+      await accounts.test(id);
+    }
+    expect(card(ultra.id).limitedUntil).toBeNull();
+    expect(card(ultra.id).usage.map((r) => r.type)).toEqual(['seven_day']); // the stale 99% is gone
+    expect(card(pro.id).limitedUntil).toBe(at + 3_600_000); // Pro's window is really full: it waits
+    expect(card(pro.id).status).toBe('limited');
+  });
+
   it("a limit doesn't outlive a new sign-in (the built-in login's too)", async () => {
     const { accounts } = await office();
     const until = () => accounts.view().accounts.find((a) => a.id === 'claude-login')!.limitedUntil;

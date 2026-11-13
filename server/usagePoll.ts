@@ -11,7 +11,7 @@ import { loginPlanName } from '../shared/accounts.ts';
 import type { UsageCheckError, UsageReading } from '../shared/types.ts';
 
 /** `refresh`: the access token is expired or turned away, but a refresh token is on file for the next session to use. */
-export type UsageCheck = { readings: UsageReading[] } | { error: UsageCheckError; refresh?: boolean };
+export type UsageCheck = { readings: UsageReading[]; noFiveHour?: true } | { error: UsageCheckError; refresh?: boolean };
 
 // ---------- when to check (pure) ----------
 
@@ -50,6 +50,16 @@ export function oauthReadings(body: unknown, now: number): UsageReading[] {
     const resetsAt = typeof resets_at === 'string' ? Date.parse(resets_at) : resets_at;
     return readingOf({ type, percent: utilization, resetsAt }, now) ?? [];
   });
+}
+
+/**
+ * Whether Anthropic's usage reply says the subscription has no 5-hour window at all (a verified Ultra plan): `five_hour`
+ * is there and null while another window is read. Then a 5-hour limit the office holds for it is out of date.
+ */
+export function noFiveHourWindow(body: unknown): boolean {
+  if (!body || typeof body !== 'object') return false;
+  const b = body as Record<string, unknown>;
+  return 'five_hour' in b && b.five_hour === null && !!b.seven_day && typeof b.seven_day === 'object';
 }
 
 interface OauthFields {
@@ -113,8 +123,9 @@ export async function checkUsage(env: NodeJS.ProcessEnv = process.env): Promise<
     });
     if (res.status === 401) return { error: 'expired', refresh: cred.refresh };
     if (!res.ok) return { error: 'failed' };
-    const readings = oauthReadings(await res.json(), Date.now());
-    return readings.length ? { readings } : { error: 'failed' };
+    const body: unknown = await res.json();
+    const readings = oauthReadings(body, Date.now());
+    return readings.length ? { readings, ...(noFiveHourWindow(body) && { noFiveHour: true as const }) } : { error: 'failed' };
   } catch {
     return { error: 'failed' }; // never the error itself: it could carry the request
   }

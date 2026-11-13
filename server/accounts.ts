@@ -45,6 +45,9 @@ import { codeProblem, inputShape, menuKeys, signInCode, signInEnd, signInScreen 
 import { secretMismatch } from '../shared/secretFormats.ts';
 import type { AccountCli, AccountKind, AccountsView, AccountSwitch, AccountView, ProviderAccount, RotationSettings, SignInMode, SignInRun, UsageReading } from '../shared/types.ts';
 
+/** How long after a session hit a limit its login's usage is read again (a limit Anthropic doesn't show is lifted then). */
+const RECHECK_MS = 60_000;
+
 const secretKey = (id: string) => `account:${id}`;
 const hint = (s: string) => (s ? s.slice(-4) : '');
 
@@ -395,6 +398,8 @@ export class Accounts {
     if (!a) return;
     const until = resetsAt ?? now + 60 * 60_000;
     this.replace({ ...a, limitedUntil: until, limitHits: [...recentHits(a.limitHits, now), now], limitSpans: addSpan(a.limitSpans, now, until, now) });
+    // A session's message isn't the last word: the provider's own usage, read a minute later, lifts a limit that isn't there.
+    if (this.deps.poll && a.kind === 'subscription-login' && !a.builtIn) setTimeout(() => void this.test(id).catch(() => undefined), RECHECK_MS).unref?.();
   }
 
   /** Its limit is over (the demo's "End the limit"): back in the rotation now. */
@@ -538,6 +543,8 @@ export class Accounts {
     if (r.plan !== undefined) this.plans.set(id, r.plan);
     if (r.who !== undefined) this.owners.set(id, r.who);
     if (r.readings.length) this.usage.set(id, mergeReadings(this.usage.get(id) ?? [], r.readings));
+    // No 5-hour window on this plan (a verified Ultra): an old 5-hour reading or limit is out of date, never a reason to wait.
+    if (r.noFiveHour) this.usage.set(id, (this.usage.get(id) ?? []).filter((x) => x.type !== 'five_hour'));
     // A limit a session hit is over once the poll shows room again (#248).
     const now = Date.now();
     const cur = this.list().find((x) => x.id === id);

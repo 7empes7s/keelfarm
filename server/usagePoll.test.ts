@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createDemoBackend } from './demo.ts';
 import { Swarm } from './swarm.ts';
-import { afterPoll, IDLE_MS, MAX_BACKOFF_MS, oauthReadings, pollDue, pollWait, POLL_MS, tokenOf, type UsageCheck } from './usagePoll.ts';
+import { afterPoll, IDLE_MS, MAX_BACKOFF_MS, noFiveHourWindow, oauthReadings, pollDue, pollWait, POLL_MS, tokenOf, type UsageCheck } from './usagePoll.ts';
 
 const MIN = 60_000;
 const NOW = Date.UTC(2026, 10, 6, 12, 0);
@@ -32,6 +32,17 @@ describe('pollDue', () => {
     expect(pollDue(0, failed, NOW + 4 * POLL_MS - 1)).toBe(false);
     expect(pollDue(0, failed, NOW + 4 * POLL_MS)).toBe(true);
     expect(afterPoll(failed, true, NOW).failures).toBe(0);
+  });
+});
+
+describe('noFiveHourWindow', () => {
+  it('is true only when Anthropic sends five_hour as null beside a weekly window (a verified Ultra plan)', () => {
+    const week = { utilization: 51, resets_at: '2026-11-17T19:00:00Z' };
+    expect(noFiveHourWindow({ five_hour: null, seven_day: week })).toBe(true);
+    expect(noFiveHourWindow({ five_hour: { utilization: 99, resets_at: '2026-11-13T01:00:00Z' }, seven_day: week })).toBe(false); // Pro, Max: a real window
+    expect(noFiveHourWindow({ seven_day: week })).toBe(false); // not said: nothing assumed
+    expect(noFiveHourWindow({ five_hour: null, seven_day: null })).toBe(false);
+    expect(noFiveHourWindow(null)).toBe(false);
   });
 });
 

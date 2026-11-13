@@ -55,6 +55,11 @@ async function wait(ms: number, step = 100) {
   }
 }
 
+/** Steps fake time until `done` holds (or `ms` runs out), rather than a fixed sleep a slow runner can outlast. */
+async function waitFor(done: () => boolean, ms = 10_000) {
+  for (let t = 0; t < ms && !done(); t += 100) await wait(100);
+}
+
 /** The account a session ran on, from its environment: a login's folder, the API key, or the built-in login. */
 const accountOf = (o: SessionOptions) => (o.cli === 'codex' ? 'codex-login' : o.env?.CLAUDE_CONFIG_DIR?.includes('claude-keelop') ? 'claude-keelop' : o.apiKeyEnv ? 'claude-apikey' : 'claude-login');
 
@@ -165,17 +170,42 @@ describe('account rotation', { timeout: 30_000 }, () => {
     expect(runs.filter((r) => r.role === 'ceo')).toHaveLength(3); // no loop
   });
 
+  it("lifts the all-out pause as soon as one account has room again, not at the reset it first named", async () => {
+    const out = ['claude-login', 'claude-keelop', 'claude-apikey'];
+    const { swarm, i, runs } = await office(out);
+    swarm.requestReview();
+    await waitFor(() => i.usageNow().state === 'paused');
+    expect(i.usageNow().state).toBe('paused');
+    out.splice(out.indexOf('claude-keelop'), 1); // it really has room now
+    swarm.accounts.back('claude-keelop'); // its provider shows room again (a verified Ultra has no 5-hour window)
+    (swarm as unknown as { schedule(): void }).schedule(); // the office's scheduler tick (every 8 s)
+    await waitFor(() => runs.filter((r) => r.role === 'ceo').at(-1)?.account === 'claude-keelop');
+    expect(i.usageNow().state).not.toBe('paused');
+    expect(i.state.messages.some((m) => /has room again: new work starts now/.test(m.text))).toBe(true);
+    expect(runs.filter((r) => r.role === 'ceo').at(-1)?.account).toBe('claude-keelop'); // the waiting job ran there
+  });
+
+  it("keeps a pause at the built-in login's own limit through a tick, though another account has room", async () => {
+    const { swarm, i } = await office([]);
+    (swarm as unknown as { pauseForLimit(at: number): void }).pauseForLimit(Date.now() + 60 * 60_000);
+    expect(swarm.accounts.hasFree('claude')).toBe(true);
+    (swarm as unknown as { schedule(): void }).schedule();
+    await wait(1_000);
+    expect(i.usageNow().state).toBe('paused');
+    expect(i.state.messages.some((m) => /has room again/.test(m.text))).toBe(false);
+  });
+
   it("offers a paused API key when every account is out, and Use API key carries on there", async () => {
     const { swarm, runs, i } = await office(['claude-login', 'claude-keelop']);
     swarm.accounts.update('claude-apikey', { enabled: false });
     swarm.requestReview();
-    await wait(3_000);
+    await waitFor(() => i.usageNow().state === 'paused');
     const allOut = i.state.messages.filter((m) => m.switch && m.switch.to === null);
     expect(allOut).toHaveLength(1);
     expect(allOut[0].switch?.useKey).toBe('claude-apikey');
     expect(allOut[0].text).toContain('Use API key');
     swarm.useAccountNow('claude-apikey');
-    await wait(3_000);
+    await waitFor(() => runs.filter((r) => r.role === 'ceo').at(-1)?.account === 'claude-apikey');
     expect(i.usageNow().state).toBe('normal');
     expect(runs.filter((r) => r.role === 'ceo').at(-1)?.account).toBe('claude-apikey');
   });
