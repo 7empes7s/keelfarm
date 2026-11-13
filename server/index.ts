@@ -626,7 +626,7 @@ if (fs.existsSync(dist)) {
     res.end(serviceWorkerSource(swVersion(html, VERSION, swarm.officeCommit())));
   });
   app.use(express.static(dist));
-  app.get(/^(?!\/api).*/, (req, res, next) => (servesPage(req.path) ? res.sendFile(path.join(dist, 'index.html')) : next()));
+  app.get(/^(?!\/api).*/, (req, res, next) => (servesPage(req.path) ? res.sendFile(path.join(dist, 'index.html'), { dotfiles: 'allow' }) : next())); // npx's copy sits under ~/.npm
 }
 
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {

@@ -30,7 +30,7 @@ test('a click on the 3D view keeps the mouse grabbed and turns the camera; Esc f
   expect(await locked(page), 'still grabbed a second later').toBe('CANVAS');
   await expect.poll(() => savedView(page)).not.toBeNull();
   const before = (await savedView(page))!.yaw;
-  for (let i = 0; i < 10; i++) await page.mouse.move(400 + i * 30, 225);
+  for (let i = 1; i <= 40; i++) await page.mouse.move(400 + i * 4, 225); // small steps: the look filter drops spikes
   await expect.poll(async () => Math.abs((await savedView(page))!.yaw - before), { timeout: 30_000 }).toBeGreaterThan(0.05);
   await page.keyboard.press('Escape');
   await expect.poll(() => locked(page)).toBeNull();
@@ -47,6 +47,9 @@ for (const width of [1280, 390]) {
     await expect(page.locator('.phone .phone-tabs')).toBeVisible(); // its content, not just the dimmed office
     await page.keyboard.press('Escape');
     await expect(page.locator('.phone')).toBeHidden();
+    await expect.poll(() => locked(page)).toBe('CANVAS'); // closing it grabs the mouse again, and the grab holds
+    await page.keyboard.press('Escape'); // free it to reach the button
+    await expect.poll(() => locked(page)).toBeNull();
     await phoneButton(page).click();
     await expect.poll(() => phoneOnScreen(page)).toBe('on screen');
     await page.waitForTimeout(20_000);
