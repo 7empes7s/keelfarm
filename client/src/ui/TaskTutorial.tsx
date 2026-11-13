@@ -11,7 +11,7 @@ import { Spotlight, StepText, useSpot } from './Tutorial';
 import { cardPlace } from './tourSpot';
 import { seenNow, useTour } from './tour';
 import { newSince, type Track } from './tourSteps';
-import { doneOf, moveTo, neverStarted, pauseTutorial, readProgress, sentCount, startTutorial, stepBlocked, stepLink, tapUses, tutorialById, TUTORIALS, type Mode, type Progress, type World } from './tutorials';
+import { doneOf, freesMouse, moveTo, neverStarted, pauseTutorial, readProgress, sentCount, startTutorial, stepBlocked, stepLink, tapUses, tutorialById, TUTORIALS, type Mode, type Progress, type World } from './tutorials';
 import './tour.css';
 import './tutorials.css';
 
@@ -136,7 +136,7 @@ export function TaskTutorial({ track }: { track: Track }) {
     setDone(false);
     if (id && step && !aside) openStep(id, at, mode);
     // the Enter click's mouse grab can land after the step opened: give the mouse back once it does
-    if (!aside && track === 'office') {
+    if (freesMouse(!!(id && step), aside, mode)) {
       const free = () => void (document.pointerLockElement && document.exitPointerLock());
       document.addEventListener('pointerlockchange', free);
       return () => document.removeEventListener('pointerlockchange', free);

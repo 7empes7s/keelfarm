@@ -223,3 +223,9 @@ export const pauseTutorial = (p: Progress): Progress => ({ ...p, running: null }
 
 /** Whether this device has never opened a tutorial: the first launch offers Get started. */
 export const neverStarted = (p: Progress) => !p.running && Object.keys(p.at).length === 0;
+
+/**
+ * Whether the 3D office gives the mouse back whenever it's grabbed: only while a tutorial step is on screen, whose
+ * controls need the cursor. With none running, looking around must keep its grab (#651).
+ */
+export const freesMouse = (stepOn: boolean, aside: boolean, mode: Mode) => stepOn && !aside && mode === 'office';

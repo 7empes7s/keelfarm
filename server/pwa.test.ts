@@ -1,6 +1,6 @@
 import vm from 'node:vm';
 import { describe, expect, it } from 'vitest';
-import { serviceWorkerSource, swVersion } from './pwa.ts';
+import { servesPage, serviceWorkerSource, swVersion } from './pwa.ts';
 
 describe('the service worker version', () => {
   it('changes with every office update: a new build, a new package version or a new commit', () => {
@@ -107,4 +107,16 @@ it('routes an approval click to the exact card in an existing window or a newly 
     expect(messages).toEqual(existing ? [{ type: 'cubefarm:open', url }] : []);
     expect(focused).toBe(existing);
   }
+});
+
+describe('what gets the page (#651)', () => {
+  it('gives the app its routes and deep links', () => {
+    expect(servesPage('/')).toBe(true);
+    expect(servesPage('/floor/2')).toBe(true);
+  });
+  it('never answers a missing bundle with the page: an old tab after an update gets a 404 it can recover from', () => {
+    expect(servesPage('/assets/Office-OldHash1.js')).toBe(false);
+    expect(servesPage('/assets/index-OldHash2.css')).toBe(false);
+    expect(servesPage('/api/nope')).toBe(false);
+  });
 });

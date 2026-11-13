@@ -22,7 +22,7 @@ import { seedDemoNotes } from './demoChat.ts';
 import { fileRoutes } from './fileRoutes.ts';
 import { parseRange } from './journal.ts';
 import { underLauncher } from './officeUpdate.ts';
-import { serviceWorkerSource, swVersion } from './pwa.ts';
+import { servesPage, serviceWorkerSource, swVersion } from './pwa.ts';
 import { screenStatus } from './screenReply.ts';
 import { parseSendBackNote } from './sendBack.ts';
 import { handleGateway, upgradeGateway } from './previewGateway.ts';
@@ -626,7 +626,7 @@ if (fs.existsSync(dist)) {
     res.end(serviceWorkerSource(swVersion(html, VERSION, swarm.officeCommit())));
   });
   app.use(express.static(dist));
-  app.get(/^(?!\/api).*/, (_req, res) => res.sendFile(path.join(dist, 'index.html')));
+  app.get(/^(?!\/api).*/, (req, res, next) => (servesPage(req.path) ? res.sendFile(path.join(dist, 'index.html')) : next()));
 }
 
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
