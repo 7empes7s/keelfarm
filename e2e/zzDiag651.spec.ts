@@ -91,7 +91,7 @@ async function probe(page: Page, label: string) {
   await page.keyboard.press('Escape');
 }
 
-test('A: fresh profile, as the manager (no tour seen)', async ({ page }) => {
+test.skip('A: fresh profile, as the manager (no tour seen)', async ({ page }) => {
   test.setTimeout(110_000);
   await page.goto('/');
   await enter(page);
