@@ -77,3 +77,14 @@ export function sessionOf(body: unknown): string {
   const s = b.cubefarm_session ?? (b.elevenlabs_extra_body as Record<string, unknown> | undefined)?.cubefarm_session;
   return typeof s === 'string' && /^[\w-]{1,64}$/.test(s) ? s : '';
 }
+
+/**
+ * The log line for a request to a voice route (#650: IT sees what reached the office, and what it answered), or null
+ * for routes that aren't voice or log themselves (a call trace that went in). Never a session id or a body.
+ */
+export function voiceRouteLine(method: string, url: string, status: number, ms: number): string | null {
+  const p = url.split('?')[0];
+  if (!p.startsWith('/api/voice/') && p !== '/v1/chat/completions') return null;
+  if (p === '/api/voice/trace' && status < 300) return null;
+  return `voice: ${method} ${p.replace(/^\/api\/voice\/agent\/[^/]+\/end$/, '/api/voice/agent/:session/end')} ${status} (${Math.round(ms)} ms)`;
+}
