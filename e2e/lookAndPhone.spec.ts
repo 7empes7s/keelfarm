@@ -34,7 +34,10 @@ test('a click on the 3D view keeps the mouse grabbed and turns the camera (#651)
   expect(await locked(page), 'still grabbed a second later').toBe('CANVAS');
   await expect.poll(() => savedView(page)).not.toBeNull();
   const before = (await savedView(page))!.yaw;
-  for (let i = 1; i <= 40; i++) await page.mouse.move(400 + i * 4, 225); // small steps: the look filter drops spikes
+  // the mouse's moves while grabbed, all at once (Playwright's each wait out slow software-WebGL frames), in small steps the look filter keeps
+  await page.evaluate(() => {
+    for (let i = 0; i < 40; i++) document.dispatchEvent(new MouseEvent('mousemove', { movementX: 6, movementY: 0, bubbles: true }));
+  });
   await expect.poll(async () => Math.abs((await savedView(page))!.yaw - before), { timeout: 30_000 }).toBeGreaterThan(0.05);
   await freeMouse(page);
 });
