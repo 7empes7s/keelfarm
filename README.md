@@ -45,12 +45,12 @@ Every agent, the CEO included, is the actual coding-agent CLI in a terminal on y
 | | Claude Code | Codex | OpenCode |
 | --- | --- | --- | --- |
 | Install | comes with cubefarm: `npx cubefarm login` | your own, signed in | your own, signed in |
-| What the office sees | every step, plus cost and usage | every step, once you trust its hooks | each finished turn |
+| What the office sees | every step, plus cost and usage | every step | each finished turn |
 | Status | the default; the CEO runs it | experimental | experimental |
 
 - **One for everyone, or one each.** The manager's console → Settings sets the default coding agent, its model and the reasoning effort (out of the box: Claude Code with Claude Opus 5.5 at medium effort). An agent's ⚙️ Setup, the Team tab, or a new agent's chair in the lobby changes them for one agent. One subscription is all you need; mixing them (say, Codex agents testing what Claude Code agents wrote) is up to you.
 - **Local models.** Codex and OpenCode agents can run a model on your own computer instead of a subscription: give them a model named after its server, `ollama/qwen3-coder`, `lmstudio/<model>`, `llamacpp/<model>` or `omlx/<model>` (see [Local models](docs/agents.md#local-models)).
-- **Codex's hooks.** The first time, Codex asks you to review the office's hooks: type `/hooks` in a Codex agent's terminal and press `t` to trust them. Until then the office shows a Codex agent's task rather than each step.
+- **Codex's hooks.** The office trusts its own Codex hooks and the agent's worktree before each session, so Codex starts on the task. Hooks it didn't write (a repo's, a plugin's) stay yours to review in `/hooks`.
 - **Usage.** Agents on the same coding agent share its usage limits. When Claude warns that usage is getting high, the office slows down new work until the window resets. To cap how many agents run at once, set a session limit in the manager's console.
 - **Restarts.** Agents keep working while the office restarts (an update, a crash): their terminals live in a small process of their own and reconnect when the office is back.
 - **Cloud agents.** Optionally, agents work in an [Upstash Box](docs/cloud.md) each instead of on your computer, so they finish their task even with the office closed or your laptop shut. Connect your Upstash account in Settings → Cloud agents; your Claude subscription, API keys and GitHub are set up once for every Box.

@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { run } from './exec.ts';
+import { codexHookTrust, type OfficeHook } from './cliSetup.ts';
 import { localModel, type LocalProvider } from '../shared/models.ts';
 import type { AgentCli, CliView, EffortLevel, KeyTrouble } from '../shared/types.ts';
 import { keyTrouble } from '../shared/keyTrouble.ts';
@@ -212,6 +213,8 @@ export interface Launch {
   env: Record<string, string>;
   /** Files the CLI reads, written before it starts: [path, text]. */
   write?: [string, string][];
+  /** Codex: the trust its home needs for the office's own hooks on this command line (#638, cliSetup.ts). */
+  codexHooks?: OfficeHook[];
 }
 
 /** A local model server's address: `CUBEFARM_<ID>_URL` (e.g. CUBEFARM_OLLAMA_URL) when set, else its usual one. */
@@ -252,10 +255,12 @@ const GEMINI_CONTEXT_NAMES = ['GEMINI.md', 'AGENTS.md', 'CLAUDE.md'];
 
 /** Codex hooks the office listens to: its steps, and Esc interrupting a turn. Turn endings come from notify. */
 export const CODEX_HOOK_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Interrupt'];
+/** Their timeout in seconds (Codex clamps Interrupt's to 3). */
+const CODEX_HOOK_TIMEOUT = 10;
 
 /**
- * The command Codex runs for each hook. It never changes (the office's address travels in CUBEFARM_HOOK_URL), so the
- * manager trusts the hooks once in Codex's /hooks and that holds for every session. On Windows, Codex runs it through
+ * The command Codex runs for each hook. It never changes (the office's address travels in CUBEFARM_HOOK_URL), so its
+ * trust, written before each session (#638), holds for every session. On Windows, Codex runs it through
  * PowerShell or cmd depending on its version, and a command starting with a quote fails in both: plain `node` (on the
  * PATH the office gave it) and the script in double quotes work in either. Elsewhere it goes through the shell.
  */
@@ -301,6 +306,8 @@ export function launchArgs(id: AgentCli, ctx: LaunchContext): Launch {
     }
     case 'codex': {
       const toml = (s: string) => JSON.stringify(s); // a JSON string is a valid TOML basic string
+      const win = ctx.posix ? false : WIN;
+      const hookCommand = codexHookCommand(ctx.node ?? process.execPath, ctx.codexHook, win);
       const args = [
         '--no-alt-screen',
         '-c',
@@ -313,12 +320,16 @@ export function launchArgs(id: AgentCli, ctx: LaunchContext): Launch {
         ...(ctx.office ? ['-c', `mcp_servers.office={url=${toml(ctx.office)}}`] : []),
         '-c',
         'commit_attribution=""', // no "Co-authored-by: Codex" in its commits (#599)
-        ...CODEX_HOOK_EVENTS.flatMap((e) => ['-c', `hooks.${e}=[{hooks=[{type="command",command=${toml(codexHookCommand(ctx.node ?? process.execPath, ctx.codexHook, ctx.posix ? false : WIN))},timeout=10}]}]`]),
+        ...CODEX_HOOK_EVENTS.flatMap((e) => ['-c', `hooks.${e}=[{hooks=[{type="command",command=${toml(hookCommand)},timeout=${CODEX_HOOK_TIMEOUT}}]}]`]),
         // Like the manager's own Codex, but it can't stop to ask: no approvals and no sandbox (its sandbox can't reach
         // the credential store, so git and gh fail in it). A consult only reads: its read-only sandbox.
         ...(ctx.readOnly ? ['--sandbox', 'read-only', '--ask-for-approval', 'never'] : ['--dangerously-bypass-approvals-and-sandbox']),
       ];
-      return { args: ctx.resumeId ? ['resume', ...args, ctx.resumeId, ctx.prompt] : [...args, '--', ctx.prompt], env: { CUBEFARM_HOOK_URL: ctx.notify.url } };
+      return {
+        args: ctx.resumeId ? ['resume', ...args, ctx.resumeId, ctx.prompt] : [...args, '--', ctx.prompt],
+        env: { CUBEFARM_HOOK_URL: ctx.notify.url },
+        codexHooks: codexHookTrust(hookCommand, CODEX_HOOK_EVENTS, CODEX_HOOK_TIMEOUT, win),
+      };
     }
     case 'opencode': {
       const local = localModel(ctx.model);
@@ -419,7 +430,7 @@ export function codexThread(action: 'archive' | 'unarchive', id: string, after?:
 // ---------- prompts the office answers ----------
 
 // The question's title line (never an option: "Yes, I trust this folder" mustn't count as one).
-const TRUST_PROMPT = /Quick safety check|Do you trust the (files|contents) (in|of) this|allow Codex to work in this folder/i;
+const TRUST_PROMPT = /Trust this folder\?|Quick safety check|Do you trust the (files|contents) (in|of) this|allow Codex to work in this folder/i;
 
 /**
  * The key that moves a CLI's folder-trust question toward trusting the office's own worktree: Enter only while the
@@ -443,8 +454,9 @@ export function trustKey(screen: string): 'enter' | 'down' | 'up' | null {
 }
 
 /**
- * Codex asks to review new hooks before it starts. They only show the office Codex's steps, so trusting them is the
- * manager's call (once, in /hooks): the office moves to "Continue without trusting" (Down) and takes it (Enter).
+ * Codex asks to review new hooks before it starts. The office's own are trusted before it starts (#638), so these are
+ * someone else's (the repo's, a plugin's): trusting them is the manager's call, in /hooks. The office moves to
+ * "Continue without trusting" (Down) and takes it (Enter); its own trusted hooks still run.
  */
 export function hookReviewKey(screen: string): 'enter' | 'down' | null {
   if (!/Hooks need review/i.test(screen)) return null;

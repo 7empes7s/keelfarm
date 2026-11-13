@@ -10,7 +10,8 @@ import { BOX_CDP, BoxPty, boxHooksReady, finishedTurn, lookAtBoxCli, readFrom, t
 import { BOX_BIN, BOX_CLI_BIN, BOX_HOME, boxSessionDir, signInCommand, tmuxKill } from './boxScripts.ts';
 import { adoptsCli } from './cliAdopt.ts';
 import { CLAUDE_NO_ATTRIBUTION, cliLabel, CLIS, codexThread, commandFor, geminiLimit, interruptions, isCli, launchArgs, lostLogin, prepareLaunch, writeHelperFiles } from './clis.ts';
-import { answerNote, countAnswer, gaveUpNote, keyBytes, screenStep, screenTry, signInError } from './cliScreens.ts';
+import { answerNote, countAnswer, gaveUpNote, keyBytes, screenStep, screenTry, signInError, type ScreenContext } from './cliScreens.ts';
+import { readyCodexSession } from './cliSetup.ts';
 import { adoptPty, discardPty, hooksReady as keeperHooksReady, keeperHookUrl, keeperPid, leaveKeeper, spawnPty, startKeeper, terminalsAvailable, type Pty } from './ptyClient.ts';
 import type { BoxApi } from './box.ts';
 import {
@@ -190,8 +191,6 @@ interface LiveCli {
   programStatus?: ProgramStatus & { at: number };
 }
 const lives = new Map<AgentTerminal, LiveCli>();
-/** How to trust Codex's hooks was said once this run (Codex asks at the start of every session until they are). */
-let hooksHinted = false;
 /** A CLI left at its prompt this long is closed; its session can still be resumed. */
 const IDLE_MS = 30 * 60_000;
 /** The same in a Box: closed sooner, so the Box can pause and stop costing. */
@@ -499,6 +498,7 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
   const nudged = new Set<string>();
   const screenTries = new Map<string, number>(); // keys pressed on each start-up screen (a few at most)
   let trustedAt = 0;
+  let screenCtx: ScreenContext = { officeHooksTrusted: !!box }; // a Box's Codex home isn't on this computer: as before #638
   const roots = sessionRoots(opts.cwd, opts.env, dir); // the folders the session may write in
   let lastCall: { tool: string; input: Record<string, unknown> } = { tool: '', input: {} };
   let onScreen: Waiting | null = null; // a prompt on screen no hook answered
@@ -969,16 +969,12 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
     screenTimer = setInterval(() => {
       if (done || Date.now() - started > BOOT_MS * 2) return clearInterval(screenTimer);
       const screen = term.screen();
-      const step = screenStep(screen, cli);
+      const step = screenStep(screen, cli, screenCtx);
       // A screen's tries spent: no more keys, the live state reports it as needing setup (liveState.ts).
       if (step?.do === 'keys' && Date.now() - trustedAt > 3000 && screenTry(screenTries, step.screen.id, () => log([{ kind: 'error', text: gaveUpNote(label, step.screen) }]))) {
         if (step.key === 'enter') {
           trustedAt = Date.now(); // the screen takes a moment to go: don't answer it twice
           log([{ kind: 'system', text: answerNote(label, step.screen, opts.account, countAnswer(opts.account, step.screen.id)) }]);
-          if (step.screen.id === 'hooks' && !hooksHinted) {
-            hooksHinted = true;
-            log([{ kind: 'system', text: `ℹ To see ${label}'s steps here, trust the office's hooks once: in this terminal, type /hooks and press t. Until then the office shows its task.` }]);
-          }
         }
         quietly(() => pty.write(keyBytes(step.key, term.appCursor)));
       } else if (step && step.do !== 'keys' && !nudged.has('login')) {
@@ -998,6 +994,9 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
     let pty: Pty;
     try {
       prepareLaunch(launch);
+      const codex = readyCodexSession(launch.codexHooks, env, opts.cwd, label); // trust for its worktree and the office's hooks (#638)
+      if (codex.line) log([codex.line]);
+      screenCtx = { officeHooksTrusted: codex.officeHooksTrusted };
       pty = spawnPty(cmd!.file, [...cmd!.args, ...launch.args], { cols: term.cols, rows: term.rows, cwd: opts.cwd, env }, metaOf(l));
     } catch (err) {
       setTimeout(() => finish({ ok: false, text: '', errors: [`Could not start ${label}: ${(err as Error).message}`] }), 0);

@@ -54,6 +54,23 @@ coding agent, and agents never fall back to it.
   onboarding done, your theme, the agent's worktree trusted (Codex: in its `config.toml`), so no first-run screen
   stops an agent. A session that still opens on a sign-in ends at once: the account reads signed out, the task goes
   to the next account (or back in line), and you get one notification.
+
+### Codex trust
+
+Checked against Codex 0.166.0 (its source, `codex-rs/hooks` and `codex-rs/config`, and its own `codex app-server`
+`hooks/list`). Before every Codex session on this computer, `readyCodexSession` (`server/cliSetup.ts`) edits the
+session's `config.toml` (its `CODEX_HOME`, else `~/.codex`), under a lock and through a rename, keeping every other line:
+
+- `[projects."<worktree>"] trust_level = "trusted"`, for the path as given and its real path (Codex looks that up first);
+- for each office hook (`-c hooks.<Event>=…`), `[hooks.state."/<session-flags>/config.toml:<event>:0:0"]` (on Windows
+  `C:\<session-flags>\config.toml`) with `trusted_hash`: sha256 over the hook's declaration as Codex normalizes it, so
+  it matches only that exact command. Each sits under a `# cubefarm: the office's own session hook (#638)` line, and
+  only marked entries are renewed when the office's hook command changes.
+
+Never touched: other hooks' trust (a repo's, a plugin's, your own), a hook you turned off (`enabled = false`), and
+office keys trusted for something else (then the log says so). A hooks review still on screen is answered with
+"Continue without trusting" only when the office's own hooks are trusted; otherwise the agent shows as needing setup
+and you get one notification. Cloud agents' Codex runs in their Box and keeps its old behaviour.
 - **API key**: paste it; the office makes one free request (the provider's model list) to check it before saving it.
 - **Setup token**: name the environment variable that holds it.
 
