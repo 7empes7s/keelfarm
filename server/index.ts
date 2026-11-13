@@ -422,7 +422,7 @@ app.post(
   (req, res, next) => clipBody(req, res, (err?: unknown) => next((err as { type?: unknown } | undefined)?.type === 'entity.too.large' ? new HttpError(413, CLIP_TOO_BIG) : err)),
   route(async (req) => {
     const audio = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
-    return { text: await swarm.voice.transcribe(audio, req.get('content-type'), Number(req.get('x-clip-ms'))) };
+    return { text: await swarm.voice.transcribe(audio, req.get('content-type'), Number(req.get('x-clip-ms')), req.get('x-voice-call') === '1') };
   }),
 );
 app.get(

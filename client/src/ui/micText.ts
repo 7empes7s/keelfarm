@@ -111,6 +111,12 @@ export const MIC_SILENT = "I can't hear you: the microphone is silent. Tap Talk 
 /** A call's turn the speech service couldn't turn into text (#645), with its reason. */
 export const speechFailed = (why: string) => `I can't hear you: the speech service failed (${why.trim().replace(/[.\s]+$/, '') || 'no reason given'}).`;
 
+/** A call that can't start its mic (#645): the browser's recognition never came on. */
+export const MIC_NO_START = "I can't hear you: the microphone didn't start. Tap Talk to try again.";
+
+/** How a call listens (#645): through the office's speech to text whenever it has an ElevenLabs key and this browser can record, else the browser's own recognition. */
+export const callListens = (keySet: boolean, caps: MicCaps): Exclude<ListenProvider, 'off'> => (keySet && caps.recorder ? 'elevenlabs' : 'browser');
+
 /** What this browser can do: recognise speech itself, and record audio for ElevenLabs. */
 export interface MicCaps {
   recognition: boolean;

@@ -16,7 +16,7 @@ import { HANDS_FREE_IDLE, handsFree, type HandsFree, type HandsFreeEvent, type R
 import { closesMic, HOLD_MS, isTalkKey, type KeyPlace } from './micKeys';
 import { useMicPause } from './micPause';
 import { deadMic, drainOf, freshEars, heardLevel, heardWords, listenRules, sendsWhenDone, verdict, type Drain, type Ears, type MicMode } from './micSilence';
-import { cantListen, joinHeard, MIC_SILENT, micErrorLine, phrasesText, speechFailed, withoutTrailingFillers, withTranscript, type MicCaps, type Phrase } from './micText';
+import { callListens, cantListen, joinHeard, MIC_NO_START, MIC_SILENT, micErrorLine, phrasesText, speechFailed, withoutTrailingFillers, withTranscript, type MicCaps, type Phrase } from './micText';
 import { FakeRecognition, fakeLive, type Recognition, type RecognitionClass } from './micFake';
 import { holdMusicDuck } from './music';
 import { getAudioPrefs, listenChime, setMicOpen, subscribeAudio } from './sfx';
@@ -82,6 +82,9 @@ export function micCaps(): MicCaps {
 
 const listening = () => useStore.getState().settings.listen ?? { provider: 'off' as ListenProvider, autoSend: false, handsFree: false };
 
+/** How a voice call listens, whatever Talk instead of type says (#645). */
+export const callProvider = () => callListens(useStore.getState().voiceKeySet, micCaps());
+
 /** Why the 🎙 can't listen now, or '' when it can. */
 export function micProblem(): string {
   const { provider } = listening();
@@ -146,8 +149,7 @@ const set = (patch: Partial<MicView>) => useMic.setState(patch);
 export function listen(id: string, mode: MicMode) {
   const target = targets.get(id);
   if (!target || session || target.disabled()) return;
-  // A call listens with the browser's recognition when Talk instead of type is off.
-  const provider = mode === 'call' && listening().provider === 'off' ? 'browser' : listening().provider;
+  const provider = mode === 'call' ? callProvider() : listening().provider;
   if (provider === 'off') return;
   const why = cantListen(provider, micCaps(), useStore.getState().voiceKeySet);
   if (why) return void (mode === 'call' ? callEars?.problem(why) : explain(why, id));
@@ -203,7 +205,10 @@ function check(n: number) {
   if (!s || s.finishing) return;
   const now = performance.now();
   if (!s.ears) {
-    if (now - s.began > STARTUP_MS) cancel('stopped');
+    if (now - s.began > STARTUP_MS) {
+      if (s.mode === 'call') fail(n, MIC_NO_START); // a call says so, and offers Talk
+      else cancel('stopped');
+    }
     return;
   }
   if (s.mode === 'call' && deadMic(s.ears, now, s.hearing?.track)) return fail(n, MIC_SILENT);
@@ -484,7 +489,7 @@ async function transcribe(s: Session, clip: Blob, ms: number) {
   s.release?.(); // the mic is off: sounds come back while the text is on its way
   s.release = null;
   try {
-    const res = await fetch('/api/voice/transcribe', { method: 'POST', headers: { 'Content-Type': clip.type, 'X-Clip-Ms': String(Math.round(ms)) }, body: clip });
+    const res = await fetch('/api/voice/transcribe', { method: 'POST', headers: { 'Content-Type': clip.type, 'X-Clip-Ms': String(Math.round(ms)), ...(s.mode === 'call' && { 'X-Voice-Call': '1' }) }, body: clip });
     const data = (await res.json().catch(() => ({}))) as { text?: unknown; error?: unknown };
     if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : `HTTP ${res.status}`);
     if (session !== s) return; // stopped meanwhile

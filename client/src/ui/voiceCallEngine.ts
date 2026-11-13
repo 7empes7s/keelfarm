@@ -14,7 +14,7 @@ import { useStore } from '../store';
 import { markBusy } from '../updateGate';
 import { sendToCeo } from './chatSend';
 import { CHIME_MS } from './handsFree';
-import { listen, micCaps, registerTarget, setCallEars, stopListening, useMic } from './mic';
+import { callProvider, listen, micCaps, registerTarget, setCallEars, stopListening, useMic } from './mic';
 import { cantListen } from './micText';
 import { listenChime, setCallQuiet, unlockAudio } from './sfx';
 import { inCall, wantsMic, type CallEffect } from './voiceCall';
@@ -31,9 +31,7 @@ let tapping = false;
 
 /** Why the call can't listen by itself, or ''. */
 function micReason(): string {
-  const st = useStore.getState();
-  const provider = st.settings.listen?.provider ?? 'off';
-  return cantListen(provider === 'off' ? 'browser' : provider, micCaps(), st.voiceKeySet);
+  return cantListen(callProvider(), micCaps(), useStore.getState().voiceKeySet);
 }
 
 // ---------- controls (the call screens and the keys) ----------

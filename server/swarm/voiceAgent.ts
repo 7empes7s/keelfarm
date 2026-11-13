@@ -138,12 +138,16 @@ export abstract class SwarmVoiceAgent extends SwarmProblems {
    * socket, in this process; anything else must carry the bearer token the agent was made with.
    */
   async voiceLlm(body: unknown, auth: string | undefined, trusted = false): Promise<string> {
-    if (!trusted && !bearerOk(auth, this.agentData().token)) throw new HttpError(401, 'Not the office voice agent');
+    if (!trusted && !bearerOk(auth, this.agentData().token)) {
+      console.log('voice agent: refused a turn without the agent token');
+      throw new HttpError(401, 'Not the office voice agent');
+    }
     const id = sessionOf(body);
     const session = this.agentSessions.get(id) ?? { at: Date.now(), last: Date.now(), brain: NO_BRAIN };
     if (id && !this.agentSessions.has(id)) this.agentSessions.set(id, session);
     session.last = Date.now();
     const text = lastUserText((body as { messages?: unknown } | null)?.messages).trim();
+    console.log(`voice agent: a turn from ElevenLabs (${text.length} characters)`); // never the words: IT sees calls reach the office (#645)
     const mark = MARKER.exec(text);
     if (mark) return this.markerWords(mark[1] as 'msg' | 'line', Number(mark[2]));
     const turn = brainTurn(text, session.brain, this.brainFacts());

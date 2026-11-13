@@ -61,6 +61,13 @@ describe("a call's speech to text (#645)", () => {
     failing = null;
   });
 
+  it("a call's turn is heard through the office even when Talk instead of type is the browser's", async () => {
+    swarm.updateSettings({ listen: { provider: 'browser', autoSend: true, handsFree: false } });
+    expect(await swarm.voice.transcribe(toneWav(), 'audio/wav', 1000, true)).toBe("What's everyone working on?");
+    expect(await swarm.voice.transcribe(toneWav(), 'audio/wav', 1000).catch((e: { status?: number }) => e.status)).toBe(409);
+    swarm.updateSettings({ listen: { provider: 'elevenlabs', autoSend: true, handsFree: false } });
+  });
+
   it("the clip's own problems aren't tickets", async () => {
     const before = tickets().length;
     await swarm.voice.transcribe(Buffer.alloc(0), 'audio/wav', 0).catch(() => undefined);

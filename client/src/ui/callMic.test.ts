@@ -28,7 +28,7 @@ let brokenMic = false;
 /** The manager speaks between these times (performance.now()). */
 let speech = { from: 0, to: 0 };
 let transcribeReply: { status: number; body: unknown } = { status: 200, body: { text: 'Ship the login page today' } };
-const posts: { url: string; body: unknown }[] = [];
+const posts: { url: string; body: unknown; call?: string }[] = [];
 
 class Track {
   readyState: 'live' | 'ended' = 'live';
@@ -152,10 +152,10 @@ class Sock {
   close() {}
 }
 
-async function fakeFetch(url: string, init?: { method?: string; body?: unknown }) {
+async function fakeFetch(url: string, init?: { method?: string; body?: unknown; headers?: Record<string, string> }) {
   const json = (status: number, body: unknown) => ({ ok: status < 300, status, statusText: '', json: async () => body }); // not undici's Response: it needs real microtasks
   if (init?.method === 'POST' && typeof init.body === 'string') posts.push({ url, body: JSON.parse(init.body) });
-  else if (init?.method === 'POST') posts.push({ url, body: null });
+  else if (init?.method === 'POST') posts.push({ url, body: null, call: init.headers?.['X-Voice-Call'] });
   if (url === '/api/voice/transcribe') return json(transcribeReply.status, transcribeReply.body);
   if (url === '/api/voice/agent/start') return json(200, { session: 's1', url: '/fake-agent' });
   return json(200, {});
@@ -201,12 +201,12 @@ afterAll(() => {
   vi.unstubAllGlobals();
 });
 
-function settings(jarvis: boolean) {
+function settings(jarvis: boolean, listen: 'browser' | 'elevenlabs' = 'elevenlabs', keySet = true) {
   const st = store.useStore.getState();
   store.useStore.setState({
-    voiceKeySet: true,
+    voiceKeySet: keySet,
     voiceAgent: { ...st.voiceAgent, fake: true, minutesMonth: 0 },
-    settings: { ...st.settings, listen: { provider: 'elevenlabs', autoSend: true, handsFree: false }, voice: { ...st.settings.voice, agent: { ...st.settings.voice.agent!, on: jarvis } } },
+    settings: { ...st.settings, listen: { provider: listen, autoSend: true, handsFree: false }, voice: { ...st.settings.voice, agent: { ...st.settings.voice.agent!, on: jarvis } } },
   });
 }
 
@@ -266,6 +266,41 @@ describe("a call's mic with the wake word on (#645)", () => {
     const chunks = sock.sent.filter((m) => m.includes('user_audio_chunk')).map((m) => (JSON.parse(m) as { user_audio_chunk: string }).user_audio_chunk);
     expect(chunks.length).toBeGreaterThan(0);
     expect(chunks.some((c) => Buffer.from(c, 'base64').some((b) => b !== 0))).toBe(true); // not silence
+  });
+});
+
+describe('a call listens through the office (#645)', () => {
+  it("with the office's ElevenLabs key, even when Talk instead of type is on the browser", async () => {
+    settings(false, 'browser');
+    gesture = true;
+    engine.startCall();
+    gesture = false;
+    await wait(1500);
+    const now = performance.now();
+    speech = { from: now + 600, to: now + 2600 };
+    await wait(7000);
+    expect(posts.filter((p) => p.url === '/api/voice/transcribe').map((p) => p.call)).toEqual(['1']);
+    expect(ceoGot()).toEqual(['Ship the login page today']);
+  });
+
+  it("without a key, the browser's recognition that never starts says so", async () => {
+    settings(false, 'browser', false);
+    const w = window as unknown as Record<string, unknown>;
+    w.webkitSpeechRecognition = class {
+      start() {}
+      stop() {}
+      abort() {}
+    };
+    try {
+      gesture = true;
+      engine.startCall();
+      gesture = false;
+      await wait(13_000);
+      expect(call.useCall.getState().call.tapToTalk).toMatch(/microphone didn't start/);
+      expect(problems()).toEqual([expect.stringMatching(/microphone didn't start/)]);
+    } finally {
+      delete w.webkitSpeechRecognition;
+    }
   });
 });
 
