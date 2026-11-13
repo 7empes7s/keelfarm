@@ -76,6 +76,7 @@ export abstract class SwarmScheduling extends SwarmQa {
 
   protected scheduleOffset = 0;
   protected pausedUntil = 0; // Claude's usage limit was hit: nothing new starts before this
+  private pausedAllOut = false; // that pause is rotation's every-account-out one, which ends once an account has room
   protected pacingUntil = 0; // Claude warned about usage: new issues are paced until this
   protected pacingLimit: string | null = null; // which of Claude's limits the pacing is for
   protected lastWarning: UsageWarningView | null = null; // the latest usage warning, for the usage meter
@@ -290,11 +291,13 @@ export abstract class SwarmScheduling extends SwarmQa {
   }
 
   /** Claude turned a session away for the usage limit: start nothing new until it resets, rather than failing agent after agent. */
-  protected pauseForLimit(resetsAt: number | null, told = false) {
+  protected pauseForLimit(resetsAt: number | null, told = false, allOut = false) {
     const until = (resetsAt ?? Date.now() + LIMIT_PAUSE_MS) + 30_000;
+    if (allOut) this.pausedAllOut = true; // every account, the built-in login too, is marked out in rotation
     if (until <= this.pausedUntil) return;
     const fresh = Date.now() >= this.pausedUntil;
     this.pausedUntil = until;
+    this.pausedAllOut = allOut;
     if (fresh && !told) this.postMessage('office', `⏸ ${this.limitWho()} reached its usage limit. The office starts no new work until ${new Date(until).toLocaleTimeString()}; sessions already running carry on.`);
     this.emitUsage();
   }
@@ -307,11 +310,13 @@ export abstract class SwarmScheduling extends SwarmQa {
 
   /**
    * The pause for every account being out ends as soon as rotation has one with room again (its limit lifted by the
-   * provider's own usage, a new sign-in, or a reset), not at the reset time the first message named.
+   * provider's own usage, a new sign-in, or a reset), not at the reset time the first message named. A pause for the
+   * built-in or only login's limit isn't rotation's to lift: it waits for its reset.
    */
   protected liftPauseWhenFree() {
-    if (!this.limited() || !this.accounts.hasFree('claude')) return;
+    if (!this.pausedAllOut || !this.limited() || !this.accounts.hasFree('claude')) return;
     this.pausedUntil = 0;
+    this.pausedAllOut = false;
     const n = this.accounts.upNext('claude');
     this.postMessage('office', `▶ ${n?.label ?? 'A Claude account'} has room again: new work starts now.`);
     this.emitUsage();
@@ -390,6 +395,7 @@ export abstract class SwarmScheduling extends SwarmQa {
     const view = this.accounts.update(id, { enabled: true });
     if (this.limited() && this.accounts.rotation().on) {
       this.pausedUntil = 0;
+      this.pausedAllOut = false;
       this.postMessage('office', `▶ ${this.accounts.label(id)} is on: new work starts on it now${this.accounts.list().find((a) => a.id === id)?.kind === 'api-key' ? ', billed per token' : ''}.`);
       this.emitUsage();
       setTimeout(() => this.schedule(), 200);
