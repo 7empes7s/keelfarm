@@ -17,6 +17,7 @@ import { CHIME_MS } from './handsFree';
 import { callProvider, listen, micCaps, registerTarget, setCallEars, stopListening, useMic } from './mic';
 import { cantListen } from './micText';
 import { listenChime, setCallQuiet, unlockAudio } from './sfx';
+import { currentTrace, trace, traceEnd, traceNote, traceStart } from './callTrace';
 import { inCall, wantsMic, type CallEffect } from './voiceCall';
 import { callOn, dispatchCall, onCallStep, useCall } from './voiceCallStore';
 import { releaseWakeMic } from './wake/wakeStore';
@@ -40,6 +41,11 @@ function micReason(): string {
 export function startCall() {
   releaseWakeMic(); // before the call's own mic opens, not when the wake word sees the call
   unlockAudio();
+  if (!callOn()) {
+    // The trace first (#650): it reaches the office even when the mic code after it throws.
+    const why = agentCallWhy(useStore.getState());
+    traceStart(why ? 'office' : 'jarvis', callProvider(), why);
+  }
   if (!callOn()) callAudio(); // inside the tap: iPhones only start sound (and the mic's audio session) from one; the office's own mic meters on it too (#648)
   if (!callOn() && !agentCallWhy(useStore.getState())) useAgentCall.setState({ mode: 'connecting', saying: '' });
   useCall.setState({ minimised: false });
@@ -65,6 +71,7 @@ export function tapOrb() {
 export function talkOnce() {
   if (!callOn() || useMic.getState().state !== 'idle') return;
   callAudio(); // the tap wakes the call's audio, which an iPhone may have stopped (#648)
+  traceNote('Talk tapped');
   tapping = true;
   listen(TARGET, 'call');
   if (useMic.getState().state === 'idle') tapping = false;
@@ -102,6 +109,7 @@ const EFFECTS: Record<CallEffect, () => void> = {
     report(sendWs, false, true);
     useCall.setState({ chatTucked: false, managerSpeaking: false });
     useStore.getState().openOverlay({ kind: 'phone', tab: 'chat' }); // the chat comes back, with the call's turns in it
+    traceEnd();
   },
 };
 
@@ -114,6 +122,8 @@ function ownEars() {
 
 /** The Jarvis voice couldn't take the call: today's voice mode carries it, and the manager hears why. */
 function ownVoice(why: string) {
+  traceNote(`voice switch: Jarvis → the office's own voice: ${why}`);
+  trace({ mode: 'office' });
   ownEars();
   useStore.getState().pushToast('info', `Using the office's own voice: ${why}`);
   dispatchCall({ type: 'connected', tapToTalk: micReason() });
@@ -126,6 +136,10 @@ onCallStep((step, ev) => {
   for (const n of step.show) pushToast(n.level, n.text, n.notice as Parameters<typeof pushToast>[2]);
   if (ev.type === 'reply' && step.call.paused) void voice().then((v) => v.pauseVoice()); // a reply that came in while paused waits
   if (ev.type === 'reply') useCall.setState({ heard: '' }); // your words stay up until the CEO answers
+  if (ev.type === 'connected' && step.call.tapToTalk) {
+    trace({ mode: 'tap' });
+    traceNote(`tap-to-talk: ${step.call.tapToTalk}`);
+  }
   soon();
 });
 
@@ -142,6 +156,7 @@ const EARS = {
     soon();
   },
   problem: (why: string) => {
+    traceNote(`mic problem, tap-to-talk: ${why}`);
     useCall.setState({ managerSpeaking: false });
     tapping = false;
     dispatchCall({ type: 'mic-problem', why });
@@ -228,6 +243,10 @@ if (typeof window !== 'undefined') {
     /** The Jarvis voice (#534): its mode, and a turn typed to it (the demo's fake mic); agentProbe() its timings. */
     get agent() {
       return useAgentCall.getState().mode;
+    },
+    /** This call's trace so far (#650), as the office gets it. */
+    get trace() {
+      return currentTrace();
     },
     say: (text: string) => agent().then((a) => a.sayToAgent(text)),
     agentProbe: () => agent().then((a) => a.agentProbe()),

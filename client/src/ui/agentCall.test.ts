@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { agentEvent, downsample, floatToPcm, formatRate, initMessage, level, orbState, pcmToFloat, replyLeftMs } from './agentCall';
+import { afterClose, agentEvent, closeWords, downsample, eventType, floatToPcm, formatRate, initMessage, level, orbState, pcmToFloat, replyLeftMs } from './agentCall';
 
 describe("the Jarvis voice: ElevenLabs' conversation protocol", () => {
   it('reads the agent socket messages the call needs', () => {
-    expect(agentEvent(JSON.stringify({ type: 'conversation_initiation_metadata', conversation_initiation_metadata_event: { agent_output_audio_format: 'pcm_22050' } }))).toEqual({ kind: 'ready', rate: 22050 });
+    expect(agentEvent(JSON.stringify({ type: 'conversation_initiation_metadata', conversation_initiation_metadata_event: { agent_output_audio_format: 'pcm_22050' } }))).toEqual({ kind: 'ready', rate: 22050, inFormat: '' });
     expect(agentEvent(JSON.stringify({ type: 'audio', audio_event: { audio_base_64: 'AAA=', event_id: 3 } }))).toEqual({ kind: 'audio', event: 3, pcm: 'AAA=' });
     expect(agentEvent(JSON.stringify({ type: 'agent_response', agent_response_event: { agent_response: 'On it.' } }))).toEqual({ kind: 'said', text: 'On it.' });
     expect(agentEvent(JSON.stringify({ type: 'agent_response_correction', agent_response_correction_event: { corrected_agent_response: 'On' } }))).toEqual({ kind: 'said', text: 'On' });
@@ -39,5 +39,22 @@ describe("the Jarvis voice: ElevenLabs' conversation protocol", () => {
     expect(replyLeftMs({ paused: false, running: true, left: 0 })).toBe(0);
     expect(replyLeftMs({ paused: false, running: true, left: 1.5 })).toBe(1750);
     expect(replyLeftMs({ paused: true, running: false, left: 2 })).toBeGreaterThan(0);
+  });
+});
+
+describe('ElevenLabs closing the conversation (#650)', () => {
+  it('dials again once, then hands the call to the office voice, whose mic hears; never a call left deaf', () => {
+    expect(afterClose({ dialling: false, ending: false, drops: 0 })).toBe('redial'); // before #650: 'idle', the mic off and replies in the backup voice
+    expect(afterClose({ dialling: false, ending: false, drops: 1 })).toBe('fallback');
+    expect(afterClose({ dialling: true, ending: false, drops: 0 })).toBe('fallback');
+    expect(afterClose({ dialling: false, ending: true, drops: 0 })).toBe('idle'); // "that's all": tap the orb to talk again
+  });
+
+  it('reads the input format and the message type, and says why it closed', () => {
+    expect(agentEvent(JSON.stringify({ type: 'conversation_initiation_metadata', conversation_initiation_metadata_event: { agent_output_audio_format: 'pcm_16000', user_input_audio_format: 'pcm_48000' } }))).toEqual({ kind: 'ready', rate: 16000, inFormat: 'pcm_48000' });
+    expect(eventType('{"type":"user_transcript","user_transcription_event":{}}')).toBe('user_transcript');
+    expect(eventType('not json')).toBe('');
+    expect(closeWords(1008, 'custom llm error')).toBe('ElevenLabs closed the call (1008: custom llm error)');
+    expect(closeWords(1006, '')).toBe('ElevenLabs closed the call (1006)');
   });
 });

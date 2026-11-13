@@ -6,6 +6,8 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { cleanTrace, keepTrace, type CallTrace } from '../../shared/callTrace.ts';
+import { redact } from '../../shared/journal.ts';
 import { messageSpeech } from '../../shared/speech.ts';
 import type { WorldSnapshot } from '../../shared/types.ts';
 import { DEFAULT_VOICE_AGENT, addCallSeconds, agentWhy, parseUsage, usageMinutes, type AgentUsage, type VoiceAgentView } from '../../shared/voiceAgent.ts';
@@ -41,6 +43,21 @@ const doingWords = (d: string | null) => (d ? d.replace(/^issue #(\d+)/, 'workin
 export abstract class SwarmVoiceAgent extends SwarmProblems {
   private agentFile: AgentFile | null = null;
   private agentSessions = new Map<string, AgentSession>();
+  private callTraces: CallTrace[] = [];
+
+  /** POST /api/voice/trace (#650): a call's trace from the browser, logged as one line and kept (the last 20 calls). */
+  voiceTrace(body: unknown) {
+    const secrets = [...this.secrets(), this.agentData().token];
+    const t = cleanTrace(body, (s) => redact(s, secrets));
+    if (!t) throw new HttpError(400, 'Not a call trace: it needs an id.');
+    console.log(`voice: call trace ${JSON.stringify(t)}`);
+    this.callTraces = keepTrace(this.callTraces, t);
+  }
+
+  /** GET /api/voice/traces: the kept traces, newest last. */
+  voiceTraces(): CallTrace[] {
+    return this.callTraces;
+  }
 
   private get agentPath() {
     return path.join(HOME_DIR, this.backend.demo ? 'demo-voice-agent.json' : 'voice-agent.json');

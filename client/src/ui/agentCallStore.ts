@@ -5,6 +5,7 @@ import { create } from 'zustand';
 import type { SwarmSettings } from '../../../shared/types';
 import { agentWhy, DEFAULT_VOICE_AGENT, type VoiceAgentView } from '../../../shared/voiceAgent';
 import type { AgentMode } from './agentCall';
+import { traceNote } from './callTrace';
 
 export interface AgentCallView {
   mode: AgentMode;
@@ -58,7 +59,11 @@ export function onAgentRelay(fn: Relay | null) {
 
 /** Hands a CEO message or progress line to the Jarvis voice to say; false when it isn't live (today's voice reads it). */
 export function agentRelay(kind: 'msg' | 'line', id: number): boolean {
-  if (useAgentCall.getState().mode !== 'live' || !relay) return false;
+  const mode = useAgentCall.getState().mode;
+  if (mode !== 'live' || !relay) {
+    if (mode !== 'off') traceNote(`voice switch: the office's own voice reads ${kind} ${id}, the Jarvis voice is ${mode}`); // #650
+    return false;
+  }
   relay(kind, id);
   return true;
 }

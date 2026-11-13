@@ -34,9 +34,10 @@ function isShell(url) {
   return url.pathname.startsWith('/assets/') || url.pathname.startsWith('/icons/') || url.pathname === '/manifest.webmanifest';
 }
 
-/** Keeps a response in this version's cache, unless a newer worker has already deleted it (it then stays deleted). */
+/** Keeps a response in this version's cache, unless a newer worker has already deleted it (it then stays deleted). A page served for a bundle is never kept as it (#650). */
 async function keep(req, res) {
-  if (res.ok && (await caches.has(CACHE))) await (await caches.open(CACHE)).put(req, res);
+  const page = (res.headers.get('content-type') || '').includes('text/html');
+  if (res.ok && !page && (await caches.has(CACHE))) await (await caches.open(CACHE)).put(req, res);
 }
 
 self.addEventListener('fetch', (event) => {
