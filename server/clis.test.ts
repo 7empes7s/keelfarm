@@ -185,6 +185,15 @@ describe('launchArgs', () => {
     expect(resumed).toContain('--dangerously-bypass-approvals-and-sandbox');
   });
 
+  it("runs a consult read-only on Codex and Gemini CLI too (#637): Codex's read-only sandbox, Gemini's plan mode", () => {
+    const codex = launchArgs('codex', ctx({ readOnly: true })).args;
+    expect(codex).not.toContain('--dangerously-bypass-approvals-and-sandbox');
+    expect(codex.join(' ')).toContain('--sandbox read-only --ask-for-approval never');
+    const gemini = launchArgs('gemini', ctx({ readOnly: true })).args;
+    expect(gemini.slice(0, 2)).toEqual(['--approval-mode', 'plan']);
+    expect(launchArgs('gemini', ctx()).args.slice(0, 2)).toEqual(['--approval-mode', 'yolo']);
+  });
+
   it("gives Codex the office's hooks, with the office's address in its environment", () => {
     const { args, env } = launchArgs('codex', ctx());
     const hooks = args.filter((a) => a.startsWith('hooks.'));

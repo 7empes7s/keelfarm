@@ -954,6 +954,7 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
     ...(opts.office && !box && cli !== 'claude' ? { office: `${officeUrl}/api/mcp/${token}` } : {}),
     ...(cli === 'claude' && opts.tools ? { tools: opts.tools } : {}),
     ...(box ? { node: 'node', posix: true } : {}),
+    ...(opts.readOnly ? { readOnly: true } : {}),
   });
 
   const env = cliEnv(process.env, launch.env, box ? { box: { ...box.env, CUBEFARM_STATUS: statusLine } } : { machine: opts.env });

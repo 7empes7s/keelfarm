@@ -237,6 +237,18 @@ describe('account rotation', { timeout: 30_000 }, () => {
     expect(i.state.messages.filter((m) => m.switch)).toHaveLength(0); // an agent's switch isn't a chat pill
   });
 
+  it("a consult of a Codex agent runs on Codex and its account, never a signed-out Claude Code (#637)", async () => {
+    const { swarm, repo, runs } = await office([]);
+    (swarm as unknown as { clis: unknown[] }).clis = ['claude', 'codex'].map((id) => ({ id, label: id, installed: true, version: 'demo', integrated: id === 'claude' }));
+    const grace = swarm.hireAgent(repo.id, { name: 'Grace', strict: true });
+    swarm.updateAgent(grace.id, { cli: 'codex' });
+    await wait(10_000);
+    const before = runs.length;
+    void (swarm as unknown as { consult(x: object): Promise<string> }).consult({ floor: repo.floor, agent_id: grace.id, question: 'How does the approval flow work?' }).catch(() => '');
+    await wait(5_000);
+    expect(runs.slice(before).filter((r) => r.role !== 'ceo')).toEqual([expect.objectContaining({ cli: 'codex', account: 'codex-login' })]);
+  });
+
   it("an agent configured as Claude on a Codex fallback is on the Codex login's On it now, not Claude's (#409)", async () => {
     const { swarm, repo, runs } = await office(['claude-login', 'claude-keelop', 'claude-apikey']);
     swarm.updateSettings({ rotation: { on: true, apiLast: true, ceoClis: [], agentsSwitchCli: true } });
@@ -504,7 +516,8 @@ describe('sessions on a fresh login', { timeout: 30_000 }, () => {
 
   it('a pinned agent that falls back says why, on their chip and to the CEO, once (#579)', async () => {
     const { swarm, repo, i, runs } = await office([]);
-    swarm.accounts.signedOut('claude-keelop');
+    void swarm.accounts.sessionSignedOut('claude-keelop', true); // a session showed its sign-in screen
+    await wait(1_000);
     const ada = swarm.hireAgent(repo.id, { name: 'Ada', strict: true });
     swarm.updateAgent(ada.id, { account: 'claude-keelop' });
     await wait(10_000);

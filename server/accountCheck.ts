@@ -6,10 +6,15 @@ import path from 'node:path';
 import { checkUsage, loginOwner, loginPlan, oauthReadings, tokenOf, type UsageCheck } from './usagePoll.ts';
 import { readCodexLimits } from './codexLimits.ts';
 import { codexReadings } from '../shared/usageSources.ts';
+import { codexAuthFile, geminiAuthFile, keyProbe, type AuthProbe } from '../shared/accountAuth.ts';
 import type { AccountCli, AccountKind, UsageReading } from '../shared/types.ts';
 
 export interface AccountCheck {
   signedIn: boolean; // a login on file, or a key the provider accepts
+  /** What the check found for its sign-in (#637, shared/accountAuth.ts); absent: read from signedIn and refresh. */
+  auth?: AuthProbe;
+  /** When its login file (.credentials.json, auth.json, oauth_creds.json) was last written: a rewrite after a sign-in failure is a fresh login. */
+  fileAt?: number;
   readings: UsageReading[];
   note: string; // one line for the manager
   refresh?: boolean; // a Claude login whose access token expired: its next session refreshes it (#442)
@@ -31,22 +36,32 @@ const get = async (url: string, headers: Record<string, string>): Promise<number
   }
 };
 
-const keyNote = (status: number, who: string): AccountCheck =>
-  status === 200
-    ? { signedIn: true, readings: [], note: `✓ ${who} accepted the key.` }
-    : status === 401 || status === 403
-      ? { signedIn: false, readings: [], note: `${who} turned the key away (${status}): paste a new one.` }
-      : { signedIn: true, readings: [], note: `Couldn't reach ${who}${status ? ` (${status})` : ''}: try again in a minute.` };
+/** A key's check from its HTTP status (pure): a network failure, 429 or 5xx is no news, never a turned-away key. */
+export const keyNote = (status: number, who: string): AccountCheck => {
+  const auth = keyProbe(status);
+  return auth === 'ok'
+    ? { signedIn: true, auth, readings: [], note: `✓ ${who} accepted the key.` }
+    : auth === 'out'
+      ? { signedIn: false, auth, readings: [], note: `${who} turned the key away (${status}): paste a new one.` }
+      : { signedIn: true, auth, readings: [], note: `Couldn't reach ${who}${status ? ` (${status})` : ''}: try again in a minute.` };
+};
+
+/**
+ * A setup token's check on the usage endpoint (pure): 401 turned it away; 403 is the endpoint, not the token (a setup
+ * token's inference-only scope may not read usage), so it isn't Signed out; the rest no news.
+ */
+export const setupTokenNote = (status: number): AccountCheck => (status === 403 ? { signedIn: true, auth: 'ok', readings: [], note: '✓ Anthropic knows the token; its usage isn\'t readable with it.' } : keyNote(status, 'Anthropic'));
 
 /**
  * A Claude login's Test from its usage check (pure). An expired access token with a refresh token on file is signed in:
  * the office never refreshes it (a running session may rotate the refresh token), its next session does (#442).
  */
 export function claudeLoginCheck(res: UsageCheck): AccountCheck {
-  if ('readings' in res) return { signedIn: true, readings: res.readings, ...(res.noFiveHour && { noFiveHour: true }), note: '✓ Signed in; usage read.' };
-  if (res.error === 'failed') return { signedIn: true, readings: [], note: "Signed in, but its usage couldn't be read just now." };
-  if (res.error === 'expired' && res.refresh) return { signedIn: true, readings: [], refresh: true, note: '✓ Signed in; its token refreshes on its next session.' };
-  return { signedIn: false, readings: [], note: res.error === 'expired' ? 'Its sign-in expired: tap Sign in again.' : 'Not signed in yet: tap Sign in.' };
+  if ('readings' in res) return { signedIn: true, auth: 'ok', readings: res.readings, ...(res.noFiveHour && { noFiveHour: true }), note: '✓ Signed in; usage read.' };
+  // Network, 429, 5xx or an unreadable answer: no news about its sign-in (#637), never Signed out nor a made-up Ready.
+  if (res.error === 'failed') return { signedIn: true, auth: 'error', readings: [], note: "Couldn't read its usage just now: its sign-in is shown as last known." };
+  if (res.error === 'expired' && res.refresh) return { signedIn: true, auth: 'refresh', readings: [], refresh: true, note: '✓ Signed in; its token refreshes on its next session.' };
+  return { signedIn: false, auth: 'out', readings: [], note: res.error === 'expired' ? 'Its sign-in expired: tap Sign in again.' : 'Not signed in yet: tap Sign in.' };
 }
 
 /**
@@ -79,41 +94,49 @@ export async function readLoginFile(dir: string, now = Date.now()): Promise<Logi
   return raw === null || !st ? null : { state: loginFileState(raw, now), changedAt: st.mtimeMs };
 }
 
-/**
- * Whether the built-in Claude login is signed in, from its file (#579, pure): not when there's no token or it expired
- * with nothing to refresh it, nor when a session found it signed out (`outAt`) and the file hasn't changed since (a
- * sign-in or a refresh rewrites it). null: no file to judge by, so it stays as it was.
- */
-export function loginSignedIn(file: LoginFile | null, outAt: number | null): boolean | null {
-  if (!file) return null;
-  if (file.state === 'out') return false;
-  return outAt === null || file.changedAt > outAt;
-}
+/** Each CLI's login file in its folder: where its sign-in and its refreshes write. */
+const LOGIN_FILE: Record<AccountCli, string[]> = { claude: ['.credentials.json'], codex: ['auth.json'], gemini: ['.gemini', 'oauth_creds.json'] };
 
 /** Test an account: `dir` is its login folder, `secret` its key or token ('' for a login). Never throws. */
 export async function checkAccount(a: CheckTarget, dir: string, secret: string): Promise<AccountCheck> {
-  if (a.kind === 'subscription-login') {
+  if (a.kind !== 'subscription-login') return checkKey(a, secret);
+  const st = await fs.stat(path.join(dir, ...LOGIN_FILE[a.cli])).catch(() => null);
+  const r = await checkLogin(a, dir);
+  return st && r.auth !== 'out' ? { ...r, fileAt: st.mtimeMs } : r;
+}
+
+async function checkLogin(a: CheckTarget, dir: string): Promise<AccountCheck> {
+  {
+    const read = (...p: string[]) => fs.readFile(path.join(dir, ...p), 'utf8').catch(() => null);
     if (a.cli === 'codex') {
-      const ok = !!(await fs.stat(path.join(dir, 'auth.json')).catch(() => null));
-      if (!ok) return { signedIn: false, readings: [], note: 'Not signed in yet: tap Sign in.' };
+      // Its auth.json read, not just found (#637): an API key, or ChatGPT tokens Codex refreshes itself.
+      const auth = codexAuthFile(await read('auth.json'), Date.now());
+      if (auth === 'out') return { signedIn: false, auth, readings: [], note: 'Not signed in: tap Sign in.' };
       const readings = codexReadings(await readCodexLimits(dir), Date.now());
-      return { signedIn: true, readings, note: readings.length ? '✓ Signed in; usage read.' : '✓ Signed in.' };
+      return { signedIn: true, auth, readings, ...(auth === 'refresh' && { refresh: true }), note: auth === 'refresh' ? '✓ Signed in; its token refreshes on its next session.' : readings.length ? '✓ Signed in; usage read.' : '✓ Signed in.' };
     }
     if (a.cli === 'gemini') {
-      // Its Google sign-in, in <GEMINI_CLI_HOME>/.gemini. Gemini CLI writes its quota nowhere: limits come from its sessions.
-      const ok = !!(await fs.stat(path.join(dir, '.gemini', 'oauth_creds.json')).catch(() => null));
-      return ok ? { signedIn: true, readings: [], note: '✓ Signed in.' } : { signedIn: false, readings: [], note: 'Not signed in yet: tap Sign in.' };
+      // Its Google sign-in, where Gemini CLI keeps it: <GEMINI_CLI_HOME>/.gemini/oauth_creds.json, or its encrypted
+      // gemini-credentials.json under GEMINI_FORCE_ENCRYPTED_FILE_STORAGE (unreadable here, so its sessions decide).
+      // Gemini CLI writes its quota nowhere: limits come from its sessions.
+      const creds = await read('.gemini', 'oauth_creds.json');
+      const auth = creds === null && (await read('.gemini', 'gemini-credentials.json')) ? 'ok' : geminiAuthFile(creds, Date.now());
+      if (auth === 'out') return { signedIn: false, auth, readings: [], note: 'Not signed in: tap Sign in.' };
+      return { signedIn: true, auth, readings: [], ...(auth === 'refresh' && { refresh: true }), note: auth === 'refresh' ? '✓ Signed in; its token refreshes on its next session.' : '✓ Signed in.' };
     }
     return { ...claudeLoginCheck(await checkUsage({ CLAUDE_CONFIG_DIR: dir })), ...(await readClaudeLogin(dir)) };
   }
-  if (!secret) return { signedIn: false, readings: [], note: 'No key saved yet.' };
+}
+
+async function checkKey(a: CheckTarget, secret: string): Promise<AccountCheck> {
+  if (!secret) return { signedIn: false, auth: 'out', readings: [], note: 'No key saved yet.' };
   if (a.cli === 'codex') return keyNote(await get('https://api.openai.com/v1/models', { Authorization: `Bearer ${secret}` }), 'OpenAI');
   if (a.kind === 'api-key') return keyNote(await get('https://api.anthropic.com/v1/models?limit=1', { 'x-api-key': secret, 'anthropic-version': '2023-06-01' }), 'Anthropic');
   // A setup token reads its subscription's usage like a login does.
   try {
     const res = await fetch('https://api.anthropic.com/api/oauth/usage', { headers: { Authorization: `Bearer ${secret}`, 'anthropic-beta': 'oauth-2025-04-20' }, signal: AbortSignal.timeout(10_000) });
-    if (res.ok) return { signedIn: true, readings: oauthReadings(await res.json(), Date.now()), note: '✓ Anthropic accepted the token.' };
-    return keyNote(res.status, 'Anthropic');
+    if (res.ok) return { signedIn: true, auth: 'ok', readings: oauthReadings(await res.json(), Date.now()), note: '✓ Anthropic accepted the token.' };
+    return setupTokenNote(res.status);
   } catch {
     return keyNote(0, 'Anthropic');
   }

@@ -173,6 +173,8 @@ export interface LaunchContext {
   node?: string;
   /** The CLI runs on Linux (a cloud agent's Box), whatever this computer is. */
   posix?: boolean;
+  /** A consult (#637): Codex in its read-only sandbox, Gemini CLI in its read-only plan mode (Claude Code's hooks refuse edits). */
+  readOnly?: boolean;
 }
 
 /** Pinned for cloud agents' Boxes (docs/cloud.md); Claude Code and Playwright's MCP follow the office's own (boxVersions). */
@@ -313,8 +315,8 @@ export function launchArgs(id: AgentCli, ctx: LaunchContext): Launch {
         'commit_attribution=""', // no "Co-authored-by: Codex" in its commits (#599)
         ...CODEX_HOOK_EVENTS.flatMap((e) => ['-c', `hooks.${e}=[{hooks=[{type="command",command=${toml(codexHookCommand(ctx.node ?? process.execPath, ctx.codexHook, ctx.posix ? false : WIN))},timeout=10}]}]`]),
         // Like the manager's own Codex, but it can't stop to ask: no approvals and no sandbox (its sandbox can't reach
-        // the credential store, so git and gh fail in it).
-        '--dangerously-bypass-approvals-and-sandbox',
+        // the credential store, so git and gh fail in it). A consult only reads: its read-only sandbox.
+        ...(ctx.readOnly ? ['--sandbox', 'read-only', '--ask-for-approval', 'never'] : ['--dangerously-bypass-approvals-and-sandbox']),
       ];
       return { args: ctx.resumeId ? ['resume', ...args, ctx.resumeId, ctx.prompt] : [...args, '--', ctx.prompt], env: { CUBEFARM_HOOK_URL: ctx.notify.url } };
     }
@@ -357,7 +359,7 @@ export function launchArgs(id: AgentCli, ctx: LaunchContext): Launch {
       // It can't stop to ask: yolo approves every tool call, --skip-trust trusts the worktree for this session.
       const args = [
         '--approval-mode',
-        'yolo',
+        ctx.readOnly ? 'plan' : 'yolo',
         '--skip-trust',
         ...(/^(gemini|auto)/i.test(ctx.model) ? ['--model', ctx.model] : []), // another CLI's model means its default
         ...(ctx.resumeId ? ['--resume', ctx.resumeId] : []),

@@ -5,6 +5,7 @@ import { EventEmitter } from 'node:events';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { WebSocket } from 'ws';
 import { Accounts, type AccountsDeps } from './accounts.ts';
+import type { AccountCheck } from './accountCheck.ts';
 import { UsageBoard } from './usageSources.ts';
 import { createDemoBackend } from './demo.ts';
 import { Swarm } from './swarm.ts';
@@ -61,7 +62,9 @@ describe('Accounts', () => {
     expect(card()).toMatchObject({ status: 'ready', tokenRefresh: true, loginPlan: 'Pro', planWarning: 'Signed in with a Pro account, not Ultra' });
     accounts.limited('claude-login', Date.now() + 3600_000);
     expect(accounts.use(undefined, 'claude')?.id).toBe(ultra.id);
-    accounts.signedOut(ultra.id); // its session couldn't sign in
+    expect(await accounts.sessionSignedOut(ultra.id)).toBe(true); // its session couldn't sign in, but the probe finds a token to refresh: once more (#637)
+    expect(card().status).toBe('ready');
+    expect(await accounts.sessionSignedOut(ultra.id)).toBe(false); // twice in a row: really out
     expect(await accounts.test(ultra.id)).toMatch(/couldn't sign in/);
     expect(card().status).toBe('signed-out');
     expect(card().tokenRefresh).toBeUndefined();
@@ -74,7 +77,7 @@ describe('Accounts', () => {
     const status = () => accounts.view().accounts.find((a) => a.id === 'claude-login')!.status;
     await poll();
     expect(status()).toBe('ready');
-    accounts.signedOut('claude-login'); // a session showed its sign-in screen
+    await accounts.sessionSignedOut('claude-login', true); // a session showed its sign-in screen
     await poll();
     expect(status()).toBe('signed-out'); // the same file: still out, not back on the next poll
     file = { state: 'in', changedAt: Date.now() + 1000 }; // signed in again in a terminal
@@ -83,6 +86,45 @@ describe('Accounts', () => {
     file = { state: 'out', changedAt: Date.now() + 2000 }; // expired, nothing to refresh it
     await poll();
     expect(status()).toBe('signed-out');
+  });
+
+  it("one sign-in state for card, rotation and launch (#637): a network failure is no news, a stale probe can't overwrite, a session's word is re-probed", async () => {
+    let answer: AccountCheck = { signedIn: true, auth: 'error', readings: [], note: "couldn't reach" };
+    let gate: Promise<void> = Promise.resolve();
+    const { accounts } = await office({
+      rotation: () => ({ on: true, apiLast: true, ceoClis: [], agentsSwitchCli: false }),
+      check: async (a) => (a.builtIn ? { signedIn: true, readings: [], note: 'ok' } : (await gate, answer)),
+    });
+    const pro = await accounts.add({ cli: 'claude', kind: 'subscription-login', label: 'Claude Pro' });
+    const card = () => accounts.view().accounts.find((a) => a.id === pro.id)!;
+    accounts.limited('claude-login', Date.now() + 3600_000); // so the rotation's only choice is Pro
+    await accounts.test(pro.id);
+    expect(card().status).toBe('signed-out'); // never reached: not a made-up Ready...
+    expect(accounts.hasFree('claude')).toBe(false);
+    answer = { signedIn: true, auth: 'ok', readings: [{ type: 'seven_day', pct: 7, resetsAt: Date.now() + 86_400_000, at: Date.now() }, { type: 'five_hour', pct: 51, resetsAt: Date.now() + 3600_000, at: Date.now() }], note: 'read' };
+    await accounts.test(pro.id);
+    expect(card().status).toBe('ready');
+    answer = { signedIn: true, auth: 'error', readings: [], note: "couldn't reach" };
+    await accounts.test(pro.id);
+    expect(card()).toMatchObject({ status: 'ready', authNote: "Couldn't reach the provider just now: shown as last known." }); // ...nor Signed out
+    // "Claude Code stopped: authentication failed" at 7% / 51%: re-probed, it's signed in, so it stays in the rotation.
+    answer = { signedIn: true, auth: 'ok', readings: [], note: 'read' };
+    expect(await accounts.sessionSignedOut(pro.id)).toBe(true);
+    expect(card().status).toBe('ready');
+    expect(accounts.view().next?.claude).toBe(pro.id);
+    expect(accounts.use(undefined, 'claude')?.id).toBe(pro.id);
+    // A slow poll that started before a session's sign-in screen comes back "ok": the newer evidence stands.
+    let open = () => undefined as void;
+    gate = new Promise((r) => (open = r));
+    const slow = accounts.test(pro.id);
+    gate = Promise.resolve();
+    await accounts.sessionSignedOut(pro.id, true);
+    open();
+    await slow;
+    expect(card().status).toBe('signed-out');
+    expect(accounts.hasFree('claude')).toBe(false);
+    accounts.ran(pro.id); // a session that ran on it after all
+    expect(card().status).toBe('ready');
   });
 
   it('notes two logins on the same subscription, never sending who owns them (#460)', async () => {

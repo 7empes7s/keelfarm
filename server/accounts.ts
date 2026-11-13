@@ -11,7 +11,8 @@ import { shareLogin, shareStatus, unshareLogin } from './sharedLogin.ts';
 import { mergeSecrets, readSecrets } from './secrets.ts';
 import { AgentTerminal } from './terminal.ts';
 import { POLL_MS } from './usagePoll.ts';
-import { loginSignedIn, type AccountCheck, type LoginFile } from './accountCheck.ts';
+import type { AccountCheck, LoginFile } from './accountCheck.ts';
+import { authAfter, authNote, authUsable, type AuthEvidence, type AuthProbe, type AuthRecord } from '../shared/accountAuth.ts';
 import type { BoxSignIn } from './cliRunner.ts';
 import {
   accountDir,
@@ -103,10 +104,8 @@ export interface NewAccount {
 export class Accounts {
   private secrets = new Map<string, string>();
   private usage = new Map<string, UsageReading[]>();
-  private signedIn = new Map<string, boolean>();
-  private sessionOut = new Set<string>(); // a session found it signed out: a poll's expired-but-refreshable token doesn't put it back (#442)
-  private outAt = new Map<string, number>(); // when a session found it signed out: the built-in login's file must change after (#579)
-  private refresh = new Set<string>(); // Claude logins whose access token expired, for their next session to refresh (#442)
+  /** Each account's sign-in, from every probe, session, sign-in and login file (#637, shared/accountAuth.ts): the one state everything reads. */
+  private auth = new Map<string, AuthRecord>();
   private plans = new Map<string, string | null>(); // the plan each Claude login really has (#442)
   private owners = new Map<string, string | null>(); // who each Claude login belongs to, never sent to tabs (#460)
   private running = new Map<string, number>();
@@ -232,6 +231,23 @@ export class Accounts {
     return this.secrets.get(a.id) ?? '';
   }
 
+  // ---------- sign-in state (#637) ----------
+
+  /** Whether a session may start on it: its auth record, else a built-in login (or a saved key) counts as signed in until something says otherwise. */
+  private usable(a: ProviderAccount): boolean {
+    if (a.kind !== 'subscription-login' && !this.secretOf(a)) return false;
+    return authUsable(this.auth.get(a.id), a.kind !== 'subscription-login' || !!a.builtIn);
+  }
+
+  private evidence(id: string, ev: AuthEvidence) {
+    this.auth.set(id, authAfter(this.auth.get(id), ev));
+  }
+
+  /** The account's sign-in record (tests, company_status). */
+  authOf(id: string): AuthRecord | undefined {
+    return this.auth.get(id);
+  }
+
   // ---------- views ----------
 
   /** Each account with what its status is read from: signed in, usage, today's spend (and sessions). */
@@ -239,7 +255,7 @@ export class Accounts {
     return this.list().map((a) => {
       const usage = a.builtIn && a.cli === 'claude' ? this.deps.builtInUsage() : (this.usage.get(a.id) ?? []);
       const spend = accountSpend(lines, a, now);
-      const signedIn = a.kind === 'subscription-login' ? (this.signedIn.get(a.id) ?? !!a.builtIn) : !!this.secretOf(a) && this.signedIn.get(a.id) !== false;
+      const signedIn = this.usable(a);
       return { account: a, signedIn, usage, todayUsd: spend.usd, sessions: spend.sessions };
     });
   }
@@ -268,7 +284,8 @@ export class Accounts {
             ...(plan ? { loginPlan: plan } : {}),
             ...(warning ? { planWarning: warning } : {}),
             ...(shared.has(a.id) ? { sameAs: shared.get(a.id) } : {}),
-            ...(this.refresh.has(a.id) && signedIn ? { tokenRefresh: true } : {}),
+            ...(this.auth.get(a.id)?.state === 'refresh' ? { tokenRefresh: true } : {}),
+            ...(authNote(this.auth.get(a.id)) && this.auth.get(a.id)?.state !== 'refresh' ? { authNote: authNote(this.auth.get(a.id))! } : {}),
             ...(this.ownsFolder(a) ? { shareMissing: shareStatus(this.dirOf(a), this.shareSource()) } : {}),
           };
         });
@@ -331,6 +348,12 @@ export class Accounts {
     return a ? this.take(a) : null;
   }
 
+  /** The same account once more (#637): a session's sign-in failure the probe didn't confirm; null once it's gone or out. */
+  again(id: string): AccountUse | null {
+    const a = this.list().find((x) => x.id === id);
+    return a && !a.removing && this.usable(a) ? this.take(a) : null;
+  }
+
   /**
    * Whether rotation would start a new session of `cli` on some account right now: rotation is on and one is ready
    * (or near its limit). A full window on one login then only rests that login, not the office.
@@ -375,9 +398,16 @@ export class Accounts {
   /** A session on an account reported its usage. */
   readings(id: string, readings: UsageReading[]) {
     this.usage.set(id, mergeReadings(this.usage.get(id) ?? [], readings));
-    this.refresh.delete(id); // its session ran, so its token is fresh again
+    this.evidence(id, { kind: 'ok', from: 'session', at: Date.now() }); // its session ran, so its token is fresh again
     this.roomAgain(id, this.usage.get(id) ?? []);
     this.emit();
+  }
+
+  /** A session on it finished its work: it's signed in, whatever was said before (#637). */
+  ran(id: string) {
+    const was = this.auth.get(id)?.state;
+    this.evidence(id, { kind: 'ok', from: 'session', at: Date.now() });
+    if (was !== 'ready') this.emit();
   }
 
   /** The built-in Claude login's readings (the office keeps them, claudeUsage) changed: its limit may be over. */
@@ -408,13 +438,18 @@ export class Accounts {
     if (a?.limitedUntil) this.replace({ ...a, limitedUntil: null });
   }
 
-  /** A session on an account found its login expired or its key turned away: out of the rotation until a Test or sign-in says otherwise. */
-  signedOut(id: string, now = Date.now()) {
-    this.signedIn.set(id, false);
-    this.sessionOut.add(id);
-    this.outAt.set(id, now);
-    this.refresh.delete(id);
+  /**
+   * A session on an account ended on a sign-in, an expired login or a turned-away key (#637): it's re-probed before it
+   * reads Signed out (`screen`: its CLI showed its own sign-in screen, which is out at once; only a rewritten login file or a sign-in brings it back). Resolves to whether a session may start on it again (the probe found a token, or couldn't reach
+   * the provider) — at most SESSION_TRIES sessions in a row, then it's Signed out until a sign-in or a session that ran.
+   */
+  async sessionSignedOut(id: string, screen = false, now = Date.now()): Promise<boolean> {
+    const a = this.list().find((x) => x.id === id);
+    if (!a) return false;
+    this.evidence(id, { kind: 'out', from: 'session', at: now, ...(screen && { hard: true }) });
     this.emit();
+    await this.test(id).catch(() => undefined);
+    return this.usable(this.list().find((x) => x.id === id) ?? a);
   }
 
   label(id: string): string {
@@ -475,7 +510,7 @@ export class Accounts {
       if (!check.signedIn) throw new HttpError(400, check.note);
       this.secrets.set(a.id, key);
       await mergeSecrets(this.deps.secretsFile, { [secretKey(a.id)]: key });
-      this.signedIn.set(a.id, true);
+      this.evidence(a.id, { kind: 'ok', from: 'signin', at: Date.now() });
     } else if (kind === 'setup-token') {
       const name = String(x.tokenEnv ?? '').trim();
       if (!ENV_NAME.test(name)) throw new HttpError(400, 'Name the environment variable that holds the token, e.g. CUBEFARM_CLAUDE_TOKEN_2.');
@@ -521,7 +556,7 @@ export class Accounts {
     const check = await this.deps.check(a, '', key);
     if (!check.signedIn) throw new HttpError(400, check.note);
     this.secrets.set(id, key);
-    this.signedIn.set(id, true);
+    this.evidence(id, { kind: 'ok', from: 'signin', at: Date.now() });
     await mergeSecrets(this.deps.secretsFile, { [secretKey(id)]: key });
     this.emit();
     return check.note;
@@ -530,16 +565,12 @@ export class Accounts {
   /** POST /api/accounts/:id/test: is it signed in (and its usage), or does the provider take the key. */
   async test(id: string): Promise<string> {
     const a = this.find(id);
+    const at = Date.now(); // the probe's start: evidence that comes in meanwhile is newer and wins (#637)
     const r = await this.deps.check(a, this.dirOf(a), this.secretOf(a));
-    // An expired token to refresh counts as signed in (#442), unless a session already failed to sign in with it.
-    const out = !!r.refresh && this.sessionOut.has(id);
-    if (r.signedIn && !r.refresh) {
-      this.sessionOut.delete(id);
-      this.outAt.delete(id);
-    }
-    this.signedIn.set(id, r.signedIn && !out);
-    if (r.refresh && !out) this.refresh.add(id);
-    else this.refresh.delete(id);
+    if (!this.list().some((x) => x.id === id)) return r.note; // removed meanwhile
+    // Its login file rewritten after the newest evidence is a fresh login (a sign-in, or its CLI's refresh); then the probe.
+    if (r.fileAt !== undefined && probeOf(r) !== 'out') this.evidence(id, { kind: r.refresh ? 'refresh' : 'ok', from: 'file', at: r.fileAt });
+    this.evidence(id, { kind: probeOf(r), from: 'probe', at });
     if (r.plan !== undefined) this.plans.set(id, r.plan);
     if (r.who !== undefined) this.owners.set(id, r.who);
     if (r.readings.length) this.usage.set(id, mergeReadings(this.usage.get(id) ?? [], r.readings));
@@ -550,7 +581,8 @@ export class Accounts {
     const cur = this.list().find((x) => x.id === id);
     if (cur?.limitedUntil && cur.limitedUntil > now && r.readings.length && r.readings.every((x) => x.pct < NEAR_OUT_PCT)) this.replace({ ...cur, limitedUntil: null });
     this.emit();
-    return out ? "Its last session couldn't sign in: tap Sign in again." : r.note;
+    const rec = this.auth.get(id);
+    return rec?.state === 'signed-out' && probeOf(r) !== 'out' ? (authNote(rec) ?? r.note) : r.note;
   }
 
   private async pollAll() {
@@ -573,13 +605,12 @@ export class Accounts {
 
   /** The built-in Claude login's sign-in from its credentials file (#579): signed out, limited and signed in told apart without a request. */
   private builtInFile(id: string, file: LoginFile | null) {
-    const on = loginSignedIn(file, this.outAt.get(id) ?? null);
-    if (on === null) return;
-    if (on) {
-      this.signedIn.delete(id); // the built-in login's default: signed in
-      this.sessionOut.delete(id);
-      this.outAt.delete(id);
-    } else this.signedIn.set(id, false);
+    if (!file) return; // a keychain or a token in the environment: nothing to judge by
+    // A token in it counts from when the file was written: a session's sign-in failure after that still stands (#579).
+    if (file.state === 'out') this.evidence(id, { kind: 'out', from: 'file', at: Math.max(Date.now(), file.changedAt) });
+    else this.evidence(id, { kind: file.state === 'in' ? 'ok' : 'refresh', from: 'file', at: file.changedAt });
+    // A session's sign-in failure the file can't settle (it hasn't changed since): the usage endpoint can.
+    if (this.auth.get(id)?.state === 'signed-out' && file.state !== 'out') void this.test(id).catch(() => undefined);
   }
 
   /** The terminal a login signs in in (/ws/term?agent=account:<id>), made when it's first asked for. */
@@ -646,7 +677,10 @@ export class Accounts {
         const end = signInEnd(mode, code, term.unwrapped().split('\n')); // joined: a narrow phone's terminal wraps the reason (#350)
         this.runs.set(id, { mode, running: false, ...end });
         if (!end.ok) term.note(end.note);
-        else this.back(id); // a new login, maybe another account: its old limit isn't its (a real one comes back on its next session)
+        else {
+          this.back(id); // a new login, maybe another account: its old limit isn't its (a real one comes back on its next session)
+          this.evidence(id, { kind: 'ok', from: 'signin', at: Date.now() }); // obsolete sign-out evidence goes; the Test below has the last word
+        }
         this.emit();
         void this.test(id).catch(() => undefined);
       });
@@ -742,9 +776,7 @@ export class Accounts {
     this.terms.delete(a.id);
     this.secrets.delete(a.id);
     this.usage.delete(a.id);
-    this.signedIn.delete(a.id);
-    this.sessionOut.delete(a.id);
-    this.refresh.delete(a.id);
+    this.auth.delete(a.id);
     this.plans.delete(a.id);
     this.owners.delete(a.id);
     this.running.delete(a.id);
@@ -772,3 +804,6 @@ function checkKey(cli: AccountCli, raw: unknown): string {
   if (wrong) throw new HttpError(400, wrong);
   return key;
 }
+
+/** What a check found for its sign-in: its own word, else read from signedIn and refresh (the demo's checks). */
+const probeOf = (r: AccountCheck): AuthProbe => r.auth ?? (!r.signedIn ? 'out' : r.refresh ? 'refresh' : 'ok');
