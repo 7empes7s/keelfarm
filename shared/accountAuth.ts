@@ -9,7 +9,7 @@
 export type AuthProbe = 'ok' | 'refresh' | 'out' | 'error';
 
 /** Where a piece of evidence came from. */
-export type AuthSource = 'probe' | 'session' | 'signin' | 'file';
+type AuthSource = 'probe' | 'session' | 'signin' | 'file';
 
 export interface AuthEvidence {
   kind: AuthProbe;
@@ -27,7 +27,7 @@ export interface AuthEvidence {
  * - signed-out: no login, a token turned away with nothing to refresh it, or sessions failed to sign in SESSION_TRIES times.
  * - unknown: nothing known yet (never probed, or only probes that couldn't reach the provider).
  */
-export type AuthState = 'ready' | 'refresh' | 'checking' | 'signed-out' | 'unknown';
+type AuthState = 'ready' | 'refresh' | 'checking' | 'signed-out' | 'unknown';
 
 export interface AuthRecord {
   state: AuthState;
@@ -64,8 +64,11 @@ export function authAfter(prev: AuthRecord | undefined, ev: AuthEvidence): AuthR
   return { state: ev.kind === 'ok' ? 'ready' : 'refresh', at: ev.at, fails: p.fails };
 }
 
-/** Whether a session may start on it: anything but checking or signed out. */
-export const authUsable = (r: AuthRecord | undefined, fallback: boolean) => (r && r.state !== 'unknown' ? r.state !== 'checking' && r.state !== 'signed-out' : fallback);
+/**
+ * Whether a session may start on it: anything but checking or signed out. Never probed: `fallback` (a built-in login or
+ * a saved key yes, another login not yet). A probe that couldn't reach the provider found a credential to send, so yes.
+ */
+export const authUsable = (r: AuthRecord | undefined, fallback: boolean) => (!r || (r.state === 'unknown' && !r.stale) ? fallback : r.state !== 'checking' && r.state !== 'signed-out');
 
 /** One line for its card, when there's something to say. */
 export function authNote(r: AuthRecord | undefined): string | null {

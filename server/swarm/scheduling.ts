@@ -6,6 +6,7 @@ import { CONSULT_DISALLOWED, consultAnswer, consultCli, consultPrompt, nextConsu
 import { clip } from '../notify.ts';
 import { ONE_TURN } from '../prompts.ts';
 import { resolveEffort } from '../../shared/costs.ts';
+import { fullWindowPause } from '../../shared/accountRotation.ts';
 import { redact as scrub } from '../../shared/journal.ts';
 import { mergeSwitches, sessionTools } from '../../shared/tooling.ts';
 import { fixGoesTo, pickTester, pipelineQueue, prepHeld, runnerFor, runsHere, WORK_PHASES } from '../handOut.ts';
@@ -497,7 +498,8 @@ export abstract class SwarmScheduling extends SwarmQa {
         // unless rotation has another Claude account to start it on: then only that login is out (its status already
         // says limited, from these readings). With every account out, the pause lasts until the first one is back.
         const full = res.readings.find((r) => (r.type === 'five_hour' || r.type === 'seven_day') && r.pct >= 100 && r.resetsAt && r.resetsAt > Date.now());
-        if (full && !this.accounts.hasFree('claude')) this.pauseForLimit(this.accounts.rotation().on ? (this.accounts.firstBack('claude') ?? full.resetsAt) : full.resetsAt);
+        const pause = full && fullWindowPause(full.resetsAt!, this.accounts.hasFree('claude'), this.accounts.rotation().on, this.accounts.firstBack('claude'));
+        if (pause) this.pauseForLimit(pause.until, false, pause.allOut);
       })
       .finally(() => (this.usagePolling = false));
   }

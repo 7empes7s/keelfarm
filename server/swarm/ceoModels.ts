@@ -5,6 +5,7 @@ import type { SessionResult } from '../agentRunner.ts';
 import type { CeoJob } from '../ceo.ts';
 import { cliLabel } from '../clis.ts';
 import { HttpError } from '../httpError.ts';
+import { jobWaitsForAccount } from '../../shared/accountRotation.ts';
 import { ceoKeepsSession, ceoModelFor, ceoModelRetry } from '../../shared/ceoModels.ts';
 import { CEO_CLIS, ceoCli, ceoModelOn, ceoRunsText, type CeoRunsOn } from '../../shared/ceoRunsOn.ts';
 import type { AgentCli } from '../../shared/types.ts';
@@ -70,7 +71,8 @@ export abstract class SwarmCeoModels extends SwarmReactions {
 
   /** A job that failed for its model goes back to the queue for the CEO's own model, with one office note; one that ran out of accounts, as it is. */
   protected retryOnCeoModel(a: PersistedAgent, job: CeoJob | null, result: SessionResult, preempted: boolean): boolean {
-    if (job && !preempted && a.status !== 'stopped' && result.outOfAccounts) return true; // every account is out (#248): it waits for the first one back
+    // Every account is out (#248): it waits for the first one back; a reply to the manager fails fast with Retry (#637).
+    if (job && !preempted && a.status !== 'stopped' && result.outOfAccounts) return jobWaitsForAccount(job.kind);
     const ceoModel = this.ceoModel(a);
     if (!job || preempted || a.status === 'stopped' || !ceoModelRetry({ ok: result.ok, errors: result.errors, model: this.ceoRunModel, ceoModel, retried: !!job.onCeoModel })) return false;
     job.onCeoModel = true;

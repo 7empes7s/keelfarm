@@ -11,8 +11,8 @@ import { shareLogin, shareStatus, unshareLogin } from './sharedLogin.ts';
 import { mergeSecrets, readSecrets } from './secrets.ts';
 import { AgentTerminal } from './terminal.ts';
 import { POLL_MS } from './usagePoll.ts';
-import type { AccountCheck, LoginFile } from './accountCheck.ts';
-import { authAfter, authNote, authUsable, type AuthEvidence, type AuthProbe, type AuthRecord } from '../shared/accountAuth.ts';
+import { probeOf, type AccountCheck, type LoginFile } from './accountCheck.ts';
+import { authAfter, authNote, authUsable, type AuthEvidence, type AuthRecord } from '../shared/accountAuth.ts';
 import type { BoxSignIn } from './cliRunner.ts';
 import {
   accountDir,
@@ -235,17 +235,11 @@ export class Accounts {
 
   /** Whether a session may start on it: its auth record, else a built-in login (or a saved key) counts as signed in until something says otherwise. */
   private usable(a: ProviderAccount): boolean {
-    if (a.kind !== 'subscription-login' && !this.secretOf(a)) return false;
-    return authUsable(this.auth.get(a.id), a.kind !== 'subscription-login' || !!a.builtIn);
+    return (a.kind === 'subscription-login' || !!this.secretOf(a)) && authUsable(this.auth.get(a.id), a.kind !== 'subscription-login' || !!a.builtIn);
   }
 
   private evidence(id: string, ev: AuthEvidence) {
     this.auth.set(id, authAfter(this.auth.get(id), ev));
-  }
-
-  /** The account's sign-in record (tests, company_status). */
-  authOf(id: string): AuthRecord | undefined {
-    return this.auth.get(id);
   }
 
   // ---------- views ----------
@@ -284,8 +278,7 @@ export class Accounts {
             ...(plan ? { loginPlan: plan } : {}),
             ...(warning ? { planWarning: warning } : {}),
             ...(shared.has(a.id) ? { sameAs: shared.get(a.id) } : {}),
-            ...(this.auth.get(a.id)?.state === 'refresh' ? { tokenRefresh: true } : {}),
-            ...(authNote(this.auth.get(a.id)) && this.auth.get(a.id)?.state !== 'refresh' ? { authNote: authNote(this.auth.get(a.id))! } : {}),
+            ...authFlags(this.auth.get(a.id)),
             ...(this.ownsFolder(a) ? { shareMissing: shareStatus(this.dirOf(a), this.shareSource()) } : {}),
           };
         });
@@ -403,11 +396,9 @@ export class Accounts {
     this.emit();
   }
 
-  /** A session on it finished its work: it's signed in, whatever was said before (#637). */
+  /** A session on it finished its work: it's signed in, whatever was said before (#637). Its release() tells the tabs. */
   ran(id: string) {
-    const was = this.auth.get(id)?.state;
     this.evidence(id, { kind: 'ok', from: 'session', at: Date.now() });
-    if (was !== 'ready') this.emit();
   }
 
   /** The built-in Claude login's readings (the office keeps them, claudeUsage) changed: its limit may be over. */
@@ -428,8 +419,8 @@ export class Accounts {
     if (!a) return;
     const until = resetsAt ?? now + 60 * 60_000;
     this.replace({ ...a, limitedUntil: until, limitHits: [...recentHits(a.limitHits, now), now], limitSpans: addSpan(a.limitSpans, now, until, now) });
-    // A session's message isn't the last word: the provider's own usage, read a minute later, lifts a limit that isn't there.
-    if (this.deps.poll && a.kind === 'subscription-login' && !a.builtIn) setTimeout(() => void this.test(id).catch(() => undefined), RECHECK_MS).unref?.();
+    // A session's message isn't the last word: the provider's own usage, read now and a minute later, lifts a limit that isn't there (#637).
+    if (this.deps.poll && a.kind === 'subscription-login' && !a.builtIn) for (const ms of [0, RECHECK_MS]) setTimeout(() => void this.test(id).catch(() => undefined), ms).unref?.();
   }
 
   /** Its limit is over (the demo's "End the limit"): back in the rotation now. */
@@ -444,12 +435,12 @@ export class Accounts {
    * the provider) — at most SESSION_TRIES sessions in a row, then it's Signed out until a sign-in or a session that ran.
    */
   async sessionSignedOut(id: string, screen = false, now = Date.now()): Promise<boolean> {
-    const a = this.list().find((x) => x.id === id);
-    if (!a) return false;
+    if (!this.list().some((x) => x.id === id)) return false;
     this.evidence(id, { kind: 'out', from: 'session', at: now, ...(screen && { hard: true }) });
     this.emit();
     await this.test(id).catch(() => undefined);
-    return this.usable(this.list().find((x) => x.id === id) ?? a);
+    const a = this.list().find((x) => x.id === id);
+    return !!a && this.usable(a);
   }
 
   label(id: string): string {
@@ -805,5 +796,5 @@ function checkKey(cli: AccountCli, raw: unknown): string {
   return key;
 }
 
-/** What a check found for its sign-in: its own word, else read from signedIn and refresh (the demo's checks). */
-const probeOf = (r: AccountCheck): AuthProbe => r.auth ?? (!r.signedIn ? 'out' : r.refresh ? 'refresh' : 'ok');
+/** A card's sign-in flags (#637): its token to refresh, or a line on its sign-in being checked, out or unverifiable. */
+const authFlags = (r: AuthRecord | undefined) => (r?.state === 'refresh' ? { tokenRefresh: true } : authNote(r) ? { authNote: authNote(r)! } : {});

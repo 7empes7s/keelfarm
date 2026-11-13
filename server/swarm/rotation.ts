@@ -9,7 +9,7 @@ import { HttpError } from '../httpError.ts';
 import { builtInPrefs, prepareLogin } from '../cliSetup.ts';
 import { cliLabel } from '../clis.ts';
 import { backText, defaultAccount, defaultsBack, defaultText, pruneTaskAccounts, switchNow, taskKey, tasksLeft } from '../../shared/accountDefault.ts';
-import { allOutText, detectLimit, fallbackText, LIMIT_TAIL_LINES, noneSignedIn, noSignInText, pinnedWaits, pinOut, sessionEnd, switchesForCeo, switchHandover, switchText, waitText, type LimitHit, type PinOut } from '../../shared/accountRotation.ts';
+import { allOutText, detectLimit, fallbackText, LIMIT_TAIL_LINES, noneSignedIn, noSignInText, pinnedWaits, pinOut, sessionEnd, stickyAccount, switchesForCeo, switchHandover, switchText, waitText, type LimitHit, type PinOut } from '../../shared/accountRotation.ts';
 import { ACCOUNT_CLIS, LOGIN_ENV } from '../../shared/accounts.ts';
 import { sessionRun } from '../../shared/sessionRun.ts';
 import { readingOf, usedPercent } from '../../shared/usage.ts';
@@ -104,7 +104,7 @@ export abstract class SwarmRotation extends SwarmUsage {
     const rec = key ? this.state.taskAccounts[key] : undefined;
     if (rec?.move) opts = { ...opts, resumeSessionId: undefined, prompt: this.freshPrompt(a, { ...opts, resumeSessionId: undefined }) };
     // Else a session to resume goes back to the account holding it while it's usable (#401).
-    const first = this.accounts.use(a.account, cli, rec && !rec.move ? rec.account : opts.resumeSessionId ? a.sessionAccount : undefined);
+    const first = this.accounts.use(a.account, cli, stickyAccount(a.role, rec, !!opts.resumeSessionId, a.sessionAccount));
     opts = this.resumable(a, opts, cli, first?.id);
     // Pinned to one account that's out and allowed to fall back (#579): it runs elsewhere, and says why.
     const out = a.role === 'ceo' ? null : pinOut(a.account, this.accounts.view().accounts);
@@ -320,9 +320,9 @@ export abstract class SwarmRotation extends SwarmUsage {
         },
         finished: (result) => {
           live.delete(simulate);
+          if (result.ok) this.accounts.ran(use.id); // it signed in and worked: earlier sign-in failures are over (#637)
           use.release();
           done();
-          if (result.ok) this.accounts.ran(use.id); // it signed in and worked: earlier sign-in failures are over (#637)
           // Rotation's sessions re-probe first (rotating); a lone account's is re-probed here, and told only if it's really out.
           if (result.signedOut && !ended) void this.accounts.sessionSignedOut(use.id, true).then((ok) => ok || this.signInLost(a, use, cli, this.fallbackClis(a, opts)));
           if (ended) ended(result, hit);

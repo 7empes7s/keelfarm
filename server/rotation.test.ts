@@ -142,6 +142,22 @@ describe('account rotation', { timeout: 30_000 }, () => {
     expect(swarm.accounts.view().accounts.find((a) => a.id === 'claude-keelop')?.shareMissing).toEqual([]);
   });
 
+  it("the CEO's chat goes back to the primary account between turns once it has room (#637)", async () => {
+    const out = ['claude-login'];
+    const { swarm, runs } = await office(out);
+    const ceoRuns = () => runs.filter((r) => r.role === 'ceo');
+    await swarm.messageCeo('Which account are you on?');
+    await wait(5_000);
+    expect(ceoRuns().map((r) => r.account)).toEqual(['claude-login', 'claude-keelop']); // the fallback
+    out.splice(0); // the primary has room again
+    swarm.accounts.back('claude-login');
+    await wait(60_000);
+    const before = ceoRuns().length;
+    await swarm.messageCeo('And now?');
+    await wait(5_000);
+    expect(ceoRuns().slice(before).map((r) => [r.account, !!r.resume])).toEqual([['claude-login', true]]); // its conversation, on the primary
+  });
+
   it("in the demo, the CEO on a second login moves to the next one mid-job and resumes the same conversation (#377)", async () => {
     const { swarm, runs, ceo, i } = await office([]);
     (ceo() as { account?: string }).account = 'claude-keelop';

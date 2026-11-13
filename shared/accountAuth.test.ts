@@ -50,7 +50,8 @@ describe("an account's sign-in state (#637)", () => {
   it('with nothing known, a built-in login or a saved key counts as signed in; another login waits for its probe', () => {
     expect(authUsable(undefined, true)).toBe(true);
     expect(authUsable(undefined, false)).toBe(false);
-    expect(authUsable({ state: 'unknown', at: 1, fails: 0, stale: true }, true)).toBe(true);
+    expect(authUsable({ state: 'unknown', at: 1, fails: 0 }, false)).toBe(false);
+    expect(authUsable({ state: 'unknown', at: 1, fails: 0, stale: true }, false)).toBe(true); // a probe that couldn't reach the provider isn't Signed out
   });
 });
 

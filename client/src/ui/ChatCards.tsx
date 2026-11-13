@@ -10,6 +10,7 @@ import { iconFor, type IconName } from './icons';
 import { useActionOpen, useRefOpen } from './RefChips';
 import { SignInSheet } from './SignInSheet';
 import { StepLogList } from './ChatLive';
+import { stuckCardNow } from '../../../shared/ceoRunsOn';
 import './chatCards.css';
 
 // The CEO chat's cards (#108): what a reply did as action cards with a live status, its idea card (Accept / Edit /
@@ -170,15 +171,19 @@ export function PacingCard({ text }: { text: string }) {
 }
 
 /** The CEO's session is stuck (#375): the office's line, its terminal, the account's guided sign-in, and Switch back. */
-export function CeoStuckCard({ text, stuck }: { text: string; stuck: ChatCeoStuck }) {
+export function CeoStuckCard({ text, stuck, at }: { text: string; stuck: ChatCeoStuck; at: number }) {
   const [busy, setBusy] = useState(false);
   const [signing, setSigning] = useState(false);
   const account = useStore((s) => s.accounts.accounts.find((a) => a.id === stuck.account));
   const binding = useStore((s) => s.agents[CEO_ID]?.account ?? '');
+  const runningOn = useStore((s) => s.agents[CEO_ID]?.run?.account || null);
+  const next = useStore((s) => s.accounts.next?.ceo ?? null);
+  const lastCeoAt = useStore((s) => s.messages.findLast((m) => m.from === 'ceo')?.at ?? null);
   const terminal = useRefOpen()({ kind: 'agent', agentId: CEO_ID, terminal: true, start: 0, end: 0 });
   const back = stuck.back;
-  const backDone = back !== null && binding === back;
-  const signIn = stuck.kind === 'sign-in' && account?.kind === 'subscription-login' && !account.builtIn;
+  const now = stuckCardNow({ cardAt: at, lastCeoAt, back, binding, runningOn, next });
+  const signIn = !now.over && stuck.kind === 'sign-in' && account?.kind === 'subscription-login' && !account.builtIn;
+  if (now.over) return <NoticePill text={`${text} It's answering again.`} />;
   return (
     <div className="notice-card" role="note">
       <p className="notice-card-title">{text}</p>
@@ -196,12 +201,12 @@ export function CeoStuckCard({ text, stuck }: { text: string; stuck: ChatCeoStuc
             <Icon name="key-round" /> {account.status === 'signed-out' ? 'Sign in' : 'Signed in'}
           </button>
         )}
-        {back !== null && (
-          <button type="button" className="btn" disabled={busy || backDone} onClick={() => {
+        {back !== null && now.showBack && (
+          <button type="button" className="btn" disabled={busy} onClick={() => {
               setBusy(true);
               void api.ceoSwitchBack(back).catch(() => undefined).finally(() => setBusy(false)); // api() already toasted the error
             }}>
-            <Icon name="undo-2" /> {backDone ? `Back on ${stuck.backLabel ?? 'it'}` : `Switch back to ${stuck.backLabel ?? 'the last account'}`}
+            <Icon name="undo-2" /> {`Switch back to ${stuck.backLabel ?? 'the last account'}`}
           </button>
         )}
       </div>

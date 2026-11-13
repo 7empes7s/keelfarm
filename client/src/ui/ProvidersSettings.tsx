@@ -188,6 +188,11 @@ function AccountCard({ a, first, last, isDefault, left, edit, signIn, missing }:
           <Icon name="refresh-cw" /> Token expired: it refreshes on its next session
         </div>
       )}
+      {a.authNote && (
+        <div className="acc-flag acc-flag-warn" role="status">
+          <Icon name="info" /> {a.authNote}
+        </div>
+      )}
       {a.shareMissing && (
         <div className={`acc-flag ${a.shareMissing.length ? 'acc-flag-warn' : ''}`} role="status">
           <Icon name={a.shareMissing.length ? 'triangle-alert' : 'link'} /> {a.shareMissing.length ? `Doesn't share ${a.shareMissing.join(', ')} with this computer's login` : "Shares memory, skills and settings with this computer's login"}

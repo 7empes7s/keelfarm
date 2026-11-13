@@ -241,7 +241,7 @@ export const Bubble = memo(function Bubble({ item, ceoName, quoted, highlight, l
           : m.pacing ? <PacingCard text={officeText(m.text)} />
           : m.problems ? <ProblemsDigestCard text={officeText(m.text)} digest={m.problems} />
           : m.checklist ? <ChecklistCard id={m.checklist.id} />
-          : m.ceoStuck ? <CeoStuckCard text={officeText(m.text)} stuck={m.ceoStuck} />
+          : m.ceoStuck ? <CeoStuckCard text={officeText(m.text)} stuck={m.ceoStuck} at={m.at} />
           : m.accountOut ? <AccountOutCard text={officeText(m.text)} account={m.accountOut.account} />
           : m.ceoRuns ? <CeoRunsPill text={officeText(m.text)} back={m.ceoRuns.back} />
           : <NoticePill text={officeText(m.text)} />}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addSpan, allOutText, detectLimit, endedText, fallbackText, hasRoom, LIMIT_TAIL_LINES, noneSignedIn, noSignInText, pickAccount, pinnedWaits, pinOut, resetTime, rotationSettings, rotationStats, sessionEnd, spanBars, switchesForCeo, switchHandover, switchText, waitText, type Candidate } from './accountRotation';
+import { addSpan, allOutText, fullWindowPause, jobWaitsForAccount, stickyAccount, detectLimit, endedText, fallbackText, hasRoom, LIMIT_TAIL_LINES, noneSignedIn, noSignInText, pickAccount, pinnedWaits, pinOut, resetTime, rotationSettings, rotationStats, sessionEnd, spanBars, switchesForCeo, switchHandover, switchText, waitText, type Candidate } from './accountRotation';
 import type { AccountSwitch, ProviderAccount } from './types';
 
 const NOW = new Date(2026, 10, 7, 13, 0, 0).getTime(); // 13:00 local
@@ -248,5 +248,27 @@ describe('no account signed in (#617)', () => {
       "🔑 No Claude Code account is signed in (Claude login on this computer, Max · keelops), so Ada's issue #3 went back in line. To fix it, run claude in a terminal on this computer and type /login, or tap Sign in.",
     );
     expect(noSignInText('codex', 'Codex', ['Codex login'], "Bo's QA of PR #9")).toContain('run codex login in a terminal on this computer');
+  });
+});
+
+describe("the CEO's account between turns and across a switch (#637)", () => {
+  it('a task stays on its account, an agent on the one it resumes, the CEO never: back to the primary once it has room', () => {
+    expect(stickyAccount('agent', { account: 'claude-pro' }, true, 'claude-ultra')).toBe('claude-pro');
+    expect(stickyAccount('agent', { account: 'claude-pro', move: true }, true, 'claude-ultra')).toBeUndefined();
+    expect(stickyAccount('agent', undefined, true, 'claude-pro')).toBe('claude-pro');
+    expect(stickyAccount('agent', undefined, false, 'claude-pro')).toBeUndefined();
+    expect(stickyAccount('ceo', undefined, true, 'claude-pro')).toBeUndefined(); // the chat resumed on Pro goes back to Ultra
+  });
+
+  it('a reply to the manager that ran out of accounts fails fast with Retry; automated jobs wait for the first one back', () => {
+    expect(jobWaitsForAccount('chat')).toBe(false);
+    expect(jobWaitsForAccount('review')).toBe(true);
+    expect(jobWaitsForAccount('followup')).toBe(true);
+  });
+
+  it('a full window on the built-in login with rotation on is every account out, lifted as soon as one has room', () => {
+    expect(fullWindowPause(5_000, true, true, null)).toBeNull(); // another account has room: no pause
+    expect(fullWindowPause(5_000, false, true, 3_000)).toEqual({ until: 3_000, allOut: true });
+    expect(fullWindowPause(5_000, false, false, 3_000)).toEqual({ until: 5_000, allOut: false });
   });
 });

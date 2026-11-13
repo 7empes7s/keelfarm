@@ -36,6 +36,9 @@ const get = async (url: string, headers: Record<string, string>): Promise<number
   }
 };
 
+/** What a check found for its sign-in: its own word, else read from signedIn and refresh (the demo's checks). */
+export const probeOf = (r: AccountCheck): AuthProbe => r.auth ?? (!r.signedIn ? 'out' : r.refresh ? 'refresh' : 'ok');
+
 /** A key's check from its HTTP status (pure): a network failure, 429 or 5xx is no news, never a turned-away key. */
 export const keyNote = (status: number, who: string): AccountCheck => {
   const auth = keyProbe(status);

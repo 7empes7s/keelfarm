@@ -98,9 +98,9 @@ describe('Accounts', () => {
     const pro = await accounts.add({ cli: 'claude', kind: 'subscription-login', label: 'Claude Pro' });
     const card = () => accounts.view().accounts.find((a) => a.id === pro.id)!;
     accounts.limited('claude-login', Date.now() + 3600_000); // so the rotation's only choice is Pro
+    expect(card().status).toBe('signed-out'); // a new login, not probed yet
     await accounts.test(pro.id);
-    expect(card().status).toBe('signed-out'); // never reached: not a made-up Ready...
-    expect(accounts.hasFree('claude')).toBe(false);
+    expect(card()).toMatchObject({ status: 'ready', authNote: "Couldn't reach the provider just now: shown as last known." }); // never reached: not Signed out, and said so
     answer = { signedIn: true, auth: 'ok', readings: [{ type: 'seven_day', pct: 7, resetsAt: Date.now() + 86_400_000, at: Date.now() }, { type: 'five_hour', pct: 51, resetsAt: Date.now() + 3600_000, at: Date.now() }], note: 'read' };
     await accounts.test(pro.id);
     expect(card().status).toBe('ready');

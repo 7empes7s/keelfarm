@@ -277,6 +277,33 @@ export function allOutText(cliName: string, first: number | null, clock: (t: num
   return `⏸ Every ${cliName} account is out. ${back}${key ? ` Or tap Use API key to carry on now on ${key}, billed per token.` : ''}`;
 }
 
+/**
+ * The account a new session prefers to stay on while it's usable (#390, #401): its task's own, else the account holding
+ * the session it resumes. Never the CEO's (#637): Claude logins share its conversation (#377), so between turns the chat
+ * goes back to the first account with room (the primary, once it has room again) instead of staying on a fallback.
+ */
+export function stickyAccount(role: string | undefined, task: { account: string; move?: boolean } | undefined, resuming: boolean, sessionAccount: string | undefined): string | undefined {
+  if (role === 'ceo') return undefined;
+  if (task) return task.move ? undefined : task.account;
+  return resuming ? sessionAccount : undefined;
+}
+
+/**
+ * Whether a CEO job that ran out of accounts waits in the queue for the first one back (#248). A reply to the manager
+ * doesn't (#637): it fails at once, its message marked ⚠️ with Retry, never a "Replying to you" that hangs.
+ */
+export const jobWaitsForAccount = (kind: string | undefined) => kind !== 'chat';
+
+/**
+ * The pause a full 5-hour or weekly window on the built-in login brings (#637): none while rotation has another account
+ * with room. With rotation on it's every account out, so it lifts as soon as one has room again (liftPauseWhenFree),
+ * not at the reset it first named; with rotation off, at the login's own reset.
+ */
+export function fullWindowPause(resetsAt: number, hasFree: boolean, rotationOn: boolean, firstBack: number | null): { until: number; allOut: boolean } | null {
+  if (hasFree) return null;
+  return rotationOn ? { until: firstBack ?? resetsAt, allOut: true } : { until: resetsAt, allOut: false };
+}
+
 /** What the CEO's next job hears about agents' switches. */
 export const switchesForCeo = (list: readonly AccountSwitch[], clock: (t: number) => string) => list.map((s) => `${s.agentName} is running on ${s.to} because ${outLine(s.from, s.why, s.until, clock)}.`);
 
