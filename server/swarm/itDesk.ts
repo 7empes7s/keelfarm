@@ -5,19 +5,19 @@
 // IT's chat as done automatically with an Undo where there is one. Every command is logged here and in the daily log.
 // Rules in server/itDesk.ts.
 import { existsSync } from 'node:fs';
+import { readdir } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { argvLine, IT_LOG_KEPT, IT_LOG_SHOWN, type ItDeskView, type ItLogEntry, type ItProposal, type ItRisk } from '../../shared/itDesk.ts';
-import { redact as scrub } from '../../shared/journal.ts';
 import type { WorldSnapshot } from '../../shared/types.ts';
 import { HOME_DIR } from '../config.ts';
 import { HttpError } from '../httpError.ts';
-import { CHANGE_TIMEOUT_MS, LOG_OUT_MAX, neverRefusal, parseCommand, readOnlyPlan, shapeOutput } from '../itDesk.ts';
+import { CHANGE_TIMEOUT_MS, itRedact, LOG_OUT_MAX, neverRefusal, parseCommand, readOnlyPlan, secretPaths, secretValues, shapeOutput } from '../itDesk.ts';
 import { AUTO_STEPS_MAX, autoVerdict, type AutoPlan } from '../itAuto.ts';
 import type { ItJob } from '../../shared/itDept.ts';
 import { OFFICE_DIR } from '../officeUpdate.ts';
 import { CfError } from '../cloudflare.ts';
-import { envPathRefusal, envSecretFile } from '../cfSecretFile.ts';
+import { envAccessPair, envPathRefusal, envSecretFile } from '../cfSecretFile.ts';
 import type { CloudflareArgs, InstallKeyArgs, ProviderActionArgs, SaveKeyArgs } from '../ceoItTools.ts';
 import { appInstallRefusal, appTarget, INSTALL_TARGETS, installLine, installRefusal, keyPart, maskPasted, renewDue, savedMark, type AppTarget, type KeyInstall } from '../../shared/keyInstall.ts';
 import { appAccess, appSet, appTest, appWhere } from '../appInstall.ts';
@@ -33,6 +33,7 @@ import type { CfChange } from '../../shared/cloudflare.ts';
 import { SwarmManagerAsks } from './managerAsks.ts';
 import { parseRunbook, projectForeign, projectProblem, runbookSummary, runbookVerdict, runRunbook, stepLabel, stepNever, undoRunbook, type RunbookHost } from '../itRunbook.ts';
 import { RUNBOOKS_KEPT, runbookView, type ItRunbookJob } from '../../shared/itRunbook.ts';
+import { appCallRefusal, appCallReply, tokenFilesFor } from '../appCall.ts';
 
 /** it_run's and it_propose's arguments (server/ceoItTools.ts). */
 export interface ItRunArgs {
@@ -45,6 +46,14 @@ export interface ItRunbookArgs {
   floor: number;
   path: string;
   project: string;
+}
+/** app_call's arguments (#625). */
+export interface AppCallArgs {
+  method: 'GET' | 'HEAD' | 'POST' | 'PUT' | 'PATCH';
+  url: string;
+  env_file?: string;
+  body?: unknown;
+  why?: string;
 }
 export interface ItProposeArgs {
   argv: string[];
@@ -112,7 +121,18 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
     return entry;
   }
 
-  private itMask = (s: string) => scrub(s, this.secrets());
+  /** Every IT output's redactor (#625): the stored keys, `extra` (what a command's secret files hold), and key shapes. */
+  private itMask = (s: string, extra: readonly string[] = []) => itRedact(s, [...this.secrets(), ...extra]);
+
+  /** The values in the secret files a command names, so its output can't show them (unreadable or huge ones add none). */
+  private async fileSecrets(argv: readonly string[]): Promise<string[]> {
+    const out: string[] = [];
+    for (const p of secretPaths(argv)) {
+      const text = await this.backend.itFiles.read(p.replace(/^~(?=\/|$)/, os.homedir())).catch(() => null);
+      if (text && text.length <= 256_000) out.push(...secretValues(text));
+    }
+    return out;
+  }
 
   /** it_run: one read-only command now, its output sorted, limited, masked and capped. */
   protected async itRun(a: ItRunArgs): Promise<string> {
@@ -123,7 +143,8 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
     const plan = readOnlyPlan(parsed.argv, { linux: process.platform === 'linux' });
     if ('refused' in plan) throw new HttpError(400, plan.refused);
     const ran = await this.backend.itExec(plan.argv, plan.timeoutMs);
-    const out = shapeOutput({ ...ran, sort: a.sort, lines: a.lines, mask: this.itMask });
+    const extra = await this.fileSecrets(plan.argv);
+    const out = shapeOutput({ ...ran, sort: a.sort, lines: a.lines, mask: (t) => this.itMask(t, extra) });
     this.itLog({ kind: 'read', by: this.itName, argv: parsed.argv, code: ran.code, out });
     this.itDeskChanged();
     return `$ ${argvLine(parsed.argv)}\n${ran.code === null ? 'did not finish' : `exit ${ran.code}`}\n${out}`;
@@ -180,7 +201,8 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
     } else undo = v.undo('');
     this.itAuto.steps++;
     const ran = await this.backend.itExec(v.argv, v.timeoutMs ?? CHANGE_TIMEOUT_MS);
-    const out = shapeOutput({ ...ran, out: first + ran.out, mask: this.itMask, max: 8_000 });
+    const extra = await this.fileSecrets(v.argv);
+    const out = shapeOutput({ ...ran, out: first + ran.out, mask: (t) => this.itMask(t, extra), max: 8_000 });
     if (ran.code !== 0) undo = null;
     if (ran.code === 0 && v.unit && !this.state.itDesk.units?.includes(v.unit)) this.state.itDesk.units = [...(this.state.itDesk.units ?? []), v.unit];
     const entry = this.itLog({ kind: 'change', auto: true, by: `${this.itName} (auto-approve)`, argv, code: ran.code, out, why: this.itMask(why), ...(undo && { undo }) });
@@ -210,7 +232,8 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
       for (const argv of e.undo ?? []) {
         const never = neverRefusal(argv, { protectedDirs: this.itProtected });
         const ran = never ? { code: null, out: never, err: '' } : await this.backend.itExec(argv, CHANGE_TIMEOUT_MS);
-        const out = shapeOutput({ ...ran, mask: this.itMask, max: 4_000 });
+        const extra = await this.fileSecrets(argv);
+        const out = shapeOutput({ ...ran, mask: (t) => this.itMask(t, extra), max: 4_000 });
         this.itLog({ kind: 'change', by, argv, code: ran.code, out, why: `Undo of ${argvLine(e.argv)}` });
         outs.push(`$ ${argvLine(argv)}\n${out}`);
         if (ran.code !== 0) {
@@ -324,7 +347,8 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
           continue;
         }
         const ran = p.ki ? await this.keyApply(p.ki.keyId, p.ki) : p.cf || p.pa ? await this.actionApply(p) : await this.backend.itExec(p.argv, CHANGE_TIMEOUT_MS);
-        const out = shapeOutput({ ...ran, mask: this.itMask, max: 8_000 });
+        const extra = p.ki || p.cf || p.pa ? [] : await this.fileSecrets(p.argv);
+        const out = shapeOutput({ ...ran, mask: (t) => this.itMask(t, extra), max: 8_000 });
         this.itLog({ kind: 'change', by, argv: p.argv, code: ran.code, out, why: p.why });
         const how = ran.code === 0 ? (p.cf || p.pa || p.ki ? 'Applied' : 'Ran') : ran.code === null ? "Couldn't finish" : `Exit ${ran.code} for`;
         this.itRan(p, `🖥️ ${how} \`${line}\` for ${p.by ?? this.ceo().name}`, out, { code: ran.code });
@@ -354,6 +378,42 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
     for (const p of gone) this.itLog({ kind: 'change', by: `${this.managerLabel()} (Not now)`, argv: p.argv, code: null, out: 'Not run: the manager said Not now.', why: p.why });
     this.itDeskChanged();
     return { ok: true };
+  }
+
+  // ---------- app_call (#625) ----------
+
+  /** The Access token file for a host: the one asked for, else the one in the office's secrets folder naming the host. */
+  private async appTokenFile(host: string, envFile?: string): Promise<string> {
+    const dir = path.join(HOME_DIR, 'secrets');
+    if (envFile) {
+      const no = envPathRefusal(envFile, []);
+      if (no) throw new HttpError(400, no);
+      return this.backend.demo ? path.join(dir, path.basename(envFile)) : path.resolve(envFile);
+    }
+    const all = await readdir(dir).catch(() => [] as string[]);
+    const hits = tokenFilesFor(host, all);
+    if (hits.length === 1) return path.join(dir, hits[0]);
+    throw new HttpError(400, hits.length ? `Several token files fit ${host} (${hits.join(', ')}): give env_file.` : `No Access token file for ${host} in ${dir}: give env_file, or make one with cloudflare access_service_token_ensure.`);
+  }
+
+  /** app_call: one HTTPS call to an allow-listed live app with its Access service token (headers only), the answer masked. */
+  protected async appCall(a: AppCallArgs): Promise<string> {
+    if (!this.itOn) throw new HttpError(403, OFF);
+    if (!this.state.settings.itDept.on) throw new HttpError(403, DEPT_OFF);
+    const method = String(a.method ?? 'GET').toUpperCase() as AppCallArgs['method'];
+    const url = String(a.url ?? '').trim();
+    const no = appCallRefusal(url, method);
+    if (no) throw new HttpError(400, no);
+    const file = await this.appTokenFile(new URL(url).hostname, a.env_file);
+    const text = await readFile(file, 'utf8').catch(() => '');
+    const token = envAccessPair(text);
+    if (!token) throw new HttpError(400, `${file} has no CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET: make the token with cloudflare access_service_token_ensure.`);
+    const res = await this.backend.providerHttp(token, { method, url, auth: 'cf-access', ...(a.body !== undefined && { body: a.body }) });
+    const out = this.itMask(appCallReply(res.status, res.body), [...secretValues(text), ...token.split(':')]);
+    const why = this.itMask(String(a.why ?? '').trim());
+    this.itLog({ kind: method === 'GET' || method === 'HEAD' ? 'read' : 'change', by: this.itName, argv: ['app_call', method, url], code: res.status === 0 ? null : res.status < 400 ? 0 : res.status, out, ...(why && { why }) });
+    this.itDeskChanged();
+    return `$ app_call ${method} ${url}\n${out}`;
   }
 
   // ---------- keys end to end (#609) ----------

@@ -23,7 +23,6 @@ const UNIT_DIR = '/etc/systemd/system';
 const PROJECT_RE = /^[a-z0-9][a-z0-9-]{1,30}$/;
 const HOST_RE = /^(?=.{4,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/;
 const VAR_RE = /^[A-Z_][A-Z0-9_]{0,63}$/;
-const TEMPLATE_RE = /^\.env\.(example|sample|template)$/;
 
 // ---------- parsing ----------
 
@@ -147,14 +146,6 @@ const sameRepo = (url: string, s: RunbookScope) => {
   return s.repoUrls.some((r) => norm(r) === norm(url));
 };
 
-/** Credential files a runbook's write steps may name: its own targets under the project, templates as sources. */
-function writable(argv: readonly string[], s: RunbookScope): (p: string) => boolean {
-  if (!['install', 'cp', 'mkdir', 'chmod', 'chown', 'touch'].includes(argv[0])) return () => false;
-  const files = argv.slice(1).filter((a) => !a.startsWith('-'));
-  const target = files.at(-1);
-  return (p) => !/^\/etc\/keel(\/|$)/.test(p) && inProject(p, s, { clone: p !== target }) && (p === target || argv[0] === 'chmod' || argv[0] === 'chown' || TEMPLATE_RE.test(path.posix.basename(p)));
-}
-
 /** The files and folders a command writes, for backups and Undo (empty: none known). */
 function writeTargets(argv: readonly string[]): string[] {
   const [program, ...args] = argv;
@@ -245,7 +236,7 @@ export function stepNever(step: RunbookStep, s: RunbookScope, protectedDirs: str
     return null;
   }
   if (step.kind === 'caddy') return null;
-  return neverRefusal(step.argv, { protectedDirs, writable: writable(step.argv, s) });
+  return neverRefusal(step.argv, { protectedDirs });
 }
 
 export interface RunbookPolicy extends RunbookScope {
@@ -263,6 +254,7 @@ export function runbookVerdict(steps: readonly RunbookStep[], p: RunbookPolicy):
   for (const [i, step] of steps.entries()) {
     if (step.kind !== 'run') continue; // env files and the Caddy block are checked by stepNever and written with backups
     if (isCaddyReload(step.argv)) continue; // the runner validates first
+    if (step.argv.some((x) => /^\/etc\/keel(\/|$)/.test(x.slice(x.indexOf('=') + 1)))) return { auto: false, why: `step ${i + 1}, \`${argvLine(step.argv)}\`: it uses KEEL's credentials (/etc/keel), which always ask` }; // #625: usable, never automatic
     if (!('refused' in readOnlyPlan(step.argv, { linux: p.linux })) || projectShape(step.argv, step.cwd, p)) continue;
     const v = autoVerdict(step.argv, { level: p.level, protectedDirs: p.protectedDirs, itUnits: p.itUnits, officeUnits: p.officeUnits, steps: 0, log: [], exists: p.exists, stamp: 'x', linux: p.linux });
     if (!v.auto) return { auto: false, why: `step ${i + 1}, \`${argvLine(step.argv)}\`: ${v.why}` };

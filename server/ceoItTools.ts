@@ -8,7 +8,8 @@ import { tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 import { runTool, toolServer, type OfficeTools } from './ceo.ts';
 import { TICKET_WHERE } from '../shared/itTickets.ts';
-import type { ItProposeArgs, ItRunArgs, ItRunbookArgs } from './swarm/itDesk.ts';
+import type { AppCallArgs, ItProposeArgs, ItRunArgs, ItRunbookArgs } from './swarm/itDesk.ts';
+import { APP_CALL_HOSTS } from './appCall.ts';
 import type { ItRecommendArgs } from './swarm/itWatch.ts';
 import type { ItImproveArgs } from './swarm/itImprove.ts';
 import { IMPROVE_KINDS } from '../shared/itImprove.ts';
@@ -70,6 +71,7 @@ export interface ItHandlers extends CloudflareHandlers {
   itRun(a: ItRunArgs): Promise<string>;
   itPropose(a: ItProposeArgs): Promise<string>;
   itRunbook(a: ItRunbookArgs): Promise<string>;
+  appCall(a: AppCallArgs): Promise<string>;
   itRecommend(a: ItRecommendArgs): string;
   itHealth(): string;
   itTicket(a: ItTicketArgs): Promise<string>;
@@ -110,7 +112,7 @@ function itTools(h: ItHandlers, run: Run) {
     ),
     tool(
       'it_propose',
-      "Propose a command that changes this machine: the manager sees it on a card with Run / Not now (chat and Telegram), and it runs only on their Run; you then get its output to check. With the manager's Auto-approve on, a routine step (git fetch/pull --ff-only, your own units, installing a unit or Caddy file, caddy validate then reload) runs at once and the reply has its output. One program per card, as argv, no shell. Never: pkill/killall, shutdown, docker volume prune or keel-postgres, /etc/keel, git push --force, the live office's folders, rm -rf of /, /root, /opt, /etc or /var.",
+      "Propose a command that changes this machine: the manager sees it on a card with Run / Not now (chat and Telegram), and it runs only on their Run; you then get its output to check. With the manager's Auto-approve on, a routine step (git fetch/pull --ff-only, your own units, installing a unit or Caddy file, caddy validate then reload) runs at once and the reply has its output. One program per card, as argv, no shell. Credential files may be used, copied, chmod-ed or passed as env files, never printed (cat, grep without -q/-l/-c, printenv… are refused). Never: pkill/killall, shutdown, docker volume prune or keel-postgres, git push --force, the live office's folders, rm -rf of /, /root, /opt, /etc or /var.",
       {
         argv: z.array(z.string().min(1).max(1000)).min(1).max(60).describe('e.g. ["journalctl", "--vacuum-size=500M"]'),
         why: z.string().min(1).max(300).describe('Why, in a sentence the manager can decide on'),
@@ -129,6 +131,18 @@ function itTools(h: ItHandlers, run: Run) {
         project: z.string().min(2).max(31).describe('What it installs, lower case: its scope is /opt/<project>, /etc/<project> and <project>* units, e.g. "postiz"'),
       },
       (a) => run(() => h.itRunbook(a)),
+    ),
+    tool(
+      'app_call',
+      `Call a live app over HTTPS past Cloudflare Access: the office loads its service token from the env file (CF_ACCESS_CLIENT_ID/SECRET) into the headers; you never see it, and the answer comes back masked. Hosts: ${Object.entries(APP_CALL_HOSTS).map(([h, m]) => `${h} (${m.join('/')})`).join(', ')}.`,
+      {
+        method: z.enum(['GET', 'HEAD', 'POST', 'PUT', 'PATCH']),
+        url: z.string().url().max(2000).describe('e.g. "https://clip.techinsiderbytes.com/api/settings"'),
+        env_file: z.string().min(2).max(500).optional().describe("The token's env file; left out, the one in the office's secrets folder naming the host"),
+        body: z.unknown().optional().describe('JSON body for POST/PUT/PATCH'),
+        why: z.string().min(1).max(300).optional().describe('For the log, in a sentence'),
+      },
+      (a) => run(() => h.appCall(a as AppCallArgs)),
     ),
     tool(
       'it_recommend',
@@ -225,7 +239,7 @@ export function cloudflareTools(h: CloudflareHandlers, run: Run) {
     ),
     tool(
       'install_key',
-      `Install a Settings → Providers key into a service's env file as VAR=value (the value never reaches you, a card or a log): a card with Approve / Not now, or at once with the manager's IT auto-approve; the file keeps its other lines, mode 600, a backup kept, then its unit restarts. The only way to write a credential file. Targets: ${INSTALL_TARGETS.map((t) => `${t.file} (${t.name})`).join(', ')}; or an app's own Settings, then its Test: ${APP_TARGETS.map((t) => `"${t.id}"`).join(', ')}.`,
+      `Install a Settings → Providers key into a service's env file as VAR=value (the value never reaches you, a card or a log): a card with Approve / Not now, or at once with the manager's IT auto-approve; the file keeps its other lines, mode 600, a backup kept, then its unit restarts. The way to put a Providers key into one. Targets: ${INSTALL_TARGETS.map((t) => `${t.file} (${t.name})`).join(', ')}; or an app's own Settings, then its Test: ${APP_TARGETS.map((t) => `"${t.id}"`).join(', ')}.`,
       {
         key: z.string().min(1).max(80).describe('The Providers key: its id, name, or provider when it has one key, e.g. "openai"'),
         target: z.string().min(2).max(300).describe('One of the targets above, e.g. "/etc/clipfarm/clipfarm.env" or "clipfarm app"'),

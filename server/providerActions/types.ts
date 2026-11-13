@@ -16,7 +16,7 @@ import type { KeyMint } from '../../shared/types.ts';
 type ActionAuth = 'bearer' | 'xi-api-key' | 'github' | 'entra-token' | 'google-sa' | 'cf-access';
 
 export interface ActionRequest {
-  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  method: 'GET' | 'HEAD' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   url: string;
   auth: ActionAuth;
   body?: unknown;

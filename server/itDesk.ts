@@ -43,9 +43,16 @@ export function parseCommand(line: string): { argv: string[] } | Refusal {
   return { argv };
 }
 
-/** Files whose contents are secrets: never named in a command, read or change. */
+/** A path an argument names: itself, or what follows "=" (`--env-file=…`, `EnvironmentFile=…`). */
+const pathOf = (arg: string) => {
+  const eq = arg.indexOf('=');
+  const after = eq >= 0 ? arg.slice(eq + 1) : '';
+  return eq >= 0 && (arg.startsWith('-') || /^[/~.]/.test(after)) ? after : arg;
+};
+
+/** Files whose contents are secrets: a command may use, copy or write them (#625), never print them. */
 export function secretPath(arg: string): boolean {
-  const p = arg.includes('=') && arg.startsWith('-') ? arg.slice(arg.indexOf('=') + 1) : arg;
+  const p = pathOf(arg);
   const base = path.posix.basename(p).toLowerCase();
   return (
     /^\/etc\/keel(\/|$)/.test(path.posix.normalize(p)) ||
@@ -57,15 +64,38 @@ export function secretPath(arg: string): boolean {
   );
 }
 
-/** Problems every command has before its program is looked at. `writable`: a runbook's own credential files (#611),
- * which its steps may write (never read or print). */
-function basics(argv: readonly string[], writable?: (p: string) => boolean): string | null {
+/** The secret files a command names, as paths, for the redactor to mask what they hold. */
+export const secretPaths = (argv: readonly string[]): string[] => [...new Set(argv.slice(1).filter(secretPath).map(pathOf))];
+
+/** Programs that print a file's contents. */
+const PRINTERS = new Set(['cat', 'tac', 'nl', 'less', 'more', 'head', 'tail', 'strings', 'xxd', 'od', 'hexdump', 'base64', 'base32', 'diff', 'awk', 'gawk', 'mawk', 'jq']);
+const GREPS = new Set(['grep', 'egrep', 'fgrep', 'rg']);
+const SAFE_LOOK = 'Check it without printing it: test -s <file>, stat <file>, or grep -c NAME= <file>.';
+
+/** Why a command would show a secret (#625): a printer given a secret file, or the environment; null when it wouldn't. */
+function printRefusal(argv: readonly string[]): string | null {
+  const [program, ...args] = argv;
+  if (program === 'env' || program === 'printenv') return `${program} prints the environment, secrets included. ${SAFE_LOOK}`;
+  if (program === 'docker') {
+    const words = args.filter((a) => !a.startsWith('-'));
+    if (words.includes('inspect')) return `docker inspect prints containers' environments, secrets included: use docker ps for what runs, and test -s or stat for their env files.`;
+    if (words[0] === 'compose' && words.includes('config') && !args.some((a) => a === '-q' || a === '--quiet')) return 'docker compose config prints the env files filled in: validate it with docker compose config --quiet.';
+  }
+  const secret = args.find(secretPath);
+  if (!secret) return null;
+  const shown = (why: string) => `${why} would print ${pathOf(secret)}, which holds secrets: they're used, never shown. ${SAFE_LOOK}`;
+  if (PRINTERS.has(program)) return shown(program);
+  if (GREPS.has(program) && !args.some((a) => /^--(quiet|silent|count|files-with(out)?-match(es)?)$/.test(a) || /^-[a-zA-Z]*[qlLc]/.test(a))) return shown(`${program} without -q, -l or -c`);
+  if (program === 'sed' && !args.some((a) => /^-[a-zA-Z]*i/.test(a) || a.startsWith('--in-place'))) return shown('sed without -i');
+  return null;
+}
+
+/** Problems every command has before its program is looked at. */
+function basics(argv: readonly string[]): string | null {
   if (!argv.length || !argv[0]) return 'Give a command.';
   if (argv.length > 60 || argv.some((a) => a.length > 1000 || a.includes('\0'))) return 'That command is too long.';
   if (argv[0].includes('/') || argv[0].includes('\\')) return `Name the program, not its path: "${path.posix.basename(argv[0])}".`;
-  const secret = argv.slice(1).find((a) => secretPath(a) && !writable?.(a));
-  if (secret) return `${secret} holds secrets: the IT desk never reads or changes credential files (/etc/keel, .env, keys).`;
-  return null;
+  return printRefusal(argv);
 }
 
 const nice = (argv: string[], linux: boolean, seconds: number) => (linux ? ['timeout', '-k', '5', String(seconds), 'nice', '-n', '19', 'ionice', '-c3', ...argv] : argv);
@@ -186,8 +216,8 @@ const POWER = new Set(['shutdown', 'reboot', 'poweroff', 'halt', 'init', 'telini
 const WHOLE = ['/', '/root', '/opt', '/etc', '/var', '/home', '/usr', '/boot', '/srv', '/mnt'];
 
 /** Why a change can never run, even after the manager's Run; null when it may. `office`: the live office's folders. */
-export function neverRefusal(argv: readonly string[], office: { protectedDirs: string[]; writable?: (p: string) => boolean }): string | null {
-  const bad = basics(argv, office.writable);
+export function neverRefusal(argv: readonly string[], office: { protectedDirs: string[] }): string | null {
+  const bad = basics(argv);
   if (bad) return bad;
   const [program, ...args] = argv;
   const never = (what: string) => `Never, even with the manager's Run: ${what}.`;
@@ -215,6 +245,54 @@ export function neverRefusal(argv: readonly string[], office: { protectedDirs: s
     if (recursive && whole) return never(`removing ${whole} as a whole`);
   }
   return null;
+}
+
+// ---------- the redactor (#625) ----------
+
+/** A secret as IT's output shows it: its last 4 characters at most (a short one shows none). */
+const masked = (secret: string) => `••••${secret.length >= 12 ? secret.slice(-4) : ''}`;
+
+// Key and token shapes; the secret is the whole match unless a group says which part.
+const TOKEN_SHAPES: RegExp[] = [
+  /\b(?:sk|pk|rk)-(?:ant-|proj-)?[A-Za-z0-9_-]{16,}/g,
+  /\bsk_(?:live|test)?_?[A-Za-z0-9]{20,}/g,
+  /\bgh[pousr]_[A-Za-z0-9]{20,}/g,
+  /\bgithub_pat_[A-Za-z0-9_]{20,}/g,
+  /\bxox[abprs]-[A-Za-z0-9-]{10,}/g,
+  /\bAKIA[0-9A-Z]{16}\b/g,
+  /\bAIza[0-9A-Za-z_-]{30,}/g,
+  /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g,
+  /\b(?=[\w-]*\d)(?=[\w-]*[a-z])(?=[\w-]*[A-Z])[\w-]{32,}/g,
+];
+const PEM = /-----BEGIN ([A-Z0-9 ]+)-----[\s\S]*?(?:-----END \1-----|$)/g;
+const BEARER = /\b(Bearer|Basic)(\s+)([A-Za-z0-9._~+/=-]{12,})/gi;
+const ASSIGN = [
+  /\b([A-Z][A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD|PWD|CREDENTIALS?|AUTH)[A-Z0-9_]*)(["']?\s*[=:]\s*["']?)([^\s"',;}]{6,})/g,
+  /\b(api[_-]?key|access[_-]?token|auth[_-]?token|client[_-]?secret|secret|password|passwd|token)(["']?\s*[=:]\s*["']?)([^\s"',;}]{6,})/gi,
+];
+
+/** `text` with every known secret value, key-shaped token, PEM block and secret-named assignment as ••••last4. */
+export function itRedact(text: string, secrets: readonly string[]): string {
+  let out = text;
+  for (const v of [...new Set(secrets)].filter((x) => x && x.length >= 6).sort((a, b) => b.length - a.length)) if (out.includes(v)) out = out.split(v).join(masked(v));
+  out = out.replace(PEM, (_m, kind: string) => `-----BEGIN ${kind}----- •••• -----END ${kind}-----`);
+  out = out.replace(BEARER, (_m, how: string, sp: string, v: string) => `${how}${sp}${masked(v)}`);
+  for (const re of ASSIGN) out = out.replace(re, (m, name: string, eq: string, v: string) => (v.startsWith('••••') ? m : `${name}${eq}${masked(v)}`));
+  for (const re of TOKEN_SHAPES) out = out.replace(re, (v) => masked(v));
+  return out;
+}
+
+/** The values a secret file holds, for the redactor: each NAME=value's value, and every line of anything else (a key). */
+export function secretValues(text: string): string[] {
+  const out: string[] = [];
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#') || line.startsWith('-----')) continue;
+    const m = line.match(/^(?:export\s+)?[A-Za-z_][A-Za-z0-9_.-]*\s*=\s*(.*)$/);
+    const v = (m ? m[1] : line).trim().replace(/^(["'])(.*)\1$/, '$2');
+    if (v.length >= 6) out.push(v);
+  }
+  return out;
 }
 
 /** it_run's sort: human sizes ("1.2G", "512K", or plain numbers) biggest first, by each line's first word. */

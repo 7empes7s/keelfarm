@@ -88,6 +88,7 @@ export function fakeClipfarm() {
   const handle = (key: string, req: ActionRequest): ActionResponse | null => {
     if (!req.url.startsWith('https://clip.techinsiderbytes.com/')) return null;
     if (req.auth !== 'cf-access' || key !== DEMO_ACCESS) return { status: 403, body: { error: 'Forbidden: not through Cloudflare Access' } };
+    if (req.method === 'GET' && new URL(req.url).pathname === '/api/settings') return { status: 200, body: { clipsToday: 7, channels: 3, settings: { youtube: { YOUTUBE_API_KEY: world.values.YOUTUBE_API_KEY ?? null } }, webhookSecret: 'whsec_DemoAppSecret0123456789abcdef' } }; // app_call (#625): its secret-looking field comes back masked
     const m = new URL(req.url).pathname.match(/^\/api\/settings\/([a-z-]+)(\/test)?$/);
     if (!m || m[1] !== 'youtube') return { status: 404, body: { error: 'No such setting' } };
     if (m[2]) {

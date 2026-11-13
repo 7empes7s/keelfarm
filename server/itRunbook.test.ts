@@ -142,8 +142,9 @@ describe('the policy', () => {
     const env = one('install -m 600 /opt/clipfarm/ops/postiz/.env.example /opt/postiz/.env'); // refused outright before #611
     expect(stepNever(env[0], scope, [])).toBeNull();
     expect(runbookVerdict(env, policy())).toEqual({ auto: true });
-    expect(stepNever(one('cat /opt/postiz/.env')[0], scope, [])).toMatch(/holds secrets/); // reading a credential file: never
-    expect(stepNever(one('cp /etc/keel/keel.env /opt/postiz/keel.env')[0], scope, [])).toMatch(/holds secrets/);
+    expect(stepNever(one('cat /opt/postiz/.env')[0], scope, [])).toMatch(/would print/); // printing a credential file: never (#625)
+    expect(stepNever(one('cp /etc/keel/keel.env /opt/postiz/keel.env')[0], scope, [])).toBeNull(); // using one may run (#625), but KEEL always asks
+    expect(runbookVerdict(one('cp /etc/keel/keel.env /opt/postiz/keel.env'), policy()).auto).toBe(false);
     expect(stepNever({ kind: 'env', file: '/etc/keel/keel.env', vars: [] }, scope, [])).toMatch(/only under \/opt\/postiz/);
   });
 });
