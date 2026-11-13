@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canPostpone, canUpdateNow, drainDeadline, DRAIN_TIMEOUT_MS, HIDDEN_LOAD_MS, loadBlocker, loadNow, officeUpdateChip, officeUpdateText, restartExpected, shouldReload, type LoadBlockers } from './officeUpdate';
+import { canPostpone, canUpdateNow, drainDeadline, DRAIN_TIMEOUT_MS, HIDDEN_LOAD_MS, loadBlocker, loadNow, officeUpdateChip, officeUpdateText, panelChangeLoads, restartExpected, shouldReload, type LoadBlockers } from './officeUpdate';
 import type { OfficeUpdateView } from '../../shared/types';
 
 const u = (over: Partial<OfficeUpdateView>): OfficeUpdateView => ({ state: 'none', behind: 0, launcher: true, drainingSince: null, running: 0, updateAt: null, holds: false, detail: null, ...over });
@@ -90,6 +90,19 @@ describe('shouldReload', () => {
   it('at most once per commit', () => {
     expect(shouldReload('abc1234', 'def5678', 'def5678')).toBe(false);
     expect(shouldReload('def5678', 'fed9999', 'def5678')).toBe(true);
+  });
+});
+
+describe('panelChangeLoads (#644)', () => {
+  it('never in the 3D office: a reload there closes the phone just opened and drops the mouse grab', () => {
+    expect(panelChangeLoads('office', null, 'phone')).toBe(false);
+    expect(panelChangeLoads('office', 'phone', null)).toBe(false);
+    expect(panelChangeLoads('office', 'phone', 'manager')).toBe(false);
+  });
+  it('in pocket mode, a page change still is (#216)', () => {
+    expect(panelChangeLoads('pocket', 'phone', null)).toBe(true);
+    expect(panelChangeLoads('pocket', null, 'previews')).toBe(true);
+    expect(panelChangeLoads('pocket', 'phone', 'phone')).toBe(false);
   });
 });
 
