@@ -8,12 +8,16 @@ import { tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 import { runTool, toolServer, type OfficeTools } from './ceo.ts';
 import { TICKET_WHERE } from '../shared/itTickets.ts';
-import type { ItProposeArgs, ItRunArgs } from './swarm/itDesk.ts';
+import type { AppCallArgs, ItProposeArgs, ItRunArgs, ItRunbookArgs } from './swarm/itDesk.ts';
+import { APP_CALL_HOSTS } from './appCall.ts';
 import type { ItRecommendArgs } from './swarm/itWatch.ts';
 import type { ItImproveArgs } from './swarm/itImprove.ts';
 import { IMPROVE_KINDS } from '../shared/itImprove.ts';
 import { problemTools, type ProblemHandlers } from './ceoProblemTools.ts';
 import { CF_OPS } from '../shared/cloudflare.ts';
+import { ACTION_PROVIDERS, PROVIDER_ACTIONS } from '../shared/providerActions.ts';
+import { APP_TARGETS, INSTALL_TARGETS, type KeyPart } from '../shared/keyInstall.ts';
+import { PROVIDERS } from '../shared/providers.ts';
 
 /** The cloudflare action's arguments (#586). */
 export interface CloudflareArgs {
@@ -23,19 +27,51 @@ export interface CloudflareArgs {
   tunnel?: string;
   emails?: string[];
   bypass?: string[];
+  idps?: string[];
+  auto_redirect?: boolean;
   name?: string;
   duration?: string;
   env_file?: string;
   why?: string;
 }
 
+/** provider_action's arguments (#602): the op's own arguments are checked by its module. */
+export interface ProviderActionArgs {
+  provider: string;
+  op: string;
+  args?: Record<string, unknown>;
+  why?: string;
+}
+
+/** install_key's and save_provider_key's arguments (#609). */
+export interface InstallKeyArgs {
+  key: string;
+  target: string;
+  var_name: string;
+  part?: KeyPart;
+  why?: string;
+}
+export interface SaveKeyArgs {
+  provider: string;
+  label?: string;
+  value?: string;
+  /** #622: a file sent in chat holding the key (a service account's JSON), deleted once saved. */
+  file?: string;
+  uses?: string;
+}
+
 export interface CloudflareHandlers {
   cloudflare(a: CloudflareArgs): Promise<string>;
+  providerAction(a: ProviderActionArgs): Promise<string>;
+  installKey(a: InstallKeyArgs): Promise<string>;
+  saveProviderKey(a: SaveKeyArgs): Promise<string>;
 }
 
 export interface ItHandlers extends CloudflareHandlers {
   itRun(a: ItRunArgs): Promise<string>;
   itPropose(a: ItProposeArgs): Promise<string>;
+  itRunbook(a: ItRunbookArgs): Promise<string>;
+  appCall(a: AppCallArgs): Promise<string>;
   itRecommend(a: ItRecommendArgs): string;
   itHealth(): string;
   itTicket(a: ItTicketArgs): Promise<string>;
@@ -76,7 +112,7 @@ function itTools(h: ItHandlers, run: Run) {
     ),
     tool(
       'it_propose',
-      "Propose a command that changes this machine: the manager sees it on a card with Run / Not now (chat and Telegram), and it runs only on their Run; you then get its output to check. With the manager's Auto-approve on, a routine step (git fetch/pull --ff-only, your own units, installing a unit or Caddy file, caddy validate then reload) runs at once and the reply has its output. One program per card, as argv, no shell. Never: pkill/killall, shutdown, docker volume prune or keel-postgres, /etc/keel, git push --force, the live office's folders, rm -rf of /, /root, /opt, /etc or /var.",
+      "Propose a command that changes this machine: the manager sees it on a card with Run / Not now (chat and Telegram), and it runs only on their Run; you then get its output to check. With the manager's Auto-approve on, a routine step (git fetch/pull --ff-only, your own units, installing a unit or Caddy file, caddy validate then reload) runs at once and the reply has its output. One program per card, as argv, no shell. Credential files may be used, copied, chmod-ed or passed as env files, never printed (cat, grep without -q/-l/-c, printenv… are refused). Never: pkill/killall, shutdown, docker volume prune or keel-postgres, git push --force, the live office's folders, rm -rf of /, /root, /opt, /etc or /var.",
       {
         argv: z.array(z.string().min(1).max(1000)).min(1).max(60).describe('e.g. ["journalctl", "--vacuum-size=500M"]'),
         why: z.string().min(1).max(300).describe('Why, in a sentence the manager can decide on'),
@@ -85,6 +121,28 @@ function itTools(h: ItHandlers, run: Run) {
         risk: z.enum(['low', 'medium', 'high']),
       },
       (a) => run(() => h.itPropose(a)),
+    ),
+    tool(
+      'it_runbook',
+      "Run a floor's install runbook (markdown: ```bash lines, ```env <file> [from <template>] with NAME=generate or NAME=provider:<id>, ```caddy <host>, a Health check section) as ONE job: one card, progress per step, stop at the first failure, the check last, an Undo for all of it. Inside auto-approve (the project's /opt/<project>, /etc/<project>, <project>* units, its compose file, its clone, its Caddy block) it runs with no tap; else one Approve. Secrets are generated or come from Providers and never shown. Use it instead of it_propose for installs.",
+      {
+        floor: z.number().int().min(1).describe('The floor whose repo has the runbook'),
+        path: z.string().min(1).max(300).describe('Its path in the repo, e.g. "ops/postiz/RUNBOOK.md"'),
+        project: z.string().min(2).max(31).describe('What it installs, lower case: its scope is /opt/<project>, /etc/<project> and <project>* units, e.g. "postiz"'),
+      },
+      (a) => run(() => h.itRunbook(a)),
+    ),
+    tool(
+      'app_call',
+      `Call a live app over HTTPS past Cloudflare Access: the office loads its service token from the env file (CF_ACCESS_CLIENT_ID/SECRET) into the headers; you never see it, and the answer comes back masked. Hosts: ${Object.entries(APP_CALL_HOSTS).map(([h, m]) => `${h} (${m.join('/')})`).join(', ')}.`,
+      {
+        method: z.enum(['GET', 'HEAD', 'POST', 'PUT', 'PATCH']),
+        url: z.string().url().max(2000).describe('e.g. "https://clip.techinsiderbytes.com/api/settings"'),
+        env_file: z.string().min(2).max(500).optional().describe("The token's env file; left out, the one in the office's secrets folder naming the host"),
+        body: z.unknown().optional().describe('JSON body for POST/PUT/PATCH'),
+        why: z.string().min(1).max(300).optional().describe('For the log, in a sentence'),
+      },
+      (a) => run(() => h.appCall(a as AppCallArgs)),
     ),
     tool(
       'it_recommend',
@@ -155,12 +213,57 @@ function itTools(h: ItHandlers, run: Run) {
 /** The IT lead's office server: its tools and the problems register's (#544). */
 export const itOfficeTools = (h: ItHandlers & ProblemHandlers): OfficeTools => toolServer([...itTools(h, runTool), ...problemTools(h, runTool)]);
 
-/** cloudflare (#586): the IT lead's and the CEO's. */
+/** Each provider's ops, providers with the same ops on one line: "openai/openrouter: key_test, models, credit". */
+const OPS_LINE = (() => {
+  const byOps = new Map<string, string[]>();
+  for (const p of ACTION_PROVIDERS) {
+    const ops = PROVIDER_ACTIONS[p].map((o) => o.op).join(', ');
+    byOps.set(ops, [...(byOps.get(ops) ?? []), p]);
+  }
+  return [...byOps].map(([ops, ps]) => `${ps.join('/')}: ${ops}`).join('; ');
+})();
+
+/** cloudflare (#586) and provider_action (#602): the IT lead's and the CEO's. */
 export function cloudflareTools(h: CloudflareHandlers, run: Run) {
   return [
     tool(
+      'provider_action',
+      `Use a key from Settings → Providers through the office (never shown to you). Reads answer now; a write puts a card with its diff to the manager (Approve / Not now), or applies at once when their IT auto-approve allows (destructive ones always ask), then reads back. A wrong op or args lists the right ones. ${OPS_LINE}.`,
+      {
+        provider: z.enum(ACTION_PROVIDERS as [string, ...string[]]),
+        op: z.string().min(1).max(40),
+        args: z.record(z.string(), z.unknown()).optional().describe('The op\'s own, e.g. {"repo":"owner/name","run_id":123}; GitHub\'s repo defaults to the first floor\'s'),
+        why: z.string().min(1).max(300).optional().describe('For the card: why, in a sentence'),
+      },
+      (a) => run(() => h.providerAction(a)),
+    ),
+    tool(
+      'install_key',
+      `Install a Settings → Providers key into a service's env file as VAR=value (the value never reaches you, a card or a log): a card with Approve / Not now, or at once with the manager's IT auto-approve; the file keeps its other lines, mode 600, a backup kept, then its unit restarts. The way to put a Providers key into one. Targets: ${INSTALL_TARGETS.map((t) => `${t.file} (${t.name})`).join(', ')}; or an app's own Settings, then its Test: ${APP_TARGETS.map((t) => `"${t.id}"`).join(', ')}.`,
+      {
+        key: z.string().min(1).max(80).describe('The Providers key: its id, name, or provider when it has one key, e.g. "openai"'),
+        target: z.string().min(2).max(300).describe('One of the targets above, e.g. "/etc/clipfarm/clipfarm.env" or "clipfarm app"'),
+        var_name: z.string().min(1).max(64).describe('e.g. "OPENAI_API_KEY"'),
+        part: z.enum(['id', 'secret']).optional().describe('For an "id:secret" pair (Twitch): which half, e.g. TWITCH_CLIENT_ID → id'),
+        why: z.string().min(1).max(300).optional().describe('For the card: why, in a sentence'),
+      },
+      (a) => run(() => h.installKey(a)),
+    ),
+    tool(
+      'save_provider_key',
+      'The manager pasted a key in chat (value), or sent it as a file (file: its id; a Google Cloud service account JSON): save it in Settings → Providers right away (tested where the provider allows); the chat shows "•••• (saved to Providers as …)" instead of a pasted one, and a file is deleted. Then install_key puts it where it is used. Never repeat the value in your reply.',
+      {
+        provider: z.enum(PROVIDERS.filter((p) => p.home === 'providers' && p.auth === 'api-key').map((p) => p.id) as [string, ...string[]]).describe('e.g. "openai", "twitch", "youtube", "postiz", or "other-key" for anything else'),
+        value: z.string().min(1).max(400).optional().describe('The key exactly as pasted; Twitch: "client_id:client_secret"'),
+        file: z.string().regex(/^[a-f0-9]{24}$/).optional().describe('Instead of value: the file id of a key file sent in chat'),
+        label: z.string().min(1).max(60).optional().describe('Its name, e.g. "Twitch (clipfarm)"'),
+        uses: z.string().min(1).max(200).optional().describe('What uses it, e.g. "clipfarm transcription"'),
+      },
+      (a) => run(() => h.saveProviderKey(a)),
+    ),
+    tool(
       'cloudflare',
-      "Cloudflare through the office's own key (never shown to you): tunnel_ingress_get and token_scopes read now (token_scopes names any missing permission); tunnel_ingress_add (hostname → service before the catch-all, every rule kept), dns_cname_ensure (proxied CNAME to the tunnel), access_app_ensure (an email allow-list, optional bypass paths) and access_service_token_ensure (a service token by name with a Service Auth policy on the hostname's app; its secret goes only into env_file as CF_ACCESS_CLIENT_ID/SECRET, mode 600) put a diff card to the manager with Approve / Not now, then apply and read back.",
+      "Cloudflare through the office's own key (never shown to you): tunnel_ingress_get and token_scopes read now (token_scopes names any missing permission); tunnel_ingress_add (hostname → service before the catch-all, every rule kept), dns_cname_ensure (proxied CNAME to the tunnel), access_app_ensure (an email allow-list, optional bypass paths; idps adds logins by name, keeping the app's others), access_idp_ensure (the Entra ID login from provider_action entra entra_app_ensure's app; its secret stays in the office) and access_service_token_ensure (a service token by name with a Service Auth policy on the hostname's app; its secret goes only into env_file as CF_ACCESS_CLIENT_ID/SECRET, mode 600) put a diff card to the manager with Approve / Not now, then apply and read back.",
       {
         op: z.enum(CF_OPS),
         hostname: z.string().min(4).max(253).optional().describe('e.g. "clip.techinsiderbytes.com"; needed by the writes'),
@@ -168,7 +271,9 @@ export function cloudflareTools(h: CloudflareHandlers, run: Run) {
         tunnel: z.string().min(1).max(100).optional().describe("The tunnel's name or id, when the account has several"),
         emails: z.array(z.string().email().max(200)).min(1).max(50).optional().describe('access_app_ensure: who may sign in'),
         bypass: z.array(z.string().min(1).max(200)).max(10).optional().describe('access_app_ensure: paths without sign-in, e.g. ["/api/health"]'),
-        name: z.string().min(1).max(100).optional().describe('access_service_token_ensure: the token\'s name, e.g. "clipfarm e2e"'),
+        idps: z.array(z.string().min(1).max(60)).max(10).optional().describe('access_app_ensure: logins to add by name, e.g. ["Entra ID"]'),
+        auto_redirect: z.boolean().optional().describe('access_app_ensure: skip the login picker (only with one login)'),
+        name: z.string().min(1).max(100).optional().describe('access_service_token_ensure: the token\'s name, e.g. "clipfarm e2e"; access_idp_ensure: the login\'s name (default "Entra ID")'),
         duration: z.string().min(2).max(10).optional().describe('access_service_token_ensure: e.g. "8760h" (Cloudflare\'s default when left out)'),
         env_file: z.string().min(2).max(500).optional().describe("access_service_token_ensure: the absolute path of the env file the service reads; left out, one in the office's own secrets folder"),
         why: z.string().min(1).max(300).optional().describe('For the card: why, in a sentence'),
@@ -194,7 +299,7 @@ export function reportTools(h: ReportHandlers, run: Run) {
   return [
     tool(
       'it_report',
-      "Report an office problem to the IT department: the test lab times out or loses a result, a port is taken, a sign-in screen, the disk is full, a preview won't start, CI is down. Returns a ticket number at once and what to do meanwhile. Report instead of sleep-looping or retrying blindly; a repeat joins the open ticket.",
+      "Report an office problem to the IT department: the test lab times out or loses a result, a port is taken, a sign-in screen, the disk is full, a preview won't start, CI is down. Returns a ticket number at once and what to do meanwhile. Report instead of sleep-looping or retrying blindly; a repeat joins the open ticket. Also for what needs a Providers key (rerun CI, a repo setting, a key's models): IT does it with the office's key; you never get the key.",
       {
         what: z.string().min(1).max(200).describe('The problem in a line, e.g. "Lab result lost"'),
         where: z.enum(TICKET_WHERE),

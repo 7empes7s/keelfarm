@@ -226,6 +226,28 @@ describe('account rotation', { timeout: 30_000 }, () => {
     expect(live() ?? null).toBeNull();
   });
 
+  it("falls back onto this computer's own Codex login while it's on, even with no agent on Codex; never once it's off", async () => {
+    const { swarm, repo, runs, i } = await office(['claude-login', 'claude-keelop', 'claude-apikey']);
+    swarm.updateSettings({ rotation: { on: true, apiLast: true, ceoClis: [], agentsSwitchCli: true } });
+    (swarm as unknown as { clis: unknown[] }).clis = ['claude', 'codex'].map((id) => ({ id, label: id, installed: true, version: 'demo', integrated: id === 'claude' }));
+    for (const a of i.state.agents as { cli?: string }[]) a.cli = ''; // nobody runs Codex, and no Codex account was added: only its built-in login is left
+    for (const id of ['codex-apikey', 'codex-pro']) await swarm.accounts.remove(id);
+    const ada = swarm.hireAgent(repo.id, { name: 'Ada', strict: true });
+    await wait(10_000);
+    const [issue] = swarm.snapshot().repos.find((r) => r.id === repo.id)!.issues;
+    void swarm.assign(ada.id, issue.number);
+    await wait(5_000);
+    expect(runs.filter((r) => r.role !== 'ceo').at(-1)).toMatchObject({ cli: 'codex', account: 'codex-login' });
+    swarm.stopAgent(ada.id);
+    await wait(1_000);
+    swarm.accounts.update('codex-login', { enabled: false });
+    const before = runs.length;
+    const [, next] = swarm.snapshot().repos.find((r) => r.id === repo.id)!.issues;
+    void swarm.assign(ada.id, next.number);
+    await wait(5_000);
+    expect(runs.slice(before).filter((r) => r.cli === 'codex')).toEqual([]);
+  });
+
   it("never moves an agent's task onto Gemini CLI, which isn't a builder (#365)", async () => {
     const { swarm, repo, runs } = await office(['claude-login', 'claude-keelop', 'claude-apikey']);
     const testing = swarm.accounts.test('gemini-plus'); // signed in, and ready
@@ -371,6 +393,62 @@ describe('sessions on a fresh login', { timeout: 30_000 }, () => {
     expect(swarm.accounts.view().accounts.find((a) => a.id === 'claude-keelop')?.status).toBe('signed-out');
     expect(signInNotices()).toHaveLength(1);
     expect(i.issueFailures.size).toBe(0);
+  });
+
+  /** Ada, on no account of her own, on the floor's first issue; sessions on `signedOut` accounts open on their sign-in (#617). */
+  async function unpinned(signedOut: string[]) {
+    const o = await office([]);
+    o.swarm.updateSettings({ rotation: { on: true, apiLast: true, ceoClis: [], agentsSwitchCli: false } });
+    const seen: { account: string; ended: boolean }[] = [];
+    const start = o.i.backend.startSession.bind(o.i.backend);
+    o.i.backend.startSession = (opts, cb) => {
+      if (opts.role === 'ceo') return start(opts, cb);
+      const run = { account: accountOf(opts), ended: false };
+      seen.push(run);
+      const done = (r: Parameters<SessionCallbacks['finished']>[0]) => ((run.ended = true), cb.finished(r));
+      if (!signedOut.includes(run.account)) return start(opts, { ...cb, finished: done });
+      // A fake CLI on its sign-in screen: cliRunner.ts ends it signed out at 0 turns.
+      const t = setTimeout(() => done({ ok: false, text: '', costUsd: 0, turns: 0, errors: [`Claude Code is not signed in on ${run.account}: it showed its sign-in screen, so the task goes back in line.`], signedOut: true }), 1_000);
+      return { send: () => undefined, stop: () => clearTimeout(t) };
+    };
+    const ada = o.swarm.hireAgent(o.repo.id, { name: 'Ada', strict: true });
+    await wait(10_000);
+    const [issue] = o.swarm.snapshot().repos.find((r) => r.id === o.repo.id)!.issues;
+    void o.swarm.assign(ada.id, issue.number);
+    await wait(5_000);
+    const agent = () => o.swarm.snapshot().agents.find((a) => a.id === ada.id)!;
+    return { ...o, ada, issue, agent, seen };
+  }
+
+  it('an unpinned session on a sign-in moves its task to the next signed-in account within 60 s, no strike (#617)', async () => {
+    const { agent, issue, seen, i } = await unpinned(['claude-login']);
+    expect(seen.map((s) => s.account)).toEqual(['claude-login', 'claude-keelop']);
+    expect(seen[0].ended).toBe(true);
+    expect(agent()).toMatchObject({ status: 'working', issueNumber: issue.number, lastError: null });
+    expect(i.issueFailures.size).toBe(0);
+    expect(i.usageNow().state).toBe('normal');
+  });
+
+  it('with no account signed in, the task goes back at once with one card, no session held and no pause (#617)', async () => {
+    const { swarm, agent, issue, seen, i, ada } = await unpinned(['claude-login', 'claude-keelop', 'claude-apikey']);
+    await wait(3_000); // a second on each sign-in screen
+    expect(seen.map((s) => s.account).sort()).toEqual(['claude-apikey', 'claude-keelop', 'claude-login']);
+    expect(seen.every((s) => s.ended)).toBe(true); // no session stays open
+    expect(agent()).toMatchObject({ issueNumber: null, lastError: null });
+    expect(agent().status).not.toBe('error');
+    expect(i.issueFailures.size).toBe(0);
+    expect(i.usageNow().state).toBe('normal'); // a sign-in, not a limit
+    expect(i.state.messages.filter((m) => m.switch)).toHaveLength(0); // no "every account is out"
+    const cards = () => i.state.messages.filter((m) => m.accountOut && m.text.startsWith('🔑 No ')); // each login's own card came as it signed out (#579)
+    expect(cards()).toHaveLength(1);
+    expect(cards()[0].text).toMatch(/^🔑 No Claude Code account is signed in \(Claude login on this computer, Max · keelops, /);
+    expect(cards()[0].text).toContain(`so Ada's issue #${issue.number} went back in line. To fix it, run claude in a terminal on this computer and type /login, or tap Sign in.`);
+    // Given it again, no session starts at all, and the card isn't repeated.
+    void swarm.assign(ada.id, issue.number);
+    await wait(2_000);
+    expect(seen).toHaveLength(3);
+    expect(agent()).toMatchObject({ issueNumber: null, lastError: null });
+    expect(cards()).toHaveLength(1);
   });
 
   it("the built-in login's sign-in screen reads signed out, never limited, with one Sign in card and a problem for the manager (#579)", async () => {

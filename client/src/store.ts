@@ -3,7 +3,8 @@ import { DEFAULT_FOLLOWUPS } from '../../shared/followups';
 import { DEFAULT_DOG_NAME, DEFAULT_MAX_AGENTS, type AccountsView, type ProvidersView, type KeyScanView, type AgentView, type CeoChatView, type CeoInfo, type CliView, type ModelCatalogView, type CloudView, type DoctorFinding, type HireRequestView, type LogLine, type ManagerChange, type NoticeView, type NotifyChannelsView, type OfficeUpdateView, type OpsView, type PhoneMessage, type PongRow, type PreviewStatsView, type PrPreviewView, type QaView, type RepoView, type ServerEvent, type SwarmSettings, type TickerItem, type UsageCheckError, type UsageReading, type UsageShares, type UsageView, type VisitorView, type VoiceCacheView, type VoiceLine } from '../../shared/types';
 import type { PastCareer } from '../../shared/careers';
 import { blockers } from '../../shared/issues';
-import { OUTSIDE_PR, UNTRUSTED_ISSUE } from '../../shared/trust';
+import { UNTRUSTED_ISSUE } from '../../shared/trust';
+import { pullSkip, SKIP_NOTES } from '../../shared/officePulls';
 import type { ChatItem } from '../../shared/agentChat';
 import { DEFAULT_WEATHER, DEFAULT_WORLD_EVENTS, EMPTY_WEATHER_VIEW, type WeatherView } from '../../shared/outside';
 import { DEFAULT_NOTIFY } from '../../shared/notify';
@@ -18,6 +19,7 @@ import type { ItTicket } from '../../shared/itTickets';
 import type { ItImproveView } from '../../shared/itImprove';
 import type { VoiceAgentView } from '../../shared/voiceAgent';
 import type { Problem } from '../../shared/problems';
+import type { Checklist } from '../../shared/checklists';
 import { DEFAULT_CEO_AWAKE } from '../../shared/ceoAwake';
 import { DEFAULT_CLOUD, EMPTY_CLOUD } from '../../shared/cloud';
 import { DEFAULT_TOOL_SETTINGS, EMPTY_INVENTORY, type ToolInventory } from '../../shared/tooling';
@@ -171,6 +173,7 @@ export interface State {
   itTickets: ItTicket[]; // office problems reported to IT (#542), newest first
   itImprove: ItImproveView | null; // IT's improvements (#543): trends, the review's cards, the changes; null until the first record
   problems: Problem[]; // the problems register's own entries (#544), newest first; IT's tickets join them on the page
+  checklists: Checklist[]; // the CEO's checklists for the manager (#612), newest first
   claudeUsage: UsageReading[]; // Claude's latest reading per usage limit (empty until a session reports)
   claudeUsageCheck: UsageCheckError | null; // why the office's idle check couldn't read it (#89), null when it could
   claudeUsageShares: UsageShares[]; // each usage bar's floor shares of the office's spend in its window (#334)
@@ -351,6 +354,7 @@ export const useStore = create<State>((set, get) => ({
   itTickets: [],
   itImprove: null,
   problems: [],
+  checklists: [],
   claudeUsage: [],
   claudeUsageCheck: null,
   claudeUsageShares: [],
@@ -564,7 +568,8 @@ export function kanbanFor(repo: RepoView, agents: Agent[], qaRecords: Record<str
     const dev = (rec?.devAgentId ? byId.get(rec.devAgentId) : undefined) ?? authorOf(p.number, p.headRefName);
     const tester = rec?.qaAgentId ? byId.get(rec.qaAgentId) : undefined;
     const base = { key: `pr-${p.number}`, number: p.number, prNumber: p.number, closes: p.closesIssues, title: p.title, url: p.url, qa: rec, untrusted: p.untrusted };
-    const card = { ...base, ...(p.untrusted ? { note: OUTSIDE_PR, tone: 'warn' as const } : qaCardNote(rec, p, repo.autoMerge)) };
+    const skip = pullSkip(p, !!repo.leaveOwnPrs); // why the office leaves it alone, said on the card (#632)
+    const card = { ...base, ...(skip && (skip === 'outside' || !rec) ? { note: SKIP_NOTES[skip], tone: 'warn' as const } : qaCardNote(rec, p, repo.autoMerge)) };
     if (rec?.status === 'passed') ready.push({ ...card, agent: dev });
     else qa.push({ ...card, agent: rec?.status === 'testing' ? tester : dev });
   }

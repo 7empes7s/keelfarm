@@ -27,6 +27,7 @@ import type { FollowupState } from '../../shared/followups.ts';
 import type { ItDeskState } from '../../shared/itDesk.ts';
 import type { TicketsState } from '../../shared/itTickets.ts';
 import type { ProblemsState } from '../../shared/problems.ts';
+import type { ChecklistsState } from '../../shared/checklists.ts';
 import type { ItState } from '../../shared/itDept.ts';
 import type { ItWatchState } from '../../shared/itWatch.ts';
 import type { ItImproveState } from '../../shared/itImprove.ts';
@@ -82,6 +83,7 @@ export interface PersistedRepo {
   color: string;
   autoAssign: boolean;
   autoMerge: boolean; // PRs merge themselves once QA passes and GitHub's checks are green
+  leaveOwnPrs?: boolean; // "Leave my own PRs alone" (#632): only the office's swarm/ branches get QA and auto-merge; missing: off
   browserTesting: boolean;
   links: string[]; // other connected repos this floor's agents may read
   localPath: string | null; // the manager's own project folder (null: a clone under WORKSPACE_ROOT)
@@ -258,6 +260,7 @@ export interface Persisted {
   itTickets: TicketsState; // office problems reported to IT, and their outcomes (#542)
   itImprove: ItImproveState; // closed tickets' records, the weekly review's cards and the changes approved (#543)
   problems: ProblemsState; // the problems register (#544): work and process problems; IT's tickets join it as infrastructure
+  checklists: ChecklistsState; // steps the CEO gave the manager as tickable cards (#612)
   diskAlert?: DiskAlertMark | null; // the last disk notification, so a restart doesn't repeat it (#502)
   usageWatch: string[]; // usage rows the manager asked to hear about once they're back (#404, kept across restarts since #538)
   usageWaiver?: Waiver | null; // pacing the manager cleared with Resume full speed, kept for its window across restarts (#323)

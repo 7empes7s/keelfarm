@@ -27,6 +27,14 @@ function store(dir: string, probe = vi.fn(async () => ({ status: 200 }))) {
 }
 
 describe('the providers store', () => {
+  it('saves from two offices on one file at once without a torn rename (#602: parallel test files share it)', async () => {
+    const dir = fs.mkdtempSync(path.join(home, 'race-'));
+    const [a, b] = [store(dir).p, store(dir).p];
+    await Promise.all([a.init(), b.init()]);
+    const adds = Array.from({ length: 10 }, (_, i) => [a, b][i % 2].add('openrouter', `sk-or-race-key-${i}-0000`));
+    await expect(Promise.all(adds)).resolves.toHaveLength(10);
+  });
+
   it('keeps keys in the secrets file only, tests them, and tells the tabs on every change', async () => {
     const dir = fs.mkdtempSync(path.join(home, 'store-'));
     const { p, changed, probe } = store(dir);

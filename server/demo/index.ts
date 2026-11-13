@@ -23,4 +23,8 @@ import './liveLeases.ts';
 import './agentSdk.ts';
 import './itDesk.ts';
 import './cloudflare.ts';
+import './providerActions.ts';
+import './keys.ts';
+import './gcloud.ts';
 import './problems.ts';
+import './checklists.ts';

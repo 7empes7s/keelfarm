@@ -50,7 +50,8 @@ export function envPathRefusal(p: string, protectedDirs: readonly string[]): str
 
 const read = (file: string) => fs.readFile(file, 'utf8').catch(() => null);
 
-async function put(file: string, text: string) {
+/** One owner-only write: a temp file, then a rename (#609's install_key writes the same way). */
+export async function put(file: string, text: string) {
   await fs.mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
   const tmp = `${file}.${process.pid}-${randomUUID().slice(0, 8)}.tmp`;
   await fs.writeFile(tmp, text, { mode: 0o600 });
@@ -69,4 +70,12 @@ export function envSecretFile(file: string): CfSecretFile {
       return () => (before === null ? fs.rm(file, { force: true }) : put(file, before));
     },
   };
+}
+
+/** An env file's Access service token as "client id:secret" (#622: the office's calls to an app behind Access). */
+export function envAccessPair(text: string): string | undefined {
+  const get = (name: string) => text.match(new RegExp(`^\\s*(?:export\\s+)?${name}\\s*=\\s*["']?([^"'\\s#]+)`, 'm'))?.[1];
+  const id = get(ID_VAR);
+  const secret = get(SECRET_VAR);
+  return id && secret ? `${id}:${secret}` : undefined;
 }

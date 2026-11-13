@@ -2,6 +2,7 @@
 // agents. Claude and Codex accounts, the ElevenLabs key and the Upstash key stay in their own stores (accounts.ts,
 // voice.ts, cloud.ts); shared/providers.ts shows them all as one list. Never a key: only its last 4 characters.
 import type { UsageWindow } from './usage.ts';
+import type { KeyInstall } from '../keyInstall.ts';
 
 export type ProviderCategory = 'coding' | 'text' | 'audio' | 'video' | 'image' | 'cloud' | 'signin' | 'mcp';
 /** What the office asks a provider for (#533): floors and the CEO ask for one of these, never a provider. */
@@ -40,7 +41,20 @@ export interface ProviderConnection {
   named?: boolean; // the manager named it: nothing renames it again
   accountId?: string; // Cloudflare's Account ID, for its account permission checks (#533); not a secret
   scopes?: string[]; // a company sign-in's granted scopes (#533); its tokens stay in secrets.json
-  expiresAt?: number; // when a sign-in's access token runs out; refreshed on the server
+  expiresAt?: number; // when a sign-in's access token runs out; refreshed on the server; a made key's expiry (#609)
+  usedBy?: string; // what uses it, in the manager's words ("Other key", #609)
+  installs?: KeyInstall[]; // the service env files it's installed in (#609): a renewal installs there too
+  mint?: KeyMint; // the office made it (#609), and renews it
+}
+
+/** A key the office made (#609): from which key, with what, so it renews itself; never its value. */
+export interface KeyMint {
+  parentId: string; // the Providers key that made it
+  tokenId: string;
+  name: string;
+  accountId: string;
+  groups: { id: string; name: string; scopes?: string[] }[];
+  days: number;
 }
 
 /** An MCP server the office adds to its agents' sessions (their own mcp.json, never ~/.claude). */

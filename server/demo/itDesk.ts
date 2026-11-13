@@ -3,12 +3,29 @@
 // chat through the real IT tools: "how much disk is free?" reads df; "free up space" reads du and journalctl, then puts
 // two changes on cards; after a Run it checks df again and reports; a ticket (#542) gets an answer and a close; a health
 // check gone bad gets a recommendation of three ranked clean-ups (#525); the weekly review proposes a fix (#543); "install
-// clipfarm" walks a runbook's steps, which auto-approve runs without a tap when it's on (#585). The demo CEO hands "check the machine" to IT.
+// clipfarm" walks a runbook's steps, which auto-approve runs without a tap when it's on (#585); "install postiz" runs a
+// floor's runbook as one job (#611), on in-memory files; "call clip" or "app_call <url>" calls the live app past Access
+// with the demo's service token file (#625), seeded in the demo's own secrets folder. The demo CEO hands "check the machine" to IT.
 // Now and then a demo agent reports a lost lab result with it_report (withItReport).
 import { describeOfficeTool, type LogEntry, type SessionCallbacks, type SessionHandle, type SessionOptions } from '../agentRunner.ts';
 import { logStreamed, writeReply } from '../demoChat.ts';
 import { registerCeoReply, registerDemo } from './registry.ts';
 import { demoDiskRoom } from './disk.ts';
+import { memoryFiles } from '../itFiles.ts';
+import { DEMO_RUNBOOK_PATH } from './runbookSample.ts';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+import { HOME_DIR } from '../config.ts';
+import { put } from '../cfSecretFile.ts';
+import { DEMO_ACCESS } from './gcloud.ts';
+
+/** The demo machine's files for runbook jobs: in memory, never this computer's. */
+const demoFiles = memoryFiles({
+  '/opt/postiz/.env.example': 'JWT_SECRET=\nDATABASE_PASSWORD=change-me\nMAIN_URL=http://localhost:5000\n',
+  '/opt/postiz/docker-compose.yml': 'services:\n  postiz:\n    image: ghcr.io/gitroomhq/postiz-app:latest\n',
+  '/opt/postiz/postiz.service': '[Service]\nExecStart=/usr/bin/docker compose -f /opt/postiz/docker-compose.yml up\n',
+  '/etc/caddy/Caddyfile': 'demo.example.com {\n\treverse_proxy localhost:4317\n}\n',
+});
 
 /** GB the demo's pretend changes have freed, so df after a Run shows it. */
 let freedGb = 0;
@@ -56,6 +73,14 @@ const DONE: Record<string, { out: string; gb: number }> = {
   apt: { out: 'Reading package lists... Done\n0 upgraded, 0 newly installed, 0 to remove.\nDel cached packages: 1.1 GB freed', gb: 1.1 },
 };
 
+// app_call's service token file (#625), in the demo's own secrets folder: what access_service_token_ensure would write.
+registerDemo('app call', () => {
+  const token = path.join(HOME_DIR, 'secrets', 'cf-access-clipfarm.env');
+  const [id, secret] = DEMO_ACCESS.split(':');
+  if (!existsSync(token)) void put(token, `CF_ACCESS_CLIENT_ID=${id}\nCF_ACCESS_CLIENT_SECRET=${secret}\n`).catch(() => undefined);
+  return {};
+});
+
 registerDemo('itDesk', () => ({
   itExec: async (argv) => {
     await new Promise((r) => setTimeout(r, 120));
@@ -68,12 +93,16 @@ registerDemo('itDesk', () => ({
     }
     if (program === 'df') return { code: 0, out: df(), err: '' };
     if (argv.includes('rev-parse')) return { code: 0, out: '3f9c2a1b7d4e5f60718293a4b5c6d7e8f9012345\n', err: '' };
+    if (argv[0] === 'docker' && argv[1] === 'compose') return { code: 0, out: argv.includes('pull') ? 'postiz Pulled' : argv.includes('down') ? 'Container postiz-1  Removed' : 'Container postiz-1  Started', err: '' };
+    if (argv[0] === 'systemctl' && argv[1] === 'enable') return { code: 0, out: `Created symlink /etc/systemd/system/multi-user.target.wants/${argv.at(-1)}.service → /etc/systemd/system/${argv.at(-1)}.service.`.replace('.service.service', '.service'), err: '' };
+    if (argv[0] === 'curl') return { code: 0, out: '<!doctype html><title>Postiz</title>', err: '' };
     if (RUNBOOK_OUT[program]) return { code: 0, out: RUNBOOK_OUT[program], err: '' };
     const watch = watchOut(argv);
     if (watch !== null) return { code: 0, out: watch, err: '' };
     return { code: 0, out: OUT[program] ?? `(demo) ${argv.join(' ')}: nothing to show in the demo`, err: '' };
   },
   certExpiry: async () => Date.now() + 61 * 24 * 3_600_000,
+  itFiles: demoFiles,
 }));
 
 /** The system disk's line of df -h: size, free and use%. */
@@ -144,6 +173,11 @@ export function itSession(opts: SessionOptions, cb: SessionCallbacks): SessionHa
       const lacks = scopes.match(/the key needs ([^\n]+)/)?.[1];
       return out.startsWith('Refused') ? `I couldn't plan it: ${out.replace(/^Refused:\s*/, '')}` : `The key that passes can edit the tunnel${lacks ? ` (the other one lacks ${lacks})` : ''}. The change is on a card with its before and after: tap Approve and I'll check the tunnel after.`;
     }
+    if (/\bapp_call\b|\bcall (the )?(clip|live app)\b/i.test(p)) {
+      const url = p.match(/https:\/\/[^\s`'"]+/)?.[0] ?? 'https://clip.techinsiderbytes.com/api/settings';
+      const out = await use('app_call', { method: 'GET', url, why: 'Check the live app answers past Access.' });
+      return out.startsWith('Refused') ? `I couldn't call it: ${out.replace(/^Refused:\s*/, '')}` : `Called ${url} with its Access service token (never shown):\n\`\`\`\n${out.split('\n').slice(1).join('\n')}\n\`\`\``;
+    }
     const disk = rootDisk(await use('it_run', { command: 'df -h' }));
     const free = disk ? `${disk.avail} free of ${disk.size} (${disk.use} used)` : 'no reading from df';
     if (/The office's checks got worse/.test(p) && !/- Disk is/.test(p)) {
@@ -170,6 +204,10 @@ export function itSession(opts: SessionOptions, cb: SessionCallbacks): SessionHa
       return out.startsWith('Refused') ? `I couldn't put the options on a card: ${out}` : `The disk is low: ${free}. Three clean-ups are on the card, best first; pick one and I'll measure again.\n\`\`\`spoken\nThe disk is low. Pick a clean-up on the card.\n\`\`\``;
     }
     if (ran) return `Checked after \`${ran[1]}\` (${ran[2]}): the system disk now has **${free}**.\n\`\`\`spoken\nDone. The disk now has ${disk?.avail ?? 'more'} free.\n\`\`\``;
+    if (/\binstall postiz\b/i.test(p)) {
+      const out = await use('it_runbook', { floor: 1, path: DEMO_RUNBOOK_PATH, project: 'postiz' });
+      return out.startsWith('Refused') ? `I couldn't start the runbook: ${out.replace(/^Refused:\s*/, '')}` : out.startsWith('Started') ? "Postiz's runbook is running as one job, with no tap: its card shows each step, and the health check runs last." : "Postiz's runbook is one card: tap Approve and all of it runs, the health check last.";
+    }
     if (/\binstall clipfarm\b/i.test(p)) {
       let auto = 0;
       for (const argv of RUNBOOK) {
@@ -187,7 +225,7 @@ export function itSession(opts: SessionOptions, cb: SessionCallbacks): SessionHa
     }
     if (/\b(disk|space|free)\b/i.test(p)) return `The system disk has **${free}**.\n\`\`\`suggestions\nFree up space\nCheck the machine\n\`\`\``;
     const health = await use('it_health', {});
-    return `All quiet: the system disk has ${free}, and ${health.startsWith('Refused') ? "the office's readings aren't in yet" : "memory and the watchdog look fine"}.\n\`\`\`suggestions\nFree up space\nHow much disk is free?\nInstall clipfarm\n\`\`\``;
+    return `All quiet: the system disk has ${free}, and ${health.startsWith('Refused') ? "the office's readings aren't in yet" : "memory and the watchdog look fine"}.\n\`\`\`suggestions\nFree up space\nHow much disk is free?\nInstall clipfarm\nInstall Postiz\n\`\`\``;
   };
   const finish = (ok: boolean, text: string, error?: string) => {
     if (done) return;

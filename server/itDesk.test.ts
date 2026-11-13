@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { neverRefusal, parseCommand, readOnlyPlan, secretPath, shapeOutput, sortBySize } from './itDesk.ts';
+import { itRedact, neverRefusal, parseCommand, readOnlyPlan, secretPath, secretPaths, secretValues, shapeOutput, sortBySize } from './itDesk.ts';
 import { argvLine } from '../shared/itDesk.ts';
 
 const plan = (line: string, linux = true) => {
@@ -58,8 +58,8 @@ describe('readOnlyPlan (it_run)', () => {
     expect(refusedWhy('git log --output=/tmp/x')).toMatch(/isn't read-only/);
   });
 
-  it.each(['ls /etc/keel', 'stat /etc/keel/gh.env', 'find /opt -name x.key', 'ls /opt/keel/.env', 'ls /root/.ssh/id_rsa', 'stat /opt/app/.env.local'])('never names a secret file: %s', (line) => {
-    expect(refusedWhy(line)).toMatch(/holds secrets/);
+  it.each(['ls /etc/keel', 'stat /etc/keel/gh.env', 'find /opt -name x.key', 'ls /opt/keel/.env', 'ls /root/.ssh/id_rsa', 'stat /opt/app/.env.local'])('looks at a secret file without printing it (#625): %s', (line) => {
+    expect(refusedWhy(line)).toBeNull();
   });
 
   it('lets ordinary files through', () => {
@@ -81,7 +81,6 @@ describe('neverRefusal (it_propose, and again at Run)', () => {
     ['rm -rf /opt/', /removing \/opt as a whole/],
     ['rm -r ~', /removing \/root as a whole/],
     ['rm -rf /var/*', /removing \/var\/\* as a whole/],
-    ['rm /etc/keel/gh.env', /secrets/],
     ['rm -rf /root/Projects/keelfarm/node_modules', /live office/],
     ['git -C /root/keelfarm reset --hard', /live office/],
     ['shutdown -h now', /rebooting/],
@@ -98,6 +97,61 @@ describe('neverRefusal (it_propose, and again at Run)', () => {
     const p = parseCommand(line);
     if ('refused' in p) throw new Error(p.refused);
     expect(neverRefusal(p.argv, office)).toBeNull();
+  });
+});
+
+describe('secret files (#625): used and written freely, never printed', () => {
+  const never = (line: string) => {
+    const p = parseCommand(line);
+    if ('refused' in p) throw new Error(p.refused);
+    return neverRefusal(p.argv, office);
+  };
+
+  it.each([
+    'install -m600 /tmp/x /opt/postiz/.env',
+    'systemd-run -p EnvironmentFile=/root/.cubefarm/secrets/cf-access-clipfarm-office-runner.env /opt/clipfarm/bin/make-clip',
+    'chmod 600 /opt/postiz/.env',
+    'chown root:root /opt/postiz/.env',
+    'cp /opt/postiz/.env.example /opt/postiz/.env',
+    'docker run --env-file /opt/postiz/.env postiz',
+    'grep -c JWT_SECRET= /opt/postiz/.env',
+    'grep -q KEY /opt/postiz/.env',
+    'sed -i s/x/y/ /opt/postiz/.env',
+    'test -s /opt/postiz/.env',
+    'rm /etc/keel/old.env',
+    'docker compose config --quiet',
+  ])('allows %s', (line) => expect(never(line)).toBeNull());
+
+  it.each([
+    ['cat /opt/postiz/.env', /cat would print \/opt\/postiz\/.env.*test -s/],
+    ['grep KEY .env', /grep without -q, -l or -c would print \.env.*grep -c/],
+    ['printenv', /prints the environment.*stat/],
+    ['env', /prints the environment/],
+    ['head -n 3 /etc/keel/gh.env', /head would print/],
+    ['sed -n 1p /opt/postiz/.env', /sed without -i/],
+    ['base64 /root/.ssh/id_ed25519', /base64 would print/],
+    ['jq . /root/.cubefarm/secrets.json', /jq would print/],
+    ['docker inspect postiz', /docker inspect prints/],
+    ['docker compose -f /opt/postiz/docker-compose.yml config', /--quiet/],
+  ])('refuses %s with a hint', (line, why) => {
+    expect(never(line)).toMatch(why);
+    expect(refusedWhy(line)).toMatch(why); // it_run says the same
+  });
+
+  it('names the secret files a command uses, for the redactor', () => {
+    expect(secretPaths(['systemd-run', '-p', 'EnvironmentFile=/root/s/a.env', '--env-file=/opt/b/.env', '/opt/b/.env', 'x'])).toEqual(['/root/s/a.env', '/opt/b/.env']);
+    expect(secretValues('# c\nexport A="hunter2hunter2"\nB=short\nC=\'lo ng value\'\n')).toEqual(['hunter2hunter2', 'lo ng value']);
+  });
+
+  it('masks stored keys, file values and key shapes as ••••last4', () => {
+    const jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U';
+    const out = itRedact(`stored=plainstoredvalue42 file hunter2hunter2 ghp_${'a'.repeat(30)} AIza${'b'.repeat(35)} ${jwt}\nAPP_KEY=x9f8e7d6c5b4a3\n-----BEGIN PRIVATE KEY-----\nMIIE\n-----END PRIVATE KEY-----`, ['plainstoredvalue42', 'hunter2hunter2']);
+    for (const s of ['plainstoredvalue42', 'hunter2hunter2', 'ghp_', 'AIza', jwt, 'x9f8e7d6c5b4a3', 'MIIE']) expect(out).not.toContain(s);
+    expect(out).toContain('••••ue42');
+    expect(out).toContain('••••ter2');
+    expect(out).toContain('APP_KEY=••••b4a3');
+    expect(out).toContain('-----BEGIN PRIVATE KEY----- •••• -----END PRIVATE KEY-----');
+    expect(itRedact('df: 12G free on /dev/sda1, commit 3f9c2a1', [])).toBe('df: 12G free on /dev/sda1, commit 3f9c2a1');
   });
 });
 

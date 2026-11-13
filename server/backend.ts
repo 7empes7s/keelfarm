@@ -11,7 +11,10 @@ import { localMachines, type MachineProvider } from './machines.ts';
 import { detectClis } from './clis.ts';
 import { npmInstall } from './cliInstall.ts';
 import { itExec, type ItExecResult } from './itExec.ts';
+import { machineFiles, type RunbookFiles } from './itFiles.ts';
 import { realCloudflareApi, type CfApi } from './cloudflare.ts';
+import { realProviderHttp } from './providerActions/http.ts';
+import type { ProviderHttp } from './providerActions/types.ts';
 import { certExpiry } from './itChecks.ts';
 import { readPicks } from './picks.ts';
 import type { QuickPicks } from '../shared/used.ts';
@@ -164,7 +167,9 @@ export interface Backend {
   /** Install a missing CLI's pinned npm package into `prefix` (#493). Never throws: how it went and its log's tail. */
   installCli(id: AgentCli, prefix: string): Promise<{ ok: boolean; tail: string[] }>;
   /** The IT desk (#506): one command on this machine, as argv without a shell. Never throws. */
-  itExec(argv: string[], timeoutMs: number): Promise<ItExecResult>;
+  itExec(argv: string[], timeoutMs: number, cwd?: string): Promise<ItExecResult>;
+  /** Runbook jobs (#611): the files their steps write (env files, the Caddyfile), backups and Undo; never through argv. */
+  itFiles: RunbookFiles;
   /** IT monitoring (#525): when a public hostname's TLS certificate expires (ms); throws when it can't be reached. */
   certExpiry(host: string): Promise<number>;
   /** OpenCode's own sign-in, `opencode auth login`, in `term` (#493). */
@@ -211,10 +216,12 @@ export interface Backend {
   providerProbe(req: ProbeRequest): Promise<ProbeResult>;
   /** The Cloudflare office action (#586): one API call with a Providers key, server-side only; never throws. */
   cloudflareApi: CfApi;
+  /** The provider-action layer (#602): one call with a Providers key, which goes in its header only; never throws. */
+  providerHttp: ProviderHttp;
   /** Keys found on this computer (#367): the retired projects' env and JSON files, read server-side (the demo's archive is fake). */
   scanForKeys(): Promise<RawKey[]>;
   /** The demo only: made-up keys and MCP servers for Settings → Providers, so a fresh demo office shows every category. */
-  demoProviders?(): { keys: { provider: string; key: string; label: string }[]; mcp: (McpInput & { secrets?: Record<string, string> })[] };
+  demoProviders?(): { keys: { provider: string; key: string; label: string; accountId?: string }[]; mcp: (McpInput & { secrets?: Record<string, string> })[] };
   /** The demo only (#366): the company's main use cases, repos listed but not moved in (a three.js game), and a floor's agent left signed out. */
   demoSetup?(): { company: UseCase[]; spare: string[]; signedOut: { floor: number; model: string }; accountOut?: string };
   /** The demo only: a made-up past week for mission control, so a fresh demo office has numbers from the start. */
@@ -386,6 +393,7 @@ export const realBackend: Backend = {
   detectClis,
   installCli: (id, prefix) => npmInstall(id, { prefix }),
   itExec,
+  itFiles: machineFiles,
   certExpiry,
   opencodeSignIn: (term, exited) => startLocalSignIn({ cli: 'opencode', env: {}, term }, exited),
   quickPicks: () => readPicks(),
@@ -396,6 +404,7 @@ export const realBackend: Backend = {
   usage: realUsageApi,
   providerProbe: realProbe,
   cloudflareApi: realCloudflareApi,
+  providerHttp: realProviderHttp,
   scanForKeys: realKeyScan,
   survivalSignals: github.survivalSignals,
   previews: realPreviews,

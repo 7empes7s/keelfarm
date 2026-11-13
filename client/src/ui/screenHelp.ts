@@ -70,6 +70,12 @@ export const SCREEN_HELP: Record<ScreenId, ScreenHelp> = {
     actions: ['Decide what needs you, on top.', 'Filter by owner and state, or see this week’s resolved ones.', 'Set the hour of the daily digest in the CEO chat.'],
     docs: `${HOW}#problems`,
   },
+  checklists: {
+    title: 'Checklists',
+    shows: 'Steps the CEO gave you, each as a checklist you tick off: values to copy, secret fields that save to Providers, your comments.',
+    actions: ['Tick a step, or mark it not needed.', 'Comment with a photo when something looks different.', 'Duplicate a checklist for another account.'],
+    docs: `${HOW}#checklists`,
+  },
   charter: {
     title: 'Charter',
     shows: 'Each floor’s mission, objectives, standards and non-goals, with numbers per objective and where the week went.',

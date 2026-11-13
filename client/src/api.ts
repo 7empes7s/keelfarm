@@ -21,6 +21,7 @@ import type { CleanPlan, CleanResult, DiskSettings } from '../../shared/disk';
 import type { HealthView } from '../../shared/health';
 import type { ChatPage } from '../../shared/chatPage';
 import type { TryThis } from '../../shared/tryIt';
+import type { Checklist } from '../../shared/checklists';
 
 async function call<T = unknown>(method: string, url: string, body?: unknown, toast = true): Promise<T> {
   // The time-lapse shows a recorded day: nothing in it can be acted on.
@@ -88,6 +89,7 @@ export const api = {
     patch: {
       autoAssign?: boolean;
       autoMerge?: boolean;
+      leaveOwnPrs?: boolean;
       browserTesting?: boolean;
       color?: string;
       theme?: FloorTheme;
@@ -135,6 +137,10 @@ export const api = {
   snoozeSetup: (repoId: string, gap: string) => call<RepoView>('POST', `${r(repoId)}/setup/snooze`, { gap }),
   closeSetupReview: (repoId: string) => call<RepoView>('POST', `${r(repoId)}/setup/review`),
   setCompanyUseCases: (useCases: UseCase[]) => call<UseCase[]>('PUT', '/api/company/use-cases', { useCases }),
+  /** Checklists (#612): a step's tick, untick, not needed or comment; a secret field (saved to Providers only); a copy. */
+  checklistStep: (id: string, step: string, body: { action: 'tick' | 'untick' | 'skip' | 'comment'; reason?: string; text?: string; fileId?: string }) => call<Checklist>('POST', `/api/checklists/${id}/steps/${step}`, body),
+  checklistSecret: (id: string, step: string, value: string) => call<Checklist>('POST', `/api/checklists/${id}/steps/${step}/secret`, { value }),
+  checklistDuplicate: (id: string, title: string) => call<Checklist>('POST', `/api/checklists/${id}/duplicate`, { title }),
   mergePull: (repoId: string, n: number, method: 'squash' | 'merge' | 'rebase' = 'squash') => call('POST', `${r(repoId)}/pulls/${n}/merge`, { method }),
   closePull: (repoId: string, n: number) => call('POST', `${r(repoId)}/pulls/${n}/close`),
   /** Queues the PR for QA; with `agentId`, that (free) agent tests it now. */
@@ -181,6 +187,8 @@ export const api = {
   itRun: (ids: string[]) => call('POST', '/api/it/run', { ids }),
   itDismiss: (ids: string[]) => call('POST', '/api/it/dismiss', { ids }),
   itUndo: (logId: string) => call<{ ok: boolean }>('POST', `/api/it/undo/${encodeURIComponent(logId)}`),
+  itRunbook: (id: string, run: boolean) => call<{ ok: boolean }>('POST', `/api/it/runbook/${encodeURIComponent(id)}`, { run }),
+  itRunbookUndo: (id: string) => call<{ ok: boolean }>('POST', `/api/it/runbook/${encodeURIComponent(id)}/undo`),
   // The IT department (#524): its chat, and its own Telegram bot (no toasts on the token: the card shows why).
   messageIt: (text: string, replyTo?: number) => call<{ id: number }>('POST', '/api/it/message', { text, replyTo }),
   reactToItMessage: (id: number, emoji: string) => call('POST', `/api/it/messages/${id}/react`, { emoji }),
@@ -247,7 +255,7 @@ export const api = {
   demoUpdateWait: () => call<OfficeUpdateView>('POST', '/api/demo/update-wait'),
   /** Saves an Anthropic or OpenAI Admin key for the usage card's organisation spend (#361); '' removes it. */
   // Settings → Providers (#362): keys and MCP servers' secrets go in and never come back out.
-  addProvider: (provider: string, key: string, label?: string, accountId?: string) => call<ProviderConnection>('POST', '/api/providers', { provider, key, label, accountId }, false),
+  addProvider: (provider: string, key: string, label?: string, accountId?: string, usedBy?: string) => call<ProviderConnection>('POST', '/api/providers', { provider, key, label, accountId, usedBy }, false),
   // Providers by what they do (#533): a capability's default and fallback, and a company's one sign-in.
   setProviderDefault: (capability: Capability, choice: CapabilityChoice) => call<ProvidersView>('PUT', `/api/providers/defaults/${capability}`, choice),
   setOAuthClient: (company: string, clientId: string, clientSecret: string) => call('PUT', `/api/providers/oauth/${encodeURIComponent(company)}/client`, { clientId, clientSecret }, false),

@@ -21,4 +21,11 @@ describe('qaRetry', () => {
     expect(qaRetry(ending({ limited: true }))).toBe('give-up');
     expect(qaRetry(ending({ ok: false }))).toBe('give-up');
   });
+
+  it("puts a round that ended on a sign-in back in line, never failed (#617)", () => {
+    expect(qaRetry(ending({ ok: false, signedOut: true }))).toBe('requeue');
+    expect(qaRetry(ending({ ok: false, signedOut: true, canResume: false }))).toBe('requeue');
+    expect(qaRetry(ending({ ok: false, signedOut: true, report: true }))).toBe('report');
+    expect(qaRetry(ending({ stopped: true, signedOut: true }))).toBe('give-up');
+  });
 });

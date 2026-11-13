@@ -32,7 +32,8 @@ function Palette({ where }: { where: Where }) {
   const agents = useStore((s) => s.agents);
   const qa = useStore((s) => s.qa);
   const messages = useStore((s) => s.messages);
-  const items = useMemo(() => buildIndex({ repos, agents, qa, messages, where, fullscreen: canGoFullscreen() }), [repos, agents, qa, messages, where]);
+  const checklists = useStore((s) => s.checklists);
+  const items = useMemo(() => buildIndex({ repos, agents, qa, messages, checklists, where, fullscreen: canGoFullscreen() }), [repos, agents, qa, messages, checklists, where]);
   const [query, setQuery] = useState('');
   const [recent, setRecent] = useState(loadRecent);
   const groups = useMemo(() => searchAll(query, items, recent), [query, items, recent]);
