@@ -117,6 +117,7 @@ async function probe(page: Page, label: string) {
 
 test('A: control, no update', async ({ page }) => {
   test.setTimeout(110_000);
+  await page.addInitScript((ids) => localStorage.getItem('cubefarm:tour-seen') === null && localStorage.setItem('cubefarm:tour-seen', ids), JSON.stringify(TOUR.map((e) => e.id)));
   await page.request.patch('/api/settings', { data: { tutorialStep: -1, setupDone: true } });
   await page.goto('/');
   await enter(page);
