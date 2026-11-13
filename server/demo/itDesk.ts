@@ -4,7 +4,8 @@
 // two changes on cards; after a Run it checks df again and reports; a ticket (#542) gets an answer and a close; a health
 // check gone bad gets a recommendation of three ranked clean-ups (#525); the weekly review proposes a fix (#543); "install
 // clipfarm" walks a runbook's steps, which auto-approve runs without a tap when it's on (#585); "install postiz" runs a
-// floor's runbook as one job (#611), on in-memory files. The demo CEO hands "check the machine" to IT.
+// floor's runbook as one job (#611), on in-memory files; "call clip" or "app_call <url>" calls the live app past Access
+// with the demo's service token file (#625), seeded in the demo's own secrets folder. The demo CEO hands "check the machine" to IT.
 // Now and then a demo agent reports a lost lab result with it_report (withItReport).
 import { describeOfficeTool, type LogEntry, type SessionCallbacks, type SessionHandle, type SessionOptions } from '../agentRunner.ts';
 import { logStreamed, writeReply } from '../demoChat.ts';
@@ -12,6 +13,10 @@ import { registerCeoReply, registerDemo } from './registry.ts';
 import { demoDiskRoom } from './disk.ts';
 import { memoryFiles } from '../itFiles.ts';
 import { DEMO_RUNBOOK_PATH } from './runbookSample.ts';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+import { HOME_DIR } from '../config.ts';
+import { put } from '../cfSecretFile.ts';
 
 /** The demo machine's files for runbook jobs: in memory, never this computer's. */
 const demoFiles = memoryFiles({
@@ -66,6 +71,13 @@ const DONE: Record<string, { out: string; gb: number }> = {
   docker: { out: 'Deleted Images:\nuntagged: node:20-old\n…\nTotal reclaimed space: 8.9GB', gb: 8.9 },
   apt: { out: 'Reading package lists... Done\n0 upgraded, 0 newly installed, 0 to remove.\nDel cached packages: 1.1 GB freed', gb: 1.1 },
 };
+
+// app_call's service token file (#625), in the demo's own secrets folder: what access_service_token_ensure would write.
+registerDemo('app call', () => {
+  const token = path.join(HOME_DIR, 'secrets', 'cf-access-clipfarm-office-runner.env');
+  if (!existsSync(token)) void put(token, 'CF_ACCESS_CLIENT_ID=demo1234abcd.access\nCF_ACCESS_CLIENT_SECRET=demoSecretValue0123456789\n').catch(() => undefined);
+  return {};
+});
 
 registerDemo('itDesk', () => ({
   itExec: async (argv) => {
@@ -158,6 +170,11 @@ export function itSession(opts: SessionOptions, cb: SessionCallbacks): SessionHa
       const out = await use('cloudflare', { op: 'tunnel_ingress_add', hostname: route[1], service: route[2], why: `Publish ${route[1]} through the main tunnel.` });
       const lacks = scopes.match(/the key needs ([^\n]+)/)?.[1];
       return out.startsWith('Refused') ? `I couldn't plan it: ${out.replace(/^Refused:\s*/, '')}` : `The key that passes can edit the tunnel${lacks ? ` (the other one lacks ${lacks})` : ''}. The change is on a card with its before and after: tap Approve and I'll check the tunnel after.`;
+    }
+    if (/\bapp_call\b|\bcall (the )?(clip|live app)\b/i.test(p)) {
+      const url = p.match(/https:\/\/[^\s`'"]+/)?.[0] ?? 'https://clip.techinsiderbytes.com/api/settings';
+      const out = await use('app_call', { method: 'GET', url, why: 'Check the live app answers past Access.' });
+      return out.startsWith('Refused') ? `I couldn't call it: ${out.replace(/^Refused:\s*/, '')}` : `Called ${url} with its Access service token (never shown):\n\`\`\`\n${out.split('\n').slice(1).join('\n')}\n\`\`\``;
     }
     const disk = rootDisk(await use('it_run', { command: 'df -h' }));
     const free = disk ? `${disk.avail} free of ${disk.size} (${disk.use} used)` : 'no reading from df';

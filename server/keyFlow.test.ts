@@ -71,7 +71,7 @@ describe('install_key through the office', () => {
     outs.push(await it.call('install_key', { key: 'openai', target: '/etc/keel/keel.env', var_name: 'OPENAI_API_KEY' }));
     expect(outs[1]).toMatch(/^Refused: \/etc\/keel\/keel.env isn't on the list of service env files/);
     outs.push(await it.call('it_propose', { argv: ['cp', '/tmp/x', '/etc/clipfarm/clipfarm.env'], why: 'w', affects: 'a', undo: 'u', risk: 'low' }));
-    expect(outs[2]).toMatch(/^Refused: .*holds secrets/); // the blanket refusal stays for everything else
+    expect(outs[2]).toMatch(/^On the manager's card/); // other writes to a credential file wait for a Run (#625)
     expect(everything(outs)).not.toContain(OPENAI);
   });
 

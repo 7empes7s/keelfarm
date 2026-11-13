@@ -8,11 +8,11 @@ import type { CfSecretFile } from '../cfSecretFile.ts';
 import type { ProviderChange } from '../../shared/providerActions.ts';
 import type { KeyMint } from '../../shared/types.ts';
 
-/** How the key goes on a request: a bearer token, ElevenLabs' header, GitHub's bearer with its API headers, or (#621) an Entra "client id:secret" as a client-credentials form. */
-type ActionAuth = 'bearer' | 'xi-api-key' | 'github' | 'entra-token';
+/** How the key goes on a request: a bearer token, ElevenLabs' header, GitHub's bearer with its API headers, or (#621) an Entra "client id:secret" as a client-credentials form, or (#625) an Access service token "id:secret" as CF-Access-Client-Id/Secret. */
+type ActionAuth = 'bearer' | 'xi-api-key' | 'github' | 'entra-token' | 'cf-access';
 
 export interface ActionRequest {
-  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  method: 'GET' | 'HEAD' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   url: string;
   auth: ActionAuth;
   body?: unknown;

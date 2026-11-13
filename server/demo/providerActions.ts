@@ -2,7 +2,7 @@
 // few Upstash boxes. A key with "bad" in it is turned away (401); a GitHub token with "noadmin" lacks Administration
 // (write), one with "nosecrets" Secrets (read). Microsoft Entra (#621): the token exchange and Graph's app registrations,
 // service principals and consent grants; an admin app with "noconsent" can't grant consent. `world.entra.secrets` holds
-// every client secret Graph handed out, so tests can look for them. `calls` records each request and whether its key came with it (the
+// every client secret Graph handed out, so tests can look for them. A live app behind Access answers app_call (#625). `calls` records each request and whether its key came with it (the
 // tests check the key reached the provider and nothing else). The demo CEO shows a read and a write card.
 import type { ActionRequest, ActionResponse, ProviderHttp } from '../providerActions/types.ts';
 import type { BoxApi, BoxInfo } from '../box.ts';
@@ -117,6 +117,8 @@ export function fakeProviderHttp() {
     if (/bad/i.test(key)) return { status: 401, body: { error: { message: 'Invalid API key' } } };
     const u = req.url;
     if (u.startsWith('https://api.github.com')) return github(key, req);
+    // app_call (#625): a live app behind Access; the settings echo a secret-looking field, which the office masks.
+    if (req.auth === 'cf-access') return key.includes(':') ? ok({ ok: true, url: u, channels: 3, clipsToday: 7, webhookSecret: 'whsec_DemoAppSecret0123456789abcdef' }) : { status: 403, body: 'Forbidden' };
     const login = u.match(/^https:\/\/login\.microsoftonline\.com\/([^/]+)\/oauth2\/v2\.0\/token$/);
     if (login && req.auth === 'entra-token') {
       entra.tenants.push(login[1]);

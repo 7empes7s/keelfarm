@@ -25,6 +25,7 @@ import { TelegramBot } from '../telegramBot.ts';
 import { plainText } from '../notify.ts';
 import type { PersistedAgent } from './model.ts';
 import { SwarmSetup } from './setup.ts';
+import { itRedact } from '../itDesk.ts';
 
 const IT_DIR = path.join(HOME_DIR, 'it');
 const OFF = 'The IT department is off: the manager turns it on in Settings → The IT department.';
@@ -116,10 +117,10 @@ export abstract class SwarmItDept extends SwarmSetup {
   // ---------- the chat ----------
 
   protected postIt(from: PhoneMessage['from'], text: string, extra: Partial<PhoneMessage> = {}): PhoneMessage {
-    const parts = parseMessage(from, text);
+    const parts = parseMessage(from, from === 'manager' ? text : itRedact(text, this.secrets())); // #625: what IT and the office post never shows a secret
     const id = this.messageSeq++;
     const artifacts = makeArtifacts(id, parts.artifacts);
-    const m: PhoneMessage = { id, from, text: parts.text.trim().slice(0, 6000), at: Date.now(), ...extra, ...(parts.suggestions && { suggestions: parts.suggestions }), ...(parts.ask && { ask: parts.ask }), ...(parts.spoken && { spoken: parts.spoken }), ...(artifacts && { artifacts }), ...(parts.visuals && { visuals: parts.visuals }) };
+    const m: PhoneMessage = { id, from, text: parts.text.trim().slice(0, 6000), at: Date.now(), ...extra, ...(extra.notice?.details && { notice: { ...extra.notice, details: itRedact(extra.notice.details, this.secrets()) } }), ...(parts.suggestions && { suggestions: parts.suggestions }), ...(parts.ask && { ask: parts.ask }), ...(parts.spoken && { spoken: parts.spoken }), ...(artifacts && { artifacts }), ...(parts.visuals && { visuals: parts.visuals }) };
     const list = this.state.it.messages;
     list.push(m);
     if (list.length > IT_MESSAGES_KEPT) list.splice(0, list.length - IT_MESSAGES_KEPT);
@@ -207,7 +208,7 @@ export abstract class SwarmItDept extends SwarmSetup {
 
   /** IT's office tools: it_run, it_propose, it_recommend (itWatch.ts), it_health, it_ticket, it_review and it_improve (itImprove.ts; server/ceoItTools.ts). */
   protected itTools(): OfficeTools {
-    return itOfficeTools({ itRun: (a) => this.itRun(a), itPropose: (a) => this.itPropose(a), itRunbook: (a) => this.itRunbook(a), itRecommend: (a) => this.itRecommend(a), itHealth: () => this.itHealth(), itTicket: (a) => this.itTicket(a), itReview: (a) => this.itReview(a), itImprove: (a) => this.itImprove(a), cloudflare: (a) => this.cloudflareAct(a, this.itName), providerAction: (a) => this.providerAct(a, this.itName), installKey: (a) => this.installKey(a, this.itName), saveProviderKey: (a) => this.saveProviderKey(a), problemsList: (a) => this.problemsList(a), noteProblem: (a) => this.noteProblem(a) });
+    return itOfficeTools({ itRun: (a) => this.itRun(a), itPropose: (a) => this.itPropose(a), itRunbook: (a) => this.itRunbook(a), appCall: (a) => this.appCall(a), itRecommend: (a) => this.itRecommend(a), itHealth: () => this.itHealth(), itTicket: (a) => this.itTicket(a), itReview: (a) => this.itReview(a), itImprove: (a) => this.itImprove(a), cloudflare: (a) => this.cloudflareAct(a, this.itName), providerAction: (a) => this.providerAct(a, this.itName), installKey: (a) => this.installKey(a, this.itName), saveProviderKey: (a) => this.saveProviderKey(a), problemsList: (a) => this.problemsList(a), noteProblem: (a) => this.noteProblem(a) });
   }
 
   /** it_health: the office's readings, compact. */
