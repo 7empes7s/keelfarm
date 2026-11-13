@@ -46,6 +46,8 @@ async function diag(page: Page, label: string) {
       vw: innerWidth,
       locks: (window as unknown as { __locks?: string[] }).__locks,
       sheets: [...document.styleSheets].length,
+      anim: ph ? ph.getAnimations().map((x) => [(x as CSSAnimation).animationName, x.playState, Math.round(Number(x.currentTime))]) : null,
+      node: ph ? ((window as unknown as { __ph?: Element }).__ph === ph ? 'same' : (((window as unknown as { __ph?: Element }).__ph = ph), 'new')) : null,
     };
   });
   console.log(`DIAG ${label}: ${JSON.stringify(d)}`);
@@ -58,7 +60,8 @@ const test = base.extend<{ page: Page }>({
       w.__locks = [];
       const orig = Element.prototype.requestPointerLock;
       Element.prototype.requestPointerLock = function (this: Element, ...a: unknown[]) {
-        w.__locks.push('call ' + this.tagName + ' ' + JSON.stringify(a));
+        w.__locks.push(Math.round(performance.now()) + ' call ' + this.tagName + ' ' + JSON.stringify(a));
+        if (localStorage.getItem('diag-plain') === '1') a = [];
         try {
           const p = (orig as (...x: unknown[]) => Promise<void> | undefined).apply(this, a);
           p?.then?.(() => w.__locks.push('ok'), (e: Error) => w.__locks.push('rej ' + e.name + ' ' + e.message));
@@ -68,7 +71,7 @@ const test = base.extend<{ page: Page }>({
           throw e;
         }
       } as typeof orig;
-      document.addEventListener('pointerlockchange', () => w.__locks.push('change ' + (document.pointerLockElement?.tagName ?? 'none')));
+      document.addEventListener('pointerlockchange', () => w.__locks.push(Math.round(performance.now()) + ' change ' + (document.pointerLockElement?.tagName ?? 'none') + ' focus=' + document.hasFocus() + ' vis=' + document.visibilityState));
       document.addEventListener('pointerlockerror', () => w.__locks.push('lockerror'));
     });
     page.on('console', (m) => console.log(`CONSOLE ${m.type()}: ${m.text().slice(0, 300)}`));
@@ -126,7 +129,23 @@ test('A: control, no update', async ({ page }) => {
   await probe(page, 'A');
 });
 
-test('B: open tab across a self-update', async ({ page }) => {
+test('C: control, plain pointer lock', async ({ page }) => {
+  test.setTimeout(110_000);
+  await page.addInitScript(() => localStorage.setItem('diag-plain', '1'));
+  await page.request.patch('/api/settings', { data: { tutorialStep: -1, setupDone: true } });
+  await page.goto('/');
+  await enter(page);
+  await page.waitForTimeout(3000);
+  await page.keyboard.press('Escape');
+  await probe(page, 'C');
+  await page.keyboard.press('KeyP');
+  for (let i = 0; i < 4; i++) {
+    await page.waitForTimeout(400);
+    await diag(page, `C phone t${i}`);
+  }
+});
+
+test.skip('B: open tab across a self-update', async ({ page }) => {
   test.setTimeout(110_000);
   await page.addInitScript((ids) => localStorage.getItem('cubefarm:tour-seen') === null && localStorage.setItem('cubefarm:tour-seen', ids), JSON.stringify(TOUR.map((e) => e.id)));
   await page.request.patch('/api/settings', { data: { tutorialStep: -1, setupDone: true } });
