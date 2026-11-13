@@ -27,6 +27,7 @@ import { recordWait } from '../metrics.ts';
 import { mergeOrder } from '../../shared/conflicts.ts';
 import { spared } from '../../shared/managerChanges.ts';
 import { qaShotsDir, removeQaShots } from '../qaShots.ts';
+import { pullSkip } from '../../shared/officePulls.ts';
 import type { LogLine, PullInfo } from '../../shared/types.ts';
 import {
   type PersistedRepo,
@@ -43,7 +44,7 @@ export abstract class SwarmMerge extends SwarmRepos {
   // ---------- auto-merge ----------
 
   /**
-   * Auto-merge (floors with it on): a swarm PR merges itself once QA has signed off on its latest commit and GitHub's
+   * Auto-merge (floors with it on): a PR the office owns (#632) merges itself once QA has signed off on its latest commit and GitHub's
    * checks are green. Failing checks and merge conflicts go back to a developer; new commits after QA's sign-off send
    * it back to QA. Merging deletes the remote branch, and the floor's folder then fast-forwards (syncRepo sees the merge).
    */
@@ -57,7 +58,8 @@ export abstract class SwarmMerge extends SwarmRepos {
       for (const rec of this.mergeQueue(repo, rt)) {
         if (merged && this.busyWanted(repo)) break; // #256: one merge per pass, so the sync that follows hands the PRs it conflicts with to a developer first
         const pr = rt.pulls.find((p) => p.number === rec.prNumber && p.state === 'OPEN');
-        if (!pr || pr.untrusted || !pr.headRefName.startsWith('swarm/')) continue; // people's own PRs are theirs to merge, outsiders' too (#185)
+        const skip = pr && pullSkip(pr, !!repo.leaveOwnPrs);
+        if (!pr || (skip && skip !== 'draft')) continue; // outsiders' (#185), `manual` ones and, on request, the manager's own (#632); mergeStep waits out a draft
         // Only act on PR data fetched after the record last changed (a fix may have just pushed).
         if ((rt.fetchedAt ?? 0) < rec.updatedAt) continue;
         try {

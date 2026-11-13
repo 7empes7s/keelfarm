@@ -24,7 +24,7 @@ export interface Pending {
 }
 
 /** POSTs a file's bytes to the store; `abort` cancels it. */
-function uploadFile(file: File, onProgress: (loaded: number) => void): { done: Promise<FileRef>; abort: () => void } {
+export function uploadFile(file: File, onProgress: (loaded: number) => void): { done: Promise<FileRef>; abort: () => void } {
   const xhr = new XMLHttpRequest();
   const done = new Promise<FileRef>((resolve, reject) => {
     xhr.open('POST', '/api/files');

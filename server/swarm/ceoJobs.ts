@@ -595,7 +595,7 @@ export abstract class SwarmCeo extends SwarmCeoLog {
   // ---------- the phone ----------
 
   /** `changes`: the team changes a CEO message proposes (Telegram gets their buttons); `telegram: 'in'`: sent from there; `closing`: a CEO turn's closing text (ceoSpoken). */
-  protected postMessage(from: PhoneMessage['from'], text: string, requestId?: string, opts: Pick<PhoneMessage, 'replyTo' | 'clientId' | 'delivery' | 'telegram' | 'voiceCall' | 'tg' | 'attachments' | 'used' | 'research' | 'log' | 'actions' | 'question' | 'notice' | 'signIn' | 'switch' | 'ceoStuck' | 'accountOut' | 'ceoRuns' | 'pacing' | 'ceoJob' | 'problems'> & { changes?: TeamChange[]; closing?: boolean } = {}) {
+  protected postMessage(from: PhoneMessage['from'], text: string, requestId?: string, opts: Pick<PhoneMessage, 'replyTo' | 'clientId' | 'delivery' | 'telegram' | 'voiceCall' | 'tg' | 'attachments' | 'used' | 'research' | 'log' | 'actions' | 'question' | 'notice' | 'signIn' | 'switch' | 'ceoStuck' | 'accountOut' | 'ceoRuns' | 'pacing' | 'ceoJob' | 'problems' | 'checklist'> & { changes?: TeamChange[]; closing?: boolean } = {}) {
     const { changes, closing = false, ...extra } = opts;
     // The CEO's suggestion boxes and artifacts come out of the text; the office's notes are cleaned (shared/chatParts.ts).
     const parts = parseMessage(from, text);
@@ -679,7 +679,7 @@ export abstract class SwarmCeo extends SwarmCeoLog {
 
   /** A team-change button pressed on Telegram: the same approve and decline as the lobby's. */
   protected decideFromTelegram(verdict: 'approve' | 'decline', id: string): string | Promise<string> {
-    if (id.startsWith('it-') || IMPROVE_CARD_ID.test(id)) return this.itDecide(verdict, id); // an IT card sent on this bot, as IT has none of its own (#524, #543)
+    if (id.startsWith('it-') || id.startsWith('rb-') || IMPROVE_CARD_ID.test(id)) return this.itDecide(verdict, id); // an IT card sent on this bot, as IT has none of its own (#524, #543)
     const req = this.state.requests.find((r) => r.id === id);
     if (verdict === 'approve') this.approveRequest(id);
     else this.rejectRequest(id);

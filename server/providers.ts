@@ -12,9 +12,11 @@ import { defaultUse, isProviderUse, keyHint, keyProblem, mcpProblem, mcpTestNote
 import { checkResult, legacyImportName } from '../shared/keyScan.ts';
 import { cleanTags } from '../shared/accounts.ts';
 import { OAUTH, authorizeUrl, callbackPath, codeForm, needsRefresh, oauthDef, readTokens, refreshForm, type OAuthDef } from '../shared/oauth.ts';
-import { cloudflareVerify, missingClassicScopes, missingNote, permissionSteps, runPermissionSteps, turnedAwayNote } from '../shared/keySetup.ts';
+import { cloudflareVerify, entraTokenProbe, missingClassicScopes, missingNote, permissionSteps, runPermissionSteps, turnedAwayNote } from '../shared/keySetup.ts';
 import { CAPABILITIES } from '../shared/capabilities.ts';
-import type { Capability, CapabilityChoice, McpServerConfig, ProviderConnection, ProvidersView, ProviderTest, ProviderUse } from '../shared/types.ts';
+import type { Capability, CapabilityChoice, KeyMint, McpServerConfig, ProviderConnection, ProvidersView, ProviderTest, ProviderUse } from '../shared/types.ts';
+import type { KeyInstall } from '../shared/keyInstall.ts';
+import { gcloudProbe } from './gcloudAuth.ts';
 
 const keyOf = (id: string) => `provider:${id}`; // a sign-in's refresh token (Meta's long-lived token)
 const accessOf = (id: string) => `oauth-access:${id}`; // a sign-in's access token
@@ -61,6 +63,9 @@ function readConnection(c: Record<string, unknown>): ProviderConnection[] {
       ...(str(c.accountId) ? { accountId: str(c.accountId) } : {}),
       ...(Array.isArray(c.scopes) ? { scopes: strs(c.scopes) } : {}),
       ...(Number(c.expiresAt) > 0 ? { expiresAt: Number(c.expiresAt) } : {}),
+      ...(str(c.usedBy) ? { usedBy: str(c.usedBy) } : {}),
+      ...(Array.isArray(c.installs) && c.installs.length ? { installs: (c.installs as KeyInstall[]).filter((i) => i && str(i.file) && str(i.var)) } : {}),
+      ...(c.mint && typeof c.mint === 'object' && str((c.mint as KeyMint).tokenId) ? { mint: c.mint as KeyMint } : {}),
     },
   ];
 }
@@ -147,6 +152,27 @@ export class Providers {
     });
   }
 
+  /** One key's value (#609: install_key and renewals). Server memory only. */
+  keyValue(id: string): string | undefined {
+    return this.keys.get(keyOf(id));
+  }
+
+  /** install_key put it in a service's env file (#609): kept on the key, so a renewal installs there too. */
+  async noteInstall(id: string, ki: KeyInstall) {
+    const c = this.connection(id);
+    c.installs = [...(c.installs ?? []).filter((i) => !(i.file === ki.file && i.var === ki.var)), ki];
+    await this.save();
+  }
+
+  /** A made key renewed (#609): its new value, expiry and token. */
+  async renewed(id: string, value: string, expiresAt: number, tokenId: string) {
+    const c = this.connection(id);
+    await mergeSecrets(this.deps.secretsFile, { [keyOf(id)]: value });
+    this.keys.set(keyOf(id), value);
+    Object.assign(c, { keyHint: keyHint(value), expiresAt, ...(c.mint && { mint: { ...c.mint, tokenId } }) });
+    await this.save();
+  }
+
   /** The MCP servers an agent's session gets (its own mcp.json). */
   mcpFor(agentId: string): Record<string, Record<string, unknown>> {
     return sessionMcpServers(this.data.mcp, agentId, (id, name) => this.keys.get(mcpKeyOf(id, name)) ?? '');
@@ -155,7 +181,7 @@ export class Providers {
   // ---------- keys ----------
 
   /** A key for a catalogue provider: saved, then tested. An empty one reuses the key it shares (Google video's Gemini key). */
-  async add(provider: string, rawKey: string, rawLabel = '', source = '', accountId = ''): Promise<ProviderConnection> {
+  async add(provider: string, rawKey: string, rawLabel = '', source = '', accountId = '', extra: { usedBy?: string; expiresAt?: number; mint?: KeyMint } = {}): Promise<ProviderConnection> {
     const shared = providerDef(provider)?.sharesKeyWith;
     const from = shared && this.data.connections.find((x) => x.provider === shared);
     const key = rawKey.trim() || (from ? (this.keys.get(keyOf(from.id)) ?? '') : '');
@@ -164,13 +190,26 @@ export class Providers {
     const def = providerDef(provider)!;
     const label = rawLabel.trim().slice(0, 60) || def.name;
     const acct = accountId.trim();
-    if (acct && !/^[0-9a-f]{32}$/i.test(acct)) throw new HttpError(400, 'An Account ID is 32 letters and digits: copy it from any domain’s Overview page.');
-    const c: ProviderConnection = { id: randomUUID().slice(0, 8), provider, label, addedAt: Date.now(), keyHint: keyHint(key), test: null, tags: [], usedFor: defaultUse(def.category), ...(source ? { source } : {}), ...(acct ? { accountId: acct } : {}) };
+    if (acct) accountIdCheck(provider, acct);
+    const usedBy = extra.usedBy?.trim().slice(0, 200);
+    const c: ProviderConnection = { id: randomUUID().slice(0, 8), provider, label, addedAt: Date.now(), keyHint: keyHint(key), test: null, tags: [], usedFor: defaultUse(def.category), ...(source ? { source } : {}), ...(acct ? { accountId: acct } : {}), ...(usedBy && { usedBy }), ...(extra.expiresAt && { expiresAt: extra.expiresAt }), ...(extra.mint && { mint: extra.mint }) };
     await mergeSecrets(this.deps.secretsFile, { [keyOf(c.id)]: key });
     this.keys.set(keyOf(c.id), key);
     this.data.connections.push(c);
     await this.save();
-    return this.test(c.id);
+    return testRequest(provider, key) || provider === 'cloudflare' || provider === 'gcloud' ? this.test(c.id) : { ...c }; // Postiz and Other keys have no test call
+  }
+
+  /** A key the office got from a provider (#622): saved, or the one of that provider and name given the new value. */
+  async saveByName(provider: string, value: string, label: string, usedBy: string): Promise<string> {
+    const c = this.data.connections.find((x) => x.provider === provider && x.label === label);
+    if (!c) return (await this.add(provider, value, label, '', '', { usedBy })).label;
+    if (this.keys.get(keyOf(c.id)) === value) return c.label;
+    await mergeSecrets(this.deps.secretsFile, { [keyOf(c.id)]: value });
+    this.keys.set(keyOf(c.id), value);
+    c.keyHint = keyHint(value);
+    await this.test(c.id).catch(() => this.save());
+    return c.label;
   }
 
   /** Rename and tags (#523): its name (empty: the provider's), tags and what it's for. A name set here stays. */
@@ -178,7 +217,7 @@ export class Providers {
     const c = this.connection(id);
     if (patch.accountId !== undefined) {
       const acct = patch.accountId.trim();
-      if (acct && !/^[0-9a-f]{32}$/i.test(acct)) throw new HttpError(400, 'An Account ID is 32 letters and digits: copy it from any domain’s Overview page.');
+      if (acct) accountIdCheck(c.provider, acct);
       if (acct) c.accountId = acct;
       else delete c.accountId;
     }
@@ -225,9 +264,10 @@ export class Providers {
         return { ...c };
       }
     }
-    const req = c.provider === 'cloudflare' && c.accountId ? cloudflareVerify(key, c.accountId) : testRequest(c.provider, c.provider === 'kling' ? klingToken(key) : key);
-    if (!req) throw new HttpError(400, `${c.label} is tested in its own settings.`);
-    let r = await this.deps.probe(req);
+    if (c.provider === 'entra' && !entraTokenProbe(key, c.accountId ?? '')) throw new HttpError(400, `Set ${c.label}'s Tenant ID, and paste the key as "client id:client secret".`);
+    const req = c.provider === 'entra' ? entraTokenProbe(key, c.accountId ?? '') : c.provider === 'cloudflare' && c.accountId ? cloudflareVerify(key, c.accountId) : testRequest(c.provider, c.provider === 'kling' ? klingToken(key) : key);
+    if (!req && c.provider !== 'gcloud') throw new HttpError(400, `${c.label} is tested in its own settings.`);
+    let r = req ? await this.deps.probe(req) : await gcloudProbe(key, this.deps.probe); // a service account: a token, then its project
     // an Account ID beside a user token: the user's verify call is the right one
     if (c.provider === 'cloudflare' && c.accountId && r.status >= 400 && r.status < 500) r = await this.deps.probe(cloudflareVerify(key));
     const ok = r.status >= 200 && r.status < 300;
@@ -408,8 +448,9 @@ export class Providers {
     const text = JSON.stringify(this.data, null, 2);
     this.writing = this.writing.catch(() => undefined).then(async () => {
       await fs.mkdir(path.dirname(this.deps.file), { recursive: true });
-      await fs.writeFile(`${this.deps.file}.tmp`, text);
-      await fs.rename(`${this.deps.file}.tmp`, this.deps.file);
+      const tmp = `${this.deps.file}.${process.pid}.${randomUUID().slice(0, 8)}.tmp`; // its own name: another writer of the file never renames it away
+      await fs.writeFile(tmp, text);
+      await fs.rename(tmp, this.deps.file);
     });
     this.deps.changed(this.view());
     return this.writing;
@@ -429,6 +470,13 @@ async function onPath(command: string): Promise<boolean> {
       if (ok) return true;
     }
   return false;
+}
+
+/** A connection's Account ID: Cloudflare's 32 characters, or an Entra tenant's GUID (#621). */
+function accountIdCheck(provider: string, acct: string) {
+  if (provider === 'entra') {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(acct)) throw new HttpError(400, 'A Tenant ID looks like 1a2b3c4d-…: copy the Directory (tenant) ID from Entra → Overview.');
+  } else if (!/^[0-9a-f]{32}$/i.test(acct)) throw new HttpError(400, 'An Account ID is 32 letters and digits: copy it from any domain’s Overview page.');
 }
 
 /** backend.providerProbe: a GET with the key in its header (10 s), or the command looked up. The key goes nowhere else. */

@@ -4,7 +4,7 @@
 import type { OfficeCall } from './ceoStream.ts';
 
 /** A console section an action card opens (ids from client/src/ui/consoleNavRules.ts). */
-type ActionSection = 'office' | 'team' | 'ceo' | 'charter' | 'ops' | 'projects' | 'notifications' | 'providers' | 'accounts' | 'it-dept' | 'problems';
+type ActionSection = 'office' | 'team' | 'ceo' | 'charter' | 'ops' | 'projects' | 'notifications' | 'providers' | 'accounts' | 'it-dept' | 'problems' | 'checklists';
 
 /** What an action card opens, and whose live status it shows. */
 export type ActionRef =
@@ -76,12 +76,17 @@ const ACTS: Record<string, string> = {
   it_propose: '🖥️',
   ask_it: '🖥️',
   cloudflare: '☁️',
+  provider_action: '🔑',
+  install_key: '🔑',
+  save_provider_key: '🔑',
   it_report: '🖥️',
   note_problem: '📋',
+  checklist_create: '☑️',
+  checklist_update: '☑️',
 };
 
 /** The office tools that aren't cards: reads, and what shows in the chat itself (files, edits, reactions, questions). */
-export const NOT_CARDS = new Set(['company_status', 'floor_detail', 'agent_detail', 'agent_log', 'qa_report', 'worktree_file', 'pr_diff', 'session_history', 'it_run', 'consult', 'attach_file', 'keep_file', 'edit_message', 'react', 'reply', 'ask_manager', 'problems']);
+export const NOT_CARDS = new Set(['company_status', 'floor_detail', 'agent_detail', 'agent_log', 'qa_report', 'worktree_file', 'pr_diff', 'session_history', 'it_run', 'consult', 'attach_file', 'keep_file', 'edit_message', 'react', 'reply', 'ask_manager', 'problems', 'checklist_read']);
 
 // Tools whose card opens a console section (with the floor, when the call names one).
 const SECTIONS: Partial<Record<string, ActionSection>> = {
@@ -100,8 +105,13 @@ const SECTIONS: Partial<Record<string, ActionSection>> = {
   it_propose: 'ops',
   ask_it: 'it-dept',
   cloudflare: 'ops',
+  provider_action: 'providers',
+  install_key: 'ops',
+  save_provider_key: 'providers',
   it_report: 'it-dept',
   note_problem: 'problems',
+  checklist_create: 'checklists',
+  checklist_update: 'checklists',
   make_default_account: 'accounts',
   apply_update: 'office',
 };

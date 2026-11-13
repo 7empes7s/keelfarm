@@ -20,6 +20,7 @@ import { recordChange } from '../../shared/managerChanges.ts';
 import { takeSteps, tryThis, type TryThis } from '../../shared/tryIt.ts';
 import { issuesResolvedBy } from '../issueClaims.ts';
 import { MergedPages } from '../mergedPages.ts';
+import { pullSkip, SKIP_WORDS } from '../../shared/officePulls.ts';
 import { type PersistedRepo, type FloorOptions, type RepoRuntime, BUSY, QA_SHOTS_DIR } from './model.ts';
 import { FLOOR_COLORS } from './flavour.ts';
 import { SwarmCore } from './core.ts';
@@ -162,7 +163,7 @@ export abstract class SwarmRepos extends SwarmCore {
 
   updateRepo(
     id: string,
-    patch: Partial<Pick<PersistedRepo, 'autoAssign' | 'autoMerge' | 'browserTesting' | 'color' | 'links' | 'mission' | 'summary' | 'qaBrief' | 'playbook'>> & { previewCommand?: unknown; previewEnv?: unknown; practices?: unknown; trustedAuthors?: unknown; theme?: unknown; props?: unknown },
+    patch: Partial<Pick<PersistedRepo, 'autoAssign' | 'autoMerge' | 'leaveOwnPrs' | 'browserTesting' | 'color' | 'links' | 'mission' | 'summary' | 'qaBrief' | 'playbook'>> & { previewCommand?: unknown; previewEnv?: unknown; practices?: unknown; trustedAuthors?: unknown; theme?: unknown; props?: unknown },
   ) {
     const repo = this.repo(id);
     if (patch.theme !== undefined) {
@@ -203,6 +204,10 @@ export abstract class SwarmRepos extends SwarmCore {
     if (patch.autoMerge !== undefined) {
       repo.autoMerge = !!patch.autoMerge;
       if (repo.autoMerge) void this.syncRepo(repo.id);
+    }
+    if (patch.leaveOwnPrs !== undefined) {
+      repo.leaveOwnPrs = !!patch.leaveOwnPrs;
+      if (!repo.leaveOwnPrs) void this.syncRepo(repo.id); // the next sync queues the PRs it left alone
     }
     if (patch.browserTesting !== undefined) repo.browserTesting = !!patch.browserTesting;
     if (patch.color && /^#[0-9a-f]{6}$/i.test(patch.color)) repo.color = patch.color;
@@ -453,6 +458,13 @@ export abstract class SwarmRepos extends SwarmCore {
     return !!this.repoRt.get(repoId)?.pulls.find((p) => p.number === number)?.untrusted;
   }
 
+  /** An open PR's QA as the CEO reads it: its record, else why the office leaves it alone (#632), never just "not tested". */
+  protected pullQaWord(repo: PersistedRepo, p: PullInfo, q: { status: string; round: number } | undefined) {
+    const skip = pullSkip(p, !!repo.leaveOwnPrs);
+    if (q && skip !== 'outside') return `${q.status}${q.round > 1 ? ` (round ${q.round})` : ''}`;
+    return skip ? SKIP_WORDS[skip] : 'waiting for QA';
+  }
+
   /** Running, testing or fixing an outsider's code would give it the office's shell (#185). */
   protected refuseOutside(repo: PersistedRepo, pr: number) {
     if (this.outsidePull(repo.id, pr)) throw new HttpError(403, `PR #${pr} on ${repo.fullName} is from outside the team: review it on GitHub. The office never runs, tests, fixes or merges it.`);
@@ -495,12 +507,13 @@ export abstract class SwarmRepos extends SwarmCore {
   }
 
   /**
-   * Every swarm PR goes through QA, including ones opened before QA existed or while the server was down. (Merged and
-   * closed PRs leave QA, and agents who had them are cleared, in cleanUpClosed.)
+   * Every open PR the office owns goes through QA, whatever its branch (#632), including ones opened before QA existed
+   * or while the server was down; drafts, outsiders', `manual` ones and, on request, the manager's own wait (pullSkip).
+   * (Merged and closed PRs leave QA, and agents who had them are cleared, in cleanUpClosed.)
    */
   protected reconcilePulls(repo: PersistedRepo, pulls: PullInfo[]) {
     for (const pr of pulls) {
-      if (pr.state !== 'OPEN' || pr.isDraft || pr.untrusted || !pr.headRefName.startsWith('swarm/')) continue;
+      if (pr.state !== 'OPEN' || pullSkip(pr, !!repo.leaveOwnPrs)) continue;
       if (this.state.qa.some((q) => q.repoId === repo.id && q.prNumber === pr.number)) continue;
       const dev = this.state.agents.find((a) => a.repoId === repo.id && a.role !== 'ceo' && a.task !== 'qa' && (a.prNumber === pr.number || a.branch === pr.headRefName));
       this.queueQa(repo, pr.number, dev ?? null, pr.closesIssues[0] ?? null);

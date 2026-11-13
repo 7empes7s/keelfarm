@@ -14,6 +14,7 @@ import { Bubble } from './ChatBubble';
 import { DaySeparator } from './ChatCards';
 import { ItDeskCards } from './ItDeskCards';
 import { ItAutoApprove, ItAutoUndo } from './ItAutoApprove';
+import { ItRunbookCard } from './ItRunbook';
 import { ItHealth, ItRecCards } from './ItHealth';
 import { ItTickets } from './ItTickets';
 import { ItImprove, ItImproveCards } from './ItImprove';
@@ -84,6 +85,7 @@ function ItChat() {
   const byId = new Map(messages.map((m) => [m.id, m]));
   const quotedNow = replyTo === null ? undefined : byId.get(replyTo);
   const offer = suggestionsFor(messages);
+  const runbookAt = new Map(messages.filter((m) => m.itRunbook).map((m) => [m.itRunbook!.job, m.id])); // a job's card under its latest message
   return (
     <section className="card it-chat" aria-label={`IT chat with ${s.name}`}>
       <div className="it-chat-head">
@@ -104,6 +106,7 @@ function ItChat() {
             <DaySeparator prev={messages[i - 1]?.at} at={m.at} />
             <Bubble item={itemOf({ m })} ceoName={s.name} quoted={itQuoted(byId, m.replyTo)} highlight={flash === m.id} linked={plain} onFloor={noop} onQuote={on.onQuote} onReply={on.onReply} onActions={on.onActions} onArtifact={noop} onFile={noop} />
             <ItAutoUndo m={m} />
+            {m.itRunbook && runbookAt.get(m.itRunbook.job) === m.id && <ItRunbookCard id={m.itRunbook.job} />}
             {m.id === offer?.id && (
               <div className="suggestions" role="group" aria-label={`Suggested replies to ${s.name}`}>
                 {offer.suggestions!.map((x) => (

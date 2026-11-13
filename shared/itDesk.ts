@@ -2,6 +2,9 @@
 // programs); changes come to the manager as cards (it_propose) and run only on their Run. The rules are in
 // server/itDesk.ts; this file has what both sides show: the cards, the log and the read-only list.
 import type { CfChange } from './cloudflare';
+import type { ProviderChange } from './providerActions';
+import type { KeyInstall } from './keyInstall';
+import { loadRunbooks, type ItRunbookJob, type ItRunbookView } from './itRunbook';
 
 export type ItRisk = 'low' | 'medium' | 'high';
 
@@ -17,6 +20,8 @@ export interface ItProposal {
   by?: string; // who proposed it: the IT lead (#524); absent: the CEO, before the IT department
   rec?: string; // a recommendation's option the manager picked (#525): the office measures before and after, IT isn't woken
   cf?: CfChange; // a Cloudflare write (#586): applied through the API on Approve, not run as a command
+  pa?: ProviderChange; // another provider's write (#602), the same way
+  ki?: KeyInstall & { keyId: string }; // install_key (#609): a Providers key written into a service's env file on Approve, its value never on the card
   diff?: string; // its before and after, "+ " on added lines
 }
 
@@ -32,6 +37,7 @@ export interface ItLogEntry {
   why?: string;
   auto?: true; // run by auto-approve (#585), without the manager's tap
   undo?: string[][]; // an auto step's undo, run on the manager's Undo
+  restore?: { file: string; backup: string | null; unit?: string }; // an auto install_key's undo (#609): the file put back from its backup
   undone?: true;
 }
 
@@ -40,11 +46,13 @@ export interface ItDeskState {
   waiting: ItProposal[];
   log: ItLogEntry[]; // newest first, IT_LOG_KEPT at most
   units?: string[]; // systemd units IT installed itself (#585): routine auto-approve may start and restart them
+  runbooks?: ItRunbookJob[]; // runbook jobs (#611), newest first, RUNBOOKS_KEPT at most
 }
 
 /** What a tab sees: whether it's on, the waiting cards, and the latest IT_LOG_SHOWN log lines. */
-export interface ItDeskView extends ItDeskState {
+export interface ItDeskView extends Omit<ItDeskState, 'runbooks'> {
   on: boolean;
+  runbooks?: ItRunbookView[];
 }
 
 export const IT_LOG_KEPT = 200;
@@ -78,5 +86,6 @@ export function loadItDesk(v: unknown): ItDeskState {
   const d = (v && typeof v === 'object' ? v : {}) as Partial<Record<keyof ItDeskState, unknown>>;
   const list = (x: unknown) => (Array.isArray(x) ? x.filter((e) => e && typeof e === 'object' && typeof e.id === 'string' && strings(e.argv) && Number.isFinite(e.at)) : []);
   const units = Array.isArray(d.units) ? d.units.filter((u): u is string => typeof u === 'string').slice(0, 100) : [];
-  return { waiting: list(d.waiting) as ItProposal[], log: (list(d.log) as ItLogEntry[]).slice(0, IT_LOG_KEPT), ...(units.length && { units }) };
+  const runbooks = loadRunbooks(d.runbooks);
+  return { waiting: list(d.waiting) as ItProposal[], log: (list(d.log) as ItLogEntry[]).slice(0, IT_LOG_KEPT), ...(units.length && { units }), ...(runbooks.length && { runbooks }) };
 }

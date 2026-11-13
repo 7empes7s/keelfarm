@@ -154,7 +154,7 @@ export abstract class SwarmCore extends SwarmContract {
     pong: {},
     officeId: officeId(),
     claudeUsage: [], usageWatch: [],
-    questions: [], decisions: { list: [], digestAt: 0 }, taskAccounts: {}, itDesk: { waiting: [], log: [] }, it: loadIt(undefined), itTickets: { seq: 0, list: [] }, itImprove: { records: [], cards: [], changes: [], reviewWeek: '', reviewedAt: 0 }, problems: { seq: 0, list: [], digestDay: '' }, itWatch: { checks: [], marks: {}, recs: [], digestDay: '', samples: [] },
+    questions: [], decisions: { list: [], digestAt: 0 }, taskAccounts: {}, itDesk: { waiting: [], log: [] }, it: loadIt(undefined), itTickets: { seq: 0, list: [] }, itImprove: { records: [], cards: [], changes: [], reviewWeek: '', reviewedAt: 0 }, problems: { seq: 0, list: [], digestDay: '' }, checklists: { seq: 0, list: [] }, itWatch: { checks: [], marks: {}, recs: [], digestDay: '', samples: [] },
     experiments: loadLab(undefined, Date.now()),
   };
   /** The chat's files store; every change goes out to the tabs as a `files` event. */
@@ -380,7 +380,7 @@ export abstract class SwarmCore extends SwarmContract {
       floor: r.floor,
       color: r.color, theme: r.theme ?? 'office', ...(r.themeByHand && { themeByHand: true as const }), props: r.props ?? null, // only a known theme or prop set is ever saved (updateRepo)
       autoAssign: r.autoAssign,
-      autoMerge: r.autoMerge,
+      autoMerge: r.autoMerge, leaveOwnPrs: !!r.leaveOwnPrs, // #632
       folderSync: rt.folderSync,
       browserTesting: r.browserTesting,
       links: r.links,

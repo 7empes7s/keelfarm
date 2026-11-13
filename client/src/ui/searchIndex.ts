@@ -6,8 +6,9 @@ import { SECTIONS, type Where } from './consoleNavRules';
 import type { Target } from './goTo';
 import type { IconName } from './icons';
 import { HUD_OPTIONS } from './hudOptions';
+import { progressText, type Checklist } from '../../../shared/checklists';
 
-export type Kind = 'action' | 'floor' | 'agent' | 'issue' | 'pr' | 'qa' | 'setting' | 'objective' | 'message' | 'artifact';
+export type Kind = 'action' | 'floor' | 'agent' | 'issue' | 'pr' | 'qa' | 'setting' | 'objective' | 'message' | 'artifact' | 'checklist';
 
 const KIND_LABEL: Record<Kind, string> = {
   action: 'Actions',
@@ -20,9 +21,10 @@ const KIND_LABEL: Record<Kind, string> = {
   objective: 'Objectives',
   message: 'CEO messages',
   artifact: 'Artifacts',
+  checklist: 'Checklists',
 };
 
-const ORDER: Kind[] = ['action', 'floor', 'agent', 'issue', 'pr', 'qa', 'objective', 'setting', 'message', 'artifact'];
+const ORDER: Kind[] = ['action', 'floor', 'agent', 'issue', 'pr', 'qa', 'objective', 'setting', 'checklist', 'message', 'artifact'];
 
 export interface Item {
   id: string;
@@ -38,6 +40,7 @@ export interface IndexInput {
   agents: Record<string, Pick<AgentView, 'id' | 'name' | 'repoId' | 'role'>>;
   qa: Record<string, Pick<QaView, 'repoId' | 'prNumber' | 'status' | 'summary' | 'round'>>;
   messages: Pick<PhoneMessage, 'id' | 'from' | 'text' | 'artifacts'>[];
+  checklists?: Pick<Checklist, 'id' | 'title' | 'steps'>[]; // #612
   where: Where;
   /** The browser has a Fullscreen API (not iPhones): the top bar's full screen is findable (#415). */
   fullscreen?: boolean;
@@ -111,6 +114,10 @@ export function buildIndex(s: IndexInput): Item[] {
     if (sec.only && sec.only !== s.where) continue;
     items.push({ id: `set:${sec.id}`, kind: 'setting', icon: sec.icon, label: sec.label, target: { kind: 'section', section: sec.id } });
     for (const f of sec.find) if (f !== sec.label) items.push({ id: `set:${sec.id}:${f}`, kind: 'setting', icon: sec.icon, label: f, sub: sec.label, target: { kind: 'section', section: sec.id } });
+  }
+  for (const c of s.checklists ?? []) {
+    items.push({ id: `cl:${c.id}`, kind: 'checklist', icon: 'check-check', label: c.title, sub: progressText(c), target: { kind: 'overlay', overlay: { kind: 'manager', tab: 'checklists', card: c.id } } });
+    for (const st of c.steps) items.push({ id: `cl:${c.id}:${st.id}`, kind: 'checklist', icon: 'check-check', label: clip(st.title), sub: c.title, target: { kind: 'overlay', overlay: { kind: 'manager', tab: 'checklists', card: c.id } } });
   }
   for (const m of s.messages.filter((x) => x.from === 'ceo').slice(-40)) {
     items.push({ id: `msg:${m.id}`, kind: 'message', icon: 'message-circle', label: clip(m.text.replace(/\s+/g, ' ')), target: { kind: 'ceo' } });
