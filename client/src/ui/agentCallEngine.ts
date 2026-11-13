@@ -12,7 +12,7 @@ import { useStore } from '../store';
 import { agentEvent, downsample, floatToPcm, initMessage, level, pcmToFloat, replyLeftMs, type AgentMode } from './agentCall';
 import { callAudio, onAgentRelay, releaseCallAudio, useAgentCall } from './agentCallStore';
 import { SILENT_LEVEL, SILENT_MIC_MS } from './micSilence';
-import { MIC_SILENT } from './micText';
+import { AUDIO_ASLEEP, MIC_QUIET } from './micText';
 import { wantsMic } from './voiceCall';
 import { callOn, dispatchCall, useCall } from './voiceCallStore';
 
@@ -41,11 +41,10 @@ let clockAt = 0; // the audio clock at the last look: one that stands still isn'
 let endAfterReply = false;
 let markers: string[] = []; // the CEO's replies and progress lines, said when the voice is free
 let mic: { stream: MediaStream; node: AudioWorkletNode; src: MediaStreamAudioSourceNode; buf: Float32Array[]; len: number; heard: boolean; check: ReturnType<typeof setTimeout> } | null = null;
-let fallbackTo: ((why: string) => void) | null = null; // today's voice mode, when this conversation can't hear
 let wasLive = false; // the conversation was on when the tab was hidden: it starts again on return
 
 /** What the probe shows (window.__swarmCall.agent): the mode, the last turn's timing, the events seen. */
-const probe = { session: '', sentAt: 0, firstAudioAt: 0, said: [] as string[], heard: [] as string[], interrupted: 0 };
+const probe = { session: '', sentAt: 0, firstAudioAt: 0, said: [] as string[], heard: [] as string[], interrupted: 0, mic: { ctx: '', blocks: 0, chunks: 0, peak: 0, track: '' } };
 
 const setMode = (mode: AgentMode) => useAgentCall.setState({ mode });
 const mode = () => useAgentCall.getState().mode;
@@ -54,7 +53,6 @@ const send = (m: unknown) => ws?.readyState === WebSocket.OPEN && ws.send(typeof
 /** Starts a conversation (the call's first, or after "that's all" from a tap on the orb). Falls back to today's voice mode on failure. */
 export async function connectAgent(fallback: (why: string) => void) {
   if (ws) return;
-  fallbackTo = fallback;
   setMode('connecting');
   const ctx = callAudio();
   if (!ctx) return fail(fallback, "This browser can't play the Jarvis voice");
@@ -104,7 +102,7 @@ export function closeConversation(next: 'idle' | 'off') {
   session = '';
   markers = [];
   endAfterReply = false;
-  useAgentCall.setState({ mode: next, input: 0, output: 0 });
+  useAgentCall.setState({ mode: next, input: 0, output: 0, micWhy: '' });
   if (callOn() && next === 'idle') dispatchCall({ type: 'reply-ended' });
 }
 
@@ -285,6 +283,7 @@ async function startMic(ctx: AudioContext) {
     for (const t of stream.getTracks()) t.stop(); // hung up while asking
     return;
   }
+  if (ctx.state !== 'running') void ctx.resume().catch(() => undefined); // iPhones can stop the call's audio as the mic opens
   const url = URL.createObjectURL(new Blob([WORKLET], { type: 'text/javascript' }));
   try {
     await ctx.audioWorklet.addModule(url);
@@ -293,12 +292,15 @@ async function startMic(ctx: AudioContext) {
   }
   const src = ctx.createMediaStreamSource(stream);
   const node = new AudioWorkletNode(ctx, 'cubefarm-mic');
-  // A mic that gives only silence (#645): the office's own voice takes the call, and the office hears why.
+  const t = stream.getAudioTracks()[0];
+  probe.mic = { ctx: `${ctx.state} ${ctx.sampleRate}`, blocks: 0, chunks: 0, peak: 0, track: t ? `${t.readyState}${t.muted ? ' muted' : ''}` : 'none' };
+  // A mic that gives only silence (#645, #648): the call screen says so and the office hears why, but the Jarvis voice
+  // stays on (a quiet room or a mic that wakes late is no reason to drop it); the first sound clears the line.
   const check = setTimeout(() => {
     if (!mic || mic.heard || mode() !== 'live') return;
-    void api.voiceProblem(`${MIC_SILENT} (the Jarvis voice's mic)`).catch(() => undefined);
-    closeConversation('off');
-    if (fallbackTo) fail(fallbackTo, MIC_SILENT);
+    const why = ctx.state === 'running' ? MIC_QUIET : AUDIO_ASLEEP; // a stopped audio clock runs no mic: a tap wakes it
+    useAgentCall.setState({ micWhy: why });
+    void api.voiceProblem(`${why} (the Jarvis voice's mic: ${probe.mic.blocks} blocks, audio ${ctx.state})`).catch(() => undefined);
   }, SILENT_MIC_MS);
   mic = { stream, node, src, buf: [], len: 0, heard: false, check };
   node.port.onmessage = (e: MessageEvent<Float32Array>) => onMic(downsample(e.data, ctx.sampleRate, MIC_RATE));
@@ -311,7 +313,12 @@ function onMic(samples: Float32Array) {
   const c = useCall.getState().call;
   const open = mode() === 'live' && wantsMic(c);
   const heard = level(samples);
-  if (heard >= SILENT_LEVEL) mic.heard = true;
+  probe.mic.blocks++;
+  probe.mic.peak = Math.max(probe.mic.peak, heard);
+  if (heard >= SILENT_LEVEL && !mic.heard) {
+    mic.heard = true;
+    if (useAgentCall.getState().micWhy) useAgentCall.setState({ micWhy: '' });
+  }
   useAgentCall.setState({ input: open ? heard : 0 });
   if (!open) return; // muted, paused or away: nothing leaves the phone
   mic.buf.push(samples);
@@ -322,6 +329,7 @@ function onMic(samples: Float32Array) {
   for (const b of mic.buf) all.set(b, (o += b.length) - b.length);
   mic.buf = [];
   mic.len = 0;
+  probe.mic.chunks++;
   send({ user_audio_chunk: floatToPcm(all) });
 }
 

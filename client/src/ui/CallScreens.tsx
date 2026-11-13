@@ -107,10 +107,16 @@ function CaptionsLine() {
   );
 }
 
-/** The mic can't listen by itself: why, and a Talk button. */
+/** The mic can't listen by itself: why, and a Talk button. The Jarvis voice's silent mic only says why (#648). */
 function TapToTalk() {
   const why = useCall((s) => s.call.tapToTalk);
-  if (!why) return null;
+  const quiet = useAgentCall((s) => (s.mode === 'live' ? s.micWhy : ''));
+  if (!why)
+    return quiet ? (
+      <p className="vcall-why" role="status">
+        {quiet}
+      </p>
+    ) : null;
   return (
     <div className="vcall-tap">
       <p className="vcall-why">{why}</p>

@@ -15,8 +15,8 @@ import { bindings } from './controls';
 import { HANDS_FREE_IDLE, handsFree, type HandsFree, type HandsFreeEvent, type Room } from './handsFree';
 import { closesMic, HOLD_MS, isTalkKey, type KeyPlace } from './micKeys';
 import { useMicPause } from './micPause';
-import { deadMic, drainOf, freshEars, heardLevel, heardWords, listenRules, sendsWhenDone, verdict, type Drain, type Ears, type MicMode } from './micSilence';
-import { callListens, cantListen, joinHeard, MIC_NO_START, MIC_SILENT, micErrorLine, phrasesText, speechFailed, withoutTrailingFillers, withTranscript, type MicCaps, type Phrase } from './micText';
+import { deadMic, drainOf, freshEars, heardLevel, heardWords, listenRules, sendsWhenDone, SILENT_MIC_MS, verdict, type Drain, type Ears, type MicMode } from './micSilence';
+import { AUDIO_ASLEEP, callListens, cantListen, joinHeard, MIC_NO_START, MIC_SILENT, micErrorLine, phrasesText, speechFailed, withoutTrailingFillers, withTranscript, type MicCaps, type Phrase } from './micText';
 import { FakeRecognition, fakeLive, type Recognition, type RecognitionClass } from './micFake';
 import { holdMusicDuck } from './music';
 import { getAudioPrefs, listenChime, setMicOpen, subscribeAudio } from './sfx';
@@ -100,6 +100,8 @@ interface Hearing {
   abort(): void;
   /** The recording's mic track, to tell a dead mic from a quiet room. */
   track?: MediaStreamTrack;
+  /** The levels' audio has stopped (an iPhone's, as the mic opened): no levels come, which isn't a silent mic. */
+  asleep?: () => boolean;
 }
 
 interface Session {
@@ -211,6 +213,7 @@ function check(n: number) {
     }
     return;
   }
+  if (s.mode === 'call' && s.hearing?.asleep?.()) return void (now - s.ears.start >= SILENT_MIC_MS && fail(n, AUDIO_ASLEEP));
   if (s.mode === 'call' && deadMic(s.ears, now, s.hearing?.track)) return fail(n, MIC_SILENT);
   const rules = listenRules(s.mode, listening().autoSend, useMicPause.getState().ms);
   const v = verdict(s.ears, now, rules, s.transcript);
@@ -421,7 +424,8 @@ async function recordClip(n: number) {
   let bytes = 0;
   let aborted = false;
   // A call's levels on the call's own audio, woken in the tap that started it: one made now (no tap) stays suspended on iPhones.
-  const levels = meter(stream, s.mode === 'call' ? callAudio() : null, (level) => {
+  const shared = s.mode === 'call' ? callAudio() : null;
+  const levels = meter(stream, shared, (level) => {
     const cur = live(n);
     const now = performance.now();
     if (cur?.ears) cur.ears = heardLevel(cur.ears, level, now);
@@ -441,6 +445,7 @@ async function recordClip(n: number) {
   };
   s.hearing = {
     track: stream.getAudioTracks()[0],
+    asleep: () => !!shared && shared.state !== 'running',
     stop: () => rec.state !== 'inactive' && rec.stop(),
     abort: () => {
       aborted = true;
@@ -465,7 +470,9 @@ function meter(stream: MediaStream, shared: AudioContext | null, onLevel: (rms: 
     src = ctx.createMediaStreamSource(stream);
     src.connect(analyser); // never to the speakers
     const buf = new Float32Array(analyser.fftSize);
+    const live = ctx;
     timer = setInterval(() => {
+      if (live.state !== 'running') return; // a stopped clock gives zeros, not the mic's silence (#648)
       analyser.getFloatTimeDomainData(buf);
       let sum = 0;
       for (const x of buf) sum += x * x;

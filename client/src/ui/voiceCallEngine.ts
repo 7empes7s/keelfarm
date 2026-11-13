@@ -8,7 +8,7 @@
 import { CEO_ID } from '../../../shared/types';
 import { cameraWords } from './agentCameraStore';
 import { report } from '../attention';
-import { agentCallWhy, agentOn, callAudio, useAgentCall } from './agentCallStore';
+import { agentCallWhy, agentOn, callAudio, releaseCallAudio, useAgentCall } from './agentCallStore';
 import { sendWs } from '../net';
 import { useStore } from '../store';
 import { markBusy } from '../updateGate';
@@ -40,10 +40,8 @@ function micReason(): string {
 export function startCall() {
   releaseWakeMic(); // before the call's own mic opens, not when the wake word sees the call
   unlockAudio();
-  if (!callOn() && !agentCallWhy(useStore.getState())) {
-    callAudio(); // inside the tap: iPhones only start sound (and the mic's audio session) from one
-    useAgentCall.setState({ mode: 'connecting', saying: '' });
-  }
+  if (!callOn()) callAudio(); // inside the tap: iPhones only start sound (and the mic's audio session) from one; the office's own mic meters on it too (#648)
+  if (!callOn() && !agentCallWhy(useStore.getState())) useAgentCall.setState({ mode: 'connecting', saying: '' });
   useCall.setState({ minimised: false });
   dispatchCall({ type: 'start', now: Date.now(), id: Date.now() });
 }
@@ -66,6 +64,7 @@ export function tapOrb() {
 /** Tap-to-talk, when the mic can't listen by itself: one turn, sent when you stop talking. */
 export function talkOnce() {
   if (!callOn() || useMic.getState().state !== 'idle') return;
+  callAudio(); // the tap wakes the call's audio, which an iPhone may have stopped (#648)
   tapping = true;
   listen(TARGET, 'call');
   if (useMic.getState().state === 'idle') tapping = false;
@@ -91,6 +90,7 @@ const EFFECTS: Record<CallEffect, () => void> = {
   'skip-voice': () => void (agentOn() ? agent().then((a) => a.skipAgent()) : voice().then((v) => v.skipSentence())),
   release: () => {
     if (agentOn()) void agent().then((a) => a.releaseAgent());
+    else releaseCallAudio();
     tapping = false;
     stopListening(TARGET);
     unregister?.();

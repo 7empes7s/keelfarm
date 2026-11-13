@@ -108,6 +108,11 @@ export function micErrorLine(code: string): string | null {
 /** A call's mic that gives only silence (#645). */
 export const MIC_SILENT = "I can't hear you: the microphone is silent. Tap Talk to try again.";
 
+/** The Jarvis voice's mic gives only silence (#648): it stays on, so no Talk button. */
+export const MIC_QUIET = "I can't hear you yet: the microphone is silent. Check it isn't muted or in use by another app.";
+/** The call's audio stopped as the mic opened (iPhones, #648): the next tap wakes it. */
+export const AUDIO_ASLEEP = "I can't hear you yet: tap the screen to wake the call's audio.";
+
 /** A call's turn the speech service couldn't turn into text (#645), with its reason. */
 export const speechFailed = (why: string) => `I can't hear you: the speech service failed (${why.trim().replace(/[.\s]+$/, '') || 'no reason given'}).`;
 
