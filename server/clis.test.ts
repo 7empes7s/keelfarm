@@ -194,6 +194,12 @@ describe('launchArgs', () => {
     expect(launchArgs('gemini', ctx()).args.slice(0, 2)).toEqual(['--approval-mode', 'yolo']);
   });
 
+  it('runs a consult read-only on OpenCode (#637): edits, shell, web fetch and outside folders denied', () => {
+    const perm = (readOnly: boolean) => JSON.parse(launchArgs('opencode', ctx({ readOnly })).env.OPENCODE_CONFIG_CONTENT as string).permission;
+    expect(perm(true)).toMatchObject({ edit: 'deny', bash: 'deny', webfetch: 'deny', external_directory: 'deny' });
+    expect(perm(false)).toMatchObject({ edit: 'allow', bash: 'allow', external_directory: 'allow' });
+  });
+
   it("gives Codex the office's hooks, with the office's address in its environment", () => {
     const { args, env } = launchArgs('codex', ctx());
     const hooks = args.filter((a) => a.startsWith('hooks.'));

@@ -173,7 +173,7 @@ export interface LaunchContext {
   node?: string;
   /** The CLI runs on Linux (a cloud agent's Box), whatever this computer is. */
   posix?: boolean;
-  /** A consult (#637): Codex in its read-only sandbox, Gemini CLI in its read-only plan mode (Claude Code's hooks refuse edits). */
+  /** A consult (#637): Codex in its read-only sandbox, Gemini CLI in its read-only plan mode, OpenCode with edit/bash denied (Claude Code's hooks refuse edits). */
   readOnly?: boolean;
 }
 
@@ -326,7 +326,10 @@ export function launchArgs(id: AgentCli, ctx: LaunchContext): Launch {
         plugin: [ctx.plugin],
         instructions: [ctx.files.system],
         autoupdate: false, // several agents starting at once must not each reinstall it
-        permission: { edit: 'allow', bash: 'allow', webfetch: 'allow', doom_loop: 'allow', external_directory: 'allow' }, // it can't stop to ask either
+        // It can't stop to ask either; a consult (#637) is refused edits, shell and outside folders, so only reads remain.
+        permission: ctx.readOnly
+          ? { edit: 'deny', bash: 'deny', webfetch: 'deny', doom_loop: 'allow', external_directory: 'deny' }
+          : { edit: 'allow', bash: 'allow', webfetch: 'allow', doom_loop: 'allow', external_directory: 'allow' },
         ...opencodeLocal(local),
         ...(ctx.browser || ctx.office
           ? { mcp: { ...(ctx.browser && { playwright: { type: 'local', command: [ctx.browser.command, ...ctx.browser.args], enabled: true } }), ...(ctx.office && { office: { type: 'remote', url: ctx.office, enabled: true } }) } }
