@@ -218,6 +218,9 @@ function FloorRow({ repo, all }: { repo: RepoView; all: RepoView[] }) {
         <label className="toggle" title="Merge a PR as soon as QA has signed off on its latest commit and GitHub's checks are green">
           <input type="checkbox" checked={repo.autoMerge} onChange={(e) => patch({ autoMerge: e.target.checked })} /> <Icon name="git-merge" /> Auto-merge
         </label>
+        <label className="toggle" title="Only test and merge PRs the office's agents opened; PRs from your own branches wait for you">
+          <input type="checkbox" checked={!!repo.leaveOwnPrs} onChange={(e) => patch({ leaveOwnPrs: e.target.checked })} /> <Icon name="user" /> Leave my own PRs alone
+        </label>
         <label className="toggle">
           <input type="checkbox" checked={repo.browserTesting} onChange={(e) => patch({ browserTesting: e.target.checked })} /> <Icon name="globe" /> Browser testing (Playwright MCP)
         </label>

@@ -380,7 +380,7 @@ export abstract class SwarmCore extends SwarmContract {
       floor: r.floor,
       color: r.color, theme: r.theme ?? 'office', ...(r.themeByHand && { themeByHand: true as const }), props: r.props ?? null, // only a known theme or prop set is ever saved (updateRepo)
       autoAssign: r.autoAssign,
-      autoMerge: r.autoMerge,
+      autoMerge: r.autoMerge, leaveOwnPrs: !!r.leaveOwnPrs, // #632
       folderSync: rt.folderSync,
       browserTesting: r.browserTesting,
       links: r.links,

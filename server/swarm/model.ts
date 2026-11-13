@@ -83,6 +83,7 @@ export interface PersistedRepo {
   color: string;
   autoAssign: boolean;
   autoMerge: boolean; // PRs merge themselves once QA passes and GitHub's checks are green
+  leaveOwnPrs?: boolean; // "Leave my own PRs alone" (#632): only the office's swarm/ branches get QA and auto-merge; missing: off
   browserTesting: boolean;
   links: string[]; // other connected repos this floor's agents may read
   localPath: string | null; // the manager's own project folder (null: a clone under WORKSPACE_ROOT)

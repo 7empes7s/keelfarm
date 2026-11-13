@@ -17,11 +17,11 @@ export function demoPreviewDesks() {
   };
 }
 
-/** Open PRs last touched days ago (4, 7, 10 …), made from `pull` (a number and a title). */
+/** Open PRs last touched days ago (4, 7, 10 …), made from `pull` (a number and a title); drafts, so QA leaves them be (#632). */
 export function stalePulls(titles: string[], pull: (title: string) => PullInfo): PullInfo[] {
   return titles.map((title, i) => {
     const at = new Date(Date.now() - (4 + i * 3) * 86_400_000).toISOString();
     const p = pull(title);
-    return { ...p, headRefName: `wip/${p.number}`, state: 'OPEN', mergedAt: null, createdAt: at, updatedAt: at, author: 'demo-co' };
+    return { ...p, headRefName: `wip/${p.number}`, state: 'OPEN', isDraft: true, mergedAt: null, createdAt: at, updatedAt: at, author: 'demo-co' };
   });
 }
