@@ -5,7 +5,7 @@ import { digestHour } from './problems.ts';
 
 /** In the order the settings list them. */
 export const NOTIFY_EVENTS: { id: NotifyEvent; label: string }[] = [
-  { id: 'needsHuman', label: 'A pull request needs me' },
+  { id: 'needsHuman', label: 'An approval needs me (pull requests and IT)' },
   { id: 'question', label: "An agent's question only I can answer" },
   { id: 'ceoMessage', label: 'A message from the CEO' },
   { id: 'hire', label: 'A team change waits for my decision' },
