@@ -109,6 +109,13 @@ export function loadBlocker(b: LoadBlockers): string | null {
   return null;
 }
 
+/**
+ * Whether a panel changing (its kind `was` → `now`, null: none) is a moment to load the new client: in pocket mode,
+ * never in the 3D office. There a reload rebuilds the scene, closes the phone just opened and drops the mouse grab
+ * closing a panel takes (#644), so the new client waits for the pill or a return to the app.
+ */
+export const panelChangeLoads = (mode: 'pocket' | 'office', was: string | null, now: string | null) => mode === 'pocket' && was !== now;
+
 /** Loads the new client now: there is one, this moment counts, and nothing holds it back. */
 export function loadNow(ready: boolean, moment: LoadMoment, b: LoadBlockers): boolean {
   if (!ready || (moment.kind === 'visible' && moment.hiddenMs < HIDDEN_LOAD_MS)) return false;

@@ -67,7 +67,7 @@ function startMode(): { mode: ViewMode; closedLast: string | null } {
 }
 
 /** `closedLast`: why the 3D office closed while starting last time (pocket mode shows it), or null. */
-export const useMode = create<{ mode: ViewMode; closedLast: string | null }>(() => (typeof window === 'undefined' ? { mode: 'office', closedLast: null } : startMode()));
+export const useMode = create<{ mode: ViewMode; closedLast: string | null }>(() => (typeof location === 'undefined' ? { mode: 'office', closedLast: null } : startMode()));
 
 /** Switches this device to `mode` and remembers it. */
 export function setMode(mode: ViewMode) {

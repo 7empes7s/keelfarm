@@ -3,7 +3,8 @@
 // in the app after a while away, or the header's "New version" pill, and never while a message is being written,
 // uploaded or sent, or a sheet is open. Drafts and the outbox are saved anyway (drafts.ts, chatSend.ts).
 import { useStore } from './store';
-import type { LoadMoment } from './officeUpdate';
+import { useMode } from './pocket/mode';
+import { panelChangeLoads, type LoadMoment } from './officeUpdate';
 import { readyAfter, tryLoad } from './updateGate';
 
 // The commit this tab last loaded the client for, so a new office commit loads it at most once.
@@ -56,8 +57,8 @@ export function installUpdateLoader() {
     if (document.visibilityState === 'hidden') hiddenAt = Date.now();
     else if (hiddenAt) loadUpdate({ kind: 'visible', hiddenMs: Date.now() - hiddenAt });
   });
-  // a page change on a desktop: once React has drawn it, so the sheet check sees the new page
-  useStore.subscribe((s, prev) => s.overlay?.kind !== prev.overlay?.kind && setTimeout(() => loadUpdate({ kind: 'nav' }), 50));
+  // a page change in pocket mode, never the 3D office's panels (officeUpdate.ts panelChangeLoads): once React has drawn it, so the sheet check sees the new page
+  useStore.subscribe((s, prev) => panelChangeLoads(useMode.getState().mode, prev.overlay?.kind ?? null, s.overlay?.kind ?? null) && setTimeout(() => loadUpdate({ kind: 'nav' }), 50));
   // a lazy chunk of the old client is gone from the office: load the new one now (drafts are saved) rather than break
   window.addEventListener('vite:preloadError', (e) => {
     const ready = useStore.getState().updateReady;

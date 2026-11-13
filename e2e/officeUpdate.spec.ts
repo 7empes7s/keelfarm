@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { expect, test } from './helpers';
+import { enterOffice, expect, test } from './helpers';
 
 // The office updating itself never reloads the manager's page (#216): a draft and its file stay put, the new version
 // loads on the next tab change with the draft still there, and a message cut off mid-send goes once.
@@ -34,6 +34,30 @@ test('an office update keeps the draft and its file, then loads on the next tab 
   await page.goto('/?pocket=1&tab=chat');
   await expect(box).toHaveValue('Half a thought about the bakery');
   await expect(page.locator('.attach-item')).toHaveCount(1);
+});
+
+test('in the 3D office, updates landing never reload the page: the phone stays open and the mouse still looks around (#644)', async ({ page }) => {
+  test.setTimeout(90_000);
+  await enterOffice(page);
+  await page.evaluate(() => ((window as { marker?: number }).marker = 1)); // gone if the page reloads
+  await page.request.post('/api/demo/new-commit'); // the live office updates itself on every merge; the demo only when asked
+  await expect(page.getByRole('button', { name: 'New version · Update' })).toBeVisible();
+  await page.keyboard.press('KeyP');
+  const phone = page.locator('.phone-overlay');
+  for (let i = 0; i < 4; i++) {
+    await expect(phone).toBeVisible();
+    await page.request.post('/api/demo/new-commit');
+    await page.waitForTimeout(2500);
+  }
+  await expect(phone).toBeVisible();
+  expect(await marked(page)).toBe(true);
+  await page.keyboard.press('Escape');
+  await expect(phone).toBeHidden();
+  await page.waitForTimeout(500); // a reload would have started by now
+  expect(await marked(page)).toBe(true);
+  await page.locator('canvas').first().click(); // grabs the mouse for looking around (Player.tsx requestLook)
+  await expect.poll(() => page.evaluate(() => document.pointerLockElement?.tagName ?? null)).toBe('CANVAS');
+  expect(await marked(page)).toBe(true);
 });
 
 test('a message cut off mid-send is sent once after the page comes back (#216)', async ({ page, context }) => {
