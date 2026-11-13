@@ -444,6 +444,7 @@ export abstract class SwarmScheduling extends SwarmQa {
   protected recordUsage(readings: UsageReading[]) {
     this.usageCheck = null; // a fresh reading answers for itself
     this.state.claudeUsage = mergeReadings(this.state.claudeUsage, readings);
+    this.accounts.builtInReadings(); // readings with room end the built-in login's limit
     if (this.readingsTimer || !readingsChanged(this.shownReadings, this.state.claudeUsage)) return;
     this.readingsTimer = setTimeout(() => {
       this.readingsTimer = null;

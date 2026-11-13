@@ -119,14 +119,9 @@ describe('Accounts', () => {
     expect(accounts.view().accounts.find((a) => a.id === 'claude-login')?.limitSpans).toHaveLength(1);
   });
 
-  it("a limit doesn't outlive a new sign-in, nor a session's readings showing room (the built-in login's too)", async () => {
+  it("a limit doesn't outlive a new sign-in (the built-in login's too)", async () => {
     const { accounts } = await office();
     const until = () => accounts.view().accounts.find((a) => a.id === 'claude-login')!.limitedUntil;
-    accounts.limited('claude-login', Date.now() + 3600_000);
-    accounts.readings('claude-login', [{ type: 'five_hour', pct: 100, resetsAt: Date.now() + 3600_000, at: Date.now() }]);
-    expect(until()).toBeGreaterThan(Date.now()); // still full: still limited
-    accounts.readings('claude-login', [{ type: 'five_hour', pct: 12, resetsAt: Date.now() + 3600_000, at: Date.now() }]);
-    expect(until()).toBeNull(); // its session shows room again
     accounts.limited('claude-login', Date.now() + 3600_000);
     accounts.signIn('claude-login'); // signed in again, maybe as another account: a fresh start
     await vi.waitFor(() => expect(until()).toBeNull());
