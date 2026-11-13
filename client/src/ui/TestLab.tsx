@@ -121,7 +121,7 @@ export function TestLabFields({ testLab, set }: { testLab: TestLabSettings; set:
       {count('totalJobs', 'Lab jobs at once in all')}
       <p className="muted small">
         Claude Code agents on this computer ask the lab for screenshots, browser checks and full test runs instead of starting their own browser or suite, so memory stays free. Off: each one gets a
-        browser of its own again, from their next task.
+        browser of its own again, from their next task. One more slot is always kept for a browser check, so heavy runs never hold one up, and a job waiting over 5 minutes goes first.
       </p>
     </>
   );

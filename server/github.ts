@@ -4,6 +4,7 @@ import { NEVER_STARTED_MS } from './mergeGate.ts';
 import { MERGED_LISTED, OPEN_PULLS_LISTED, PR_FILES_MAX, type GhRepoSummary, type IssueInfo, type MergedPage, type PullInfo } from '../shared/types.ts';
 import type { SurvivalSignals } from '../shared/experiments.ts';
 import { TRUST_LABEL } from '../shared/trust.ts';
+import { MANUAL_LABEL } from '../shared/officePulls.ts';
 import { prSummary } from '../shared/prSummary.ts';
 import { tryItField } from '../shared/tryIt.ts';
 import { hasAttribution, squashBody, stripAttribution, type PrCommit } from './attribution.ts';
@@ -152,6 +153,7 @@ interface RawPull {
   files?: { path: string }[] | null;
   author?: { login: string } | null;
   isCrossRepository?: boolean;
+  labels?: { name: string }[] | null;
   // check runs (GitHub Actions…) carry name/status/conclusion/detailsUrl and startedAt/completedAt; commit statuses (Vercel…) carry context/state/targetUrl
   statusCheckRollup:
     | { name?: string; context?: string; status?: string; conclusion?: string; state?: string; detailsUrl?: string; targetUrl?: string; startedAt?: string; completedAt?: string }[]
@@ -159,7 +161,7 @@ interface RawPull {
 }
 
 const PR_FIELDS =
-  'number,title,url,headRefName,headRefOid,state,isDraft,mergeable,mergeStateStatus,reviewDecision,closingIssuesReferences,createdAt,updatedAt,mergedAt,additions,deletions,statusCheckRollup,files,author,isCrossRepository,body';
+  'number,title,url,headRefName,headRefOid,state,isDraft,mergeable,mergeStateStatus,reviewDecision,closingIssuesReferences,createdAt,updatedAt,mergedAt,additions,deletions,statusCheckRollup,files,author,isCrossRepository,body,labels';
 
 type Check = NonNullable<RawPull['statusCheckRollup']>[number];
 const BAD = ['FAILURE', 'ERROR', 'CANCELLED', 'TIMED_OUT', 'ACTION_REQUIRED', 'STARTUP_FAILURE'];
@@ -221,6 +223,7 @@ function toPull(p: RawPull): PullInfo {
     ...(p.state === 'OPEN' && tryItField(p.body)), // the sync takes them off (takeSteps): read on demand, never in the snapshot
     author: p.author?.login ?? null,
     isCrossRepository: p.isCrossRepository ?? true, // unknown: treated as a fork's
+    ...((p.labels ?? []).some((l) => l.name.toLowerCase() === MANUAL_LABEL) && { manual: true }), // the manager merges it (#632)
   };
 }
 

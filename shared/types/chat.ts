@@ -58,6 +58,7 @@ export interface PhoneMessage {
   tg?: number; // its Telegram message id, for one the manager sent from there
   notice?: ChatNotice; // the office's: a system notice (an update held back, rolled back…) shown as a card
   itAuto?: { log: string; undo: boolean; undone?: true }; // IT's: a change auto-approve ran (#585), its IT desk log line and whether it has an Undo
+  itRunbook?: { job: string }; // IT's: a runbook job's card (#611), drawn from the IT desk's runbooks by id
   hidden?: true; // the CEO's, hidden by the manager (#145): kept for the CEO, never sent to a phone (shared/chatPage.ts)
   signIn?: ChatSignIn; // the office's: cloud agents to sign in after the API key stopped working (#258), as a card
   switch?: ChatSwitch; // the office's: the CEO moved to another account (#248), shown as a pill
@@ -66,6 +67,7 @@ export interface PhoneMessage {
   ceoStuck?: ChatCeoStuck; // the office's: the CEO's session is stuck (#375), as a card with Open terminal, Sign in and Switch back
   pacing?: true; // the office's: pacing started on a usage warning, as a card with Resume full speed and Always keep full speed (#323)
   problems?: ProblemsDigest; // the office's daily problems digest (#544), as a card with tappable items
+  checklist?: { id: string }; // a checklist's card (#612), drawn live from the store's checklists
   ceoJob?: CeoJobTag; // the CEO's reply to a job the office started (#332): its model, and Redo on Opus
 }
 

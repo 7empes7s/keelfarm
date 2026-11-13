@@ -49,7 +49,7 @@
     "prepublishOnly": "npm test && npm run build"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.3.322",
+    "@anthropic-ai/claude-agent-sdk": "^0.3.323",
     "@lydell/node-pty": "1.2.0-beta.15",
     "@modelcontextprotocol/sdk": "^1.30.1",
     "@playwright/mcp": "0.0.83",

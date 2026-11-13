@@ -146,6 +146,18 @@ const GUIDES: Record<string, SetupGuide> = {
     limits: 'Free.',
     test: 'Refreshes the sign-in and reads your profile (free).',
   },
+  entra: {
+    keyKind: 'An admin app credential: "client id:client secret". The office registers Cloudflare Access’s own app with it.',
+    steps: [
+      'In Microsoft Entra → App registrations → New registration, name it "cubefarm admin" (single tenant, no redirect).',
+      'API permissions → Add → Microsoft Graph → Application permissions: Application.ReadWrite.All and DelegatedPermissionGrant.ReadWrite.All, then Grant admin consent.',
+      'Certificates & secrets → New client secret. Paste the Application (client) ID, a colon, then the secret value here.',
+      'Paste the Directory (tenant) ID from Overview as the Tenant ID.',
+    ],
+    limits: 'Free. Only this tenant is ever used.',
+    test: 'Signs the admin app in to the tenant (free, nothing is changed).',
+    accountId: { label: 'Tenant ID', hint: 'Directory (tenant) ID, from Entra → Overview' },
+  },
 };
 
 /** A provider's setup card: its own, or the plain three steps. */
@@ -258,6 +270,14 @@ export function turnedAwayNote(provider: string, status: number): string | null 
 export const missingNote = (missing: readonly string[]) => `Missing: ${missing.join(', ')}`;
 
 /** Cloudflare's verify call: an account-owned token's when the Account ID is known (#533), else a user token's. */
+/** An Entra admin app's test (#621): its client-credentials token for Graph, the key ("client id:secret") as the form. */
+export function entraTokenProbe(key: string, tenant: string): Extract<ProbeRequest, { kind: 'form' }> | null {
+  const t = tenant.trim().toLowerCase();
+  const at = key.indexOf(':');
+  if (!/^[0-9a-z][0-9a-z.-]{2,}$/.test(t) || at < 1) return null;
+  return { kind: 'form', url: `https://login.microsoftonline.com/${t}/oauth2/v2.0/token`, form: { grant_type: 'client_credentials', scope: 'https://graph.microsoft.com/.default', client_id: key.slice(0, at), client_secret: key.slice(at + 1) } };
+}
+
 export function cloudflareVerify(key: string, accountId = ''): Extract<ProbeRequest, { kind: 'http' }> {
   const id = accountId.trim();
   return { kind: 'http', url: id ? `${CF}/accounts/${id}/tokens/verify` : `${CF}/user/tokens/verify`, headers: { Authorization: `Bearer ${key}` } };

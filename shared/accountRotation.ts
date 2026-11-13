@@ -122,6 +122,21 @@ export const waitText = (out: PinOut) => (out.why === 'signed-out' ? `Waiting fo
 /** A pinned agent running elsewhere, for their log and the CEO: "Fable is running on Claude Ultra because Claude Pro is signed out." */
 export const fallbackText = (agentName: string, to: string, out: Pick<PinOut, 'label' | 'why'>) => `${agentName} is running on ${to} because ${out.label} is ${out.why === 'signed-out' ? 'signed out' : 'limited'}.`;
 
+// ---------- no account signed in (#617) ----------
+
+/** Whether every enabled account of `cli` reads signed out: a session there could only show a sign-in. False when it has none. */
+export function noneSignedIn(accounts: readonly { cli: AccountCli; status: string }[], cli: AccountCli): boolean {
+  const live = accounts.filter((a) => a.cli === cli && a.status !== 'paused');
+  return live.length > 0 && live.every((a) => a.status === 'signed-out');
+}
+
+/** How to sign a coding agent in on this computer. */
+const LOGIN_STEP: Record<AccountCli, string> = { claude: 'run claude in a terminal on this computer and type /login', codex: 'run codex login in a terminal on this computer', gemini: 'run gemini in a terminal on this computer and sign in' };
+
+/** The one card when no account of a coding agent is signed in: which, the fix, and who waits. */
+export const noSignInText = (cli: AccountCli, cliName: string, labels: readonly string[], waiting: string) =>
+  `🔑 No ${cliName} account is signed in (${labels.join(', ')}), so ${waiting} went back in line. To fix it, ${LOGIN_STEP[cli]}, or tap Sign in.`;
+
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 
 /** A wall-clock time in an IANA time zone ("UTC", "Europe/Berlin") as epoch ms; the computer's own zone when it's unknown. */

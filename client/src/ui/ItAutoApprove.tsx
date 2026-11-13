@@ -9,7 +9,7 @@ import { Icon } from './Icon';
 import './itAuto.css';
 
 const LEVELS: { level: Exclude<ItAutoLevel, 'off'>; label: string; what: string }[] = [
-  { level: 'routine', label: 'Routine', what: "reads, git fetch/pull, IT's own units, installing a unit or Caddy file, caddy reload after validate" },
+  { level: 'routine', label: 'Routine', what: "reads, git fetch/pull, IT's own units, installing a unit or Caddy file, caddy reload after validate, a project's runbook in its own folders" },
   { level: 'all', label: 'Everything except dangerous', what: 'any change not on the danger list' },
 ];
 
