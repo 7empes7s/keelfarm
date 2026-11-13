@@ -71,6 +71,8 @@ async function enter(page: Page) {
 
 async function probe(page: Page, label: string) {
   await page.waitForTimeout(1500);
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(1200);
   await diag(page, `${label} before`);
   await page.locator('canvas').first().click({ position: { x: 400, y: 200 } });
   await page.waitForTimeout(800);
@@ -99,9 +101,11 @@ test('A: fresh profile, as the manager (no tour seen)', async ({ page }) => {
 test('B: open tab across a self-update', async ({ page }) => {
   test.setTimeout(110_000);
   await page.addInitScript((ids) => localStorage.getItem('cubefarm:tour-seen') === null && localStorage.setItem('cubefarm:tour-seen', ids), JSON.stringify(TOUR.map((e) => e.id)));
+  await page.request.patch('/api/settings', { data: { tutorialStep: -1, setupDone: true } });
   await page.goto('/');
   await enter(page);
   await page.waitForTimeout(3000);
+  await page.keyboard.press('Escape');
   update();
   try {
     await page.request.post('/api/demo/new-commit');
