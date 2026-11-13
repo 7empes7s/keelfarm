@@ -14,7 +14,7 @@ import { nonZeroPcmBytes } from '../../../shared/callTrace';
 import { ctxLabel, trace, traceChunk, traceLevel, traceNote, traceTrack, traceWs } from './callTrace';
 import { callAudio, onAgentRelay, releaseCallAudio, useAgentCall } from './agentCallStore';
 import { SILENT_LEVEL, SILENT_MIC_MS } from './micSilence';
-import { AUDIO_ASLEEP, MIC_QUIET } from './micText';
+import { AUDIO_ASLEEP, MIC_QUIET, micErrorLine } from './micText';
 import { wantsMic } from './voiceCall';
 import { callOn, dispatchCall, useCall } from './voiceCallStore';
 
@@ -96,7 +96,7 @@ export async function connectAgent(fallback: (why: string) => void) {
     const name = (err as Error).name || 'Error';
     traceNote(`the Jarvis mic failed: ${name} ${(err as Error).message ?? ''}`.trim());
     closeConversation('off');
-    return fail(fallback, name === 'NotAllowedError' ? 'The microphone is blocked: allow it for this site in the browser (on an iPhone: Settings → Safari → Microphone)' : `The microphone couldn't start (${name})`);
+    return fail(fallback, name === 'NotAllowedError' ? (micErrorLine(name) ?? name) : `The microphone couldn't start (${name})`);
   }
 }
 

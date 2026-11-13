@@ -76,11 +76,14 @@ export function phrasesText(phrases: readonly Phrase[]): { text: string; speakin
   return { text: phrases.map((p) => p.transcript.trim()).filter(Boolean).join(' '), speaking: phrases.some((p) => !p.final && p.transcript.trim()) };
 }
 
+/** An iPhone or iPad, whose mic permission lives in Settings, not by the address bar (#650). */
+const onIos = () => typeof navigator !== 'undefined' && /iPhone|iPad|iPod/.test(navigator.userAgent);
+
 /**
  * A recognition or microphone error in one friendly line, or null when it needs none (stopped on purpose, nothing
  * said). Codes are SpeechRecognition's `error` or getUserMedia's DOMException names.
  */
-export function micErrorLine(code: string): string | null {
+export function micErrorLine(code: string, ios = onIos()): string | null {
   switch (code) {
     case 'aborted':
     case 'no-speech':
@@ -90,7 +93,9 @@ export function micErrorLine(code: string): string | null {
     case 'service-not-allowed':
     case 'NotAllowedError':
     case 'SecurityError':
-      return 'The microphone is blocked for the office. Allow it from the icon at the left of the address bar to talk instead of type.';
+      return ios
+        ? 'The microphone is blocked for the office: allow it in Settings → Safari → Microphone (or aA → Website Settings), then try again.'
+        : 'The microphone is blocked for the office. Allow it from the icon at the left of the address bar to talk instead of type.';
     case 'audio-capture':
     case 'NotFoundError':
     case 'NotReadableError':
