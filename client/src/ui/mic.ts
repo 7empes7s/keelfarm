@@ -470,9 +470,9 @@ function meter(stream: MediaStream, shared: AudioContext | null, onLevel: (rms: 
     src = ctx.createMediaStreamSource(stream);
     src.connect(analyser); // never to the speakers
     const buf = new Float32Array(analyser.fftSize);
-    const live = ctx;
+    const audio = ctx;
     timer = setInterval(() => {
-      if (live.state !== 'running') return; // a stopped clock gives zeros, not the mic's silence (#648)
+      if (audio.state !== 'running') return; // a stopped clock gives zeros, not the mic's silence (#648)
       analyser.getFloatTimeDomainData(buf);
       let sum = 0;
       for (const x of buf) sum += x * x;

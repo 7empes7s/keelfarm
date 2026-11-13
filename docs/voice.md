@@ -312,6 +312,9 @@ in `<SWARM_HOME>/voice-agent.json` (mode 600) with the agent's id and the minute
 and updates it when the voice or address changes. The browser gets only a short-lived signed URL for each conversation,
 never the key. Without a key or address, over the limit, with the switch off, or when ElevenLabs can't be reached,
 the call is exactly today's voice mode (a toast says why when it falls back).
+A mic that stays silent for 5 s never drops the Jarvis voice: the call screen says so under the status (and the
+office gets an IT ticket), and the first sound clears it. On iPhones opening the mic can stop the call's audio: the
+call starts it again, or asks for a tap on the screen (#648).
 
 The demo office talks to a fake agent socket on itself (`/ws/voice-agent`, `server/voiceAgentFake.ts`) that speaks
 ElevenLabs' protocol and "speaks" a soft tone; `__swarmCall.agent` is the conversation's mode (`off`, `connecting`,
