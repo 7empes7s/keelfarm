@@ -54,6 +54,8 @@ const SIGN_IN_DIFF = "● Update(server/liveState.ts)\n  ⎿  29 + const SIGN_IN
 describe('classifyScreen', () => {
   it('reads the theme, trust, sign-in and Codex session-ended screens', () => {
     expect(classifyScreen(THEME)).toEqual({ state: 'setup', reason: 'needs setup (the theme screen)' });
+    expect(classifyScreen('  Trust this folder? Codex can read, edit, and run files here\n› 1. Trust and continue\n  2. Quit')).toEqual({ state: 'setup', reason: 'needs setup (the folder-trust screen)' });
+    expect(classifyScreen('  Hooks need review\n  5 hooks are new or changed.\n› 1. Review hooks\n  2. Trust all and continue')).toEqual({ state: 'setup', reason: "needs setup (Codex's hooks review: open their terminal and pick Review hooks)" });
     expect(classifyScreen(TRUST)).toEqual({ state: 'setup', reason: 'needs setup (the folder-trust screen)' });
     expect(classifyScreen(SIGN_IN)).toEqual({ state: 'sign-in', reason: 'needs sign-in' });
     expect(classifyScreen(CODEX_ENDED).state).toBe('ended');

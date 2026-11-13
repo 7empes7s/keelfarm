@@ -74,6 +74,20 @@ describe('screenStep', () => {
     expect(screenStep(update, 'claude')).toBeNull();
   });
 
+  // Codex 0.166's start-up screens (#638), as its TUI draws them.
+  const TRUST_0166 = ['  Folder access', '  /m/work/acme__web', '  Trust this folder? Codex can read, edit, and run files here, subject to your permission settings.', '› 1. Trust and continue', '  2. Quit', '  enter continue · esc quit'].join('\n');
+  const HOOKS_0166 = ['  Hooks need review', '  5 hooks are new or changed.', '  Hooks can run outside the sandbox after you trust them.', '› 1. Review hooks', '  2. Trust all and continue', "  3. Continue without trusting (hooks won't run)"].join('\n');
+
+  it("trusts the office's worktree on Codex 0.166's folder screen", () => {
+    expect(screenStep(TRUST_0166, 'codex')).toMatchObject({ do: 'keys', key: 'enter', screen: { id: 'trust' } });
+  });
+
+  it("goes on past others' hooks only once the office's own are trusted, never trusting them, and never skips the office's", () => {
+    expect(screenStep(HOOKS_0166, 'codex', { officeHooksTrusted: true })).toMatchObject({ do: 'keys', key: 'down', screen: { id: 'hooks' } });
+    expect(screenStep(HOOKS_0166.replace('› 1.', '  1.').replace('  3. Continue', '› 3. Continue'), 'codex', { officeHooksTrusted: true })).toMatchObject({ key: 'enter' });
+    expect(screenStep(HOOKS_0166, 'codex')).toBeNull(); // left to the manager: the live state says it needs setup
+  });
+
   it('sends nothing to a screen it only half recognises, or to a CLI at work', () => {
     expect(screenStep(' Choose the text style that looks best with your terminal', 'claude')).toBeNull(); // no options drawn yet
     expect(screenStep(' WARNING: Claude Code running in Bypass Permissions mode\n ❯ 1. No, exit', 'claude')).toBeNull();

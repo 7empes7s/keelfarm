@@ -12,6 +12,7 @@ export default defineConfig({
     environment: 'node',
     // Anything a test imports must never see the live office's state (~/.cubefarm) or its ports.
     // Previews tests probe ports: keep them clear of the live office's preview ranges (6300-6499).
-    env: { SWARM_HOME: path.join(os.tmpdir(), `cubefarm-vitest-${process.pid}`), SWARM_PORT: '0', SWARM_PREVIEW_PORT: '9300' },
+    // CODEX_HOME: a Codex session started by a test readies its home (#638), never the manager's ~/.codex.
+    env: { SWARM_HOME: path.join(os.tmpdir(), `cubefarm-vitest-${process.pid}`), SWARM_PORT: '0', SWARM_PREVIEW_PORT: '9300', CODEX_HOME: path.join(os.tmpdir(), `cubefarm-vitest-${process.pid}`, 'codex') },
   },
 });
