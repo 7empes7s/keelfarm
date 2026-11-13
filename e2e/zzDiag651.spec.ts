@@ -40,6 +40,12 @@ async function diag(page: Page, label: string) {
       centre: at ? `${at.tagName}.${(at as HTMLElement).className}` : null,
       tour: [...document.querySelectorAll('.tour, .tour-dim, .tour-ring, .tour-invite')].map((e) => e.className),
       sw: navigator.serviceWorker?.controller?.scriptURL ?? null,
+      ov: (() => { const o = document.querySelector('.overlay'); if (!o) return null; const q = o.getBoundingClientRect(); const c = getComputedStyle(o); return [q.x, q.width, c.display, c.gridTemplateColumns, c.placeItems, c.padding]; })(),
+      wide: ph ? [...ph.querySelectorAll('*')].map((e) => [e.tagName + '.' + (e as HTMLElement).className, Math.round(e.getBoundingClientRect().width), Math.round((e as HTMLElement).scrollWidth)] as const).sort((a, b) => b[2] - a[2]).slice(0, 5) : null,
+      docW: document.documentElement.scrollWidth,
+      vw: innerWidth,
+      locks: (window as unknown as { __locks?: string[] }).__locks,
+      sheets: [...document.styleSheets].length,
     };
   });
   console.log(`DIAG ${label}: ${JSON.stringify(d)}`);
@@ -47,6 +53,24 @@ async function diag(page: Page, label: string) {
 
 const test = base.extend<{ page: Page }>({
   page: async ({ page }, use) => {
+    await page.addInitScript(() => {
+      const w = window as unknown as { __locks: string[] };
+      w.__locks = [];
+      const orig = Element.prototype.requestPointerLock;
+      Element.prototype.requestPointerLock = function (this: Element, ...a: unknown[]) {
+        w.__locks.push('call ' + this.tagName + ' ' + JSON.stringify(a));
+        try {
+          const p = (orig as (...x: unknown[]) => Promise<void> | undefined).apply(this, a);
+          p?.then?.(() => w.__locks.push('ok'), (e: Error) => w.__locks.push('rej ' + e.name + ' ' + e.message));
+          return p as Promise<void>;
+        } catch (e) {
+          w.__locks.push('throw ' + String(e));
+          throw e;
+        }
+      } as typeof orig;
+      document.addEventListener('pointerlockchange', () => w.__locks.push('change ' + (document.pointerLockElement?.tagName ?? 'none')));
+      document.addEventListener('pointerlockerror', () => w.__locks.push('lockerror'));
+    });
     page.on('console', (m) => console.log(`CONSOLE ${m.type()}: ${m.text().slice(0, 300)}`));
     page.on('pageerror', (e) => console.log(`PAGEERROR ${e.message}`));
     page.on('response', (r) => {
@@ -91,10 +115,13 @@ async function probe(page: Page, label: string) {
   await page.keyboard.press('Escape');
 }
 
-test.skip('A: fresh profile, as the manager (no tour seen)', async ({ page }) => {
+test('A: control, no update', async ({ page }) => {
   test.setTimeout(110_000);
+  await page.request.patch('/api/settings', { data: { tutorialStep: -1, setupDone: true } });
   await page.goto('/');
   await enter(page);
+  await page.waitForTimeout(3000);
+  await page.keyboard.press('Escape');
   await probe(page, 'A');
 });
 
