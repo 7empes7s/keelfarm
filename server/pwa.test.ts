@@ -83,3 +83,28 @@ describe('push in the service worker (#210)', () => {
     expect(r).toEqual({ shown: [], closed: ['cubefarm-ceoMessage'] });
   });
 });
+
+it('routes an approval click to the exact card in an existing window or a newly opened office', async () => {
+  for (const existing of [true, false]) {
+    const handlers: Record<string, (e: unknown) => void> = {};
+    const opened: string[] = [], messages: unknown[] = [];
+    let focused = false, closed = false;
+    const url = 'https://office.example/?tab=approvals&note=it-abc-1';
+    const self = {
+      addEventListener: (type: string, fn: (e: unknown) => void) => (handlers[type] = fn),
+      location: { origin: 'https://office.example' },
+      clients: {
+        matchAll: async () => existing ? [{ url: 'https://office.example/', postMessage: (m: unknown) => messages.push(m), focus: async () => { focused = true; } }] : [],
+        openWindow: async (u: string) => { opened.push(u); },
+      },
+    };
+    vm.runInNewContext(serviceWorkerSource('test'), { self, URL });
+    let done: Promise<unknown> | undefined;
+    handlers.notificationclick({ notification: { data: { url }, close: () => { closed = true; } }, waitUntil: (p: Promise<unknown>) => { done = p; } });
+    await done;
+    expect(closed).toBe(true);
+    expect(opened).toEqual(existing ? [] : [url]);
+    expect(messages).toEqual(existing ? [{ type: 'cubefarm:open', url }] : []);
+    expect(focused).toBe(existing);
+  }
+});

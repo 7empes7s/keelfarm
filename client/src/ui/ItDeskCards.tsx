@@ -1,7 +1,9 @@
 // The IT desk's cards (#506): the commands the CEO proposed, each with what it's for, what it frees, how to undo it and
 // its risk, and Run / Not now; Run all for several. Shown in the CEO chat and on Mission control. Also Settings → CEO
 // settings' IT desk: on/off, the read-only list and the commands run.
+import { create } from 'zustand';
 import { useState } from 'react';
+import { useBackLayer } from './Panel';
 import { api } from '../api';
 import { useStore } from '../store';
 import { CEO_ID } from '../../../shared/types';
@@ -151,4 +153,29 @@ export function ItDeskSettings() {
       )}
     </div>
   );
+}
+
+/** A pushed approval opens just this card; a decision elsewhere leaves a clear settled state. */
+function ItApproval({ id, onClose }: { id: string; onClose: () => void }) {
+  useBackLayer(onClose);
+  const p = useStore((s) => s.itDesk?.waiting.find((c) => c.id === id));
+  const [busy, setBusy] = useState(false);
+  const act = (ids: string[], run: boolean) => {
+    setBusy(true);
+    void (run ? api.itRun(ids) : api.itDismiss(ids)).catch(() => undefined).finally(() => setBusy(false));
+  };
+  return (
+    <Sheet label="IT approval" className="ds-screen" onClose={onClose}>
+      <div className="artifact-body it-desk">
+        {p ? <ProposalCard p={p} busy={busy} act={act} /> : <p>This approval is no longer pending. It was already handled or withdrawn.</p>}
+      </div>
+    </Sheet>
+  );
+}
+
+export const useItApproval = create<{ id: string | null }>(() => ({ id: null }));
+
+export function ItApprovalSheet() {
+  const id = useItApproval((s) => s.id);
+  return id ? <ItApproval key={id} id={id} onClose={() => useItApproval.setState({ id: null })} /> : null;
 }

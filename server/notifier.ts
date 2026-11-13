@@ -195,7 +195,10 @@ export class Notifier {
 
   /** Something happened: tell the manager on every channel that's on, after a short wait, unless the event is off or they're in the app; `message`: the CEO message it's about. */
   notify(event: NotifyEvent, title: string, body: string, line?: string, changes?: TeamChange[], id?: string, message?: number) {
-    if (!this.deps.settings().events[event]) return;
+    if (!this.deps.settings().events[event]) {
+      if (id?.startsWith('it-')) this.deps.log('notify: IT approval not sent: approval notifications are disabled');
+      return;
+    }
     if (id && message !== undefined) this.attention.link(id, message);
     this.step(queue(this.threads, note(event, title, body, line, changes, id), this.now(), this.present()));
   }
@@ -401,6 +404,10 @@ export class Notifier {
     const s = this.deps.settings();
     const on = (c: NotifyChannel) => (only ? c === only : s.channels[c]);
     const at = this.now();
+    if (n.id?.startsWith('it-')) {
+      if (!on('push')) this.deps.log('notify: IT approval push not sent: push is disabled');
+      else if (!this.push.vapid || !this.push.devices.length) this.deps.log('notify: IT approval push not sent: no subscribed device');
+    }
     const view: NoteView = { id: n.id ?? `${at.toString(36)}-${++this.seq}`, event: n.event, title: n.title, body: n.body, at, url: `/?tab=${noteTab(n.event)}${n.id ? `&note=${n.id}` : ''}` };
     const link = noteLink(s.officeUrl, n);
     if (on('desktop')) {

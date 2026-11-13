@@ -9,6 +9,14 @@ const world: RefWorld = {
 };
 
 describe('noticeJump', () => {
+  it('opens the exact IT approval card on phone and desktop, including after it settles', () => {
+    for (const mode of ['pocket', 'office'] as const) {
+      const n = { kind: 'it' as const, requestId: 'it-abc-1' };
+      const want = { kind: 'itApproval', id: 'it-abc-1' };
+      expect(noticeJump(n, mode, world)).toEqual(want);
+      expect(noticeStep('openIt', n, mode, world)).toEqual(want);
+    }
+  });
   it('jumps to its target like a chat ref', () => {
     expect(noticeJump({ kind: 'stuck', target: { kind: 'agent', agentId: 'a1', terminal: true } }, 'pocket', world)).toEqual({ kind: 'overlay', overlay: { kind: 'terminal', agentId: 'a1', view: 'terminal' } });
   });
