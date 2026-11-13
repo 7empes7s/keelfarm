@@ -172,7 +172,7 @@ describe('prepareCodexSession', () => {
     expect(r).toEqual({ changed: true, hooksTrusted: true, problem: null });
     const text = read(path.join(home, 'config.toml'));
     expect(text).toContain(`[projects.${JSON.stringify(wt)}]`);
-    expect(text).toContain(`[projects.${JSON.stringify(fs.realpathSync(wt))}]`);
+    expect(text).toContain(`[projects.${JSON.stringify(fs.realpathSync.native(wt))}]`);
     for (const h of hooks) expect(text).toContain(`trusted_hash = "${h.hash}"`);
     expect(prepareCodexSession(home, [wt], hooks)).toEqual({ changed: false, hooksTrusted: true, problem: null });
     expect(fs.readdirSync(home)).toEqual(['config.toml']);
