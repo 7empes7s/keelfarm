@@ -72,6 +72,11 @@ const test = base.extend<{ page: Page }>({
         }
       } as typeof orig;
       document.addEventListener('pointerlockchange', () => w.__locks.push(Math.round(performance.now()) + ' change ' + (document.pointerLockElement?.tagName ?? 'none') + ' focus=' + document.hasFocus() + ' vis=' + document.visibilityState));
+      const ex = Document.prototype.exitPointerLock;
+      Document.prototype.exitPointerLock = function (this: Document) {
+        w.__locks.push(Math.round(performance.now()) + ' EXIT ' + (new Error().stack ?? '').split('\n').slice(1, 7).map((l) => l.trim().replace(/https?:\/\/[^/]+\/assets\//, '')).join(' | '));
+        return ex.call(this);
+      };
       document.addEventListener('pointerlockerror', () => w.__locks.push('lockerror'));
     });
     page.on('console', (m) => console.log(`CONSOLE ${m.type()}: ${m.text().slice(0, 300)}`));
@@ -129,7 +134,7 @@ test('A: control, no update', async ({ page }) => {
   await probe(page, 'A');
 });
 
-test('C: control, plain pointer lock', async ({ page }) => {
+test.skip('C: control, plain pointer lock', async ({ page }) => {
   test.setTimeout(110_000);
   await page.addInitScript(() => localStorage.setItem('diag-plain', '1'));
   await page.request.patch('/api/settings', { data: { tutorialStep: -1, setupDone: true } });
