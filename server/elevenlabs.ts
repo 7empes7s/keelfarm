@@ -6,7 +6,7 @@ import { clipExtension } from '../shared/clipLimits.ts';
 import { probeClip } from './clipProbe.ts';
 import { isV4Voice } from '../shared/voices.ts';
 import { STT_MODEL, synthBody, VoiceApiError, type VoiceApi } from './voice.ts';
-import { agentBody, agentHash } from './voiceAgent.ts';
+import { agentBody, agentHash, type ReachAnswer } from './voiceAgent.ts';
 import { streamChat } from './voiceFast.ts';
 
 const API = 'https://api.elevenlabs.io';
@@ -139,4 +139,20 @@ export const elevenLabs: VoiceApi = {
   },
 
   chatStream: streamChat, // the Jarvis voice's fast answers (#665): not ElevenLabs, but the call's voice
+  reach, // the reply address checked as ElevenLabs would reach it (#682)
 };
+
+/** How long the reply address may take to answer before a call opens without the Jarvis voice. */
+const REACH_TIMEOUT_MS = 2_500;
+
+/** POSTs to the office's public custom LLM address without the token, through the internet as ElevenLabs would. */
+async function reach(url: string): Promise<ReachAnswer> {
+  try {
+    const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}', redirect: 'manual', signal: AbortSignal.timeout(REACH_TIMEOUT_MS) });
+    const body = (await res.text().catch(() => '')).slice(0, 2000);
+    return { status: res.status, body, ...(res.headers.get('location') && { location: res.headers.get('location')! }) };
+  } catch (err) {
+    const e = err as Error & { cause?: { code?: string } };
+    return { status: 0, body: '', error: e.name === 'TimeoutError' ? `no answer in ${REACH_TIMEOUT_MS / 1000} s` : (e.cause?.code ?? e.message) };
+  }
+}

@@ -85,7 +85,7 @@ function statusSay(f: BrainFacts): string {
   const head = `${plural(f.floors.length, 'floor')}, ${plural(people, 'person', 'people')}, ${working} working right now, ${plural(merged, 'merge')} today.`;
   const busiest = [...f.floors].sort((a, b) => b.agents.filter((x) => x.doing).length - a.agents.filter((x) => x.doing).length).slice(0, 3);
   const lines = busiest.map((x) => `Floor ${x.floor}, ${x.name}: ${plural(x.open, 'open issue')}, ${plural(x.prs, 'pull request')}.`);
-  const ceo = f.ceoJob ? `${f.ceoName} is ${f.ceoJob}.` : `${f.ceoName} is free.`;
+  const ceo = f.ceoJob ? `I'm ${f.ceoJob}.` : "I'm free."; // the voice is the CEO: never its own name (msg 4603)
   const asks = f.decisions.length ? ` ${plural(f.decisions.length, 'decision')} waiting on you.` : '';
   return `${head} ${lines.join(' ')} ${ceo}${asks}`;
 }
@@ -140,7 +140,7 @@ export function brainTurn(text: string, state: BrainState, facts: BrainFacts): B
   const out = (say: string, next: Partial<BrainState> = {}, extra: Partial<BrainTurn> = {}): BrainTurn => ({ say: speechText(say, 600), state: { ...state, pending: null, ...next }, record: true, ...extra });
   if (!t) return out("Sorry, I didn't catch that.", { pending: state.pending });
   if (state.pending) {
-    if (YES.test(t)) return out(state.pending.act.kind === 'ceo' ? `On it. I've asked ${facts.ceoName}; I'll tell you when there's news.` : 'Done.', {}, { act: state.pending.act, ...(state.pending.act.kind === 'ceo' && { handoff: true as const }) });
+    if (YES.test(t)) return out(state.pending.act.kind === 'ceo' ? "On it. I'll tell you when it's done." : 'Done.', {}, { act: state.pending.act, ...(state.pending.act.kind === 'ceo' && { handoff: true as const }) });
     if (NO.test(t)) return out("Okay, I won't.");
   }
   if (wantsToEnd(text)) return out('Okay. Talk soon.');
@@ -164,8 +164,21 @@ export function brainTurn(text: string, state: BrainState, facts: BrainFacts): B
   if (/\b(status|how are we doing|how's it going|how is it going|what's everyone|what is everyone|everyone doing|everyone working|overview|catch me up|what's happening|what is happening)\b/.test(t) && !CHANGE.test(t)) return out(statusSay(facts));
   // Real work goes to the CEO: a question at once, a change once you've said yes.
   const ask = clip(text.trim().replace(/[.?!]+$/, ''), 160);
-  if (CHANGE.test(t) && !QUESTION.test(t)) return out(`Should I ask ${facts.ceoName} to ${ask.charAt(0).toLowerCase()}${ask.slice(1)}?`, { pending: { act: { kind: 'ceo', text: text.trim() }, what: ask } });
-  return out(`On it. I'm asking ${facts.ceoName}${facts.ceoJob ? `, who's ${facts.ceoJob}` : ''}; I'll tell you when there's news.`, {}, { act: { kind: 'ceo', text: text.trim() }, handoff: true });
+  if (CHANGE.test(t) && !QUESTION.test(t)) return out(`Should I ${ask.charAt(0).toLowerCase()}${ask.slice(1)}?`, { pending: { act: { kind: 'ceo', text: text.trim() }, what: ask } });
+  return out("On it. I'll look into that now and tell you when I have it.", {}, { act: { kind: 'ceo', text: text.trim() }, handoff: true });
+}
+
+/** A turn sent again this soon with the same words is the same turn (msgs 4593/4595: every utterance reached the chat twice). */
+const REPEAT_MS = 8000;
+
+/**
+ * Whether `text` repeats the last turn (`last`) within a few seconds: answered again, never forwarded twice. A whole
+ * yes or no while a "Should I…?" waits (`pending`) answers that question, so it's never a repeat.
+ */
+export function repeatTurn(last: { text: string; at: number } | undefined, text: string, now: number, pending = false): boolean {
+  const t = norm(text);
+  if (pending && (YES.test(t) || NO.test(t)) && t.split(' ').length <= 3) return false;
+  return !!last && now - last.at < REPEAT_MS && norm(last.text) === t;
 }
 
 /** A marker's words: the CEO's spoken answer (with "the full answer's in the chat" when it's longer), or a progress line. */

@@ -3,7 +3,7 @@
 // (voiceCallEngine.ts) all go through dispatchCall; it imports nothing of theirs, so none of them import in a circle.
 import { create } from 'zustand';
 import type { VoiceSettings } from '../../../shared/types';
-import { callStep, inCall, NO_CALL, type Call, type CallEvent, type CallStep, type HeldNote } from './voiceCall';
+import { callStep, inCall, NO_CALL, voiceOnCall, type Call, type CallEvent, type CallStep, type HeldNote } from './voiceCall';
 
 export interface CallView {
   call: Call;
@@ -19,9 +19,11 @@ export interface CallView {
   chatTucked: boolean;
   /** You sit at the meeting room's table in the 3D office (#369): the call window's live view of the room is left out. */
   atTable: boolean;
+  /** A Jarvis call fell back with an ElevenLabs key (#682): the office answers each turn at once, in the CEO's ElevenLabs voice. */
+  eleven: boolean;
 }
 
-export const useCall = create<CallView>(() => ({ call: NO_CALL, heard: '', managerSpeaking: false, minimised: false, captions: true, speaker: true, chatTucked: false, atTable: false }));
+export const useCall = create<CallView>(() => ({ call: NO_CALL, heard: '', managerSpeaking: false, minimised: false, captions: true, speaker: true, chatTucked: false, atTable: false, eleven: false }));
 
 /** Screens this narrow get the phone's call screen and its pill; wider ones the orb and its card. */
 export const CALL_NARROW = '(max-width: 640px)';
@@ -43,8 +45,11 @@ export function dispatchCall(ev: CallEvent): CallStep {
 /** A call is on. */
 export const callOn = () => inCall(useCall.getState().call);
 
-/** The voice a message is read in: a call speaks even with Speak messages off, in the browser's voice then. */
-export const callVoice = (v: VoiceSettings): VoiceSettings => (callOn() && v.provider === 'off' ? { ...v, provider: 'browser' } : v);
+/** The voice a message is read in (voiceCall.ts voiceOnCall). */
+export const callVoice = (v: VoiceSettings): VoiceSettings => voiceOnCall(v, { on: callOn(), eleven: useCall.getState().eleven });
+
+/** The clip query that keeps a fallen-back call in the ElevenLabs voice whatever the provider (#682). */
+export const callClipQuery = () => (callOn() && useCall.getState().eleven ? '?call=1' : '');
 
 /** The office's automatic toast: held while a call is on (true), else for the caller to show (false). */
 export function holdNote(note: HeldNote): boolean {

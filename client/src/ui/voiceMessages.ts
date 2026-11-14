@@ -21,7 +21,7 @@ import { replyEnded, useMic } from './mic';
 import { holdMusicDuck } from './music';
 import { audio, chirp, duckOthers, getAudioPrefs, groupOutput, subscribeAudio } from './sfx';
 import { sentenceAt, sentenceFraction, sentenceStarts, splitSentences } from './voiceCall';
-import { callOn, callVoice, dispatchCall, useCall } from './voiceCallStore';
+import { callClipQuery, callOn, callVoice, dispatchCall, useCall } from './voiceCallStore';
 import { wonVoice } from './voiceClaim';
 import { elevenOnTap, enqueue, nextUp, type Queued } from './voiceQueue';
 import { elementPrimed, useReplay, voiceElement, type Replay } from './voiceTap';
@@ -158,7 +158,7 @@ async function read(m: PhoneMessage, replay?: Replay) {
   const { settings, voiceKeySet } = useStore.getState();
   const { voiceName, speed } = settings.voice;
   const call = !replay && m.from === 'ceo' && callOn();
-  const set = settings.voice.provider === 'off' && call ? 'browser' : settings.voice.provider; // a call always speaks
+  const set = call ? callVoice(settings.voice).provider : settings.voice.provider; // a call always speaks, in ElevenLabs after a Jarvis fallback (#682)
   const tapVoice = elevenOnTap({ provider: settings.voice.provider, keySet: voiceKeySet }) ? 'elevenlabs' : 'browser';
   const provider = !replay ? set : replay === 'whole' ? tapVoice : replay === 'browser' ? 'browser' : 'elevenlabs';
   if (provider === 'off') return; // turned off while it waited
@@ -231,7 +231,7 @@ async function playClip(id: number, words: string, began: (clipMs: number, parts
   };
   let doneMs = 0; // the earlier parts' length
   for (let part = 0, parts = 1; part < parts; part++) {
-    const res = await fetch(`/api/voice/messages/${id}`);
+    const res = await fetch(`/api/voice/messages/${id}${callClipQuery()}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     parts = Math.max(1, Number(res.headers.get('X-Voice-Parts')) || 1);
     const a = audio();
@@ -595,7 +595,7 @@ async function sayLine(line: VoiceLine, provider: Exclude<VoiceProvider, 'off'>,
 
 /** The line's ElevenLabs clip (GET /api/voice/talk/:id), started when the line is queued; a failure is reported when it's played. */
 function lineFetch(id: number) {
-  const res = fetch(`/api/voice/talk/${id}`);
+  const res = fetch(`/api/voice/talk/${id}${callClipQuery()}`);
   res.catch(() => undefined);
   return res;
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { NO_BRAIN, brainTurn, lastUserText, marker, MARKER, markerSay, wantsToEnd, type BrainFacts } from './voiceBrain';
+import { NO_BRAIN, brainTurn, repeatTurn, lastUserText, marker, MARKER, markerSay, wantsToEnd, type BrainFacts } from './voiceBrain';
 
 const facts = (patch: Partial<BrainFacts> = {}): BrainFacts => ({
   ceoName: 'Mimoun',
@@ -20,6 +20,34 @@ const facts = (patch: Partial<BrainFacts> = {}): BrainFacts => ({
 });
 
 describe('the Jarvis voice brain', () => {
+  it('speaks as the CEO in the first person: never "asking Mimoun" or the CEO by name (msgs 4603/4605)', () => {
+    const busy = facts({ ceoJob: 'reviewing floor 2' });
+    const lines = ['Why did the login PR fail QA?', 'status please', 'File an issue to make the terminal font bigger', 'Anything waiting on me?', 'floor 1'].flatMap((q) => {
+      const t = brainTurn(q, NO_BRAIN, busy);
+      return [t.say, brainTurn('yes', t.state, busy).say];
+    });
+    for (const say of lines) {
+      expect(say).not.toMatch(/asking Mimoun/i);
+      expect(say).not.toMatch(/\bMimoun\b|\bthe CEO\b/);
+    }
+    expect(brainTurn('status', NO_BRAIN, busy).say).toMatch(/I'm reviewing floor 2\./);
+  });
+
+  it('takes a turn sent twice within a few seconds once (msgs 4593/4595)', () => {
+    expect(repeatTurn(undefined, 'Why is QA slow?', 1000)).toBe(false);
+    expect(repeatTurn({ text: 'Why is QA slow?', at: 1000 }, 'why is QA slow', 4000)).toBe(true);
+    expect(repeatTurn({ text: 'Why is QA slow?', at: 1000 }, 'Why is QA slow?', 20_000)).toBe(false);
+    expect(repeatTurn({ text: 'Why is QA slow?', at: 1000 }, 'And floor 4?', 2000)).toBe(false);
+    // a yes or no answers a new "Should I…?" each time: two confirmations are never merged
+    expect(repeatTurn({ text: 'Yes', at: 1000 }, 'yes', 3000, true)).toBe(false);
+    expect(repeatTurn({ text: 'no thanks', at: 1000 }, 'No thanks.', 3000, true)).toBe(false);
+    // with no "Should I…?" waiting, a short command sent twice is one turn
+    expect(repeatTurn({ text: "Don't merge it", at: 1000 }, "Don't merge it", 2000)).toBe(true);
+    expect(repeatTurn({ text: 'Yes', at: 1000 }, 'yes', 2000)).toBe(true);
+    // a sentence that only starts with one of those words is still the same turn sent twice
+    for (const q of ["Okay, what's waiting on me?", 'Please file an issue for the login bug', "Don't merge the review one", 'Stop the preview on floor 4']) expect(repeatTurn({ text: q, at: 1000 }, q, 2000)).toBe(true);
+  });
+
   it('answers status, a floor, decisions and server health at once from company data, with no hand-off', () => {
     const status = brainTurn("How's everyone doing? Give me the status.", NO_BRAIN, facts());
     expect(status.act).toBeUndefined();
@@ -45,13 +73,13 @@ describe('the Jarvis voice brain', () => {
     const t = brainTurn('Why did the login PR fail QA?', NO_BRAIN, facts({ ceoJob: 'reviewing floor 2' }));
     expect(t.act).toEqual({ kind: 'ceo', text: 'Why did the login PR fail QA?' });
     expect(t.handoff).toBe(true);
-    expect(t.say).toMatch(/^On it. I'm asking Mimoun, who's reviewing floor 2/);
+    expect(t.say).toBe("On it. I'll look into that now and tell you when I have it.");
   });
 
   it('asks "Should I…?" before a change and does it only on a spoken yes', () => {
     const ask = brainTurn('File an issue to make the terminal font bigger', NO_BRAIN, facts());
     expect(ask.act).toBeUndefined();
-    expect(ask.say).toBe('Should I ask Mimoun to file an issue to make the terminal font bigger?');
+    expect(ask.say).toBe('Should I file an issue to make the terminal font bigger?');
     const yes = brainTurn('Yes please', ask.state, facts());
     expect(yes.act).toEqual({ kind: 'ceo', text: 'File an issue to make the terminal font bigger' });
     expect(yes.handoff).toBe(true);

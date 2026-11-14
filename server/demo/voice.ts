@@ -85,6 +85,9 @@ const demoVoice: VoiceApi = {
       yield w;
     }
   },
+  // The reply address check (#682): the office's own 401, or with SWARM_DEMO_VOICE_UNREACHABLE=1 a tunnel's 404, to
+  // see a call open in the fallback at once with an IT ticket naming the address.
+  reach: async () => (process.env.SWARM_DEMO_VOICE_UNREACHABLE === '1' ? { status: 404, body: 'Not Found' } : { status: 401, body: '{"error":"Not the office voice agent"}' }),
 };
 
 registerDemo('voice', () => ({ voice: demoVoice }));

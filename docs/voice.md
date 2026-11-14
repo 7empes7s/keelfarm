@@ -305,8 +305,19 @@ caps it: past it, calls use today's voice mode until the next month. A call is c
 started minute counts); a tab that vanished is counted to its last turn.
 
 **What it needs:** the key (with the **ElevenLabs Agents** permission if you restrict it), and the office reachable by
-ElevenLabs at an https address, set in Settings → Notifications → Office address (a Tailscale Funnel or Cloudflare
-Tunnel URL, for example): ElevenLabs calls `<address>/v1/chat/completions` with a bearer token the office made, kept
+ElevenLabs at a public https address, set in Settings → Voice → Reply address (#682; empty: `https://office.techinsiderbytes.com`, this office's own tunnel,
+then the Office address if it's https; the first that answers as this office is used), a Cloudflare Tunnel or Tailscale Funnel URL, for example, with Cloudflare Access bypassed for
+`/v1/chat/completions` only. Before each call (kept 5 minutes, a failure 30 s) the office POSTs to that URL without the
+token and expects its own 401 `Not the office voice agent (office <id>)` (`<id>` a hash of its token, so another office's answer doesn't pass); anything else (a tunnel's 404, Access's login, no answer in
+2.5 s) means a call would hang, so the call opens in the fallback at once and IT gets a ticket naming the address.
+A Jarvis call that falls back for any reason keeps the CEO's ElevenLabs voice (`?call=1` on the clips), and each turn
+goes to `POST /api/voice/call-turn`: answered at once from the office's data or the fast model, real work handed to
+the CEO in the background, so a busy or limited CEO never leaves the call silent. Echo (msg 4563): the mic asks for echo cancellation, noise suppression and auto gain, and the trace says if the
+browser didn't apply them; words heard that match what the voice is saying or just said (`ui/callEcho.ts`) are never a
+turn or a barge-in. The voice speaks as the CEO in the first person, never "I'm asking <name>"; filler words (uh, um, mm, och, a
+hesitant "Well…") are taken out of every spoken line and of the manager's words, with a restarted phrase kept once
+(`shared/fillers.ts`); the same words sent again within 8 s are answered but forwarded to the chat and the CEO once
+(`repeatTurn`), a whole earlier phrase the recognizer repeats is never resent, and each utterance is numbered in the trace. ElevenLabs calls `<address>/v1/chat/completions` with a bearer token the office made, kept
 in `<SWARM_HOME>/voice-agent.json` (mode 600) with the agent's id and the minutes. The office creates the agent
 ("<company> office voice", the CEO's voice, Flash v2) and its secret on your ElevenLabs workspace on the first call,
 and updates it when the voice or address changes. The browser gets only a short-lived signed URL for each conversation,

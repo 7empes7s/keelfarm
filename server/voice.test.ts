@@ -267,6 +267,7 @@ describe('Voice', () => {
     ensureAgent: async () => ({ agentId: 'a', secretId: 's', hash: 'h' }),
     agentUrl: async () => 'wss://example/x',
     chatStream: async function* () {},
+    reach: async () => ({ status: 401, body: 'Not the office voice agent' }),
   };
 
   const make = () =>
@@ -409,6 +410,25 @@ describe('Voice', () => {
     expect(await status(v.messageAudio(99))).toBe(404);
     settings = { ...settings, provider: 'browser' };
     expect(await status(v.messageAudio(1))).toBe(404);
+  });
+
+  it('reads a call that fell back from the Jarvis voice in ElevenLabs, whatever the provider (#682)', async () => {
+    const v = make();
+    await v.setKey('sk_good');
+    settings = { ...settings, provider: 'browser', voiceId: 'own1' };
+    const voices: string[] = [];
+    const synth = api.synthesize;
+    api.synthesize = (key, req, signal) => (voices.push(req.voiceId), synth(key, req, signal));
+    try {
+      expect(await status(v.messageAudio(1))).toBe(404);
+      expect((await v.messageAudio(1, false, false, true)).toString()).toBe('mp3:Floor 2 shipped number 12.');
+      v.rememberTalk(5, 'Still on it.');
+      expect(await status(v.talkAudio(5))).toBe(404);
+      expect((await v.talkAudio(5, true)).toString()).toBe('mp3:Still on it.');
+      expect(voices).toEqual([DEFAULT_VOICE.voiceId, DEFAULT_VOICE.voiceId]); // the Jarvis agent's voice, never a browser setting's
+    } finally {
+      api.synthesize = synth;
+    }
   });
 
   it('shares one call between requests for the same message, and makes one clip at a time', async () => {
