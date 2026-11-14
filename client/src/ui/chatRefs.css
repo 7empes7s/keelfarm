@@ -153,13 +153,68 @@
   font-size: 0.8rem;
 }
 
-/* A bare #N on several floors' boards: one button per floor (#505). */
-.ref-pick-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ds-space-2);
-  padding: var(--ds-space-3);
+/* A bare #N on several floors' boards: "Which one?", a list row per floor (#505, #678). */
+.ref-pick-body {
+  min-width: 0;
+  padding: var(--ds-space-2) var(--ds-space-3) var(--ds-space-3);
 }
-.ref-pick-list .ds-btn {
+.ref-pick-sub {
+  margin: 0 0 var(--ds-space-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ref-pick-list {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ref-pick-row {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: var(--ds-target);
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.ref-pick-row:hover,
+.ref-pick-row:focus-visible {
+  background: var(--ds-surface-hover);
+}
+.ref-pick-list li + li .ref-pick-row {
+  border-top: 1px solid var(--ds-line);
+  border-radius: 0;
+}
+.ref-pick-floor {
+  display: inline-block;
+  max-width: 100%;
+  margin-bottom: var(--ds-space-1);
+  padding: 0 var(--ds-space-2);
+  overflow: hidden;
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-sunken);
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-strong);
+  line-height: 1.6;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: top;
+}
+.ref-pick-item {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  line-height: var(--ds-leading-tight);
   overflow-wrap: anywhere;
+}
+.ref-pick-go {
+  flex: none;
+  color: var(--ds-text-muted);
 }

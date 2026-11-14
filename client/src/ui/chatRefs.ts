@@ -21,7 +21,14 @@ export type Jump =
   | { kind: 'file' }
   | { kind: 'url'; url: string }
   | { kind: 'decisions' } // the decision log under the approvals (#208)
-  | { kind: 'pick'; options: { label: string; jump: Jump }[] }; // a bare #N on several floors' boards: which one (#505)
+  | { kind: 'pick'; what: string; options: PickOption[] }; // a bare #N on several floors' boards: which one (#505)
+
+/** One floor's answer to "Which one?": its floor ("Floor 5 · agency") and what's there ("#2 Fiverr gigs"). */
+export interface PickOption {
+  floor: string;
+  item: string;
+  jump: Jump;
+}
 
 const ghUrl = (fullName: string, n: number, pull: boolean) => `https://github.com/${fullName}/${pull ? 'pull' : 'issues'}/${n}`;
 
@@ -50,9 +57,9 @@ export function jumpFor(ref: ChatRef, mode: 'office' | 'pocket', w: RefWorld): J
         const r = w.repos.find((x) => x.id === repoId);
         const jump = r && jumpFor({ ...ref, repoId, alts: undefined }, mode, w);
         const title = r && (r.issues.find((i) => i.number === n) ?? r.pulls.find((p) => p.number === n))?.title;
-        return jump ? [{ label: `Floor ${r.floor} · #${n}${title ? ` ${title}` : ''}`, jump }] : [];
+        return jump ? [{ floor: `Floor ${r.floor} · ${r.fullName.split('/')[1]}`, item: `#${n}${title ? ` ${title}` : ''}`, jump }] : [];
       });
-      if (options.length > 1) return { kind: 'pick', options };
+      if (options.length > 1) return { kind: 'pick', what: `#${n}`, options };
     }
     const issue = repo.issues.some((i) => i.number === n);
     // The whiteboard has open issues and open or merged PRs; anything else is on GitHub.
