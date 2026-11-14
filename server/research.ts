@@ -1,6 +1,7 @@
-// The CEO's research jobs (#20): started only by the manager ("Research: <topic>" in the chat, or "Research first" in a
-// floor's Plan dialog). The CEO looks outward (the web) and inward (the floors, the manager's connected apps), brings
-// options with sources, files nothing, and the manager's pick becomes a normal plan job.
+// Research (#20): started by the manager ("Research: <topic>" in the chat, or "Research first" in a floor's Plan
+// dialog) or by the CEO (request_research, #664). The Researcher (server/swarm/researcher.ts) runs it in a session of its
+// own, so the CEO's chat stays free: it looks outward (the web) and inward (the floors, the manager's connected apps),
+// brings options with sources, files nothing, and the manager's pick becomes a normal plan job.
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { researchTopic } from '../shared/chat.ts';
@@ -19,8 +20,10 @@ export const RESEARCH_NO_FILING = 'Research files nothing. Put the options in yo
 
 /** Refused office tools during research, which reads untrusted pages and so acts on nothing. */
 export const RESEARCH_READ_ONLY = 'Research only reads: it changes nothing in the office and sends nothing. Put what you would change in your final message; the manager decides.';
-/** The office tools research may use: the read-only ones, and attach_file to hand the manager a file. */
-const RESEARCH_TOOLS = new Set<keyof OfficeHandlers>(['companyStatus', 'floorDetail', 'agentDetail', 'agentLog', 'qaReport', 'worktreeFile', 'prDiff', 'sessionHistory', 'attachFile', 'problemsList']);
+/** The office tools research may use: the read-only ones. Its brief is saved as a file by the office. */
+const RESEARCH_TOOLS = new Set<keyof OfficeHandlers>(['companyStatus', 'floorDetail', 'agentDetail', 'agentLog', 'qaReport', 'worktreeFile', 'prDiff', 'sessionHistory', 'problemsList']);
+/** Their names on the office's MCP server: the only tools the Researcher's session is offered. */
+export const RESEARCH_TOOL_NAMES = new Set(['company_status', 'floor_detail', 'agent_detail', 'agent_log', 'qa_report', 'worktree_file', 'pr_diff', 'session_history', 'problems']);
 
 /** `h` with every tool but RESEARCH_TOOLS refused while `researching()` (file_issue with RESEARCH_NO_FILING). */
 export function researchReadOnly(h: OfficeHandlers, researching: () => boolean): OfficeHandlers {
@@ -38,10 +41,11 @@ export function researchReadOnly(h: OfficeHandlers, researching: () => boolean):
 
 export const clampResearchMin = (n: unknown) => Math.max(5, Math.min(120, Math.round(Number(n)) || DEFAULT_RESEARCH_MIN));
 
-/** The research job's prompt: the topic, the floor it's for (if any), the time budget and the no-filing rule. */
-export function researchPrompt(topic: string, floor: { floor: number; fullName: string; clone: string } | null, minutes: number): string {
+/** The research job's prompt: the topic, who asked, their questions, the floor it's for (if any), the time budget and the no-filing rule. */
+export function researchPrompt(topic: string, floor: { floor: number; fullName: string; clone: string } | null, minutes: number, o: { by?: 'manager' | 'ceo'; questions?: string[] } = {}): string {
   return [
-    `Research for the manager: "${topic}"`,
+    `Research for the ${o.by === 'ceo' ? 'CEO' : 'manager'}: "${topic}"`,
+    ...(o.questions?.length ? ['Answer these:', ...o.questions.map((q) => `- ${q}`)] : []),
     floor ? `It is for floor ${floor.floor} (${floor.fullName}, clone at ${floor.clone}).` : 'It is not tied to a floor: relate it to the floors in company_status where it fits.',
     `You have about ${minutes} minutes. When the office says time is up, wrap up with what you have.`,
     '',
@@ -57,7 +61,16 @@ export function researchPrompt(topic: string, floor: { floor: number; fullName: 
   ].join('\n');
 }
 
-/** What the office sends the CEO when the research budget runs out. */
+/** Who the Researcher is (#664): short, paid on every session. */
+export function researcherSystemPrompt(o: { name: string; company: string; ceo: string }): string {
+  return [
+    `You are ${o.name}, the researcher of ${o.company || 'the company'}. The manager and ${o.ceo}, the CEO, hand you one topic per job so the CEO never has to stop and search.`,
+    "- Read the web (WebSearch, WebFetch), the floors' clones (Read, Glob, Grep) and the office's read-only tools. You have no shell.",
+    '- You never file issues, change settings or send anything: the office refuses it. Your final message is a sourced brief; the manager reads it on their phone and the CEO plans from it.',
+  ].join('\n');
+}
+
+/** What the office sends the Researcher when the research budget runs out. */
 export function researchWrapUp(topic: string, minutes: number): string {
   return `Time is up for the research on "${short(topic)}" (${minutes} minutes). Stop looking and write your final message now with what you have: the summary, the "Research: ${short(topic)}" artifact and the suggestions.`;
 }
@@ -96,7 +109,7 @@ export async function researchJob(o: { text: string; quoted?: PhoneMessage; forw
 }
 
 /** Writes a research message's artifacts to `file` for the plan picked from it: the path, or null when there's nothing to save. */
-async function saveBrief(file: string, artifacts: NonNullable<PhoneMessage['artifacts']>): Promise<string | null> {
+export async function saveBrief(file: string, artifacts: NonNullable<PhoneMessage['artifacts']>): Promise<string | null> {
   const docs = artifacts.filter((x) => x.markdown);
   if (!docs.length) return null;
   try {
@@ -123,7 +136,7 @@ export function pastResearch(o: { history: readonly Pick<HistoryEntry, 'at' | 'c
 }
 
 /**
- * A research job's time budget: at `min` minutes the CEO is told to wrap up, RESEARCH_GRACE_MIN later its session is
+ * A research job's time budget: at `min` minutes the Researcher is told to wrap up, RESEARCH_GRACE_MIN later its session is
  * stopped (`stopping` runs first, with the reason). `clear` when the job ends.
  */
 export class ResearchGuard {
@@ -136,7 +149,7 @@ export class ResearchGuard {
       setTimeout(() => {
         const s = session();
         if (!s) return;
-        stopping(`the research ran past its ${min}-minute budget and was stopped. Raise it in Settings → The CEO, or ask again with a narrower topic.`);
+        stopping(`the research ran past its ${min}-minute budget and was stopped with what it had. Raise it in Settings → The CEO, or ask again with a narrower topic.`);
         s.stop();
       }, (min + RESEARCH_GRACE_MIN) * 60_000),
     );

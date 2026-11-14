@@ -269,12 +269,13 @@ export function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionH
       const team = grow ? ` ${await scale(s, f, grow)}` : '';
       return `I turned the brief into three issues on floor ${floor}. #${n} sets up the skeleton; the other two say "Depends on #${n}", so nobody starts them early.${team}`;
     },
-    // Research: look outward and inward, then bring options with sources, filing nothing (server/research.ts).
+    // Research at the Researcher's desk (#664): look outward and inward, then bring options with sources, filing nothing
+    // (server/research.ts). Slow enough (about 20 s) to chat with the CEO meanwhile.
     async research(topic: string, floor: number | null) {
       const s = await status();
       const f = s.floors.find((x) => x.floor === floor) ?? s.floors[0];
-      await step([{ kind: 'tool', tool: 'WebSearch', text: `⏺ Web Search("${short(topic, 60)} best practices")` }, { kind: 'result', text: '  ⎿ Did 1 search' }]);
-      await step([{ kind: 'tool', tool: 'WebFetch', text: '⏺ Fetch(https://developer.mozilla.org/en-US/docs/Web)' }, { kind: 'result', text: '  ⎿ Received 48.2KB' }]);
+      await step([{ kind: 'tool', tool: 'WebSearch', text: `⏺ Web Search("${short(topic, 60)} best practices")` }, { kind: 'result', text: '  ⎿ Did 1 search' }], 8000);
+      await step([{ kind: 'tool', tool: 'WebFetch', text: '⏺ Fetch(https://developer.mozilla.org/en-US/docs/Web)' }, { kind: 'result', text: '  ⎿ Received 48.2KB' }], 8000);
       if (f) await read(`${f.repo}/README.md`, 40);
       await think('Three distinct ways to do it. Facts and guesses kept apart.');
       return researchBrief(topic, f ? `floor ${f.floor} (\`${f.repo.split('/').pop()}\`)` : 'your floors');
@@ -428,8 +429,8 @@ export function ceoSession(opts: SessionOptions, cb: SessionCallbacks): SessionH
     ? async () => DEMO_HANDOVER
     : triage
     ? () => scripts.triage(Number(triage[2]), Number(triage[1]), prompt)
-    : prompt.startsWith('Research for the manager:')
-      ? () => scripts.research(prompt.match(/^Research for the manager: "([\s\S]*?)"\n/)?.[1] ?? '', where ? Number(where[1]) : null)
+    : /^Research for the (manager|CEO):/.test(prompt)
+      ? () => scripts.research(prompt.match(/^Research for the (?:manager|CEO): "([\s\S]*?)"\n/)?.[1] ?? '', where ? Number(where[1]) : null)
     : prompt.startsWith('The manager changed work')
       ? () => scripts.changes(changed.split('\n').filter((l) => l.startsWith('- floor ')))
     : prompt.startsWith('Follow-up:')

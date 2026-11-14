@@ -11,10 +11,19 @@ const world = (o: Partial<WaitWorld> = {}): WaitWorld => ({
   agent: (id) => (id === 'ada' ? { name: 'Ada', status: 'working' } : null),
   preview: () => 'starting',
   usage: () => 'pacing',
+  research: (id) => (id === 3 ? { topic: 'Voice notes', done: null } : null),
   ...o,
 });
 
 describe('wait conditions', () => {
+  it("holds research_done once the Researcher's brief is in (#664)", () => {
+    expect(waitProblem({ kind: 'research_done' }, world())).toMatch(/needs research/);
+    expect(waitProblem({ kind: 'research_done', research: 9 }, world())).toMatch(/no research #9/);
+    expect(waitMet({ kind: 'research_done', research: 3 }, world())).toBeNull();
+    const done = world({ research: () => ({ topic: 'Voice notes', done: { file: '/b/3.md', summary: 'Go with B.', partial: false } }) });
+    expect(waitMet({ kind: 'research_done', research: 3 }, done)).toBe('Research #3 "Voice notes" is done. Brief: /b/3.md (read it). Go with B.');
+  });
+
   it('holds once the thing waited for happened', () => {
     expect(waitMet({ kind: 'pr_merged', floor: 1, pr: 7 }, world())).toBeNull();
     expect(waitMet({ kind: 'pr_merged', floor: 1, pr: 7 }, world({ pr: () => 'MERGED' }))).toBe('PR #7 on floor 1 merged.');

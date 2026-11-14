@@ -184,6 +184,7 @@ app.post('/api/repos/:repo/issues/:n/close', route((req) => swarm.closeIssueByMa
 app.post('/api/repos/:repo/issues/:n/assign', route((req) => swarm.assignIssue(repoId(req), num(req.params.n), str(req.body?.agentId))));
 app.post('/api/repos/:repo/issues/:n/trust', route((req) => swarm.trustIssue(repoId(req), num(req.params.n))));
 app.post('/api/repos/:repo/plan', route((req) => swarm.planFloor(repoId(req), typeof req.body?.mission === 'string' ? req.body.mission : undefined, req.body?.research === true)));
+app.post('/api/research/stop', route(() => swarm.stopResearch()));
 app.post('/api/repos/:repo/onboard', route((req) => swarm.onboardFloor(repoId(req))));
 // The floor's charter (#48): the manager's edit, their call on the CEO's proposal, an objective's status (#105), and Export
 app.put('/api/repos/:repo/charter', route((req) => swarm.setCharter(repoId(req), req.body?.charter)));

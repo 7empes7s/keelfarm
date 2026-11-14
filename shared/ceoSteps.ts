@@ -133,6 +133,7 @@ const OFFICE: Record<string, [string, Words]> = {
   it_runbook: ['📋', () => 'Running a runbook as one job'],
   it_health: ['🖥️', () => "Reading the office's health"],
   ask_it: ['🖥️', () => 'Asking IT'],
+  request_research: ['🔎', () => 'Handing research to the Researcher'],
   cloudflare: ['☁️', () => 'Working on Cloudflare'],
   provider_action: ['🔑', () => "Using a provider's key"],
   install_key: ['🔑', () => 'Installing a key into a service'],

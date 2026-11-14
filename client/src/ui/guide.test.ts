@@ -55,12 +55,13 @@ describe('the guide checklist', () => {
     expect(guideProgress(guideItems(ticked)).done).toBe(3);
   });
 
-  it('ticks research from the server, not the chat, and shows a running one in progress', () => {
-    const research = (ceo: GuideInput['ceo']) => guideItems(office({ ceo })).find((i) => i.id === 'research')!;
-    expect(research({ job: null, queue: [], researchedAt: 1 })).toMatchObject({ done: true, busy: false });
-    expect(research({ job: { kind: 'research', label: 'Researching' }, queue: [], researchedAt: null })).toMatchObject({ done: false, busy: true });
-    expect(research({ job: { kind: 'chat', label: 'Chatting' }, queue: [{ kind: 'research', label: 'Researching' }], researchedAt: null })).toMatchObject({ done: false, busy: true });
-    expect(research({ job: { kind: 'chat', label: 'Chatting' }, queue: [], researchedAt: null })).toMatchObject({ done: false, busy: false });
+  it("ticks research from the server, not the chat, and shows one at the Researcher's desk in progress (#664)", () => {
+    const ceo: GuideInput['ceo'] = { job: { kind: 'chat', label: 'Chatting' }, queue: [], researchedAt: null };
+    const research = (o: Partial<GuideInput>) => guideItems(office({ ceo, ...o })).find((i) => i.id === 'research')!;
+    expect(research({ ceo: { ...ceo, researchedAt: 1 } })).toMatchObject({ done: true, busy: false });
+    expect(research({ research: { job: { id: 1, topic: 'A', by: 'manager', startedAt: 0, minutes: 20 }, queue: [] } })).toMatchObject({ done: false, busy: true });
+    expect(research({ research: { job: null, queue: [{ id: 1, topic: 'A', by: 'ceo' }] } })).toMatchObject({ done: false, busy: true });
+    expect(research({ research: null })).toMatchObject({ done: false, busy: false });
   });
 
   it('gives each item a reason and a place to go', () => {
