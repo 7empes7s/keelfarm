@@ -43,7 +43,9 @@ export interface PhoneMessage {
   attachments?: FileRef[]; // files sent with it, in the office's files store (shared/files.ts)
   used?: UsedView; // the CEO's: the skills, connectors and tools it used for this reply (shared/used.ts)
   refs?: ChatRef[]; // the office things it names (@Ada, floor 2 #13, file: …), in text order (shared/chatRefs.ts)
-  research?: { topic: string; repoId?: string }; // the CEO's reply to a research job (repoId: from a floor's Plan dialog); a reply to it becomes a plan (server/research.ts)
+  research?: ChatResearch; // a research job's card (repoId: from a floor's Plan dialog); a reply to its brief becomes a plan (server/research.ts)
+  origin?: ChatOrigin; // who it's really from, when its fields don't say (#679, shared/chatSender.ts): IT's notes in the CEO's chat
+  background?: string; // the CEO's reply to a background job (#679): the job's name, shown as a folded "background" card
   question?: string; // the CEO's: it asks the manager this agent question (its id): answers go to the agent
   answered?: number; // that question's answer reached the agent then (#508)
   steps?: string[]; // the CEO's, before #150: the steps it took for this reply, as labels
@@ -69,6 +71,21 @@ export interface PhoneMessage {
   problems?: ProblemsDigest; // the office's daily problems digest (#544), as a card with tappable items
   checklist?: { id: string }; // a checklist's card (#612), drawn live from the store's checklists
   ceoJob?: CeoJobTag; // the CEO's reply to a job the office started (#332): its model, and Redo on Opus
+}
+
+/** Who a chat item is really from (#679): the CEO itself, the Researcher, IT, a background CEO job, the office, an agent. */
+export type ChatOrigin = 'ceo' | 'research' | 'it' | 'job' | 'event' | 'agent';
+
+/** A research job's card (#679): queued and running cards are updated in place as the job moves; done holds the brief. */
+export interface ChatResearch {
+  topic: string;
+  repoId?: string;
+  job?: number; // the research job's id (absent on briefs posted before #679)
+  state?: 'queued' | 'running' | 'done' | 'partial'; // absent: a brief from before #679 (done)
+  startedAt?: number;
+  budget?: number; // its time budget, minutes
+  minutes?: number; // what it took, once done
+  usd?: number; // what it cost, once done
 }
 
 /** A CEO job's reply in the chat (#332): which job, the model it ran on, and the links between a job and its redo. */

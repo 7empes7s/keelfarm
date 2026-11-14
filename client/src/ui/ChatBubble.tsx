@@ -32,6 +32,8 @@ import { SignInCard } from './SignInCard';
 import { toolsInRow, toolsOffset } from './bubbleTools';
 import { XLabel } from './HoverCard';
 import { CeoJobLine } from './CeoJobRedo';
+import { chatOrigin, jobName } from '../../../shared/chatSender';
+import { ResearchCard, SenderHead, useSenderLook } from './ChatSender';
 
 // One message in the chat with the CEO: its bubble, swipe to reply, long press for actions, replay and the delivery tick.
 
@@ -180,6 +182,10 @@ export const Bubble = memo(function Bubble({ item, ceoName, quoted, highlight, l
   const press = useRef<{ x: number; y: number; at: number; timer: number; long: boolean; swipe: boolean } | null>(null);
   const renderRef = useCallback((i: number, label: ReactNode) => m && <RefChip messageId={m.id} index={i}>{label}</RefChip>, [m]);
   const look = m ? messageLook(m) : 'bubble';
+  // what the CEO didn't write itself (#679): research, IT, background jobs, agents' questions get their own header and card
+  const origin = m ? chatOrigin(m) : 'manager';
+  const src = useSenderLook(m, origin, ceoName);
+  const [folded, setFolded] = useState(true);
   if (look === 'hidden') return null; // the CLI's own output (#193) stays backend
   const mine = !m || m.from === 'manager';
   const text = m ? m.text : item.out!.text;
@@ -232,9 +238,10 @@ export const Bubble = memo(function Bubble({ item, ceoName, quoted, highlight, l
   };
 
   // An office note: hold or right-click it for its actions (Delete).
-  if (m && (look === 'pill' || m.switch?.useKey || m.pacing || m.ceoStuck || m.accountOut || m.problems || m.checklist || ((m.notice || m.signIn) && look === 'card')))
+  if (m && origin !== 'research' && (look === 'pill' || m.switch?.useKey || m.pacing || m.ceoStuck || m.accountOut || m.problems || m.checklist || ((m.notice || m.signIn) && look === 'card')))
     return (
-      <div className="bubble-row-office" data-msg={id} {...gestures}>
+      <div className={`bubble-row-office ${src?.tone === 'it' ? 'bubble-row-src' : ''}`} data-msg={id} {...gestures}>
+        {src?.tone === 'it' && <SenderHead look={src} />}
         {m.signIn && look === 'card' ? <SignInCard card={m.signIn} />
           : m.notice && look === 'card' ? <NoticeCard text={officeText(m.text)} notice={m.notice} />
           : m.switch?.useKey ? <UseKeyCard text={officeText(m.text)} account={m.switch.useKey} />
@@ -271,13 +278,25 @@ export const Bubble = memo(function Bubble({ item, ceoName, quoted, highlight, l
       if (e.target.classList.contains('bubble-tool')) e.target.scrollIntoView({ block: 'nearest' });
     }}>
       {mine && <BubbleTools id={id} item={item} onReply={onReply} onActions={onActions} />}
-      <div className={`bubble ${mine ? 'bubble-me' : 'bubble-them'} ${delivery === 'failed' ? 'bubble-failed' : ''}`} style={dx ? { transform: `translateX(${dx}px)` } : undefined} {...gestures}>
+      <div className={`bubble ${mine ? 'bubble-me' : 'bubble-them'} ${src ? `bubble-src bubble-src-${src.tone}` : ''} ${delivery === 'failed' ? 'bubble-failed' : ''}`} style={dx ? { transform: `translateX(${dx}px)` } : undefined} {...gestures}>
         {dx > 0 && (
           <span className={`bubble-swipe ${dx > SWIPE_PX ? 'bubble-swipe-on' : ''}`} aria-hidden>
             <Icon name="reply" />
           </span>
         )}
-        {!mine && <div className="bubble-from">{ceoName}</div>}
+        {!mine && !src && <div className="bubble-from">{ceoName}</div>}
+        {src && (origin === 'job' ? (
+          <button type="button" className="bubble-src-head bubble-src-toggle" aria-expanded={!folded} onClick={() => setFolded(!folded)}>
+            <SenderHead look={src} />
+            <span className="bubble-src-jobname">{jobName(m!)}</span>
+            <Icon name={folded ? 'chevron-right' : 'chevron-down'} />
+          </button>
+        ) : (
+          <div className="bubble-src-head"><SenderHead look={src} /></div>
+        ))}
+        {origin === 'job' && folded ? (
+          text && <p className="bubble-src-preview">{excerpt(speechText(text, 400), 160)}</p>
+        ) : <>
         {quote}
         {mine ? (
           text && <div className="bubble-text">
@@ -299,6 +318,8 @@ export const Bubble = memo(function Bubble({ item, ceoName, quoted, highlight, l
               ),
             )}
           </div>
+        ) : m?.research ? (
+          <ResearchCard m={m} onOpen={(a) => onArtifact(m.id, a)}>{(open) => open && text && <Markdown className="bubble-md" text={linked(refsMarkdown(text, m.refs))} onFloor={onFloor} renderRef={renderRef} />}</ResearchCard>
         ) : (
           text && <LongText text={linked((m && struckText(m, m.from)) ?? refsMarkdown(text, m?.refs))}>{(md) => <Markdown className="bubble-md" text={md} onFloor={onFloor} renderRef={renderRef} />}</LongText>
         )}
@@ -310,11 +331,12 @@ export const Bubble = memo(function Bubble({ item, ceoName, quoted, highlight, l
             <ChatVisuals visuals={m.visuals} />
           </Suspense>
         )}
-        {m?.artifacts?.map((a) => <ArtifactCard key={a.id} artifact={a} onOpen={() => onArtifact(m.id, a.id)} />)}
+        {m && (m.research ? m.artifacts?.slice(1) : m.artifacts)?.map((a) => <ArtifactCard key={a.id} artifact={a} onOpen={() => onArtifact(m.id, a.id)} />)}
         {!!m?.actions?.length && <ActionCards actions={m.actions} messageId={m.id} />}
         {m && (log || m.summary) && <StepsRow log={rowLog(m)} actions={m.actions?.length ?? 0} used={m.used} summary={m.summary} linked={linked} onFloor={onFloor} />}
         {m?.ceoJob && <CeoJobLine tag={m.ceoJob} onJump={onQuote} />}
         {req && req.status === 'pending' && m?.from === 'ceo' && <Resume req={req} />}
+        </>}
         {/* one compact meta row (#215): Used (when there's no steps row to carry it) folds open across it, the time on its right */}
         <div className="bubble-meta">
           {!log && !m?.summary && m?.used && <UsedLine used={m.used} />}

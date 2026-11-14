@@ -12,6 +12,7 @@ import { clipBroken, clipProblem, sniffClip } from '../shared/clipLimits.ts';
 import { clampSpeed, cleanFavourites, pickVoice, SPEED_DEFAULT, VOICE_ID, voicePool } from '../shared/voices.ts';
 import type { ListenSettings, PhoneMessage, VoiceCacheView, VoiceOption, VoiceSettings } from '../shared/types.ts';
 import { secretMismatch } from '../shared/secretFormats.ts';
+import { researchInterim } from '../shared/chatSender.ts';
 import { DEFAULT_VOICE_AGENT, voiceAgentSettings } from '../shared/voiceAgent.ts';
 import type { AgentConfig, AgentIds, ReachAnswer } from './voiceAgent.ts';
 import type { FastModel } from './voiceFast.ts';
@@ -174,6 +175,7 @@ export function parseManifest(raw: unknown): ClipManifest {
 
 /** The phone messages that are spoken: the CEO's (not a silent one, #282), and the office's own notes when the manager asked for them. */
 export function speaks(m: PhoneMessage, s: VoiceSettings): boolean {
+  if (researchInterim(m.research)) return false; // a research card still going (#679): its brief is the one worth hearing
   return (m.from === 'ceo' && !m.silent) || (m.from === 'office' && s.speakOffice);
 }
 
