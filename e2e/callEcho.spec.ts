@@ -113,7 +113,7 @@ test('a call never posts its own voice or noise, cuts its voice when the manager
   await expect.poll(() => phase(page), { timeout: 5000 }).not.toBe('speaking');
   const phases = await win(page)(() => (window as unknown as CallWindow).__phases);
   console.log(`phases (ms from sentence 2's onset): ${phases.map((p) => `${p.phase} ${Math.round(p.at - onset)}`).join(', ')}`);
-  const cut = phases.findLast((p, i) => i > 0 && phases[i - 1].phase === 'speaking' && p.phase !== 'speaking')!.at;
+  const cut = phases.find((p, i) => i > 0 && p.at >= onset - 100 && phases[i - 1].phase === 'speaking' && p.phase !== 'speaking')?.at ?? Infinity;
   console.log(`barge-in: the voice stopped ${Math.round(cut - onset)} ms after the manager started talking`);
   expect(cut - onset).toBeLessThanOrEqual(300);
   await expect.poll(() => phase(page), { timeout: 30_000 }).toBe('speaking'); // its answer to sentence 2

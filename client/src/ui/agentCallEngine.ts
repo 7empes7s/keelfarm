@@ -295,6 +295,22 @@ function interim(text: string) {
   }
 }
 
+/** How long a barge-in holds the CEO's waiting lines when no words follow it. */
+const BARGE_QUIET_MS = 3000;
+let talkTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** The manager cut in: the CEO's waiting lines wait for their words (interim's '' or BARGE_QUIET_MS), never talk over them. */
+function talking() {
+  useCall.setState({ managerSpeaking: true });
+  if (talkTimer) clearTimeout(talkTimer);
+  talkTimer = setTimeout(() => {
+    talkTimer = null;
+    if (useCall.getState().heard) return;
+    useCall.setState({ managerSpeaking: false });
+    flush();
+  }, BARGE_QUIET_MS);
+}
+
 /** The listener hears nothing now (#694): the voice is playing, or went quiet under TAIL_MS ago. */
 const deaf = () => deafNow(playing.length > 0, endedAt, performance.now());
 
@@ -587,6 +603,7 @@ function onMic(samples: Float32Array) {
       if (barge.push(rms(samples), rms(outBuf), (samples.length / mic.rate) * 1000, performance.now())) {
         traceNote('the manager talked over the voice: it stops');
         probe.barged++;
+        talking();
         dispatchCall({ type: 'barge' });
       }
     }
