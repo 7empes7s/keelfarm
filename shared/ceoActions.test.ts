@@ -102,6 +102,7 @@ describe('every action card opens what it is about (#215)', () => {
         call('resolve_decision', 'Closed "Ship it?": yes.', { id: 'msg:12', outcome: 'yes' }),
         call('wait_for', 'PR #7 on floor 3 merged.', { conditions: [{ kind: 'pr_merged', floor: 3, pr: 7 }] }),
         call('wait_for', 'Usage is back to normal.', { conditions: [{ kind: 'usage', usage: 'normal' }] }),
+        call('wait_for', 'IT answered (message 5): 32G free.', { conditions: [{ kind: 'it_answer', message: 5 }] }),
       ],
       repoOf,
       agentOf,
@@ -114,6 +115,7 @@ describe('every action card opens what it is about (#215)', () => {
       { kind: 'decision', id: 'msg:12' },
       { kind: 'issue', repoId: 'acme/shop', number: 7 },
       { kind: 'section', section: 'ops' },
+      { kind: 'section', section: 'it-dept' },
     ]);
   });
 });

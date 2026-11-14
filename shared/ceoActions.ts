@@ -132,6 +132,7 @@ function refOf(call: OfficeCall, repoOf: (floor: number) => string | null, agent
   if (call.tool === 'propose_design') return { kind: 'approvals' };
   if (call.tool === 'resolve_decision' && typeof a.id === 'string' && a.id) return { kind: 'decision', id: a.id };
   if (wait?.kind === 'usage') return { kind: 'section', section: 'ops' };
+  if (wait?.kind === 'it_answer') return { kind: 'section', section: 'it-dept' };
   const floor = num(a.floor) ?? (Array.isArray(a.floors) ? num(a.floors[0]) : null);
   const repoId = floor === null ? null : repoOf(floor);
   const section = SECTIONS[call.tool];

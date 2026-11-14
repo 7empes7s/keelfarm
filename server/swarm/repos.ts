@@ -425,9 +425,8 @@ export abstract class SwarmRepos extends SwarmCore {
     try {
       const started = Date.now();
       const [listed, pulled, trust] = await Promise.all([this.backend.listIssues(repo.fullName), this.backend.listPulls(repo.fullName), this.trustOf(repo, rt)]);
-      const trusted = markTrust(listed, pulled, trust);
-      const pulls = trusted.pulls;
-      const issues = this.withJustFiled(repo.id, trusted.issues, rt.closedIssues);
+      const { issues: open, pulls } = markTrust(listed, pulled, trust);
+      const issues = this.withJustFiled(repo.id, open, rt.closedIssues);
       const before = rt.lastSync != null ? rt.issues : null;
       rt.issues = issues;
       for (const i of before ? unblockedIssues(before, issues) : []) {

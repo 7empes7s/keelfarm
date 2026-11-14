@@ -203,7 +203,6 @@ export abstract class SwarmItDept extends SwarmSetup {
     return text || 'IT finished without a written answer: look in the IT chat.';
   }
 
-
   /** wait_for's view of an ask_it's answer (#663). */
   protected itAnswerOf(m: number): { done: boolean; text: string } | null {
     const a = this.itAnswers.get(m);
