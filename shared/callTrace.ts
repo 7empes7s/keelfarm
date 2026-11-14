@@ -43,6 +43,10 @@ export interface CallTrace {
   nonZeroBytes: number;
   /** The user_input_audio_format ElevenLabs asked for (it gets 16 kHz PCM unless it says otherwise). */
   inFormat: string;
+  /** The rate the mic was actually sent at (#656), Hz. */
+  sentRate: number;
+  /** user_transcript events back from ElevenLabs: 0 with chunks sent is a call that can't hear the manager. */
+  transcripts: number;
   /** The office voice's MediaRecorder: type, chunks, bytes. */
   recorder: { mime: string; chunks: number; bytes: number } | null;
   /** /api/voice/transcribe answers: HTTP status and error text (the last 10). */
@@ -102,6 +106,8 @@ export function cleanTrace(raw: unknown, scrub: (s: string) => string = (s) => s
     chunkBytes: int(r.chunkBytes),
     nonZeroBytes: int(r.nonZeroBytes),
     inFormat: label(r.inFormat, 20),
+    sentRate: int(r.sentRate, 384_000),
+    transcripts: int(r.transcripts),
     recorder: rec && { mime: label(rec.mime, 40), chunks: int(rec.chunks), bytes: int(rec.bytes) },
     posts: list(r.posts, TRACE_POSTS).map((p) => ({ status: int(obj(p).status, 999), error: label(obj(p).error, 160) })),
     ws,

@@ -112,6 +112,74 @@ export function downsample(input: Float32Array, from: number, to: number): Float
   return out;
 }
 
+// ---------- the manager's voice in (#656) ----------
+
+/** The audio the agent takes the manager's voice in (its user_input_audio_format): 16-bit LE PCM or μ-law, mono, at `rate`. */
+export interface InFormat {
+  codec: 'pcm' | 'ulaw';
+  rate: number;
+  /** False for a format this call can't send (it sends pcm_16000, ElevenLabs' default, and says so). */
+  ok: boolean;
+}
+
+/** ElevenLabs' user_input_audio_format ("pcm_16000", "pcm_48000", "ulaw_8000"…); none said means its default, pcm_16000. */
+export function inputFormat(format: string): InFormat {
+  const pcm = /^pcm_(\d{4,6})$/.exec(format);
+  if (pcm) return { codec: 'pcm', rate: Number(pcm[1]), ok: true };
+  if (format === 'ulaw_8000') return { codec: 'ulaw', rate: 8000, ok: true };
+  return { codec: 'pcm', rate: 16_000, ok: format === '' };
+}
+
+/** `input` at `from` Hz to `to` Hz: averaged going down, interpolated going up (one 100 ms chunk at a time, so no block edges drift). */
+function resample(input: Float32Array, from: number, to: number): Float32Array {
+  if (from === to || !input.length) return input;
+  if (from > to) return downsample(input, from, to);
+  const ratio = from / to;
+  const out = new Float32Array(Math.round(input.length / ratio));
+  for (let i = 0; i < out.length; i++) {
+    const x = i * ratio;
+    const a = Math.min(input.length - 1, Math.floor(x));
+    const b = Math.min(input.length - 1, a + 1);
+    out[i] = input[a] + (input[b] - input[a]) * (x - a);
+  }
+  return out;
+}
+
+/** One sample in -1..1 as G.711 μ-law. */
+function ulawByte(x: number): number {
+  let v = Math.round(Math.max(-1, Math.min(1, x)) * 0x7fff);
+  const sign = v < 0 ? 0x80 : 0;
+  v = Math.min(Math.abs(v), 32635) + 0x84;
+  let exp = 7;
+  for (let mask = 0x4000; (v & mask) === 0 && exp > 0; mask >>= 1) exp--;
+  return ~(sign | (exp << 4) | ((v >> (exp + 3)) & 0x0f)) & 0xff;
+}
+
+/** A chunk of the mic at `from` Hz as the agent takes it: resampled to its rate, then PCM16 LE or μ-law, in base64. */
+export function encodeMic(samples: Float32Array, from: number, f: InFormat): { b64: string; samples: Float32Array } {
+  const at = resample(samples, from, f.rate);
+  if (f.codec === 'pcm') return { b64: floatToPcm(at), samples: at };
+  let bin = '';
+  for (const x of at) bin += String.fromCharCode(ulawByte(x));
+  return { b64: btoa(bin), samples: at };
+}
+
+/** How long the manager can talk with no user_transcript back before the call says the voice isn't hearing them. */
+export const DEAF_MS = 5_000;
+/** A chunk this loud (level()) is the manager talking, not a quiet room. */
+export const TALK_LEVEL = 0.1;
+
+/**
+ * The voice isn't hearing the manager: they talked (first and last loud chunk since the last transcript) and no
+ * user_transcript came back within DEAF_MS of starting and 2 s after they stopped (or 15 s of talking). The words, or ''.
+ */
+export function deafWhy(o: { firstTalk: number; lastTalk: number; now: number; format: string; sent: InFormat }): string {
+  if (!o.firstTalk || o.now - o.firstTalk < DEAF_MS) return '';
+  if (o.now - o.lastTalk < 2_000 && o.now - o.firstTalk < 15_000) return '';
+  if (!inputFormat(o.format).ok) return `The voice isn't hearing you: it wants ${o.format} audio, which this call can't send. Hang up and call again on the office's own voice.`;
+  return `The voice isn't hearing you: ElevenLabs gets your audio (${o.sent.codec === 'ulaw' ? 'μ-law' : 'PCM'} ${o.sent.rate} Hz) but sends no words back. Hang up and call again, or use the office's own voice.`;
+}
+
 /** A level 0..1 for the orb from samples' loudness. */
 export function level(samples: Float32Array): number {
   let sum = 0;

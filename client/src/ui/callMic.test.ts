@@ -384,8 +384,9 @@ describe("an iPhone stops the call's audio as the mic opens (#648)", () => {
     await wait(6000);
     expect(agentStore.useAgentCall.getState().mode).toBe('live');
     expect(heardChunks()).toBe(true);
-    expect(agentStore.useAgentCall.getState().micWhy).toBe('');
-    expect(problems()).toEqual([]);
+    // The manager talked and this fake ElevenLabs sends no user_transcript: the call says so, never silent (#656).
+    expect(agentStore.useAgentCall.getState().micWhy).toMatch(/^The voice isn't hearing you: ElevenLabs gets your audio/);
+    expect(problems()).toEqual([expect.stringMatching(/isn't hearing you/)]);
   });
 
   it('when only a tap starts it, the call says tap the screen, keeps the Jarvis voice, and a tap hears the manager', async () => {

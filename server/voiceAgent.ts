@@ -22,9 +22,19 @@ export interface AgentIds {
 /** English agents speak with Flash v2 (ElevenLabs Agents' low-latency voice for English). */
 const AGENT_TTS_MODEL = 'eleven_flash_v2';
 
+/** The audio both ways: 16 kHz PCM16, which the call's mic is resampled to (#656). */
+const AGENT_AUDIO = 'pcm_16000';
+
+/**
+ * What ElevenLabs sends the call (#656): without user_transcript the call never sees a turn. Names from the Create
+ * agent API's conversation.client_events (https://elevenlabs.io/docs/api-reference/agents/create).
+ */
+const AGENT_CLIENT_EVENTS = ['conversation_initiation_metadata', 'audio', 'interruption', 'user_transcript', 'agent_response', 'agent_response_correction', 'vad_score', 'ping'] as const;
+
 /**
  * The agent's conversation config for POST /v1/convai/agents/create and PATCH /v1/convai/agents/:id. The prompt is
- * a formality: the custom LLM (the office) decides every word. Interruptions and the per-call extra body are on.
+ * a formality: the custom LLM (the office) decides every word. Interruptions and the per-call extra body are on; the
+ * input and output formats and the events the call needs are set, not left to the account's defaults (#656).
  */
 export function agentBody(c: AgentConfig) {
   return {
@@ -35,8 +45,10 @@ export function agentBody(c: AgentConfig) {
         language: 'en',
         prompt: { prompt: 'You are the voice of the cubefarm office. The custom LLM writes every reply.', llm: 'custom-llm', custom_llm: { url: c.llmUrl, model_id: 'cubefarm-voice', api_key: { secret_id: c.llmSecretId } } },
       },
-      tts: { model_id: AGENT_TTS_MODEL, voice_id: c.voiceId },
+      asr: { user_input_audio_format: AGENT_AUDIO },
+      tts: { model_id: AGENT_TTS_MODEL, voice_id: c.voiceId, agent_output_audio_format: AGENT_AUDIO },
       turn: { turn_eagerness: 'normal' },
+      conversation: { client_events: [...AGENT_CLIENT_EVENTS] },
     },
     platform_settings: { overrides: { custom_llm_extra_body: true } },
   };
