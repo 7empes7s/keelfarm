@@ -133,7 +133,7 @@ export function OfficeRow({ update }: { update: OfficeUpdateView }) {
       {demo && (
         <div className="row wrap">
           <span className="muted small">Demo:</span>
-          <button className="btn btn-small btn-ghost" onClick={() => void attempt(api.demoNewCommit)} title="As if the office just updated itself: open tabs keep working and show New version · Update">
+          <button className="btn btn-small btn-ghost" onClick={() => void attempt(api.demoNewCommit)} title="As if the office just updated itself: open tabs keep working and show Reload app">
             <Icon name="refresh-cw" /> Simulate an office update
           </button>
           <button className="btn btn-small btn-ghost" onClick={() => void attempt(api.demoUpdateWait)} title="Show the next reason a ready update waits for, as the header and this row show it">

@@ -1,6 +1,6 @@
 // The office's new client after a self-update (#216): never a reload on its own. net.ts marks it ready
 // (store.updateReady) and it loads at a safe moment (officeUpdate.ts `loadNow`): the next tab or section change, back
-// in the app after a while away, or the header's "New version" pill, and never while a message is being written,
+// in the app after a while away, or the header's Reload app, and never while a message is being written,
 // uploaded or sent, or a sheet is open. Drafts and the outbox are saved anyway (drafts.ts, chatSend.ts).
 import { useStore } from './store';
 import { useMode } from './pocket/mode';
