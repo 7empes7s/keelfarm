@@ -10,6 +10,7 @@
 import { CEO_ID } from '../../../shared/types';
 import { agentListener, DEFAULT_VOICE_AGENT, LISTENER_WORDS, nextListener, type ListenCaps } from '../../../shared/voiceAgent';
 import { browserEars, relayEars, type Ears } from './agentEars';
+import { echoOf, micProcessingOff } from './callEcho';
 import { cameraWords } from './agentCameraStore';
 import { marker, wantsToEnd } from '../../../shared/voiceBrain';
 import { api } from '../api';
@@ -212,6 +213,7 @@ function onMessage(raw: string) {
     case 'heard':
       traceTranscript();
       if (listener() !== 'elevenlabs') return; // its echo of a user_message the call sent: heard already
+      if (echoOf(ev.text, replies())) return traceNote("ElevenLabs heard the voice's own reply: its echo, not shown");
       probe.heard.push(ev.text);
       turnStep('transcript', 'elevenlabs');
       turnStep('sent', 'elevenlabs'); // the agent has the words already
@@ -255,6 +257,7 @@ export function sayToAgent(text: string) {
 export function sendHeard(text: string) {
   if (mode() !== 'live' || !text.trim()) return;
   if (useCall.getState().call.phase === 'speaking') return traceNote('words heard while the voice talked, with no barge-in: its echo, dropped');
+  if (echoOf(text, replies())) return traceNote("words heard matching the voice's reply: its echo, dropped");
   traceUtterance();
   turnStep('transcript', listener());
   sayToAgent(text);
@@ -270,8 +273,11 @@ function interim(text: string) {
     activityAt = now;
     send({ type: 'user_activity' });
   }
-  if (useCall.getState().call.phase === 'speaking') dispatchCall({ type: 'speech', now, text });
+  if (useCall.getState().call.phase === 'speaking' && !echoOf(text, replies())) dispatchCall({ type: 'speech', now, text });
 }
+
+/** What the voice is saying now and said last: words heard that match them are its echo (#682). */
+const replies = () => [useAgentCall.getState().saying, ...probe.said.slice(-2)];
 
 /** The listener broke or never heard (`why`): the next one takes over, said once; none left and the call says why. */
 function switchListener(why: string) {
@@ -460,7 +466,10 @@ async function startMic(ctx: AudioContext) {
     throw err;
   }
   trace({ gum: 'ok' });
-  traceTrack(stream.getAudioTracks()[0]);
+  const track = stream.getAudioTracks()[0];
+  traceTrack(track);
+  const off = micProcessingOff(track?.getSettings?.() ?? {});
+  traceNote(off.length ? `the browser didn't apply ${off.join(', ')} to the mic: the voice may hear itself` : 'the mic has echo cancellation, noise suppression and auto gain on');
   if (!ws) {
     for (const t of stream.getTracks()) t.stop(); // hung up while asking
     return;

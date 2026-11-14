@@ -51,8 +51,27 @@ function replyUrl(raw: unknown): string | null {
   }
 }
 
-/** The base of the agent's custom LLM (ElevenLabs adds /v1/chat/completions to it): the reply address, else the Office address. */
-export const agentLlmBase = (settings: VoiceAgentSettings, officeUrl: string) => (settings.replyUrl || officeUrl).trim().replace(/\/+$/, '');
+/**
+ * This office's public address for ElevenLabs (#682, msg 4563: the tunnel office.techinsiderbytes.com → the office, Access
+ * bypassed on /v1/chat/completions), so no one has to type it. Another install's office never uses it: the check before
+ * dialling only passes on this office's own 401 (server/voiceAgent.ts reachWhy).
+ */
+export const DEFAULT_REPLY_URL = 'https://office.techinsiderbytes.com';
+
+const clean = (u: string) => u.trim().replace(/\/+$/, '');
+
+/**
+ * The bases the agent's custom LLM may use (ElevenLabs adds /v1/chat/completions), tried in order before dialling: the
+ * reply address alone when set; else the office's public address, then the Office address when it's https.
+ */
+export function agentLlmBases(settings: VoiceAgentSettings, officeUrl: string): string[] {
+  if (settings.replyUrl) return [clean(settings.replyUrl)];
+  const office = clean(officeUrl);
+  return [...new Set([DEFAULT_REPLY_URL, ...(office.startsWith('https://') ? [office] : [])])];
+}
+
+/** The first base ElevenLabs would be given. */
+export const agentLlmBase = (settings: VoiceAgentSettings, officeUrl: string) => agentLlmBases(settings, officeUrl)[0];
 
 /** Who hears the manager on a Jarvis call (#658), in the order they're tried. */
 export const LISTENERS = ['browser', 'elevenlabs', 'openai', 'clip'] as const;

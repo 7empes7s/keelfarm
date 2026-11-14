@@ -160,6 +160,26 @@ describe('the Jarvis voice when ElevenLabs can\'t reach the office (#682)', () =
     expect(reach).toHaveBeenLastCalledWith('https://voice.example.com/v1/chat/completions');
   });
 
+  it("configures itself on the office's public address when it answers as this office, never another office's (#682)", async () => {
+    const swarm = await office();
+    swarm.updateSettings({ notify: { ...swarm.snapshot().settings.notify, officeUrl: 'https://o.tailnet.ts.net' } });
+    const own = await swarm.voiceLlm({ messages: [] }, 'Bearer nope').catch((e: Error) => e.message);
+    expect(own).toMatch(/^Not the office voice agent \(office \w+\)$/);
+    const ensure = vi.spyOn(voiceOf(swarm), 'ensureAgent');
+    const reach = vi.spyOn(voiceOf(swarm), 'reach').mockResolvedValue({ status: 401, body: JSON.stringify({ error: own }) });
+    await expect(swarm.startVoiceAgent()).resolves.toMatchObject({ url: '/ws/voice-agent' });
+    expect(reach).toHaveBeenCalledWith('https://office.techinsiderbytes.com/v1/chat/completions');
+    expect(ensure.mock.calls[0][1].llmUrl).toBe('https://office.techinsiderbytes.com/v1');
+
+    // Another install: that address answers as someone else's office, so the Office address is used.
+    const other = await office();
+    other.updateSettings({ notify: { ...other.snapshot().settings.notify, officeUrl: 'https://other.example.com' } });
+    const otherEnsure = vi.spyOn(voiceOf(other), 'ensureAgent');
+    vi.spyOn(voiceOf(other), 'reach').mockImplementation(async (url) => ({ status: 401, body: url.startsWith('https://office.techinsiderbytes.com') ? 'Not the office voice agent (office 0123456789)' : own }));
+    await expect(other.startVoiceAgent()).resolves.toMatchObject({ url: '/ws/voice-agent' });
+    expect(otherEnsure.mock.calls.at(-1)?.[1].llmUrl).toBe('https://other.example.com/v1');
+  });
+
   it('answers a fallback call turn in words within 5 s with every Claude account limited, read aloud in the call (#682)', async () => {
     const swarm = await office();
     vi.spyOn(swarm, 'messageCeo').mockImplementation(() => new Promise(() => undefined)); // limited: the CEO never gets to it
@@ -210,6 +230,8 @@ describe('the reply address check (#682)', () => {
     expect(reachWhy({ status: 404, body: 'Not Found' })).toBe('it answered 404, so the address leads somewhere else (check the tunnel\'s route)');
     expect(reachWhy({ status: 302, body: '', location: 'https://team.cloudflareaccess.com/cdn-cgi/access/login' })).toMatch(/Cloudflare Access .* \/v1\/chat\/completions/);
     expect(reachWhy({ status: 403, body: '<title>Sign in ・ Cloudflare Access</title>' })).toMatch(/Cloudflare Access/);
+    expect(reachWhy({ status: 401, body: 'Not the office voice agent (office abc)' }, 'abc')).toBe('');
+    expect(reachWhy({ status: 401, body: 'Not the office voice agent (office xyz)' }, 'abc')).toMatch(/another cubefarm office/);
     expect(reachWhy({ status: 401, body: 'Unauthorized' })).toMatch(/answered 401 but not as the office/);
     expect(reachWhy({ status: 0, body: '', error: 'getaddrinfo ENOTFOUND office.example.com' })).toBe("it couldn't be reached (getaddrinfo ENOTFOUND office.example.com)");
   });

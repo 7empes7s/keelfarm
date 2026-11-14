@@ -3,7 +3,7 @@
 // (after which calls use today's voice mode), the minutes used today and this month with their estimate, and why a
 // call would fall back right now.
 import { useId } from 'react';
-import { AGENT_USD_PER_MIN, DEFAULT_VOICE_AGENT, hoursLabel, LISTENER_NAMES, LISTENERS, minutesCost, minutesLabel, type AgentListen } from '../../../shared/voiceAgent';
+import { AGENT_USD_PER_MIN, DEFAULT_REPLY_URL, DEFAULT_VOICE_AGENT, hoursLabel, LISTENER_NAMES, LISTENERS, minutesCost, minutesLabel, type AgentListen } from '../../../shared/voiceAgent';
 import { useStore } from '../store';
 import { agentCallWhy } from './agentCallStore';
 import { saveVoice } from './VoiceSettings';
@@ -28,7 +28,7 @@ export function JarvisSettings() {
       </label>
       <label className="field" htmlFor={replyId}>
         <span>Reply address</span>
-        <input id={replyId} type="url" inputMode="url" placeholder={settings.notify?.officeUrl || 'https://office.example.com'} defaultValue={agent.replyUrl ?? ''} key={agent.replyUrl ?? ''} onBlur={(e) => e.target.value.trim() !== (agent.replyUrl ?? '') && save({ replyUrl: e.target.value.trim() })} />
+        <input id={replyId} type="url" inputMode="url" placeholder={DEFAULT_REPLY_URL} defaultValue={agent.replyUrl ?? ''} key={agent.replyUrl ?? ''} onBlur={(e) => e.target.value.trim() !== (agent.replyUrl ?? '') && save({ replyUrl: e.target.value.trim() })} />
         <span className="muted small">The public https address ElevenLabs sends each turn to (it adds /v1/chat/completions). Empty: the Office address. Each call first checks ElevenLabs can reach it; if not, the office answers in the same voice and IT gets a ticket.</span>
       </label>
       <label className="field" htmlFor={listenId}>

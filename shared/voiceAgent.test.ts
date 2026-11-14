@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_VOICE_AGENT, addCallSeconds, agentListener, agentLlmBase, agentWhy, minutesCost, minutesLabel, nextListener, parseUsage, usageMinutes, voiceAgentSettings } from './voiceAgent';
+import { DEFAULT_VOICE_AGENT, addCallSeconds, agentListener, DEFAULT_REPLY_URL, agentLlmBase, agentLlmBases, agentWhy, minutesCost, minutesLabel, nextListener, parseUsage, usageMinutes, voiceAgentSettings } from './voiceAgent';
 
 describe('the Jarvis voice minutes and cap', () => {
   it('counts minutes per day, today and this month, a started minute counting', () => {
@@ -16,7 +16,7 @@ describe('the Jarvis voice minutes and cap', () => {
     const base = { settings: DEFAULT_VOICE_AGENT, keySet: true, officeUrl: 'https://office.example.com', minutesMonth: 0, fake: false };
     expect(agentWhy(base)).toBe('');
     expect(agentWhy({ ...base, keySet: false })).toMatch(/ElevenLabs key/);
-    expect(agentWhy({ ...base, officeUrl: '' })).toMatch(/https address/);
+    expect(agentWhy({ ...base, settings: { ...DEFAULT_VOICE_AGENT, replyUrl: 'http://office.example.com' } })).toMatch(/https address/);
     expect(agentWhy({ ...base, officeUrl: '', fake: true })).toBe(''); // the demo's fake agent needs no address
     expect(agentWhy({ ...base, minutesMonth: 15 * 60 - 1 })).toBe('');
     expect(agentWhy({ ...base, minutesMonth: 15 * 60 })).toMatch(/15 h of Jarvis voice are used/);
@@ -65,13 +65,18 @@ describe('the voice reply address (#682)', () => {
 
   it("prefers Settings → Voice → Reply address over the Office address for the agent's custom LLM", () => {
     expect(agentLlmBase({ ...DEFAULT_VOICE_AGENT, replyUrl: 'https://office.example.com/' }, base.officeUrl)).toBe('https://office.example.com');
-    expect(agentLlmBase(DEFAULT_VOICE_AGENT, 'https://o.ts.net/')).toBe('https://o.ts.net');
     expect(agentWhy({ ...base, settings: { ...DEFAULT_VOICE_AGENT, replyUrl: 'https://office.example.com' } })).toBe('');
   });
 
+  it("tries the office's public address first, then an https Office address, with no reply address set (#682)", () => {
+    expect(agentLlmBases(DEFAULT_VOICE_AGENT, 'https://o.ts.net/')).toEqual([DEFAULT_REPLY_URL, 'https://o.ts.net']);
+    expect(agentLlmBases(DEFAULT_VOICE_AGENT, base.officeUrl)).toEqual([DEFAULT_REPLY_URL]);
+    expect(agentLlmBases({ ...DEFAULT_VOICE_AGENT, replyUrl: 'https://office.example.com' }, 'https://o.ts.net')).toEqual(['https://office.example.com']);
+    expect(DEFAULT_REPLY_URL).toBe('https://office.techinsiderbytes.com');
+    expect(agentWhy(base)).toBe('');
+  });
+
   it('says plainly when the address ElevenLabs would use is missing or not https', () => {
-    expect(agentWhy(base)).toMatch(/Settings → Voice → Reply address/);
-    expect(agentWhy({ ...base, officeUrl: '' })).toMatch(/Reply address/);
     expect(agentWhy({ ...base, settings: { ...DEFAULT_VOICE_AGENT, replyUrl: 'http://office.example.com' } })).toMatch(/http:\/\/office\.example\.com isn't https/);
   });
 

@@ -11,13 +11,13 @@ import { cleanTrace, keepTrace, turnWords, type CallTrace } from '../../shared/c
 import { redact } from '../../shared/journal.ts';
 import { messageSpeech } from '../../shared/speech.ts';
 import type { WorldSnapshot } from '../../shared/types.ts';
-import { DEFAULT_VOICE_AGENT, addCallSeconds, agentLlmBase, agentWhy, parseUsage, usageMinutes, type AgentUsage, type VoiceAgentView } from '../../shared/voiceAgent.ts';
+import { DEFAULT_VOICE_AGENT, addCallSeconds, agentLlmBases, agentWhy, parseUsage, usageMinutes, type AgentUsage, type VoiceAgentView } from '../../shared/voiceAgent.ts';
 import { MARKER, NO_BRAIN, brainTurn, lastUserText, markerSay, type BrainAct, type BrainFacts, type BrainState } from '../../shared/voiceBrain.ts';
 import { VOICE_ID } from '../../shared/voices.ts';
 import { HOME_DIR } from '../config.ts';
 import { HttpError } from '../httpError.ts';
 import { DEFAULT_VOICE, localDay } from '../voice.ts';
-import { bearerOk, newLlmToken, reachWhy, sessionOf, type AgentIds } from '../voiceAgent.ts';
+import { bearerOk, newLlmToken, office401, officeVoiceId, reachWhy, sessionOf, type AgentIds } from '../voiceAgent.ts';
 import { fastModel, fastPrompt, fastSentences, type FastModel } from '../voiceFast.ts';
 import { SwarmProblems } from './problems.ts';
 
@@ -80,7 +80,7 @@ export abstract class SwarmVoiceAgent extends SwarmProblems {
   private callTraces: CallTrace[] = [];
   private llmTimes = new Map<string, LlmTime[]>(); // a call's turns (never markers), in the order they came
   private loggedTurns = new Set<string>();
-  private reachKept: { url: string; why: string; at: number } | null = null;
+  private reachKept = new Map<string, { why: string; at: number }>(); // per checked URL
   private fallbackSession: AgentSession = { at: 0, last: 0, brain: NO_BRAIN }; // turns of calls the Jarvis voice couldn't take (#682)
 
   /**
@@ -174,9 +174,9 @@ export abstract class SwarmVoiceAgent extends SwarmProblems {
     const s = this.state.settings;
     const data = this.agentData();
     const voiceId = s.voice.provider === 'elevenlabs' && VOICE_ID.test(s.voice.voiceId) ? s.voice.voiceId : DEFAULT_VOICE.voiceId;
-    const base = agentLlmBase(s.voice.agent ?? DEFAULT_VOICE_AGENT, s.notify.officeUrl);
-    const unreachable = await this.voiceReachWhy(base);
-    if (unreachable) return { unreachable: `ElevenLabs can't reach the office at ${base || 'its address'}: ${unreachable}` };
+    const reached = await this.voiceReachBase(agentLlmBases(s.voice.agent ?? DEFAULT_VOICE_AGENT, s.notify.officeUrl));
+    if ('why' in reached) return { unreachable: reached.why };
+    const { base } = reached;
     const key = this.voice.secret();
     try {
       const ids = await this.backend.voice.ensureAgent(key, { name: `${s.companyName || 'cubefarm'} office voice`, llmUrl: `${base}/v1`, llmSecretId: '', voiceId, firstMessage: this.agentGreeting() }, data.ids, data.token);
@@ -199,13 +199,25 @@ export abstract class SwarmVoiceAgent extends SwarmProblems {
    */
   private async voiceReachWhy(base: string): Promise<string> {
     const url = `${base}/v1/chat/completions`;
-    const kept = this.reachKept;
-    if (kept && kept.url === url && Date.now() - kept.at < (kept.why ? REACH_FAIL_MS : REACH_OK_MS)) return kept.why;
-    const why = reachWhy(await this.backend.voice.reach(url));
-    this.reachKept = { url, why, at: Date.now() };
-    console.log(`voice agent: reply address check ${why ? `failed: ${why}` : 'passed'}`);
-    if (why) this.autoTicket({ kind: 'voice-reach', url: base || '(no address)', why });
+    const kept = this.reachKept.get(url);
+    if (kept && Date.now() - kept.at < (kept.why ? REACH_FAIL_MS : REACH_OK_MS)) return kept.why;
+    const why = reachWhy(await this.backend.voice.reach(url), officeVoiceId(this.agentData().token));
+    this.reachKept.set(url, { why, at: Date.now() });
+    console.log(`voice agent: reply address check ${why ? `failed: ${why}` : 'passed'} (${base || 'no address'})`);
     return why;
+  }
+
+  /** The first of `bases` that reaches this office (#682), or why none does, with an IT ticket naming the first. */
+  private async voiceReachBase(bases: string[]): Promise<{ base: string } | { why: string }> {
+    const whys: string[] = [];
+    for (const base of bases) {
+      const why = await this.voiceReachWhy(base);
+      if (!why) return { base };
+      whys.push(why);
+    }
+    const first = bases[0] || '';
+    this.autoTicket({ kind: 'voice-reach', url: first || '(no address)', why: whys[0] ?? '' });
+    return { why: `ElevenLabs can't reach the office at ${first || 'its address'}: ${whys[0] ?? 'no address'}` };
   }
 
   /**
@@ -267,7 +279,7 @@ export abstract class SwarmVoiceAgent extends SwarmProblems {
   async *voiceTurn(body: unknown, auth: string | undefined, trusted = false): AsyncGenerator<string> {
     if (!trusted && !bearerOk(auth, this.agentData().token)) {
       console.log('voice agent: refused a turn without the agent token');
-      throw new HttpError(401, 'Not the office voice agent');
+      throw new HttpError(401, office401(this.agentData().token));
     }
     const t0 = Date.now();
     const id = sessionOf(body);
