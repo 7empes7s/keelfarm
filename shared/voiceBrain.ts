@@ -171,9 +171,11 @@ export function brainTurn(text: string, state: BrainState, facts: BrainFacts): B
 /** A turn sent again this soon with the same words is the same turn (msgs 4593/4595: every utterance reached the chat twice). */
 const REPEAT_MS = 8000;
 
-/** Whether `text` repeats the last turn (`last`) within a few seconds: answered again, never forwarded twice. */
+/** Whether `text` repeats the last turn (`last`) within a few seconds: answered again, never forwarded twice. Never a yes or no. */
 export function repeatTurn(last: { text: string; at: number } | undefined, text: string, now: number): boolean {
-  return !!last && now - last.at < REPEAT_MS && norm(last.text) === norm(text);
+  const t = norm(text);
+  if (YES.test(t) || NO.test(t)) return false; // a yes or no answers a new "Should I…?" each time
+  return !!last && now - last.at < REPEAT_MS && norm(last.text) === t;
 }
 
 /** A marker's words: the CEO's spoken answer (with "the full answer's in the chat" when it's longer), or a progress line. */

@@ -38,6 +38,9 @@ describe('the Jarvis voice brain', () => {
     expect(repeatTurn({ text: 'Why is QA slow?', at: 1000 }, 'why is QA slow', 4000)).toBe(true);
     expect(repeatTurn({ text: 'Why is QA slow?', at: 1000 }, 'Why is QA slow?', 20_000)).toBe(false);
     expect(repeatTurn({ text: 'Why is QA slow?', at: 1000 }, 'And floor 4?', 2000)).toBe(false);
+    // a yes or no answers a new "Should I…?" each time: two confirmations are never merged
+    expect(repeatTurn({ text: 'Yes', at: 1000 }, 'yes', 3000)).toBe(false);
+    expect(repeatTurn({ text: 'no thanks', at: 1000 }, 'No thanks.', 3000)).toBe(false);
   });
 
   it('answers status, a floor, decisions and server health at once from company data, with no hand-off', () => {
