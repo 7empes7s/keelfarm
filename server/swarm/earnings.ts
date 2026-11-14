@@ -71,14 +71,16 @@ export abstract class SwarmEarnings extends SwarmResearcher {
     this.earningsChanged();
   }
 
-  /** A fresh demo office gets its sample earnings; then the rollup every 5 minutes and the feeds every hour (not in tests). */
+  /** The rollup every 5 minutes and the feeds every hour, a fresh demo office's sample first (not in tests). */
   protected override async startUsage() {
-    const e = this.state.earnings;
-    if (this.backend.demo && !e.seq) earningsSample(e, this.state.repos.map((r) => r.id), Date.now());
     if (!process.env.VITEST && !this.earningsTimers.length) {
       this.earningsTimers = [setInterval(() => this.earningsChanged(false), ROLL_MS), setInterval(() => void this.readEarningFeeds(), FEED_MS)];
       for (const t of this.earningsTimers) t.unref?.();
-      setTimeout(() => void this.readEarningFeeds(), 4000).unref?.();
+      setTimeout(() => {
+        const e = this.state.earnings; // a fresh demo's sample, once its floors are connected
+        if (this.backend.demo && !e.seq) earningsSample(e, this.state.repos.map((r) => r.id), Date.now());
+        void this.readEarningFeeds();
+      }, 4000).unref?.();
     }
     await super.startUsage();
   }
