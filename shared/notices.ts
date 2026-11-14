@@ -56,6 +56,7 @@ export function makeNotice(input: NoticeInput, id: string, at: number): NoticeVi
     level: input.level ?? LEVEL[input.kind] ?? 'info',
     title: clip(input.title, 100),
     text: clip(input.text, 300), // as long as a push's body (server/notify.ts)
+    ...(input.details && { details: input.details.slice(0, 1500) }),
     actions: actions.length ? actions : undefined,
     read: false,
   };

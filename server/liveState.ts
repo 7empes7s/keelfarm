@@ -4,6 +4,7 @@
 // the demo's fake sessions feed SessionWatch their screen every couple of seconds and act on what it says.
 
 import { modelSupportMessage } from '../shared/claudeCode.ts';
+import { isAccountMenu, menuDetails, menuReason, readMenu, type MenuRead } from '../shared/menuScreen.ts';
 
 /** No model turn this long after starting: Enter is pressed once, then it's blocked. */
 export const NOT_STARTED_MS = 90_000;
@@ -25,6 +26,8 @@ export interface Stuck {
   kind: StuckKind;
   /** Shown after "Blocked: ". */
   reason: string;
+  /** The menu on screen, when there is one (#640). */
+  menu?: MenuRead;
 }
 
 export type ScreenState = 'sign-in' | 'setup' | 'menu' | 'error' | 'ended' | 'working' | 'idle';
@@ -55,7 +58,10 @@ export function classifyScreen(screen: string): { state: ScreenState; reason: st
   if (WORKING.test(screen)) return { state: 'working', reason: '' };
   if (SIGN_IN.test(screen)) return { state: 'sign-in', reason: 'needs sign-in' };
   for (const [re, what] of SETUP) if (re.test(screen)) return { state: 'setup', reason: `needs setup (${what})` };
-  if (menuOnScreen(screen)) return { state: 'menu', reason: 'a menu on screen' };
+  if (menuOnScreen(screen)) {
+    const menu = readMenu(screen);
+    return { state: 'menu', reason: menu ? menuReason(menu) : 'a menu on screen' };
+  }
   const unsupported = modelSupportMessage(screen);
   if (unsupported) return { state: 'error', reason: unsupported };
   for (const [re, what] of ERRORS) if (re.test(screen)) return { state: 'error', reason: what };
@@ -158,7 +164,8 @@ export class SessionWatch {
     if (t.begun || read.state === 'working') this.begun = true;
     if (this.held?.state !== read.state) this.held = { state: read.state, since: t.now };
     const kind = STUCK_STATES[read.state];
-    if (kind && t.now - this.held.since >= HOLD_MS[read.state] && t.quietMs >= (QUIET_FOR[read.state] ?? 0)) return this.become({ kind, reason: read.reason });
+    const menu = kind === 'menu' || kind === 'setup' ? readMenu(t.screen) : null; // a sign-in screen is its own
+    if (kind && t.now - this.held.since >= HOLD_MS[read.state] && t.quietMs >= (QUIET_FOR[read.state] ?? 0)) return this.become({ kind, reason: read.reason, ...(menu && { menu }) });
     // A result on screen with the CLI no longer working: the turn ended without the office hearing of it.
     const result = this.begun && (read.state === 'idle' || read.state === 'ended') ? printedResult(t.tail, this.required) : null;
     if (!result && read.state === 'ended' && this.begun) return this.become({ kind: 'unregistered', reason: "finished, but the office couldn't read its result" });
@@ -167,7 +174,7 @@ export class SessionWatch {
       if (t.now - this.resultSince >= UNREGISTERED_MS) return { do: 'complete', text: result.text };
     } else this.resultSince = null;
     if (!this.begun && this.checkStart && t.now - this.started >= NOT_STARTED_MS) {
-      if (this.retriedAt === null && read.state !== 'menu') {
+      if (this.retriedAt === null && read.state !== 'menu' && !isAccountMenu(menu)) {
         this.retriedAt = t.now;
         return { do: 'retry' };
       }
@@ -223,6 +230,7 @@ export interface BlockedState {
   since: number;
   told: boolean;
   kind?: StuckKind;
+  menu?: MenuRead;
 }
 
 /** Whether to tell the manager and the CEO about this blocked state now: once per state, a prompt only after 5 minutes. */
@@ -249,11 +257,18 @@ export function forgetTold(told: Set<string>, tasks: ReadonlySet<string>) {
 }
 
 /** The manager's notification for it: words and the action that fixes it. */
-export function stuckNotice(name: string, b: BlockedState, now: number, floor?: number): { title: string; body: string; who: string; actions: ('terminal' | 'retry')[] } {
+export function stuckNotice(name: string, b: BlockedState, now: number, floor?: number): { title: string; body: string; who: string; actions: ('terminal' | 'retry')[]; details?: string } {
+  const n = stuckWords(name, b, now, floor);
+  return b.menu ? { ...n, details: menuDetails(b.menu) } : n;
+}
+
+function stuckWords(name: string, b: BlockedState, now: number, floor?: number): { title: string; body: string; who: string; actions: ('terminal' | 'retry')[] } {
   const kind = b.kind ?? 'prompt';
   const on = floor === undefined ? '' : ` on floor ${floor}`;
   const who = floor === undefined ? name : `${name} (floor ${floor})`;
   const reason = b.reason.replace(/\.$/, '').slice(0, 200);
+  // An account's state, not a stuck agent: the office never presses its options (#640).
+  if (isAccountMenu(b.menu)) return { title: `${name}'s account: ${b.menu!.class.slice('account/'.length)}`, body: `Their coding agent shows its account menu${on}: ${reason}. The office won't pick an option for them; open their terminal to choose.`, who, actions: ['terminal'] };
   if (kind === 'sign-in') return { title: `${name} needs sign-in`, body: `Their coding agent is on its sign-in screen${on}. Open their terminal and sign in there.`, who, actions: ['terminal'] };
   if (kind === 'not-started') return { title: `${name} hasn't started`, body: `No model turn in 2 minutes${on}, even after the office pressed Enter. Open their terminal, or retry.`, who, actions: ['terminal', 'retry'] };
   if (kind === 'unregistered') return { title: `${name} finished, but it didn't register`, body: `Their session ended${on} without a result the office could read. Open their terminal, or retry.`, who, actions: ['terminal', 'retry'] };

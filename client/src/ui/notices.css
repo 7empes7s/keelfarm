@@ -217,6 +217,18 @@
   -webkit-line-clamp: unset;
   line-clamp: none;
 }
+.notice-details {
+  margin: 0 0 0 calc(1.25rem + var(--ds-space-2));
+  min-width: 0;
+  padding: var(--ds-space-2);
+  max-height: 16rem;
+  overflow: auto;
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface-sunken);
+  font-size: var(--ds-text-sm);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .notice-foot {
   display: flex;
   flex-wrap: wrap;

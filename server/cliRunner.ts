@@ -652,7 +652,7 @@ export function startCliSession(opts: SessionOptions, callbacks: SessionCallback
 
   const watchLive = (l: LiveCli, now: number) =>
     actOn(watch.tick({ now, begun, screen: term.screen(), tail: term.tail(120), quietMs: now - Math.max(l.lastData ?? started, l.lastHook ?? started) }), label, {
-      log: (text, error) => log([{ kind: error ? 'error' : 'system', text }]), blocked: (s) => (s ? cb.blocked?.(s.reason, s.kind) : !onScreen?.blocked && !statusReport.blocked && cb.blocked?.(null)),
+      log: (text, error) => log([{ kind: error ? 'error' : 'system', text }]), blocked: (s) => (s ? cb.blocked?.(s.reason, s.kind, s.menu && (lastCall.tool ? { ...s.menu, lastStep: describeTool(opts.cwd, lastCall.tool, lastCall.input) } : s.menu)) : !onScreen?.blocked && !statusReport.blocked && cb.blocked?.(null)),
       retry: () => quietly(() => l.proc?.write('\r')), complete: (text) => finish({ ok: true, text, errors: [] }, true),
     });
   /**

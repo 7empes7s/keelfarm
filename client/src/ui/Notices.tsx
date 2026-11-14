@@ -344,9 +344,10 @@ function NoticeRow({ n, pocket, today, after }: { n: NoticeView; pocket: boolean
   return (
     <li className={`notice-row notice-${n.level} ${n.read ? '' : 'notice-unread'} ${open ? 'notice-open' : ''}`}>
       <NoticeBody n={n} pocket={pocket} after={after} meta={meta} textRef={text} />
-      {(clamped || open || !!n.actions?.length) && (
+      {open && n.details && <pre className="notice-details">{n.details}</pre>}
+      {(clamped || open || !!n.details || !!n.actions?.length) && (
         <span className="notice-foot">
-          {(clamped || open) && (
+          {(clamped || open || !!n.details) && (
             <button type="button" className="btn btn-small btn-ghost notice-expand" aria-expanded={open} onClick={() => setOpen(!open)}>
               {open ? 'Less' : 'More'}
             </button>
