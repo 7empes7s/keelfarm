@@ -18,7 +18,7 @@ test('an office update keeps the draft and its file, then loads on the next tab 
   await page.evaluate(() => ((window as { marker?: number }).marker = 1)); // gone if the page reloads
 
   await page.request.post('/api/demo/new-commit');
-  const pill = page.getByRole('button', { name: 'New version · Update' });
+  const pill = page.getByRole('button', { name: 'Reload app' });
   await expect(pill).toBeVisible();
   await pill.click(); // the draft holds it: it says so and waits
   await expect(page.getByText(/The new version loads once you send or clear your message/)).toBeVisible();
@@ -41,7 +41,7 @@ test('in the 3D office, updates landing never reload the page: the phone stays o
   await enterOffice(page);
   await page.evaluate(() => ((window as { marker?: number }).marker = 1)); // gone if the page reloads
   await page.request.post('/api/demo/new-commit'); // the live office updates itself on every merge; the demo only when asked
-  await expect(page.getByRole('button', { name: 'New version · Update' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Reload app' })).toBeVisible();
   await page.keyboard.press('KeyP');
   const phone = page.locator('.phone-overlay');
   for (let i = 0; i < 4; i++) {
