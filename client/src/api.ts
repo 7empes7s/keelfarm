@@ -292,8 +292,9 @@ export const api = {
   /** Saves (or with '' removes) the ElevenLabs key. No toast: the settings show why a key was rejected. */
   setVoiceKey: (key: string) => call<{ voiceKeySet: boolean; voiceKeyHint: string }>('PUT', '/api/voice/key', { key }, false),
   /** The Jarvis voice (#534): a signed URL for one ElevenLabs conversation; errors fall back to today's voice mode quietly. */
-  startVoiceAgent: () => call<{ session: string; url: string; stt?: boolean }>('POST', '/api/voice/agent/start', undefined, false),
+  startVoiceAgent: () => call<{ session: string; url: string; stt?: boolean } | { unreachable: string }>('POST', '/api/voice/agent/start', undefined, false),
   /** A call that can't hear the manager (#645): an IT ticket for the office. No toast: the call screen says it. */
+  voiceCallTurn: (text: string) => call<{ say: string }>('POST', '/api/voice/call-turn', { text }, false),
   voiceProblem: (problem: string) => call('POST', '/api/voice/problem', { problem }, false),
   voices: () => call<VoiceOption[]>('GET', '/api/voice/voices'),
   /** No toast: Settings → Voice's Test says what went wrong (voiceTest.ts). */

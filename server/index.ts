@@ -416,8 +416,8 @@ app.get(
   '/api/voice/messages/:id',
   route(async (req, res) => {
     const { id } = parse(z.object({ id: z.coerce.number().int().positive() }), req.params);
-    const q = parse(z.object({ cached: z.literal('1').optional(), whole: z.literal('1').optional(), tap: z.literal('1').optional(), part: z.coerce.number().int().min(0).max(99).default(0) }), req.query);
-    if (!q.cached) return sendAudio(res, await swarm.voice.messageAudio(id, !!q.whole, !!q.tap));
+    const q = parse(z.object({ cached: z.literal('1').optional(), whole: z.literal('1').optional(), tap: z.literal('1').optional(), call: z.literal('1').optional(), part: z.coerce.number().int().min(0).max(99).default(0) }), req.query);
+    if (!q.cached) return sendAudio(res, await swarm.voice.messageAudio(id, !!q.whole, !!q.tap, !!q.call));
     // The phone's ▶: a saved clip or a 404, never a new synthesis. Not kept by the browser, so "Clear saved clips" holds.
     const { audio, parts } = await swarm.voice.cachedAudio(id, q.part);
     res.setHeader('X-Voice-Parts', String(parts));
@@ -442,7 +442,7 @@ app.get(
 );
 app.get(
   '/api/voice/talk/:id',
-  route(async (req, res) => sendAudio(res, await swarm.voice.talkAudio(parse(z.object({ id: z.coerce.number().int().min(1) }), req.params).id))),
+  route(async (req, res) => sendAudio(res, await swarm.voice.talkAudio(parse(z.object({ id: z.coerce.number().int().min(1) }), req.params).id, req.query.call === '1'))),
 );
 app.get(
   '/api/voice/standup',
@@ -454,6 +454,8 @@ app.get(
 // The Jarvis voice (#534): a signed URL for one ElevenLabs conversation (never the key), its end (minutes), and the
 // office as the agent's custom LLM: OpenAI's chat completions, streamed when asked, behind the agent's bearer token.
 app.post('/api/voice/agent/start', route(() => swarm.startVoiceAgent()));
+// A turn of a call the Jarvis voice couldn't take (#682): answered at once from the office or the fast model, read aloud.
+app.post('/api/voice/call-turn', route((req) => swarm.voiceCallTurn(str(req.body?.text))));
 app.post('/api/voice/problem', route((req) => swarm.voiceProblem(str(req.body?.problem))));
 // A call's trace from the browser (#650, shared/callTrace.ts): logged as `voice: call trace {…}`, the last 20 calls kept.
 app.post('/api/voice/trace', route((req) => {

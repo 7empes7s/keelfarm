@@ -13,7 +13,7 @@ import { clampSpeed, cleanFavourites, pickVoice, SPEED_DEFAULT, VOICE_ID, voiceP
 import type { ListenSettings, PhoneMessage, VoiceCacheView, VoiceOption, VoiceSettings } from '../shared/types.ts';
 import { secretMismatch } from '../shared/secretFormats.ts';
 import { DEFAULT_VOICE_AGENT, voiceAgentSettings } from '../shared/voiceAgent.ts';
-import type { AgentConfig, AgentIds } from './voiceAgent.ts';
+import type { AgentConfig, AgentIds, ReachAnswer } from './voiceAgent.ts';
 import type { FastModel } from './voiceFast.ts';
 import { HttpError } from './httpError.ts';
 import { mergeSecrets, readSecrets } from './secrets.ts';
@@ -270,6 +270,8 @@ export interface VoiceApi {
   agentUrl(key: string, agentId: string): Promise<string>;
   /** The Jarvis voice's fast answer (#665): a streamed OpenAI-style chat completion's words (voiceFast.ts). */
   chatStream(model: FastModel, history: { role: 'user' | 'assistant'; content: string }[], system: string, signal: AbortSignal): AsyncIterable<string>;
+  /** The Jarvis voice's reachability check (#682): what `url` answers a POST without the agent token, from outside the box. */
+  reach(url: string): Promise<ReachAnswer>;
 }
 
 export interface VoiceKeyView {
@@ -408,12 +410,21 @@ export class Voice {
    * ⋯ menu's "Read the whole message"): its whole text, cached by its words but never the clip the ▶ replays.
    * `tapped` (?tap=1, #532): the manager asked for it, so any CEO message is made, also with the voice off.
    */
-  messageAudio(id: number, whole = false, tapped = false): Promise<Buffer> {
-    return this.logged(`message ${id}`, () => this.makeMessageAudio(id, whole, tapped));
+  messageAudio(id: number, whole = false, tapped = false, call = false): Promise<Buffer> {
+    return this.logged(`message ${id}`, () => this.makeMessageAudio(id, whole, tapped, call));
   }
 
-  private async makeMessageAudio(id: number, whole: boolean, tapped: boolean): Promise<Buffer> {
+  /**
+   * The voice settings a clip is made with. `call` (?call=1, #682): a Jarvis call that fell back keeps the agent's
+   * ElevenLabs voice, whatever the provider, so the voice never quietly changes mid-call.
+   */
+  private clipVoice(call: boolean): VoiceSettings {
     const s = this.deps.settings();
+    return call && s.provider !== 'elevenlabs' ? { ...s, provider: 'elevenlabs', voiceId: DEFAULT_VOICE.voiceId } : s;
+  }
+
+  private async makeMessageAudio(id: number, whole: boolean, tapped: boolean, call: boolean): Promise<Buffer> {
+    const s = this.clipVoice(call);
     if (s.provider !== 'elevenlabs' && !(tapped && s.provider === 'off')) throw new HttpError(404, "Messages aren't read by ElevenLabs right now.");
     const m = this.message(id);
     if (!m || !(speaks(m, s) || (tapped && m.from === 'ceo'))) throw new HttpError(404, `No spoken message ${id}`);
@@ -540,9 +551,9 @@ export class Voice {
   }
 
   /** GET /api/voice/talk/:id: an ack or progress line as mp3, cached by its words (so each fixed ack is made once). */
-  talkAudio(id: number): Promise<Buffer> {
+  talkAudio(id: number, call = false): Promise<Buffer> {
     return this.logged(`spoken line ${id}`, async () => {
-      const s = this.deps.settings();
+      const s = this.clipVoice(call);
       if (s.provider !== 'elevenlabs') throw new HttpError(404, "The CEO isn't voiced by ElevenLabs right now.");
       const text = this.talkLines.get(id);
       if (!text) throw new HttpError(404, `No spoken line ${id}`);

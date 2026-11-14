@@ -2,6 +2,18 @@
 // screen. Pure, so it's tested without a microphone or a voice; voiceCallEngine.ts runs it and the call screens
 // (CallScreens.tsx) only draw it. Nothing shown over the call ends or restarts it: only End (or closing the tab) does.
 
+import type { VoiceSettings } from '../../../shared/types';
+
+/**
+ * The voice a message is read in: a call always speaks (the browser's voice with Speak messages off), and a Jarvis call
+ * that fell back keeps the CEO's ElevenLabs voice (`eleven`, #682), never quietly switching to another.
+ */
+export function voiceOnCall(v: VoiceSettings, call: { on: boolean; eleven: boolean }): VoiceSettings {
+  if (!call.on) return v;
+  if (call.eleven) return v.provider === 'elevenlabs' ? v : { ...v, provider: 'elevenlabs' };
+  return v.provider === 'off' ? { ...v, provider: 'browser' } : v;
+}
+
 /** Where the call is: dialling, your turn, waiting for the CEO's reply, or the CEO talking. */
 type CallPhase = 'idle' | 'connecting' | 'listening' | 'thinking' | 'speaking' | 'ended';
 

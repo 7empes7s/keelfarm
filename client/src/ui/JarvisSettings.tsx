@@ -1,4 +1,5 @@
-// Settings → Voice → Jarvis voice on calls (#534, docs/voice.md "ElevenLabs Agents"): the switch, who listens (#658), the monthly cap
+// Settings → Voice → Jarvis voice on calls (#534, docs/voice.md "ElevenLabs Agents"): the switch, the reply address ElevenLabs
+// reaches the office on (#682), who listens (#658), the monthly cap
 // (after which calls use today's voice mode), the minutes used today and this month with their estimate, and why a
 // call would fall back right now.
 import { useId } from 'react';
@@ -14,6 +15,7 @@ export function JarvisSettings() {
   const agent = settings.voice.agent ?? DEFAULT_VOICE_AGENT;
   const capId = useId();
   const listenId = useId();
+  const replyId = useId();
   const why = agentCallWhy({ settings, voiceKeySet: keySet, voiceAgent: used });
   const save = (patch: Partial<typeof agent>) => saveVoice({ agent: { ...agent, ...patch } });
   return (
@@ -23,6 +25,11 @@ export function JarvisSettings() {
         <span>
           Jarvis voice on calls<span className="muted small"> · the ElevenLabs agent speaks, answers at once and hands real work to the CEO</span>
         </span>
+      </label>
+      <label className="field" htmlFor={replyId}>
+        <span>Reply address</span>
+        <input id={replyId} type="url" inputMode="url" placeholder={settings.notify?.officeUrl || 'https://office.example.com'} defaultValue={agent.replyUrl ?? ''} key={agent.replyUrl ?? ''} onBlur={(e) => e.target.value.trim() !== (agent.replyUrl ?? '') && save({ replyUrl: e.target.value.trim() })} />
+        <span className="muted small">The public https address ElevenLabs sends each turn to (it adds /v1/chat/completions). Empty: the Office address. Each call first checks ElevenLabs can reach it; if not, the office answers in the same voice and IT gets a ticket.</span>
       </label>
       <label className="field" htmlFor={listenId}>
         <span>Listen</span>

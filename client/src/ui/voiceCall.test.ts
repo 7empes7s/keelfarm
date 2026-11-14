@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { canListen } from './handsFree';
-import { BARGE_MS, bargesIn, callClock, captionLine, callStep, callStatus, inCall, isBackchannel, NO_CALL, sentenceAt, sentenceFraction, sentenceStarts, splitSentences, wantsMic, type Call, type CallEvent } from './voiceCall';
+import { BARGE_MS, bargesIn, callClock, captionLine, callStep, callStatus, inCall, isBackchannel, NO_CALL, sentenceAt, sentenceFraction, sentenceStarts, splitSentences, voiceOnCall, wantsMic, type Call, type CallEvent } from './voiceCall';
 
 /** Runs events from no call, returning the last step and every effect along the way. */
 function run(events: CallEvent[], from: Call = NO_CALL) {
@@ -212,5 +212,16 @@ describe('the call screen', () => {
     expect(captionLine(speaking, 'Mimoun', 'All green.', 'how are we')).toBe('Mimoun: All green.');
     expect(captionLine(started, 'Mimoun', 'All green.', 'how are we')).toBe('You: how are we');
     expect(captionLine(speaking, 'Mimoun', '', '')).toBe('');
+  });
+});
+
+describe('the voice a call speaks in (#682)', () => {
+  const v = { provider: 'browser' } as Parameters<typeof voiceOnCall>[0];
+  it("keeps the CEO's ElevenLabs voice when a Jarvis call falls back, never quietly switching to another", () => {
+    expect(voiceOnCall(v, { on: true, eleven: true }).provider).toBe('elevenlabs');
+    expect(voiceOnCall({ ...v, provider: 'off' }, { on: true, eleven: true }).provider).toBe('elevenlabs');
+    expect(voiceOnCall(v, { on: true, eleven: false }).provider).toBe('browser');
+    expect(voiceOnCall({ ...v, provider: 'off' }, { on: true, eleven: false }).provider).toBe('browser'); // a call always speaks
+    expect(voiceOnCall({ ...v, provider: 'off' }, { on: false, eleven: true }).provider).toBe('off');
   });
 });

@@ -93,7 +93,9 @@ export async function connectAgent(fallback: (why: string) => void) {
   if (!ctx) return fail(fallback, "This browser can't play the Jarvis voice");
   let start: { session: string; url: string; stt?: boolean };
   try {
-    start = await api.startVoiceAgent();
+    const r = await api.startVoiceAgent();
+    if ('unreachable' in r) return fail(fallback, r.unreachable); // #682: never a call that hangs on "thinking"
+    start = r;
   } catch (err) {
     return fail(fallback, (err as Error).message);
   }

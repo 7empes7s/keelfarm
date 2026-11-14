@@ -11,13 +11,13 @@ import { cleanTrace, keepTrace, turnWords, type CallTrace } from '../../shared/c
 import { redact } from '../../shared/journal.ts';
 import { messageSpeech } from '../../shared/speech.ts';
 import type { WorldSnapshot } from '../../shared/types.ts';
-import { DEFAULT_VOICE_AGENT, addCallSeconds, agentWhy, parseUsage, usageMinutes, type AgentUsage, type VoiceAgentView } from '../../shared/voiceAgent.ts';
+import { DEFAULT_VOICE_AGENT, addCallSeconds, agentLlmBase, agentWhy, parseUsage, usageMinutes, type AgentUsage, type VoiceAgentView } from '../../shared/voiceAgent.ts';
 import { MARKER, NO_BRAIN, brainTurn, lastUserText, markerSay, type BrainAct, type BrainFacts, type BrainState } from '../../shared/voiceBrain.ts';
 import { VOICE_ID } from '../../shared/voices.ts';
 import { HOME_DIR } from '../config.ts';
 import { HttpError } from '../httpError.ts';
 import { DEFAULT_VOICE, localDay } from '../voice.ts';
-import { bearerOk, newLlmToken, sessionOf, type AgentIds } from '../voiceAgent.ts';
+import { bearerOk, newLlmToken, reachWhy, sessionOf, type AgentIds } from '../voiceAgent.ts';
 import { fastModel, fastPrompt, fastSentences, type FastModel } from '../voiceFast.ts';
 import { SwarmProblems } from './problems.ts';
 
@@ -31,6 +31,9 @@ const FAST_TIMEOUT_MS = 8_000;
 /** Calls whose turn timings are kept for their traces (#665), and the turns of each. */
 const TIMED_SESSIONS = 20;
 const TIMED_TURNS = 20;
+/** How long the reply address check's answer is kept (#682): a pass a few minutes, a failure briefly, so a fix shows soon. */
+const REACH_OK_MS = 5 * 60_000;
+const REACH_FAIL_MS = 30_000;
 
 /** The office's side of a turn (#665): ms from the request to its first words and to the end. */
 interface LlmTime {
@@ -77,6 +80,8 @@ export abstract class SwarmVoiceAgent extends SwarmProblems {
   private callTraces: CallTrace[] = [];
   private llmTimes = new Map<string, LlmTime[]>(); // a call's turns (never markers), in the order they came
   private loggedTurns = new Set<string>();
+  private reachKept: { url: string; why: string; at: number } | null = null;
+  private fallbackSession: AgentSession = { at: 0, last: 0, brain: NO_BRAIN }; // turns of calls the Jarvis voice couldn't take (#682)
 
   /**
    * POST /api/voice/trace (#650): a call's trace from the browser, logged as one line and kept (the last 20 calls).
@@ -158,17 +163,23 @@ export abstract class SwarmVoiceAgent extends SwarmProblems {
     return `Hi, it's ${this.ceo().name}. What can I do for you?`;
   }
 
-  /** POST /api/voice/agent/start: the office's agent made or brought up to date, and a signed URL for one conversation. */
-  async startVoiceAgent(): Promise<{ session: string; url: string; stt: boolean }> {
+  /**
+   * POST /api/voice/agent/start: the office's agent made or brought up to date, and a signed URL for one conversation;
+   * or (#682) why ElevenLabs can't reach the office, an answer rather than an error, so the call falls back at once.
+   */
+  async startVoiceAgent(): Promise<{ session: string; url: string; stt: boolean } | { unreachable: string }> {
     this.sweepAgentSessions();
     const why = this.voiceAgentWhy();
     if (why) throw new HttpError(409, why);
     const s = this.state.settings;
     const data = this.agentData();
     const voiceId = s.voice.provider === 'elevenlabs' && VOICE_ID.test(s.voice.voiceId) ? s.voice.voiceId : DEFAULT_VOICE.voiceId;
+    const base = agentLlmBase(s.voice.agent ?? DEFAULT_VOICE_AGENT, s.notify.officeUrl);
+    const unreachable = await this.voiceReachWhy(base);
+    if (unreachable) return { unreachable: `ElevenLabs can't reach the office at ${base || 'its address'}: ${unreachable}` };
     const key = this.voice.secret();
     try {
-      const ids = await this.backend.voice.ensureAgent(key, { name: `${s.companyName || 'cubefarm'} office voice`, llmUrl: `${s.notify.officeUrl.replace(/\/+$/, '')}/v1`, llmSecretId: '', voiceId, firstMessage: this.agentGreeting() }, data.ids, data.token);
+      const ids = await this.backend.voice.ensureAgent(key, { name: `${s.companyName || 'cubefarm'} office voice`, llmUrl: `${base}/v1`, llmSecretId: '', voiceId, firstMessage: this.agentGreeting() }, data.ids, data.token);
       if (JSON.stringify(ids) !== JSON.stringify(data.ids)) {
         data.ids = ids;
         this.saveAgentData();
@@ -180,6 +191,35 @@ export abstract class SwarmVoiceAgent extends SwarmProblems {
     } catch (err) {
       throw new HttpError(502, `ElevenLabs couldn't start the call: ${(err as Error).message}`);
     }
+  }
+
+  /**
+   * Why ElevenLabs can't reach the agent's custom LLM at `base` ('' when it can, #682): the public address called
+   * without the token must answer with the office's own 401. Kept a few minutes; a failure files an IT ticket naming it.
+   */
+  private async voiceReachWhy(base: string): Promise<string> {
+    const url = `${base}/v1/chat/completions`;
+    const kept = this.reachKept;
+    if (kept && kept.url === url && Date.now() - kept.at < (kept.why ? REACH_FAIL_MS : REACH_OK_MS)) return kept.why;
+    const why = reachWhy(await this.backend.voice.reach(url));
+    this.reachKept = { url, why, at: Date.now() };
+    console.log(`voice agent: reply address check ${why ? `failed: ${why}` : 'passed'}`);
+    if (why) this.autoTicket({ kind: 'voice-reach', url: base || '(no address)', why });
+    return why;
+  }
+
+  /**
+   * POST /api/voice/call-turn (#682): a turn of a call the Jarvis voice couldn't take, answered like one of its turns
+   * (the office's own answer, the fast model's, or real work handed to the CEO in the background, never waited on),
+   * and written into the chat so the call reads the answer aloud in the CEO's ElevenLabs voice.
+   */
+  async voiceCallTurn(text: string): Promise<{ say: string }> {
+    const t = text.trim().slice(0, 4000);
+    if (!t) throw new HttpError(400, 'Say something first.');
+    this.fallbackSession.last = Date.now();
+    let say = '';
+    for await (const piece of this.turnWords(t, this.fallbackSession, [{ role: 'user', content: t }], false)) say += piece;
+    return { say: say.trim() };
   }
 
   /** The OpenAI key the call's transcription relay uses (#658: OpenAI audio first, then any OpenAI key), 'fake' in the demo, or null. Server memory only. */
@@ -268,7 +308,9 @@ export abstract class SwarmVoiceAgent extends SwarmProblems {
    * A manager turn's words: the office's own answer, a fast model's for an open question when a key for one is there
    * (#665, streamed sentence by sentence), and real work handed to the CEO in the background, never waited on.
    */
-  private async *turnWords(text: string, session: AgentSession, messages: unknown): AsyncGenerator<string> {
+  private async *turnWords(text: string, session: AgentSession, messages: unknown, spoken = true): AsyncGenerator<string> {
+    const heard = { voiceCall: true as const };
+    const answer = spoken ? heard : {}; // said by the Jarvis voice already, or (#682) for the call to read aloud
     const before = session.brain;
     const facts = this.brainFacts();
     const turn = brainTurn(text, before, facts);
@@ -290,13 +332,13 @@ export abstract class SwarmVoiceAgent extends SwarmProblems {
         console.log(`voice agent: the fast answer (${fast.provider}) failed: ${(err as Error).message}`);
       }
       if (said.length) {
-        this.postMessage('manager', text.slice(0, 4000), undefined, { voiceCall: true });
-        this.postMessage('ceo', said.join('').trim(), undefined, { voiceCall: true });
+        this.postMessage('manager', text.slice(0, 4000), undefined, heard);
+        this.postMessage('ceo', said.join('').trim(), undefined, answer);
         return;
       }
     }
     let say = turn.say;
-    if (turn.record && !turn.handoff) this.postMessage('manager', text.slice(0, 4000), undefined, { voiceCall: true });
+    if (turn.record && !turn.handoff) this.postMessage('manager', text.slice(0, 4000), undefined, heard);
     if (turn.act && turn.handoff) {
       void this.voiceAct(turn.act).catch((err: Error) => console.log(`voice agent: handing the turn to the CEO failed: ${err.message}`));
     } else if (turn.act) {
@@ -306,7 +348,7 @@ export abstract class SwarmVoiceAgent extends SwarmProblems {
         say = `That didn't work: ${(err as Error).message}`;
       }
     }
-    if (turn.record) this.postMessage('ceo', say, undefined, { voiceCall: true });
+    if (turn.record) this.postMessage('ceo', say, undefined, answer);
     yield say;
   }
 

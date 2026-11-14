@@ -17,6 +17,8 @@ export interface VoiceAgentSettings {
   capHours: number; // a month's minutes up to this many hours, then calls fall back to today's voice mode
   /** Who hears the manager on a Jarvis call (#658, #665): auto (absent: the default) or one listener first, for testing each. */
   listen?: AgentListen;
+  /** The public https address ElevenLabs reaches the office's /v1/chat/completions on (#682); absent: the Office address. */
+  replyUrl?: string;
 }
 
 export type AgentListen = 'auto' | AgentListener;
@@ -30,8 +32,27 @@ export function voiceAgentSettings(base: VoiceAgentSettings, patch: unknown): Vo
   if (typeof p.on === 'boolean') out.on = p.on;
   if (typeof p.capHours === 'number' && Number.isFinite(p.capHours)) out.capHours = Math.max(0, Math.min(CAP_HOURS_MAX, Math.round(p.capHours * 4) / 4));
   if (p.listen === 'auto' || LISTENERS.includes(p.listen as AgentListener)) out.listen = p.listen as AgentListen;
+  const url = replyUrl(p.replyUrl);
+  if (url === '') delete out.replyUrl;
+  else if (url) out.replyUrl = url;
   return out;
 }
+
+/** A reply address as saved: '' clears it, an http(s) address without its trailing slashes, null for anything else. */
+function replyUrl(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const s = raw.trim();
+  if (!s) return '';
+  if (s.length > 300) return null;
+  try {
+    return /^https?:$/.test(new URL(s).protocol) ? s.replace(/\/+$/, '') : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The base of the agent's custom LLM (ElevenLabs adds /v1/chat/completions to it): the reply address, else the Office address. */
+export const agentLlmBase = (settings: VoiceAgentSettings, officeUrl: string) => (settings.replyUrl || officeUrl).trim().replace(/\/+$/, '');
 
 /** Who hears the manager on a Jarvis call (#658), in the order they're tried. */
 export const LISTENERS = ['browser', 'elevenlabs', 'openai', 'clip'] as const;
@@ -113,7 +134,9 @@ export function parseUsage(raw: unknown): AgentUsage {
 export function agentWhy(a: { settings: VoiceAgentSettings; keySet: boolean; officeUrl: string; minutesMonth: number; fake: boolean }): string {
   if (!a.settings.on) return 'The Jarvis voice is off.';
   if (!a.keySet) return 'Add an ElevenLabs key to use the Jarvis voice.';
-  if (!a.fake && !a.officeUrl.startsWith('https://')) return "ElevenLabs needs the office's https address (Settings → Notifications → Office address) to reach it.";
+  const base = agentLlmBase(a.settings, a.officeUrl);
+  if (!a.fake && !base) return 'ElevenLabs needs a public https address to reach the office: set Settings → Voice → Reply address.';
+  if (!a.fake && !base.startsWith('https://')) return `ElevenLabs needs a public https address to reach the office, and ${base} isn't https: set Settings → Voice → Reply address.`;
   if (a.minutesMonth >= a.settings.capHours * 60) return `This month's ${hoursLabel(a.settings.capHours)} of Jarvis voice are used: calls use the office's own voice until next month.`;
   return '';
 }
