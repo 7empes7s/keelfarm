@@ -7,6 +7,7 @@ import { providerCards } from '../shared/providers.ts';
 import { EMPTY_CLOUD } from '../shared/cloud.ts';
 import { redact } from '../shared/journal.ts';
 import type { ProbeRequest, ProbeResult } from '../shared/providers.ts';
+import { createChecklist, fillSecret } from '../shared/checklists.ts';
 
 // Its own folder: the demo's secrets files are read straight from SWARM_HOME.
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'cubefarm-providers-'));
@@ -166,6 +167,73 @@ describe('one sign-in per company and permission checks (#533)', () => {
     expect(cf.test).toMatchObject({ ok: true, result: 'live', missing: ['Zone DNS edit'], note: 'Missing: Zone DNS edit' });
     const gh = await p.add('github', 'github_pat_abc');
     expect(gh.test).toMatchObject({ missing: ['Pull requests (read)'], note: 'Missing: Pull requests (read)' });
+  });
+});
+
+describe('an Entra key and its Tenant ID (#677)', () => {
+  const TENANT = '73b6beef-9d40-4ea6-8ad6-2da6b4818f29';
+  const KEY = 'client-0001:secret-value-Hc85';
+  /** Graph's sign-in, faked: only the tenant (by GUID, or by the verified domain) signs the app in; its token names the tenant. */
+  const graph = () =>
+    vi.fn(async (req: ProbeRequest): Promise<ProbeResult> => {
+      const t = req.kind === 'form' ? req.url.split('/')[3] : '';
+      return t === TENANT || t === 'techinsiderbytes.com' ? { status: 200, body: { access_token: `e30.${Buffer.from(JSON.stringify({ tid: TENANT })).toString('base64url')}.sig` } } : { status: 400, body: { error: 'invalid_request' } };
+    });
+  const entra = (probe: ReturnType<typeof graph>, hints: string[] = []) => {
+    const dir = fs.mkdtempSync(path.join(home, 'entra-'));
+    return new Providers({ file: path.join(dir, 'providers.json'), secretsFile: path.join(dir, 'secrets.json'), probe, changed: vi.fn(), tenantHints: () => hints });
+  };
+
+  it('saves a checklist secret with its Tenant ID on the same entry, and tests it there', async () => {
+    const probe = graph();
+    const p = entra(probe);
+    await p.init();
+    const s = { seq: 0, list: [] };
+    const c = createChecklist(s, { title: 'Connect the shared mailboxes', steps: [{ title: 'Paste the admin app', secret: { label: 'client id:client secret', provider: 'entra' } }] }, 1);
+    const r = await fillSecret(c, 's1', KEY, (provider, label, v, acct) => p.add(provider, v, label, '', acct), () => 2, ` ${TENANT} `);
+    expect(r).not.toHaveProperty('error');
+    const [conn] = p.view().connections;
+    expect(conn).toMatchObject({ provider: 'entra', accountId: TENANT, keyHint: 'Hc85', test: { ok: true, result: 'live' } });
+    expect(probe).toHaveBeenCalledWith(expect.objectContaining({ url: `https://login.microsoftonline.com/${TENANT}/oauth2/v2.0/token` }));
+    expect(c.steps[0].secret?.saved).toMatchObject({ connectionId: conn.id, hint: 'Hc85' });
+  });
+
+  it('lets an entry saved without one get its Tenant ID later, without the key, and then passes its test', async () => {
+    const probe = graph();
+    const p = entra(probe);
+    await p.init();
+    const c = await p.add('entra', KEY, 'client id:client secret · Connect the shared mailboxes');
+    expect(c.accountId).toBeUndefined();
+    expect(c.test).toMatchObject({ ok: false, note: expect.stringMatching(/^Add its Tenant ID/) });
+    expect(probe).not.toHaveBeenCalled();
+    const fixed = await p.update(c.id, { accountId: TENANT });
+    expect(fixed).toMatchObject({ accountId: TENANT, keyHint: 'Hc85', test: { ok: true, result: 'live', note: 'Key works' } });
+    expect(p.keyValue(c.id)).toBe(KEY); // the key itself untouched
+    await expect(p.update(c.id, { accountId: 'not a tenant' })).rejects.toThrow(/Tenant ID looks like/);
+  });
+
+  it("tries the office's verified domain as the tenant when there is none, and keeps the tenant GUID it signed in to", async () => {
+    const probe = graph();
+    const p = entra(probe, ['nope.example', 'techinsiderbytes.com', 'techinsiderbytes.com']);
+    await p.init();
+    const c = await p.add('entra', KEY);
+    expect(probe.mock.calls.map(([req]) => (req.kind === 'form' ? req.url : ''))).toEqual(['https://login.microsoftonline.com/nope.example/oauth2/v2.0/token', 'https://login.microsoftonline.com/techinsiderbytes.com/oauth2/v2.0/token']);
+    expect(c).toMatchObject({ accountId: TENANT, test: { ok: true, note: 'Key works; Tenant ID found from techinsiderbytes.com' } });
+
+    const none = entra(graph(), ['nope.example']);
+    await none.init();
+    const d = await none.add('entra', KEY);
+    expect(d.accountId).toBeUndefined();
+    expect(d.test).toMatchObject({ ok: false, result: 'unknown', note: "Add its Tenant ID: nope.example didn't sign it in (invalid_request)" });
+  });
+
+  it('edits every field but the key on any entry, whoever saved it', async () => {
+    const p = entra(graph());
+    await p.init();
+    const c = await p.add('openai', OPENAI, 'Imported');
+    const e = await p.update(c.id, { usedBy: 'clipfarm transcription', label: 'OpenAI (clipfarm)' });
+    expect(e).toMatchObject({ usedBy: 'clipfarm transcription', label: 'OpenAI (clipfarm)', keyHint: '9f3a' });
+    expect((await p.update(c.id, { usedBy: '' })).usedBy).toBeUndefined();
   });
 });
 

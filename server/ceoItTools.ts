@@ -59,6 +59,15 @@ export interface SaveKeyArgs {
   /** #622: a file sent in chat holding the key (a service account's JSON), deleted once saved. */
   file?: string;
   uses?: string;
+  /** #677: its Account ID / Tenant ID, saved with it. */
+  account_id?: string;
+}
+/** provider_update's arguments (#677): an entry's fields, never its key. */
+export interface ProviderUpdateArgs {
+  key: string;
+  account_id?: string;
+  label?: string;
+  uses?: string;
 }
 
 export interface CloudflareHandlers {
@@ -66,6 +75,8 @@ export interface CloudflareHandlers {
   providerAction(a: ProviderActionArgs): Promise<string>;
   installKey(a: InstallKeyArgs): Promise<string>;
   saveProviderKey(a: SaveKeyArgs): Promise<string>;
+  providerStatus(a: { provider?: string }): string;
+  providerUpdate(a: ProviderUpdateArgs): Promise<string>;
 }
 
 export interface ItHandlers extends CloudflareHandlers {
@@ -260,8 +271,26 @@ export function cloudflareTools(h: CloudflareHandlers, run: Run) {
         file: z.string().regex(/^[a-f0-9]{24}$/).optional().describe('Instead of value: the file id of a key file sent in chat'),
         label: z.string().min(1).max(60).optional().describe('Its name, e.g. "Twitch (clipfarm)"'),
         uses: z.string().min(1).max(200).optional().describe('What uses it, e.g. "clipfarm transcription"'),
+        account_id: z.string().min(3).max(64).optional().describe("Its Account ID when the provider has one: Entra's Tenant ID (GUID or domain), Cloudflare's Account ID"),
       },
       (a) => run(() => h.saveProviderKey(a)),
+    ),
+    tool(
+      'provider_status',
+      "Every Settings → Providers key's completeness: working or not (with the reason), a field it lacks (Entra's Tenant ID), missing permissions, what the office can do with it. Read it before asking the manager for a key or permission: ask only for what is missing.",
+      { provider: z.string().min(2).max(40).optional().describe('Only this provider, e.g. "entra"') },
+      (a) => run(async () => h.providerStatus(a)),
+    ),
+    tool(
+      'provider_update',
+      "Set a Providers key's Tenant ID / Account ID, name or what uses it, without touching the key (not a secret: no manager step). A changed Tenant ID is tested at once; the result says whether it works.",
+      {
+        key: z.string().min(1).max(80).describe('The key: its id, name, or provider when it has one key'),
+        account_id: z.string().min(3).max(64).optional().describe('e.g. an Entra Directory (tenant) ID "1a2b3c4d-…"'),
+        label: z.string().min(1).max(60).optional(),
+        uses: z.string().min(1).max(200).optional(),
+      },
+      (a) => run(() => h.providerUpdate(a)),
     ),
     tool(
       'cloudflare',

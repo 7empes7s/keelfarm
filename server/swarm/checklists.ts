@@ -113,9 +113,9 @@ export abstract class SwarmChecklists extends SwarmAgentSdk {
   }
 
   /** A secret field: the value is saved to Providers and nowhere else (POST /api/checklists/:id/steps/:step/secret). */
-  async checklistSecret(id: string, stepId: string, value: unknown): Promise<Checklist> {
+  async checklistSecret(id: string, stepId: string, value: unknown, accountId?: unknown): Promise<Checklist> {
     const c = this.checklistOf(id);
-    const r = await fillSecret(c, stepId, typeof value === 'string' ? value : '', (provider, label, v) => this.providers.add(provider, v, label), Date.now);
+    const r = await fillSecret(c, stepId, typeof value === 'string' ? value : '', (provider, label, v, acct) => this.providers.add(provider, v, label, '', acct), Date.now, typeof accountId === 'string' ? accountId : '');
     if ('error' in r) throw new HttpError(400, r.error);
     this.checklistChanged(c, r.change);
     return c;

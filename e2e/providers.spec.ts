@@ -24,7 +24,7 @@ for (const width of [390, 1280]) {
     try {
       let section = await providers(page, width);
       await section.getByRole('button', { name: `More for ${OLD_NAME}` }).click();
-      await page.getByRole('menuitem', { name: /Rename and tags/ }).click();
+      await page.getByRole('menuitem', { name: /Edit details/ }).click();
       const sheet = page.getByRole('dialog', { name: `Edit ${OLD_NAME}` });
       await sheet.getByLabel('Name').fill('Cerebras paid');
       await sheet.getByLabel('Tags').fill('inference');

@@ -178,12 +178,15 @@ export function applyStep(c: Checklist, stepId: string, a: StepAction, now: numb
   return { change: { checklist: c.id, title: c.title, step: s.id, stepTitle: s.title, what } };
 }
 
-/** Save a secret field: the value goes only to `save` (Providers); the step keeps its connection and last 4. */
-export async function fillSecret(c: Checklist, stepId: string, value: string, save: (provider: string, label: string, value: string) => Promise<{ id: string; keyHint: string }>, now: () => number) {
+/**
+ * Save a secret field: the value goes only to `save` (Providers); the step keeps its connection and last 4. A provider
+ * whose setup asks for an Account ID (Entra's Tenant ID, #677) gets it saved on the same entry.
+ */
+export async function fillSecret(c: Checklist, stepId: string, value: string, save: (provider: string, label: string, value: string, accountId: string) => Promise<{ id: string; keyHint: string }>, now: () => number, accountId = '') {
   const s = c.steps.find((x) => x.id === stepId);
   if (!s?.secret) return { error: s ? 'That step has no secret field.' : `No step ${stepId} on “${c.title}”.` };
   if (!value.trim()) return { error: 'Paste the value first.' };
-  const conn = await save(s.secret.provider, `${s.secret.label} · ${c.title}`.slice(0, 60), value.trim());
+  const conn = await save(s.secret.provider, `${s.secret.label} · ${c.title}`.slice(0, 60), value.trim(), accountId.trim());
   return applyStep(c, stepId, { kind: 'secret', connectionId: conn.id, hint: conn.keyHint }, now());
 }
 

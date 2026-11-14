@@ -113,6 +113,48 @@ describe('save_provider_key', () => {
   });
 });
 
+describe("an Entra key's Tenant ID through the CEO (#677)", () => {
+  const TENANT = '73b6beef-9d40-4ea6-8ad6-2da6b4818f29';
+  /** Graph's sign-in for Providers' test, faked: the tenant by its GUID, or by the Comms floor's default domain unless told otherwise. */
+  async function entraOffice(domainSignsIn: boolean) {
+    const { swarm, o, ceo, everything } = await office();
+    swarm.providers['deps'].probe = async (req) => {
+      const t = req.kind === 'form' ? req.url.split('/')[3] : '';
+      return t === TENANT || (domainSignsIn && t === 'techinsiderbytes.com') ? { status: 200, body: { access_token: `e30.${Buffer.from(JSON.stringify({ tid: TENANT })).toString('base64url')}.sig` } } : { status: 400, body: { error: 'invalid_request' } };
+    };
+    for (const c of swarm.providers.view().connections.filter((x) => x.provider === 'entra')) await swarm.providers.remove(c.id);
+    const key = await swarm.providers.add('entra', 'mail-client-0001:mail-secret-value-Hc85', 'client id:client secret · Connect the shared mailboxes');
+    return { swarm, o, ceo, key, everything };
+  }
+
+  it('reads what a key lacks, sets its Tenant ID without the key, and key_test then signs in to that tenant', async () => {
+    const { swarm, ceo, key, everything } = await entraOffice(false);
+    const status = await ceo.call('provider_status', { provider: 'entra' });
+    expect(status).toBe(`1 key, 1 needs attention:\n${key.id} "client id:client secret · Connect the shared mailboxes" (entra, ••••Hc85) · not working: Add its Tenant ID: techinsiderbytes.com didn't sign it in (invalid_request) · lacks its Tenant ID: set it with provider_update (no key needed)`);
+    const set = await ceo.call('provider_update', { key: key.id, account_id: TENANT });
+    expect(set).toBe(`${key.id} "client id:client secret · Connect the shared mailboxes" (entra, ••••Hc85) · working · Tenant ID ${TENANT} · can: test the key, register the Cloudflare Access sign-in app, set up mail for the shared mailboxes only`);
+    expect(swarm.providers.keyValue(key.id)).toBe('mail-client-0001:mail-secret-value-Hc85');
+    expect(await ceo.call('provider_action', { provider: 'entra', op: 'key_test' })).toMatch(new RegExp(`signs in to tenant ${TENANT}`));
+    expect(await ceo.call('provider_status', {})).toMatch(/^\d+ keys, /);
+    expect(everything([status, set])).not.toContain('mail-secret-value-Hc85');
+  });
+
+  it("finds the tenant from the office's verified domain before an Entra action, and keeps its GUID", async () => {
+    const { swarm, ceo, key } = await entraOffice(true);
+    expect(swarm.providers.view().connections.find((c) => c.id === key.id)).toMatchObject({ accountId: TENANT, test: { ok: true, note: 'Key works; Tenant ID found from techinsiderbytes.com' } });
+    await swarm.providers.update(key.id, { accountId: '' }); // lost again: the next action finds it again
+    expect(await ceo.call('provider_action', { provider: 'entra', op: 'key_test' })).toMatch(new RegExp(`signs in to tenant ${TENANT}`));
+    expect(swarm.providers.view().connections.find((c) => c.id === key.id)!.accountId).toBe(TENANT);
+  });
+
+  it('saves a pasted key with its Tenant ID', async () => {
+    const { swarm, ceo } = await entraOffice(false);
+    const out = await ceo.call('save_provider_key', { provider: 'entra', value: 'second-client-02:second-secret-zz99', label: 'Entra (mail)', account_id: TENANT });
+    expect(out).toMatch(/Its test: Key works\./);
+    expect(swarm.providers.view().connections.find((c) => c.label === 'Entra (mail)')).toMatchObject({ accountId: TENANT, test: { ok: true } });
+  });
+});
+
 describe('a narrow Cloudflare token the office made', () => {
   it('is made least-scope on Approve, renewed before it expires, installed again, and the old one revoked', async () => {
     const { swarm, o, cf, it, everything } = await office('routine');

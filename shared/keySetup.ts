@@ -278,6 +278,27 @@ export function entraTokenProbe(key: string, tenant: string): Extract<ProbeReque
   return { kind: 'form', url: `https://login.microsoftonline.com/${t}/oauth2/v2.0/token`, form: { grant_type: 'client_credentials', scope: 'https://graph.microsoft.com/.default', client_id: key.slice(0, at), client_secret: key.slice(at + 1) } };
 }
 
+const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** An Entra tenant as an entry's Tenant ID (#677): its GUID, or a verified domain such as "contoso.com". */
+export const isEntraTenant = (t: string) => GUID.test(t.trim()) || /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(t.trim());
+
+/** The tenant GUID a client-credentials answer's access token was issued in (its `tid` claim), or null. Nothing is verified: it only names the tenant. */
+export function tokenTenant(body: unknown): string | null {
+  const token = (body as { access_token?: unknown } | undefined)?.access_token;
+  const part = typeof token === 'string' ? token.split('.')[1] : undefined;
+  if (!part) return null;
+  try {
+    const tid = (JSON.parse(atob(part.replace(/-/g, '+').replace(/_/g, '/'))) as { tid?: unknown }).tid;
+    return typeof tid === 'string' && GUID.test(tid) ? tid.toLowerCase() : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The domains to try as an Entra entry's tenant when it has no Tenant ID (#677): each once, in order. */
+export const tenantGuesses = (domains: readonly (string | undefined)[]) => [...new Set(domains.map((d) => (d ?? '').trim().toLowerCase()).filter((d) => d && isEntraTenant(d)))];
+
 export function cloudflareVerify(key: string, accountId = ''): Extract<ProbeRequest, { kind: 'http' }> {
   const id = accountId.trim();
   return { kind: 'http', url: id ? `${CF}/accounts/${id}/tokens/verify` : `${CF}/user/tokens/verify`, headers: { Authorization: `Bearer ${key}` } };
