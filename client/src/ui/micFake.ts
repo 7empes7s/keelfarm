@@ -2,7 +2,7 @@
 // driven by window.__swarmMic.
 interface RecognitionResultLike {
   isFinal: boolean;
-  0?: { transcript: string };
+  0?: { transcript: string; confidence?: number };
 }
 export interface Recognition {
   lang: string;
@@ -12,7 +12,8 @@ export interface Recognition {
   onresult: ((e: { results: ArrayLike<RecognitionResultLike> }) => void) | null;
   onerror: ((e: { error: string }) => void) | null;
   onend: (() => void) | null;
-  start(): void;
+  /** `track`: a mic to listen to (Chrome's MediaStreamTrack recognition); others ignore it. */
+  start(track?: MediaStreamTrack): void;
   stop(): void;
   abort(): void;
 }

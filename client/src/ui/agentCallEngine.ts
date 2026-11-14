@@ -10,7 +10,9 @@
 import { CEO_ID } from '../../../shared/types';
 import { agentListener, DEFAULT_VOICE_AGENT, LISTENER_WORDS, nextListener, type ListenCaps } from '../../../shared/voiceAgent';
 import { browserEars, relayEars, type Ears } from './agentEars';
-import { echoOf, micProcessingOff } from './callEcho';
+import { micProcessingOff } from './callEcho';
+import { BargeMeter, deafNow, rms, TAIL_MS } from './callDuplex';
+import { DROP_WORDS, heardDrop } from '../../../shared/callHeard';
 import { cleanHeard } from '../../../shared/fillers';
 import { cameraWords } from './agentCameraStore';
 import { marker, wantsToEnd } from '../../../shared/voiceBrain';
@@ -50,6 +52,14 @@ let ws: WebSocket | null = null;
 let session = '';
 let rate = 16_000;
 let out: GainNode | null = null;
+let outMeter: AnalyserNode | null = null; // what the voice plays now, for barge-in (#694)
+let outBuf: Float32Array<ArrayBuffer> | null = null;
+let endedAt = 0; // when the voice last went quiet by itself: the listener stays deaf TAIL_MS after (#694)
+let tailTimer: ReturnType<typeof setTimeout> | null = null;
+const barge = new BargeMeter();
+/** What the voice said (the greeting, replies) and turns sent, with when: a transcript matching one is dropped (#694). */
+let spoken: { text: string; at: number }[] = [];
+let sentTurns: { text: string; at: number }[] = [];
 let playHead = 0;
 let playing: { src: AudioBufferSourceNode; event: number }[] = [];
 let droppedUpTo = -1; // audio events interrupted or skipped
@@ -75,7 +85,7 @@ const ACTIVITY_MS = 5_000;
 const NOTE_MS = 8_000;
 
 /** What the probe shows (window.__swarmCall.agent): the mode, the last turn's timing, the events seen. */
-const probe = { session: '', sentAt: 0, firstAudioAt: 0, said: [] as string[], heard: [] as string[], utterances: 0, interrupted: 0, mic: { ctx: '', blocks: 0, chunks: 0, peak: 0, track: '' } };
+const probe = { session: '', sentAt: 0, firstAudioAt: 0, said: [] as string[], heard: [] as string[], utterances: 0, interrupted: 0, barged: 0, mic: { ctx: '', blocks: 0, chunks: 0, peak: 0, track: '' } };
 
 const setMode = (mode: AgentMode) => useAgentCall.setState({ mode });
 const mode = () => useAgentCall.getState().mode;
@@ -134,12 +144,13 @@ export async function connectAgent(fallback: (why: string) => void) {
     }
     if (next === 'fallback') fail(fallback, dialling ? `${words}: it didn't take the call` : words);
   };
-  if (first === 'browser' || first === 'clip') return; // the browser's recognition starts once the agent is ready; a clip is mic.ts's
+  if (first === 'clip') return; // a clip is mic.ts's
   try {
-    await startMic(ctx);
+    await startMic(ctx); // the browser's recognition too (#694): the echo-cancelled mic is its barge-in, and its audio where the browser takes a track
   } catch (err) {
     const name = (err as Error).name || 'Error';
     traceNote(`the Jarvis mic failed: ${name} ${(err as Error).message ?? ''}`.trim());
+    if (first === 'browser') return traceNote('the browser listens without barge-in');
     closeConversation('off');
     return fail(fallback, name === 'NotAllowedError' ? (micErrorLine(name) ?? name) : `The microphone couldn't start (${name})`);
   }
@@ -176,6 +187,8 @@ export function closeConversation(next: 'idle' | 'off') {
 export function releaseAgent() {
   wasLive = false;
   drops = 0;
+  spoken = [];
+  sentTurns = [];
   closeConversation('off');
   useAgentCall.setState({ saying: '' });
   releaseCallAudio();
@@ -209,12 +222,13 @@ function onMessage(raw: string) {
     case 'said':
       traceReply();
       probe.said.push(ev.text);
+      spoken = [...spoken.slice(-4), { text: ev.text, at: performance.now() }];
       useAgentCall.setState({ saying: ev.text });
       return;
     case 'heard':
       traceTranscript();
       if (listener() !== 'elevenlabs') return; // its echo of a user_message the call sent: heard already
-      if (echoOf(ev.text, replies())) return traceNote("ElevenLabs heard the voice's own reply: its echo, not shown");
+      if (dropped(ev.text)) return; // the office drops it too: never posted or answered
       probe.heard.push(ev.text);
       turnStep('transcript', 'elevenlabs');
       turnStep('sent', 'elevenlabs'); // the agent has the words already
@@ -256,19 +270,21 @@ export function sayToAgent(text: string) {
 }
 
 /** An utterance the browser, OpenAI or a clip heard: one user_message, unless it's the voice's own echo while it talks. */
-export function sendHeard(raw: string) {
+export function sendHeard(raw: string, confidence?: number) {
   const text = cleanHeard(raw); // no fillers or restarted phrases in the turn, the captions or the chat (msg 4621)
   if (mode() !== 'live' || !text) return;
-  if (useCall.getState().call.phase === 'speaking') return traceNote('words heard while the voice talked, with no barge-in: its echo, dropped');
-  if (echoOf(text, replies())) return traceNote("words heard matching the voice's reply: its echo, dropped");
+  if (useCall.getState().call.phase === 'speaking' || deaf()) return traceNote('words heard while the voice talked: its echo, dropped');
+  if (dropped(text, confidence)) return;
+  sentTurns = [...sentTurns.slice(-4), { text, at: performance.now() }];
   traceUtterance();
   traceNote(`utterance ${++probe.utterances} (${listener()})`);
   turnStep('transcript', listener());
   sayToAgent(text);
 }
 
-/** The words being said now: shown live, and talking over the voice interrupts it (voiceCall.ts's barge-in rules). */
+/** The words being said now, shown live (never while the voice talks: barge-in is by the mic's energy, #694). */
 function interim(text: string) {
+  if (text && deaf()) return;
   useCall.setState({ heard: cleanHeard(text), managerSpeaking: !!text }); // the CEO's lines wait while the manager talks (flush)
   if (!text) return;
   turnHearing(listener());
@@ -277,11 +293,37 @@ function interim(text: string) {
     activityAt = now;
     send({ type: 'user_activity' });
   }
-  if (useCall.getState().call.phase === 'speaking' && !echoOf(text, replies())) dispatchCall({ type: 'speech', now, text });
 }
 
-/** What the voice is saying now and said last: words heard that match them are its echo (#682). */
-const replies = () => [useAgentCall.getState().saying, ...probe.said.slice(-2)];
+/** How long a barge-in holds the CEO's waiting lines when no words follow it. */
+const BARGE_QUIET_MS = 3000;
+let talkTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** The manager cut in: the CEO's waiting lines wait for their words (interim's '' or BARGE_QUIET_MS), never talk over them. */
+function talking() {
+  useCall.setState({ managerSpeaking: true });
+  if (talkTimer) clearTimeout(talkTimer);
+  talkTimer = setTimeout(() => {
+    talkTimer = null;
+    if (useCall.getState().heard) return;
+    useCall.setState({ managerSpeaking: false });
+    flush();
+  }, BARGE_QUIET_MS);
+}
+
+/** The listener hears nothing now (#694): the voice is playing, or went quiet under TAIL_MS ago. */
+const deaf = () => deafNow(playing.length > 0, endedAt, performance.now());
+
+/** A finished transcript that isn't the manager's turn (#694: echo, the greeting, noise, repeats), said in the trace. */
+function dropped(text: string, confidence?: number): boolean {
+  const ceo = useStore.getState().agents[CEO_ID]?.name;
+  const now = performance.now();
+  const said = [...spoken, ...(useAgentCall.getState().saying ? [{ text: useAgentCall.getState().saying, at: now }] : [])];
+  const why = heardDrop(text, { spoken: said.map((s) => ({ text: s.text, at: playing.length ? now : Math.max(s.at, endedAt) })), names: ceo ? [ceo] : [], sent: sentTurns, now, confidence });
+  if (!why) return false;
+  traceNote(`words heard dropped: ${DROP_WORDS[why]}`);
+  return true;
+}
 
 /** The listener broke or never heard (`why`): the next one takes over, said once; none left and the call says why. */
 function switchListener(why: string) {
@@ -320,15 +362,16 @@ function startActivity() {
 function syncEars() {
   const l = listener();
   const want = mode() === 'live' && wantsMic(useCall.getState().call);
-  if (ears && (!want || l !== 'browser')) stopEars();
+  if (ears && (!want || l !== 'browser' || deaf())) stopEars();
   if (sttRelay && (!want || l !== 'openai')) stopEars();
   if (!want) return;
   const hooks = { interim, utterance: sendHeard, failed: (why: string) => switchListener(micErrorLine(why) ?? why) };
+  if (l === 'browser' && deaf()) return; // half duplex (#694): off while the voice plays, back TAIL_MS after
   if (l === 'browser' && !ears) {
     const R = recognitionClass();
     if (!R) return switchListener("this browser can't recognise speech");
     try {
-      ears = browserEars(R, hooks, navigator.language || 'en-US');
+      ears = browserEars(R, hooks, navigator.language || 'en-US', mic?.stream.getAudioTracks()[0]);
     } catch {
       ears = null;
       switchListener('the speech recognition would not start');
@@ -365,7 +408,13 @@ function play(event: number, pcm: string) {
   if (!ctx || event <= droppedUpTo || !pcm) return;
   if (!probe.firstAudioAt && probe.sentAt) probe.firstAudioAt = performance.now();
   lastEvent = event;
-  out ??= ctx.createGain();
+  if (!out) {
+    out = ctx.createGain();
+    outMeter = ctx.createAnalyser();
+    outMeter.fftSize = 512;
+    outBuf = new Float32Array(outMeter.fftSize);
+    out.connect(outMeter);
+  }
   out.gain.value = useCall.getState().speaker ? 1 : 0.35;
   out.connect(ctx.destination);
   const samples = pcmToFloat(pcm);
@@ -380,10 +429,13 @@ function play(event: number, pcm: string) {
   src.start(playHead);
   playHead += buf.duration;
   playing.push({ src, event });
+  if (ears) syncEars(); // half duplex (#694): the browser's recognition stops while the voice plays
   useAgentCall.setState({ output: level(samples) });
   src.onended = () => {
     playing = playing.filter((p) => p.src !== src);
-    if (!playing.length) finishSoon();
+    if (playing.length) return;
+    quietNow();
+    finishSoon();
   };
   if (doneTimer) clearTimeout(doneTimer);
   doneTimer = null;
@@ -406,8 +458,20 @@ function armBackstop(ms: number) {
     if (wait) return armBackstop(wait);
     if (!playing.length) return;
     stopPlayback();
+    quietNow();
     finishSoon();
   }, ms);
+}
+
+/** The voice went quiet by itself: the listener comes back TAIL_MS later (#694), never hearing its last words' echo. */
+function quietNow() {
+  endedAt = performance.now();
+  barge.reset();
+  if (tailTimer) clearTimeout(tailTimer);
+  tailTimer = setTimeout(() => {
+    tailTimer = null;
+    syncEars();
+  }, TAIL_MS + 20);
 }
 
 /** The voice went quiet: the turn is the manager's again (and "that's all" ends the conversation). */
@@ -446,6 +510,7 @@ function stopPlayback() {
 export function skipAgent() {
   droppedUpTo = Math.max(droppedUpTo, lastEvent);
   stopPlayback();
+  quietNow();
   finishSoon();
 }
 
@@ -456,7 +521,10 @@ export const resumeAgent = () => void callAudio()?.resume();
 export function stopAgentVoice() {
   droppedUpTo = Math.max(droppedUpTo, lastEvent);
   stopPlayback();
+  endedAt = 0; // the manager has the turn: their words are heard from now
+  barge.reset();
   send({ type: 'user_activity' });
+  syncEars();
 }
 
 // ---------- the mic ----------
@@ -507,7 +575,7 @@ async function startMic(ctx: AudioContext) {
   mic = { stream, node, src, rate: ctx.sampleRate, buf: [], len: 0, heard: false, check };
   trace({ audio: ctxLabel(ctx) });
   node.port.onmessage = (e: MessageEvent<Float32Array>) => {
-    traceLevel(rmsOf(e.data), true);
+    traceLevel(rms(e.data), true);
     onMic(e.data);
   };
   src.connect(node);
@@ -528,6 +596,21 @@ function onMic(samples: Float32Array) {
     if (why === MIC_QUIET || why === AUDIO_ASLEEP) useAgentCall.setState({ micWhy: '' }); // a switch's words stay (#658)
   }
   useAgentCall.setState({ input: open ? heard : 0 });
+  if (open && deaf()) {
+    // Half duplex (#694): nothing is sent while the voice plays or just after; the manager's voice over it stops it.
+    if (playing.length && outMeter && outBuf && useCall.getState().call.phase === 'speaking') {
+      outMeter.getFloatTimeDomainData(outBuf);
+      if (barge.push(rms(samples), rms(outBuf), (samples.length / mic.rate) * 1000, performance.now())) {
+        traceNote('the manager talked over the voice: it stops');
+        probe.barged++;
+        talking();
+        dispatchCall({ type: 'barge' });
+      }
+    }
+    mic.buf = [];
+    mic.len = 0;
+    return;
+  }
   const l = listener();
   if (!open || (l !== 'elevenlabs' && l !== 'openai')) return; // muted, paused or away (or the browser listens): nothing leaves the phone
   mic.buf.push(samples);
@@ -563,13 +646,6 @@ function checkHearing(loud: number) {
   if (nextListener('elevenlabs', caps())) return switchListener(`ElevenLabs sent no words back for ${Math.round((now - talk.first) / 1000)} s of your talking`);
   useAgentCall.setState({ micWhy: why });
   void api.voiceProblem(why).catch(() => undefined);
-}
-
-/** A block's loudness (RMS, 0..1), for the trace. */
-function rmsOf(samples: Float32Array): number {
-  let sum = 0;
-  for (const x of samples) sum += x * x;
-  return Math.sqrt(sum / Math.max(1, samples.length));
 }
 
 function stopMic() {

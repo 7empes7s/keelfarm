@@ -65,6 +65,9 @@ export default defineConfig({
     ...(installed.webkit ? [{ name: 'iphone-jarvis', testMatch: 'voiceAgent.spec.ts', dependencies: ['smoke'], use: { ...devices['iPhone 15'], headless: true } }] : []),
     // The wake word (#537) on Safari's engine too: onnxruntime-web, the AudioWorklet and the fake mic.
     ...(installed.webkit ? [{ name: 'iphone-wake', testMatch: 'wakeWord.spec.ts', dependencies: ['smoke'], use: { ...devices['iPhone 15'], headless: true } }] : []),
+    // A call that hears itself (#694) on Firefox and Safari's engine too: the mic shim, echo and barge-in.
+    ...(installed.firefox ? [{ name: 'firefox-call-echo', testMatch: 'callEcho.spec.ts', dependencies: ['smoke'], use: { ...devices['Desktop Firefox'], headless: true } }] : []),
+    ...(installed.webkit ? [{ name: 'iphone-call-echo', testMatch: 'callEcho.spec.ts', dependencies: ['smoke'], use: { ...devices['iPhone 15'], headless: true } }] : []),
   ],
   webServer: {
     command: webServerCommand(process.env),

@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { describe, expect, it, vi } from 'vitest';
 import type WebSocket from 'ws';
-import { fakeRelay, openaiRelay, sttIn, sttOut, sttSessionUpdate } from './sttRelay.ts';
+import { FAKE_ECHO, FAKE_TURNS, fakeRelay, openaiRelay, sttIn, sttOut, sttSessionUpdate } from './sttRelay.ts';
 
 // The Jarvis call's OpenAI listener (#658): the mic relayed to OpenAI Realtime transcription, the key kept on the office.
 class FakeWs extends EventEmitter {
@@ -24,9 +24,9 @@ class FakeWs extends EventEmitter {
 }
 
 /** 100 ms of 24 kHz PCM16 at `amp`. */
-const pcm = (amp: number) => {
+const pcm = (amp: number, hz = 764) => {
   const b = Buffer.alloc(4800);
-  for (let i = 0; i < 2400; i++) b.writeInt16LE(Math.round(amp * 0x7fff * Math.sin(i / 5)), i * 2);
+  for (let i = 0; i < 2400; i++) b.writeInt16LE(Math.round(amp * 0x7fff * Math.sin((2 * Math.PI * hz * i) / 24_000)), i * 2);
   return b.toString('base64');
 };
 
@@ -74,6 +74,11 @@ describe("the office's OpenAI transcription relay", () => {
       browser.emit('message', JSON.stringify({ audio: pcm(0) }));
       vi.advanceTimersByTime(600);
       expect(browser.sent.map((m) => JSON.parse(m).type)).toEqual(['delta', 'final']);
+      for (let i = 0; i < 5; i++) browser.emit('message', JSON.stringify({ audio: pcm(0.5, 220) })); // the demo voice's tone, heard back (#694)
+      vi.advanceTimersByTime(600);
+      for (let i = 0; i < 5; i++) browser.emit('message', JSON.stringify({ audio: pcm(0.5) }));
+      vi.advanceTimersByTime(600);
+      expect(browser.sent.map((m) => JSON.parse(m)).filter((m) => m.type === 'final').map((m) => m.text)).toEqual([FAKE_TURNS[0], FAKE_ECHO, FAKE_TURNS[1]]);
     } finally {
       vi.useRealTimers();
     }

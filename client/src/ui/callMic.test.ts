@@ -515,23 +515,45 @@ describe('a Jarvis call where the browser listens (#658)', () => {
     expect(sentOf(agentSock(), 'user_message')).toHaveLength(1);
   });
 
-  it('talking over the voice stops its playback and tells the agent', async () => {
+  it("half duplex (#694): nothing listens while the voice plays or 400 ms after, so its echo is never a turn", async () => {
+    await jarvisCall();
+    expect(fakes.fakeLive.now).not.toBeNull();
+    agentTalks(1); // the greeting
+    agentSock().onmessage?.({ data: JSON.stringify({ type: 'agent_response', agent_response_event: { agent_response: "Hi, it's me, Mimoun. What can I do?" } }) });
+    expect(fakes.fakeLive.now).toBeNull(); // the recognition stops as the voice starts
+    await wait(2500); // the reply ends (its backstop) and the tail passes
+    expect(call.useCall.getState().call.phase).toBe('listening');
+    expect(fakes.fakeLive.now).not.toBeNull(); // listening again
+    const r = fakes.fakeLive.now!;
+    for (const heard of ["hi it's me moon what can I do", 'men', 'on it']) {
+      r.say(heard, true);
+      await wait(200);
+    }
+    r.say('ship the login page today', true);
+    await wait(200);
+    r.say('ship the login page today', true);
+    await wait(700);
+    expect(sentOf(agentSock(), 'user_message').map((m) => m.text)).toEqual(['ship the login page today']);
+    expect(currentTrace()?.events.map((e) => e.what)).toContainEqual('words heard dropped: the voice\'s greeting heard back');
+  });
+
+  it("the manager's voice over the voice stops it within 300 ms, and their words are heard (#694)", async () => {
     await jarvisCall();
     agentTalks(1);
     expect(call.useCall.getState().call.phase).toBe('speaking');
     expect(jarvis.agentProbe().playing).toBe(1);
-    const r = fakes.fakeLive.now!;
-    r.say('wait', false);
-    await wait(200);
-    r.say('wait stop there', false);
-    await wait(200);
-    r.say('wait stop there please', false);
-    await wait(100);
+    const now = performance.now();
+    speech = { from: now, to: now + 2000 };
+    await wait(300);
     expect(call.useCall.getState().call.phase).toBe('listening');
-    expect(jarvis.agentProbe().playing).toBe(0);
+    expect(jarvis.agentProbe()).toMatchObject({ playing: 0, barged: 1 });
     expect(sentOf(agentSock(), 'user_activity').length).toBeGreaterThan(0);
     agentTalks(1); // the rest of the interrupted reply never plays
     expect(jarvis.agentProbe().playing).toBe(0);
+    expect(fakes.fakeLive.now).not.toBeNull(); // listening at once, no tail after a barge-in
+    fakes.fakeLive.now!.say('wait stop there please', true);
+    await wait(100);
+    expect(sentOf(agentSock(), 'user_message').map((m) => m.text)).toEqual(['wait stop there please']);
   });
 
   it("times the turn's steps and sends them to the office as the voice answers (#665)", async () => {

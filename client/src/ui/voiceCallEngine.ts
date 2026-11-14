@@ -6,6 +6,7 @@
 // With the Jarvis voice (#534, agentCallStore.ts) ElevenLabs Agents listens and talks instead (agentCallEngine.ts);
 // without a key, over the monthly cap or when it can't connect, the call is exactly as before.
 import { CEO_ID } from '../../../shared/types';
+import { DROP_WORDS, heardDrop } from '../../../shared/callHeard';
 import { cameraWords } from './agentCameraStore';
 import { report } from '../attention';
 import { agentCallWhy, agentOn, callAudio, releaseCallAudio, useAgentCall } from './agentCallStore';
@@ -30,6 +31,8 @@ const agent = () => import('./agentCallEngine');
 let unregister: (() => void) | null = null;
 /** A tap-to-talk turn is open: the call doesn't close it for not wanting the mic. */
 let tapping = false;
+/** Turns sent on this call, with when: the same words again soon are the recognizer repeating itself (#694). */
+let sentTurns: { text: string; at: number }[] = [];
 
 /** Why the call can't listen by itself, or ''. */
 function micReason(): string {
@@ -103,6 +106,7 @@ const EFFECTS: Record<CallEffect, () => void> = {
     if (agentOn()) void agent().then((a) => a.releaseAgent());
     else releaseCallAudio();
     tapping = false;
+    sentTurns = [];
     stopListening(TARGET);
     unregister?.();
     unregister = null;
@@ -177,6 +181,12 @@ const EARS = {
 function turn(text: string) {
   const c = useCall.getState().call;
   if (!inCall(c) || (c.phase === 'speaking' && !tapping)) return;
+  const now = Date.now();
+  const st = useStore.getState();
+  const spoken = st.messages.filter((m) => m.from === 'ceo' && now - m.at < 60_000).slice(-3).map((m) => ({ text: m.text, at: now }));
+  const drop = heardDrop(text, { spoken, names: [st.agents[CEO_ID]?.name ?? ''].filter(Boolean), sent: sentTurns, now });
+  if (drop) return traceNote(`words heard dropped: ${DROP_WORDS[drop]}`); // #694: echo, noise and repeats never reach the chat
+  sentTurns = [...sentTurns.slice(-4), { text, at: now }];
   useCall.setState({ heard: text });
   if (cameraWords(text, CEO_ID)) return; // "turn on your camera" (#539): the call goes on listening
   if (useCall.getState().eleven) {

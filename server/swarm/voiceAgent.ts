@@ -13,6 +13,7 @@ import { messageSpeech } from '../../shared/speech.ts';
 import type { WorldSnapshot } from '../../shared/types.ts';
 import { DEFAULT_VOICE_AGENT, addCallSeconds, agentLlmBases, agentWhy, parseUsage, usageMinutes, type AgentUsage, type VoiceAgentView } from '../../shared/voiceAgent.ts';
 import { cleanHeard, noFillers } from '../../shared/fillers.ts';
+import { DROP_WORDS, heardDrop } from '../../shared/callHeard.ts';
 import { MARKER, NO_BRAIN, brainTurn, lastUserText, markerSay, repeatTurn, type BrainAct, type BrainFacts, type BrainState } from '../../shared/voiceBrain.ts';
 import { VOICE_ID } from '../../shared/voices.ts';
 import { HOME_DIR } from '../config.ts';
@@ -326,6 +327,14 @@ export abstract class SwarmVoiceAgent extends SwarmProblems {
   private async *turnWords(text: string, session: AgentSession, messages: unknown, spoken = true): AsyncGenerator<string> {
     const heard = { voiceCall: true as const };
     const answer = spoken ? heard : {}; // said by the Jarvis voice already, or (#682) for the call to read aloud
+    const now = Date.now();
+    const said = [...chatHistory(messages).filter((m) => m.role === 'assistant').slice(-3).map((m) => m.content), session.lastTurn?.say ?? '', this.agentGreeting()];
+    const drop = heardDrop(text, { spoken: said.filter(Boolean).map((t) => ({ text: t, at: now })), names: [this.ceo().name], sent: [], now });
+    if (drop && drop !== 'repeat') {
+      // #694: ElevenLabs' own transcripts never pass the browser's check; echo and noise are never posted nor answered
+      console.log(`voice agent: a turn dropped, ${DROP_WORDS[drop]}`);
+      return;
+    }
     const last = session.lastTurn;
     if (repeatTurn(last, text, Date.now(), !!session.brain.pending)) {
       console.log('voice agent: the same turn again within seconds: answered, not forwarded twice');
