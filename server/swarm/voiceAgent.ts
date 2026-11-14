@@ -327,7 +327,7 @@ export abstract class SwarmVoiceAgent extends SwarmProblems {
     const heard = { voiceCall: true as const };
     const answer = spoken ? heard : {}; // said by the Jarvis voice already, or (#682) for the call to read aloud
     const last = session.lastTurn;
-    if (repeatTurn(last, text, Date.now())) {
+    if (repeatTurn(last, text, Date.now(), !!session.brain.pending)) {
       console.log('voice agent: the same turn again within seconds: answered, not forwarded twice');
       yield last!.say;
       return;

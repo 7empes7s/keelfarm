@@ -39,8 +39,11 @@ describe('the Jarvis voice brain', () => {
     expect(repeatTurn({ text: 'Why is QA slow?', at: 1000 }, 'Why is QA slow?', 20_000)).toBe(false);
     expect(repeatTurn({ text: 'Why is QA slow?', at: 1000 }, 'And floor 4?', 2000)).toBe(false);
     // a yes or no answers a new "Should I…?" each time: two confirmations are never merged
-    expect(repeatTurn({ text: 'Yes', at: 1000 }, 'yes', 3000)).toBe(false);
-    expect(repeatTurn({ text: 'no thanks', at: 1000 }, 'No thanks.', 3000)).toBe(false);
+    expect(repeatTurn({ text: 'Yes', at: 1000 }, 'yes', 3000, true)).toBe(false);
+    expect(repeatTurn({ text: 'no thanks', at: 1000 }, 'No thanks.', 3000, true)).toBe(false);
+    // with no "Should I…?" waiting, a short command sent twice is one turn
+    expect(repeatTurn({ text: "Don't merge it", at: 1000 }, "Don't merge it", 2000)).toBe(true);
+    expect(repeatTurn({ text: 'Yes', at: 1000 }, 'yes', 2000)).toBe(true);
     // a sentence that only starts with one of those words is still the same turn sent twice
     for (const q of ["Okay, what's waiting on me?", 'Please file an issue for the login bug', "Don't merge the review one", 'Stop the preview on floor 4']) expect(repeatTurn({ text: q, at: 1000 }, q, 2000)).toBe(true);
   });
