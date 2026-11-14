@@ -40,9 +40,10 @@ describe('jumpFor', () => {
     const two = { ...world, repos: [...world.repos, api] };
     expect(jumpFor(ref({ kind: 'issue', repoId: 'o/web', number: 3, alts: ['o/api'] }), 'pocket', two)).toEqual({
       kind: 'pick',
+      what: '#3',
       options: [
-        { label: 'Floor 2 · #3 Dark mode', jump: { kind: 'overlay', overlay: { kind: 'card', repoId: 'o/web', key: 'i-3', number: 3, pr: false } } },
-        { label: 'Floor 3 · #3 Rate limits', jump: { kind: 'overlay', overlay: { kind: 'card', repoId: 'o/api', key: 'i-3', number: 3, pr: false } } },
+        { floor: 'Floor 2 · web', item: '#3 Dark mode', jump: { kind: 'overlay', overlay: { kind: 'card', repoId: 'o/web', key: 'i-3', number: 3, pr: false } } },
+        { floor: 'Floor 3 · api', item: '#3 Rate limits', jump: { kind: 'overlay', overlay: { kind: 'card', repoId: 'o/api', key: 'i-3', number: 3, pr: false } } },
       ],
     });
     // the other floor is gone: straight to the one left

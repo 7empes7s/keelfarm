@@ -4,7 +4,7 @@ import { qaKey, useStore, type Overlay } from '../store';
 import { useMode } from '../pocket/mode';
 import type { ChatRef, RefFileView } from '../../../shared/types';
 import { fileUrl } from '../../../shared/chatRefs';
-import { actionJump, chipInfo, codeTokens, fileWindow, jumpFor, mentionAt, mentionPicks, type Jump, type RefWorld } from './chatRefs';
+import { actionJump, chipInfo, codeTokens, fileWindow, jumpFor, mentionAt, mentionPicks, type Jump, type PickOption, type RefWorld } from './chatRefs';
 import type { ActionRef } from '../../../shared/ceoActions';
 import { qaShotUrl } from './channels';
 import { Sheet } from './ChatArtifacts';
@@ -59,10 +59,10 @@ const useWorld = (): RefWorld => ({ repos: useStore((s) => s.repos), agents: use
 export function useRefNav(scroller: RefObject<HTMLElement | null>, onFloor: (floor: number) => void) {
   const pocket = useMode((s) => s.mode) === 'pocket';
   const [file, setFile] = useState<{ messageId: number; index: number } | null>(null);
-  const [pick, setPick] = useState<{ options: { label: string; jump: Jump }[]; at: { messageId: number; index: number } } | null>(null);
+  const [pick, setPick] = useState<{ what: string; options: PickOption[]; at: { messageId: number; index: number } } | null>(null);
   const nav: RefNav = {
     go: (j, at) => {
-      if (j.kind === 'pick') setPick({ options: j.options, at });
+      if (j.kind === 'pick') setPick({ what: j.what, options: j.options, at });
       else if (j.kind === 'url') window.open(j.url, '_blank', 'noopener,noreferrer');
       else if (j.kind === 'file') setFile(at);
       else if (j.kind === 'floor') onFloor(j.floor);
@@ -83,27 +83,48 @@ export function useRefNav(scroller: RefObject<HTMLElement | null>, onFloor: (flo
     <>
       {file && <RefFileViewer {...file} onClose={() => setFile(null)} />}
       {pick && (
-        <Sheet label="Which floor?" className="ref-pick" onClose={() => setPick(null)}>
-          <div className="ref-pick-list">
-            {pick.options.map((o) => (
-              <button
-                key={o.label}
-                type="button"
-                className="ds-btn"
-                onClick={() => {
-                  setPick(null);
-                  nav.go(o.jump, pick.at);
-                }}
-              >
-                {o.label}
-              </button>
-            ))}
-          </div>
+        <Sheet label="Which one?" className="ref-pick" onClose={() => setPick(null)}>
+          <RefPickList
+            what={pick.what}
+            options={pick.options}
+            onPick={(o) => {
+              setPick(null);
+              nav.go(o.jump, pick.at);
+            }}
+          />
         </Sheet>
       )}
     </>
   );
   return { wrap, viewer, mode: pocket ? ('pocket' as const) : ('office' as const) };
+}
+
+const COUNT = ['', 'one', 'two', 'three', 'four', 'five'];
+
+/** "Which one?": a row per floor, its floor first, then the item on up to two lines, then a chevron (#678). */
+export function RefPickList({ what, options, onPick }: { what: string; options: PickOption[]; onPick: (o: PickOption) => void }) {
+  return (
+    <div className="ref-pick-body">
+      <p className="ref-pick-sub muted small">
+        {what} is on {COUNT[options.length] ?? options.length} floors
+      </p>
+      <ul className="ref-pick-list">
+        {options.map((o) => (
+          <li key={o.floor}>
+            <button type="button" className="ds-row ref-pick-row" onClick={() => onPick(o)}>
+              <span className="ds-row-main">
+                <span className="ref-pick-floor">{o.floor}</span>
+                <span className="ref-pick-item">{o.item}</span>
+              </span>
+              <span className="ref-pick-go" aria-hidden>
+                <Icon name="chevron-right" />
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 /** Opens what a ref names, as its chip would; null when it's gone or outside a chat. */
