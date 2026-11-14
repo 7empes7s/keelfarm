@@ -22,6 +22,7 @@ import type { HealthView } from '../../shared/health';
 import type { ChatPage } from '../../shared/chatPage';
 import type { TryThis } from '../../shared/tryIt';
 import type { Checklist } from '../../shared/checklists';
+import type { EarningEntry, FixedCost } from '../../shared/earnings';
 
 async function call<T = unknown>(method: string, url: string, body?: unknown, toast = true): Promise<T> {
   // The time-lapse shows a recorded day: nothing in it can be acted on.
@@ -139,6 +140,11 @@ export const api = {
   closeSetupReview: (repoId: string) => call<RepoView>('POST', `${r(repoId)}/setup/review`),
   setCompanyUseCases: (useCases: UseCase[]) => call<UseCase[]>('PUT', '/api/company/use-cases', { useCases }),
   /** Checklists (#612): a step's tick, untick, not needed or comment; a secret field (saved to Providers only); a copy. */
+  addEarning: (body: { date?: string; usd: number; source: string; note?: string; repoId?: string | null }) => call<EarningEntry>('POST', '/api/earnings/entries', body),
+  removeEarning: (id: string) => call('DELETE', `/api/earnings/entries/${id}`),
+  addFixedCost: (body: { label: string; usdPerMonth: number }) => call<FixedCost>('POST', '/api/earnings/fixed', body),
+  removeFixedCost: (id: string) => call('DELETE', `/api/earnings/fixed/${id}`),
+  setEarningsFeed: (repoId: string, url: string) => call('PUT', `/api/earnings/feeds/${encodeURIComponent(repoId)}`, { url }),
   checklistStep: (id: string, step: string, body: { action: 'tick' | 'untick' | 'skip' | 'comment'; reason?: string; text?: string; fileId?: string }) => call<Checklist>('POST', `/api/checklists/${id}/steps/${step}`, body),
   checklistSecret: (id: string, step: string, value: string) => call<Checklist>('POST', `/api/checklists/${id}/steps/${step}/secret`, { value }),
   checklistDuplicate: (id: string, title: string) => call<Checklist>('POST', `/api/checklists/${id}/duplicate`, { title }),

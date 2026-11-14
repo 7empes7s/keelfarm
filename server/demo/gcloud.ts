@@ -2,9 +2,10 @@
 // API Keys (create with restrictions, read the key string, delete), each write a finished operation. A service account
 // whose email has "viewer" in it is refused every write (403), one with "norestrict" gets keys without their
 // restriction. clipfarm's Settings take a key only with the demo's Access service token, and its Test says whether the
-// key looks like a YouTube one. The demo CEO shows the whole flow for "the YouTube key".
+// key looks like a YouTube one; its earnings feed (#666) answers 8 weeks of days. The demo CEO shows the whole flow for "the YouTube key".
 import { generateKeyPairSync } from 'node:crypto';
 import type { ActionRequest, ActionResponse } from '../providerActions/types.ts';
+import { dayKey } from '../../shared/journal.ts';
 import { registerCeoReply } from './registry.ts';
 
 export const DEMO_GCP = { project: 'clipfarm-demo', email: 'office@clipfarm-demo.iam.gserviceaccount.com' };
@@ -83,11 +84,22 @@ export function fakeGoogle() {
 }
 
 /** clipfarm's Settings API behind Access; null when the request isn't clipfarm's. */
+/** clipfarm's earnings feed in the demo (#666): 8 weeks of payouts, revenue and invoices, growing a little each week. */
+function demoEarningDays(now: number) {
+  return Array.from({ length: 56 }, (_, i) => {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    const w = 8 - Math.floor(i / 7);
+    return { date: dayKey(d.getTime()), campaignPayouts: 6 * w + (i % 3) * 4, platformRevenue: 3 * w + (i % 5), creatorInvoices: i % 7 === 2 ? 40 + 5 * w : 0 };
+  });
+}
+
 export function fakeClipfarm() {
   const world = { values: {} as Record<string, string>, tests: 0 };
   const handle = (key: string, req: ActionRequest): ActionResponse | null => {
     if (!req.url.startsWith('https://clip.techinsiderbytes.com/')) return null;
     if (req.auth !== 'cf-access' || key !== DEMO_ACCESS) return { status: 403, body: { error: 'Forbidden: not through Cloudflare Access' } };
+    if (req.method === 'GET' && new URL(req.url).pathname === '/api/earnings') return { status: 200, body: { days: demoEarningDays(Date.now()) } }; // the earnings feed (#666)
     if (req.method === 'GET' && new URL(req.url).pathname === '/api/settings') return { status: 200, body: { clipsToday: 7, channels: 3, settings: { youtube: { YOUTUBE_API_KEY: world.values.YOUTUBE_API_KEY ?? null } }, webhookSecret: 'whsec_DemoAppSecret0123456789abcdef' } }; // app_call (#625): its secret-looking field comes back masked
     const m = new URL(req.url).pathname.match(/^\/api\/settings\/([a-z-]+)(\/test)?$/);
     if (!m || m[1] !== 'youtube') return { status: 404, body: { error: 'No such setting' } };

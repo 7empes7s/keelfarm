@@ -526,6 +526,12 @@ app.post('/api/it/telegram/demo', route((req) => swarm.itTelegramDemo(req.body ?
 app.post('/api/checklists/:id/steps/:step', route((req) => swarm.checklistStep(String(req.params.id), String(req.params.step), req.body ?? {})));
 app.post('/api/checklists/:id/steps/:step/secret', route((req) => swarm.checklistSecret(String(req.params.id), String(req.params.step), req.body?.value)));
 app.post('/api/checklists/:id/duplicate', route((req) => swarm.checklistDuplicate(String(req.params.id), req.body?.title)));
+// Earnings vs. spend (#666): manual entries, fixed monthly costs, a floor's feed URL.
+app.post('/api/earnings/entries', route((req) => swarm.addEarning(req.body ?? {})));
+app.delete('/api/earnings/entries/:id', route((req) => swarm.removeEarning(String(req.params.id))));
+app.post('/api/earnings/fixed', route((req) => swarm.addFixedCost(req.body ?? {})));
+app.delete('/api/earnings/fixed/:id', route((req) => swarm.removeFixedCost(String(req.params.id))));
+app.put('/api/earnings/feeds/:repo', route((req) => swarm.setEarningsFeed(repoId(req), req.body?.url)));
 // IT monitoring (#525): the checks now, a recommendation's option picked, Not now.
 app.post('/api/it/watch/check', route(() => swarm.itWatchTick()));
 app.post('/api/agent-sdk/check', route(() => swarm.checkAgentSdk()));

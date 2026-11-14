@@ -13,7 +13,7 @@ import type { KeyMint } from '../../shared/types.ts';
  * Entra "client id:secret" as a client-credentials form, a Google service account's JSON (an access token minted from
  * it, #622) or a Cloudflare Access service token "id:secret".
  */
-type ActionAuth = 'bearer' | 'xi-api-key' | 'github' | 'entra-token' | 'google-sa' | 'cf-access';
+type ActionAuth = 'bearer' | 'xi-api-key' | 'github' | 'entra-token' | 'google-sa' | 'cf-access' | 'none'; // none: a public URL (an earnings feed, #666)
 
 export interface ActionRequest {
   method: 'GET' | 'HEAD' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';

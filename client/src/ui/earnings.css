@@ -1,0 +1,129 @@
+/* Earnings vs. spend (#666): the Company page's card and its sheet. */
+.earn-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+  color: var(--ds-text);
+  font: inherit;
+  cursor: pointer;
+}
+.earn-head,
+.earn-legend {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+}
+.earn-head > b {
+  flex: 1;
+}
+.earn-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--ds-space-2);
+}
+.earn-stat {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: var(--ds-space-1) var(--ds-space-2);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface-sunken);
+}
+.earn-stat > b {
+  font-size: var(--ds-text-lg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.earn-stat.earn-good,
+.earn-num.earn-good {
+  background: var(--ds-good-fill);
+  color: var(--ds-on-color);
+}
+.earn-stat.earn-bad,
+.earn-num.earn-bad {
+  background: var(--ds-bad-fill);
+  color: var(--ds-on-color);
+}
+.earn-stat.earn-good .muted,
+.earn-stat.earn-bad .muted {
+  color: var(--ds-on-color);
+}
+.earn-trend {
+  width: 100%;
+  height: 44px;
+  display: block;
+}
+.earn-bar-in,
+.earn-dot-in {
+  fill: var(--ds-series-2);
+  background: var(--ds-series-2);
+}
+.earn-bar-out,
+.earn-dot-out {
+  fill: var(--ds-series-3);
+  background: var(--ds-series-3);
+}
+.earn-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--ds-radius-pill);
+  vertical-align: middle;
+}
+.earn-warn {
+  color: var(--ds-warn-text);
+}
+
+.earn-sheet section + section {
+  margin-top: var(--ds-space-4);
+}
+.earn-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.earn-row {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-height: var(--ds-target);
+  border-bottom: 1px solid var(--ds-line);
+}
+.earn-row-head {
+  min-height: 0;
+  padding-bottom: var(--ds-space-1);
+}
+.earn-row-label {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.earn-url {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.earn-num {
+  flex: none;
+  min-width: 4.5em;
+  padding: 0 var(--ds-space-1);
+  border-radius: var(--ds-radius-sm);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.earn-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 160px), 1fr));
+  gap: var(--ds-space-2);
+  margin-top: var(--ds-space-2);
+}
+.earn-form input,
+.earn-form select {
+  min-height: var(--ds-target);
+  min-width: 0;
+}

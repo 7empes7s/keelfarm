@@ -38,6 +38,7 @@ import { useMode } from '../pocket/mode';
 import { flashInto } from './jumpFlash';
 import { RunChip } from './RunChip';
 import { Icon } from './Icon';
+import { EarningsFeedField } from './EarningsCard';
 
 // The console's work sections (floors, the CEO, the team, issues); ConsoleNav.tsx puts them in their tabs.
 
@@ -261,6 +262,7 @@ function FloorRow({ repo, all }: { repo: RepoView; all: RepoView[] }) {
           Open the app viewer
         </button>
       </details>
+      <EarningsFeedField repo={repo} />
       <FloorPractices repo={repo} />
     </div>
   );
