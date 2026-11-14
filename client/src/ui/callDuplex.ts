@@ -5,11 +5,11 @@
 /** The listener stays deaf this long after the voice's last sound. */
 export const TAIL_MS = 400;
 /** The mic's RMS (0..1) from which a voice can be the manager's. */
-export const BARGE_LEVEL = 0.03;
+const BARGE_LEVEL = 0.03;
 /** The mic must be this much louder than what the voice played lately: its echo alone never is. */
-export const ECHO_RATIO = 1.6;
+const ECHO_RATIO = 1.6;
 /** Loud for this long (ms, net of quiet blocks) is the manager talking. */
-export const BARGE_HOLD_MS = 120;
+const BARGE_HOLD_MS = 120;
 /** What the voice played over this window (ms) counts as its echo now: the speaker-to-mic path lags. */
 const ECHO_WINDOW_MS = 250;
 

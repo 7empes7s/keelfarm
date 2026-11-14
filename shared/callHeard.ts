@@ -6,13 +6,13 @@
 export type HeardDrop = '' | 'echo' | 'self' | 'noise' | 'short' | 'unsure' | 'repeat';
 
 /** A heard transcript sharing this much of its words with something the voice just said is that thing's echo. */
-export const ECHO_SHARE = 0.6;
+const ECHO_SHARE = 0.6;
 /** What the voice said counts for echo this long after it ended. */
-export const SPOKEN_MS = 30_000;
+const SPOKEN_MS = 30_000;
 /** The same words again within this long are a recognizer repeating itself. */
-export const REPEAT_MS = 8_000;
+const REPEAT_MS = 8_000;
 /** Below this the recognizer wasn't sure (0 or missing: the browser didn't say). */
-export const MIN_CONFIDENCE = 0.5;
+const MIN_CONFIDENCE = 0.5;
 
 const NUMBERS: Record<string, string> = { zero: '0', one: '1', two: '2', three: '3', four: '4', five: '5', six: '6', seven: '7', eight: '8', nine: '9', ten: '10' };
 

@@ -313,8 +313,12 @@ token and expects its own 401 `Not the office voice agent (office <id>)` (`<id>`
 A Jarvis call that falls back for any reason keeps the CEO's ElevenLabs voice (`?call=1` on the clips), and each turn
 goes to `POST /api/voice/call-turn`: answered at once from the office's data or the fast model, real work handed to
 the CEO in the background, so a busy or limited CEO never leaves the call silent. Echo (msg 4563): the mic asks for echo cancellation, noise suppression and auto gain, and the trace says if the
-browser didn't apply them; words heard that match what the voice is saying or just said (`ui/callEcho.ts`) are never a
-turn or a barge-in. The voice speaks as the CEO in the first person, never "I'm asking <name>"; filler words (uh, um, mm, och, a
+browser didn't apply them. Half duplex (#694, `ui/callDuplex.ts`): nothing listens while the voice plays and for
+400 ms after (the browser's recognition is stopped, no audio goes to ElevenLabs or OpenAI), and the manager's voice
+over it, by the mic's energy against what the voice played lately, stops it within 300 ms. Every finished transcript
+then goes through `shared/callHeard.ts`, in the browser and again in the office for ElevenLabs' own transcripts: the
+voice's words heard back (60% of the words, in order), its greeting ("hi, it's me, <name>"), fillers and stray single
+words, unsure results and repeats within 8 s are never a turn, never posted and never answered. The voice speaks as the CEO in the first person, never "I'm asking <name>"; filler words (uh, um, mm, och, a
 hesitant "Well…") are taken out of every spoken line and of the manager's words, with a restarted phrase kept once
 (`shared/fillers.ts`); the same words sent again within 8 s are answered but forwarded to the chat and the CEO once
 (`repeatTurn`), a whole earlier phrase the recognizer repeats is never resent, and each utterance is numbered in the trace. ElevenLabs calls `<address>/v1/chat/completions` with a bearer token the office made, kept
