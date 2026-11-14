@@ -24,7 +24,7 @@ export const DEMO_CF = { account: '0123456789abcdef0123456789abcdef', tunnel: 'c
 /** A fake Cloudflare API; `calls` records every request (without its key). */
 export function fakeCloudflare(o: { ingress?: IngressRule[]; access?: boolean } = {}) {
   const ingress: IngressRule[] = o.ingress ?? [{ hostname: 'keel.techinsiderbytes.com', service: 'http://localhost:80' }, { service: 'http_status:404' }];
-  const world = { config: { ingress, 'warp-routing': { enabled: false } } as Record<string, unknown>, dns: [{ id: 'r1', type: 'CNAME', name: 'keel.techinsiderbytes.com', content: `${DEMO_CF.tunnel}.cfargotunnel.com`, proxied: true }], apps: [] as { id: string; domain: string; name: string; allowed_idps?: string[]; auto_redirect_to_identity?: boolean }[], idps: [{ id: 'idp-otp', name: 'One-time PIN', type: 'onetimepin', config: {} }, { id: 'idp-google', name: 'Google', type: 'google', config: { client_id: 'google-client' } }] as { id: string; name: string; type: string; config: Record<string, unknown> }[], policies: {} as Record<string, Policy[]>, tokens: [] as { id: string; name: string; client_id: string; duration?: string }[], secrets: [] as string[], apiTokens: [] as { id: string; name: string; value: string; expires_on: string; policies: unknown[] }[] };
+  const world = { config: { ingress, 'warp-routing': { enabled: false } } as Record<string, unknown>, dns: [{ id: 'r1', type: 'CNAME', name: 'keel.techinsiderbytes.com', content: `${DEMO_CF.tunnel}.cfargotunnel.com`, proxied: true }, { id: 'r-spf', type: 'TXT', name: 'techinsiderbytes.com', content: '"v=spf1 include:_spf.google.com ~all"', proxied: false }], apps: [] as { id: string; domain: string; name: string; allowed_idps?: string[]; auto_redirect_to_identity?: boolean }[], idps: [{ id: 'idp-otp', name: 'One-time PIN', type: 'onetimepin', config: {} }, { id: 'idp-google', name: 'Google', type: 'google', config: { client_id: 'google-client' } }] as { id: string; name: string; type: string; config: Record<string, unknown> }[], policies: {} as Record<string, Policy[]>, tokens: [] as { id: string; name: string; client_id: string; duration?: string }[], secrets: [] as string[], apiTokens: [] as { id: string; name: string; value: string; expires_on: string; policies: unknown[] }[] };
   let seq = 0;
   if (o.access) {
     // the demo office: KEEL already behind Access with an email allow-list
@@ -73,6 +73,12 @@ export function fakeCloudflare(o: { ingress?: IngressRule[]; access?: boolean } 
         const b = req.body as { type: string; name: string; content: string; proxied: boolean };
         world.dns.push({ id: `r${world.dns.length + 1}`, type: b.type, name: b.name, content: b.content, proxied: b.proxied });
         return ok(world.dns.at(-1));
+      }
+      if (req.method === 'PUT') {
+        const r = world.dns.find((x) => p.endsWith(`/${x.id}`));
+        if (!r) return no(404, 81044, 'Record does not exist.');
+        Object.assign(r, req.body);
+        return ok(r);
       }
       const name = decodeURIComponent(p.split('name=')[1] ?? '');
       return ok(world.dns.filter((r) => r.name === name));

@@ -37,6 +37,9 @@ export const PROVIDER_ACTIONS: Record<string, ActionOp[]> = {
     { op: 'access_service_token_ensure', risk: 'destructive', does: 'make an Access service token', args: '{ hostname, name, duration?, env_file? }' },
     // #609: a narrow API token, saved as the office's own key and renewed before it expires
     { op: 'token_create', risk: 'change', does: 'make narrow API tokens and renew them', args: '{ name, permissions: ["DNS Write", …] as the dashboard names them, days? }' },
+    // #668: SPF, DKIM and DMARC for the shared mailboxes' domain
+    { op: 'mail_dns_check', risk: 'read', does: "check the mail domain's SPF, DKIM and DMARC", args: '{ domain? }', needs: 'Zone DNS edit' },
+    { op: 'mail_dns_ensure', risk: 'change', does: "fix the mail domain's SPF, DKIM and DMARC", args: '{ domain? }', needs: 'Zone DNS edit' },
   ],
   github: [
     { op: 'key_scopes', risk: 'read', does: 'check its repo permissions', args: '{ repo? }' },
@@ -55,7 +58,12 @@ export const PROVIDER_ACTIONS: Record<string, ActionOp[]> = {
   cerebras: INFERENCE,
   nvidia: INFERENCE,
   elevenlabs: [KEY_TEST, { op: 'voices', risk: 'read', does: 'list voices' }, { op: 'usage', risk: 'read', does: 'read character usage' }],
-  entra: [KEY_TEST, { op: 'entra_app_ensure', risk: 'change', does: 'register the Cloudflare Access sign-in app', args: '{ name? }' }],
+  entra: [
+    KEY_TEST,
+    { op: 'entra_app_ensure', risk: 'change', does: 'register the Cloudflare Access sign-in app', args: '{ name? }' },
+    // #668: it grants mail access and makes mailboxes, so it always asks
+    { op: 'mail_app_ensure', risk: 'destructive', does: 'set up mail for the shared mailboxes only', args: '{ mailboxes: ["hello", "sales", "support"], domain?, name? }' },
+  ],
   // #622: the office's service account; enabling an allow-listed API is routine, a key is a change
   gcloud: [
     { op: 'key_test', risk: 'read', does: 'test the service account' },

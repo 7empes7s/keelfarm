@@ -29,3 +29,4 @@ import './gcloud.ts';
 import './problems.ts';
 import './checklists.ts';
 import './research.ts';
+import './comms.ts';

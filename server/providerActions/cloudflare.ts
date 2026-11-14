@@ -6,6 +6,7 @@ import { envSecretFile } from '../cfSecretFile.ts';
 import type { CfChange } from '../../shared/cloudflare.ts';
 import type { ActionCtx, ActionPlan, ProviderModule } from './types.ts';
 import { applyTokenCreate, planTokenCreate, tokenCreateArgs } from './cfTokens.ts';
+import { applyMailDns, mailDnsOps } from './mailDns.ts';
 
 const host = z.string().min(4).max(253);
 const tunnel = z.string().min(1).max(100).optional();
@@ -61,9 +62,11 @@ export const cloudflareModule: ProviderModule = {
     },
     access_idp_ensure: { args: z.object({ name: z.string().min(1).max(60).optional() }), plan: (ctx, a) => planIdpCard(ctx, a) },
     token_create: { args: tokenCreateArgs, plan: (ctx, a) => planTokenCreate(ctx, tokenCreateArgs.parse(a)) },
+    ...mailDnsOps,
   },
   apply: (ctx, c) => {
     if (c.op === 'token_create') return applyTokenCreate(ctx, c);
+    if (c.op === 'mail_dns_ensure') return applyMailDns(ctx, c.keyId, c.data);
     const change = c.data as unknown as CfChange;
     if (change.op === 'access_idp_ensure') {
       const cred = ctx.entra?.get();

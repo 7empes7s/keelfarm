@@ -28,7 +28,7 @@ const SAMPLE: Record<string, Record<string, Record<string, unknown>>> = {
     access_idp_ensure: {},
     token_create: { name: 'clipfarm DNS', permissions: ['DNS Write'] },
   },
-  entra: { key_test: {}, entra_app_ensure: {} },
+  entra: { key_test: {}, entra_app_ensure: {}, mail_app_ensure: { mailboxes: ['hello', 'sales'] } },
   github: {
     key_scopes: {},
     repo_get: {},

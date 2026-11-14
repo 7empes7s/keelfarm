@@ -62,6 +62,27 @@ export interface ActionCtx {
   cfKeys?: readonly ActionKey[];
   /** The office's own Entra app secret (#621), in secrets.json: written by entra_app_ensure, read by access_idp_ensure. */
   entra?: EntraStore;
+  /** The office's mail app for the shared mailboxes (#668), in secrets.json: written by entra mail_app_ensure. */
+  mail?: CredStore<MailCred>;
+}
+
+/** The mail app the office made for its shared mailboxes (#668), its secret, and what it may reach. Never in a card, log or tool result. */
+export interface MailCred {
+  tenant: string;
+  appObjectId: string;
+  clientId: string;
+  keyId: string;
+  secret: string;
+  expiresAt: number;
+  domain: string;
+  /** The only mailboxes Exchange's RBAC scope lets the app read and send as. */
+  mailboxes: string[];
+  /** Exchange's DKIM selector CNAME targets for the domain, when it has them. */
+  dkim?: { selector1: string; selector2: string };
+}
+export interface CredStore<T> {
+  get(): T | undefined;
+  set(c: T): Promise<void>;
 }
 
 /** The Entra app the office made for Cloudflare Access, and its client secret (#621). Never in a card, log or tool result. */
