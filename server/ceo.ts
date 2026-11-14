@@ -712,7 +712,7 @@ export function ceoJobPrompt(job: CeoJob, floor: { floor: number; fullName: stri
         ...(floor.charter ? ['', floor.charter] : []),
         '',
         'Plan the next milestone toward it:',
-        '- End each issue with a line "Expected earnings: …" (the money it should bring or save per week, or "none, it serves <what>"); company_status\'s earnings block is the week\'s earnings vs. spend.',
+        '- End each issue with a line "Expected earnings: …" ($ a week it brings or saves, or none).',
         '- With charter objectives, end each issue with a line "Objective: O<n>". A part of the brief that is a non-goal or serves no objective: file nothing for it; ask the manager, or propose_charter.',
         `- Read the current code and the ${floor.backlog} open issues first, so you build on what exists and do not duplicate anything.`,
         '- One issue per whole feature. Split a feature only when its parts are independent and touch different files, or a risky foundation part should land first. Only for an empty or nearly empty repository does a skeleton issue come first, with the others depending on it.',
