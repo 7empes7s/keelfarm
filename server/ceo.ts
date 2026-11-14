@@ -26,6 +26,7 @@ import { problemTools, type ProblemHandlers } from './ceoProblemTools.ts';
 import { researchTools, type ResearchHandlers } from './ceoResearchTools.ts';
 import { agencyTools, type AgencyHandlers } from './ceoAgencyTools.ts';
 import { checklistTools, type ChecklistHandlers } from './ceoChecklistTools.ts';
+import { archiveFileOf } from './ceoNotes.ts';
 import { mailTools, type MailHandlers } from './ceoMailTools.ts';
 
 // The CEO: a Claude Code session in the lobby that runs the company instead of writing code.
@@ -174,7 +175,7 @@ export interface OfficeHandlers extends WaitHandlers, ReactHandlers, SetupHandle
   configureAgent(a: { agent_id: string; account?: string; account_fallback?: boolean; cli?: AgentCli | ''; model?: string; effort?: string; tools_off?: string[]; tools_on?: string[]; tools_reset?: string[] }): string;
   fileIssue(a: { floor: number; title: string; body: string }): Promise<string>;
   setDependencies(a: { floor: number; number: number; depends_on: number[] }): Promise<string>;
-  closeIssue(a: { floor: number; number: number; reason: string }): Promise<string>;
+  closeIssue(a: { floor: number; number: number; reason: string }): Promise<string>; editIssue(a: { floor: number; number: number; title?: string; append?: string }): Promise<string>;
   // asked_in (#403): outside a triage job, the manager's message that asks for it
   retryQa(a: { floor: number; pr: number; asked_in?: number }): Promise<string>;
   sendBack(a: { floor: number; pr: number; note: string; asked_in?: number }): Promise<string>;
@@ -379,6 +380,7 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
       },
       (a) => run(() => h.fileIssue(a)),
     ),
+    tool('edit_issue', "Change an open issue's scope instead of closing and refiling it: a new title, and/or text appended to its body (what was there stays). Same rule as file_issue: only when the manager asked, or a standing mandate covers the floor.", { floor: z.number().int(), number: z.number().int().positive().describe('The issue number'), title: z.string().min(1).max(120).optional(), append: z.string().min(1).max(4000).optional().describe('Added under the body as an update, e.g. "Also: the export works offline."') }, (a) => run(() => h.editIssue(a))),
     tool(
       'set_dependencies',
       'Rewrite the "Depends on #N" line of an open issue instead of filing a duplicate. The rest of the body stays as it is. Not for an issue in progress.',
@@ -500,7 +502,7 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
     ),
     tool(
       'message_agent',
-      'Send guidance into an agent\'s session, e.g. "the test is flaky, rerun it". Typed in after their current step if they are working, else their session resumes with it. Only to an agent on the floor you name.',
+      'Send guidance into an agent\'s session, e.g. "the test is flaky, rerun it". Typed in after their current step if they are working, else their session resumes with it; with no session, it goes into their next task\'s prompt (and onto an open issue it names as #N). Only to an agent on the floor you name.',
       { floor: z.number().int(), agent_id: z.string().describe('An id (or name) from company_status'), text: z.string().min(1).max(2000) },
       (a) => run(() => h.messageAgent(a)),
     ),
@@ -633,7 +635,7 @@ export function ceoSystemPrompt(o: {
     'How you work:',
     "- Call mcp__office__company_status first (floors, clone paths, teams, backlogs, PRs), and floor_detail before planning a floor's issues, QA brief or charter.",
     '- Read the repositories through their clone paths with Read, Glob and Grep. They are read-only to you. You cannot run shell commands. This machine (disk, memory, services, logs) belongs to the IT department: ask_it hands them a question.',
-    `- Keep durable notes about the company in ${o.notesFile}: read it at the start, and update it at the end with decisions and anything worth remembering next time.`,
+    `- Keep durable notes about the company in ${o.notesFile}: read it at the start, and update it at the end with decisions and anything worth remembering next time. Older notes move to ${archiveFileOf(o.notesFile)}: Grep it, never Read it whole.`,
     '- Change things only through the mcp__office__ tools.',
     "- wait_for a PR, issue, agent or preview instead of ending the job; ask_manager for answers you need; consult a floor's agent about its code.",
     `- ${ONE_TURN}`,

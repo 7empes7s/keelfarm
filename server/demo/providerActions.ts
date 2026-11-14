@@ -124,6 +124,7 @@ export function fakeProviderHttp() {
     if (other) return other;
     if (/bad/i.test(key)) return { status: 401, body: { error: { message: 'Invalid API key' } } };
     const u = req.url;
+    if (req.auth === 'none' && /^http:\/\/(localhost|127\.0\.0\.1):\d+\/api\//.test(u)) return ok({ demo: true, path: new URL(u).pathname, traces: [{ id: 't1', stage: 'stt', ms: 412 }, { id: 't2', stage: 'tts', ms: 690 }] }); // the office's own API (#663)
     if (u.startsWith('https://api.github.com')) return github(key, req);
     const login = u.match(/^https:\/\/login\.microsoftonline\.com\/([^/]+)\/oauth2\/v2\.0\/token$/);
     if (login && req.auth === 'entra-token') {

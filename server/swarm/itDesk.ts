@@ -11,7 +11,7 @@ import path from 'node:path';
 import { approvalWords } from '../../shared/itApproval.ts';
 import { argvLine, IT_LOG_KEPT, IT_LOG_SHOWN, type ItDeskView, type ItLogEntry, type ItProposal, type ItRisk } from '../../shared/itDesk.ts';
 import type { WorldSnapshot } from '../../shared/types.ts';
-import { HOME_DIR } from '../config.ts';
+import { HOME_DIR, PORT } from '../config.ts';
 import { HttpError } from '../httpError.ts';
 import { CHANGE_TIMEOUT_MS, itRedact, LOG_OUT_MAX, neverRefusal, parseCommand, readOnlyPlan, secretPaths, secretValues, shapeOutput } from '../itDesk.ts';
 import { AUTO_STEPS_MAX, autoVerdict, type AutoPlan } from '../itAuto.ts';
@@ -35,7 +35,7 @@ import type { CfChange } from '../../shared/cloudflare.ts';
 import { SwarmManagerAsks } from './managerAsks.ts';
 import { parseRunbook, projectForeign, projectProblem, runbookSummary, runbookVerdict, runRunbook, stepLabel, stepNever, undoRunbook, type RunbookHost } from '../itRunbook.ts';
 import { RUNBOOKS_KEPT, runbookView, type ItRunbookJob } from '../../shared/itRunbook.ts';
-import { appCallRefusal, appCallReply, tokenFilesFor } from '../appCall.ts';
+import { appCallRefusal, appCallReply, officeApiUrl, tokenFilesFor } from '../appCall.ts';
 
 /** it_run's and it_propose's arguments (server/ceoItTools.ts). */
 export interface ItRunArgs {
@@ -417,15 +417,21 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
     if (!this.state.settings.itDept.on) throw new HttpError(403, DEPT_OFF);
     const method = String(a.method ?? 'GET').toUpperCase() as AppCallArgs['method'];
     const url = String(a.url ?? '').trim();
-    const no = appCallRefusal(url, method);
+    const no = appCallRefusal(url, method, PORT);
     if (no) throw new HttpError(400, no);
+    if (officeApiUrl(url, PORT)) return this.appCallDone(method, url, a.why, await this.backend.providerHttp('', { method, url, auth: 'none' }), []);
     const file = await this.appTokenFile(new URL(url).hostname, a.env_file);
     const text = await readFile(file, 'utf8').catch(() => '');
     const token = envAccessPair(text);
     if (!token) throw new HttpError(400, `${file} has no CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET: make the token with cloudflare access_service_token_ensure.`);
     const res = await this.backend.providerHttp(token, { method, url, auth: 'cf-access', ...(a.body !== undefined && { body: a.body }) });
-    const out = this.itMask(appCallReply(res.status, res.body), [...secretValues(text), ...token.split(':')]);
-    const why = this.itMask(String(a.why ?? '').trim());
+    return this.appCallDone(method, url, a.why, res, [...secretValues(text), ...token.split(':')]);
+  }
+
+  /** app_call's answer, masked, and its line in the IT log. */
+  private appCallDone(method: AppCallArgs['method'], url: string, why0: unknown, res: { status: number; body?: unknown }, extra: string[]): string {
+    const out = this.itMask(appCallReply(res.status, res.body), extra);
+    const why = this.itMask(String(why0 ?? '').trim());
     this.itLog({ kind: method === 'GET' || method === 'HEAD' ? 'read' : 'change', by: this.itName, argv: ['app_call', method, url], code: res.status === 0 ? null : res.status < 400 ? 0 : res.status, out, ...(why && { why }) });
     this.itDeskChanged();
     return `$ app_call ${method} ${url}\n${out}`;

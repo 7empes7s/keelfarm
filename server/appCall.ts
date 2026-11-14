@@ -1,7 +1,7 @@
 // app_call (#625): IT calls a floor's live app over HTTPS past Cloudflare Access, with the service token from its env
 // file (CF_ACCESS_CLIENT_ID / CF_ACCESS_CLIENT_SECRET) read in-process and put only in the request's headers
 // (providerActions/http.ts, auth 'cf-access'; read with cfSecretFile.ts' envAccessPair). Pure: the allow-list, which
-// token file fits a host, and the reply's shape.
+// token file fits a host, and the reply's shape. The live office's own /api/ on localhost is readable too, with no token (#663).
 
 type Method = 'GET' | 'HEAD' | 'POST' | 'PUT' | 'PATCH';
 
@@ -11,15 +11,26 @@ export const APP_CALL_HOSTS: Record<string, readonly Method[]> = {
   'keel.techinsiderbytes.com': ['GET', 'HEAD'],
 };
 
-/** Why this call can't go, or null; `url` parsed when it can. */
-export function appCallRefusal(url: string, method: string): string | null {
+/** The live office's own read-only API on this machine (#663): http://localhost:<office port>/api/…, no token. */
+export function officeApiUrl(url: string, officePort: number): boolean {
+  try {
+    const u = new URL(url);
+    return u.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(u.hostname) && u.port === String(officePort) && u.pathname.startsWith('/api/') && !u.username && !u.password;
+  } catch {
+    return false;
+  }
+}
+
+/** Why this call can't go, or null; `url` parsed when it can. `officePort`: the office's own, whose /api/ IT may read. */
+export function appCallRefusal(url: string, method: string, officePort: number): string | null {
   let u: URL;
   try {
     u = new URL(url);
   } catch {
     return `"${url}" isn't a URL: give it in full, e.g. https://clip.techinsiderbytes.com/api/settings.`;
   }
-  if (u.protocol !== 'https:') return 'app_call goes over https only.';
+  if (officeApiUrl(url, officePort)) return method === 'GET' || method === 'HEAD' ? null : "app_call only reads the office's API: GET or HEAD.";
+  if (u.protocol !== 'https:') return `app_call goes over https only (or GET http://localhost:${officePort}/api/… for the office's own API).`;
   if (u.username || u.password) return 'Leave sign-in out of the URL: the service token is added by the office.';
   const methods = APP_CALL_HOSTS[u.hostname];
   if (!methods) return `${u.hostname} isn't on app_call's list (${Object.keys(APP_CALL_HOSTS).join(', ')}).`;

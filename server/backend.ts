@@ -78,10 +78,12 @@ export interface Backend {
   createIssue(fullName: string, title: string, body: string, labels?: string[]): Promise<number>;
   /** OPEN or CLOSED; null when there is no such issue. */
   issueState(fullName: string, number: number): Promise<'OPEN' | 'CLOSED' | null>;
-  editIssue(fullName: string, number: number, edit: { body?: string; addLabels?: string[]; removeLabels?: string[] }): Promise<void>;
+  editIssue(fullName: string, number: number, edit: { title?: string; body?: string; addLabels?: string[]; removeLabels?: string[] }): Promise<void>;
   /** Close an issue with a comment, as completed unless `reason` says not planned. */
   closeIssue(fullName: string, number: number, comment: string, reason?: 'completed' | 'not planned'): Promise<void>;
   mergePull(fullName: string, number: number, method: 'squash' | 'merge' | 'rebase', headSha?: string): Promise<void>;
+  /** A draft PR marked ready for review (#663), so it can merge. */
+  readyPull(fullName: string, number: number): Promise<void>;
   updateBranch(fullName: string, number: number): Promise<void>;
   /** Commits of `base` the PR's head doesn't have yet (up to date before merge, #24). */
   behindBy(fullName: string, base: string, headSha: string): Promise<number>;
@@ -341,6 +343,7 @@ export const realBackend: Backend = {
   editIssue: github.editIssue,
   closeIssue: github.closeIssue,
   mergePull: github.mergePull,
+  readyPull: github.readyPull,
   updateBranch: github.updateBranch,
   behindBy: github.behindBy,
   fileHistory: (fullName) => workspace.fileHistory(fullName),

@@ -3,6 +3,8 @@
 // server/managerAsks.ts). Each call becomes an action card naming that message, with Undo where the console has one.
 import type { CharterProposalArgs } from '../charterTool.ts';
 import type { AskHandlers } from '../ceoAskTools.ts';
+import { issueRefusal } from '../ceo.ts';
+import { mandateFor } from '../../shared/followups.ts';
 import { HttpError } from '../httpError.ts';
 import { issuesResolvedBy } from '../issueClaims.ts';
 import { askedInRefusal, liveStandardsRefusal, neverAllowed } from '../managerAsks.ts';
@@ -200,14 +202,38 @@ export abstract class SwarmManagerAsks extends SwarmTeam {
     return this.askedDone(repo.id, `changed floor ${repo.floor}'s charter`);
   }
 
+  /** edit_issue (#663): a new title and/or an update appended to an open issue's body, under file_issue's rule. */
+  protected async editIssue(x: { floor: number; number: number; title?: string; append?: string }) {
+    const repo = this.floorRepo(x.floor);
+    const refused = issueRefusal({ kind: this.state.ceo.job?.kind ?? null, asked: this.ceoAsked, floor: repo.floor, mandate: mandateFor(this.state.settings.ceoMandates, repo.floor, Date.now()) });
+    if (refused) throw new Error(refused);
+    const n = Number(x.number);
+    const title = String(x.title ?? '').trim().slice(0, 120);
+    const append = String(x.append ?? '').trim().slice(0, 4000);
+    if (!title && !append) throw new Error('Nothing to change: pass title, append or both.');
+    const issue = this.repoRt.get(repo.id)?.issues.find((i) => i.number === n);
+    if (!issue) throw new Error(`There is no open issue #${n} on floor ${repo.floor}: company_status lists them.`);
+    const body = append ? `${issue.body.trimEnd()}\n\n**Update from ${this.ceo().name}:** ${append}` : undefined;
+    await this.backend.editIssue(repo.fullName, n, { ...(title && { title }), ...(body !== undefined && { body }) });
+    Object.assign(issue, title && { title }, body !== undefined && { body });
+    this.emitRepo(repo);
+    return `Edited #${n} on floor ${repo.floor}: ${[title && 'new title', append && 'body appended'].filter(Boolean).join(', ')}.`;
+  }
+
   protected async askMergePull(a: Args<'mergePull'>) {
     this.checkAsked(a);
     const repo = this.floorRepo(a.floor);
     const n = Number(a.pr);
     const rec = this.state.qa.find((q) => q.repoId === repo.id && q.prNumber === n);
     if (rec?.status !== 'passed') throw new HttpError(409, `PR #${n} hasn't passed QA (it is ${rec?.status ?? 'not in QA'}). Only the manager merges without QA, from its card.`);
+    const pr = this.repoRt.get(repo.id)?.pulls.find((p) => p.number === n);
+    const draft = pr?.isDraft === true;
+    if (draft) {
+      await this.backend.readyPull(repo.fullName, n); // #663: GitHub refuses to merge a draft
+      pr.isDraft = false;
+    }
     await this.mergePull(repo.id, n);
-    return this.askedDone(repo.id, `merged PR #${n} on floor ${repo.floor}`);
+    return this.askedDone(repo.id, `merged PR #${n} on floor ${repo.floor}${draft ? ' (it was a draft: marked ready first)' : ''}`);
   }
 
   /** apply_update (#600): the manager's Update now, through the drain and the launcher's preflight and probation. */

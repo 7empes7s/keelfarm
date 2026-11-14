@@ -75,7 +75,7 @@ export abstract class SwarmCeoTools extends SwarmItDesk {
       scaleTeam: acts((a) => this.didFor(this.scaleTeam(a), a.floor, [], a.reason, `floor ${a.floor}'s team set to ${a.size}`)),
       configureAgent: acts((a) => this.didForAgent(this.configureAgent(a), a.agent_id)),
       fileIssue: (a) => this.fileIssue(a),
-      setDependencies: acts((a) => this.setDependencies(a)),
+      setDependencies: acts((a) => this.setDependencies(a)), editIssue: acts((a) => this.editIssue(a)),
       closeIssue: acts(async (a) => this.didFor(await this.closeIssue(a), a.floor, [Number(a.number)], a.reason, `closed #${a.number}`)),
       retryQa: acts((a) => this.triageRetryQa(a)),
       sendBack: acts((a) => this.triageSendBack(a)),
@@ -115,7 +115,7 @@ export abstract class SwarmCeoTools extends SwarmItDesk {
       setCeoSetup: acts((a) => this.askCeoSetup(a)),
       applyCharter: acts((a) => this.askApplyCharter(a)),
       mergePull: acts((a) => this.askMergePull(a)), applyUpdate: acts((a) => this.askApplyUpdate(a)),
-      askIt: (a) => this.askIt(a), cloudflare: (a) => this.cloudflareAct(a, this.ceo().name), providerAction: (a) => this.providerAct(a, this.ceo().name), installKey: (a) => this.installKey(a, this.ceo().name), saveProviderKey: (a) => this.saveProviderKey(a),
+      askIt: (a) => this.askIt(a), itAnswer: (a) => this.itAnswer(a), cloudflare: (a) => this.cloudflareAct(a, this.ceo().name), providerAction: (a) => this.providerAct(a, this.ceo().name), installKey: (a) => this.installKey(a, this.ceo().name), saveProviderKey: (a) => this.saveProviderKey(a),
       itReport: (a) => this.itReport(a, { id: 'ceo', name: this.ceo().name }), problemsList: (a) => this.problemsList(a), noteProblem: (a) => this.noteProblem(a), checklistCreate: acts((a) => this.checklistCreate(a)), checklistUpdate: acts((a) => this.checklistUpdate(a)), checklistRead: (a) => this.checklistRead(a), requestResearch: (a) => this.requestResearch(a), mailList: (a) => this.mailList(a), mailRead: (a) => this.mailRead(a), mailDraft: acts((a) => this.mailDraft(a, this.ceo().name)), mailSend: acts((a) => this.mailSend(a)), leadUpdate: acts((a) => this.leadUpdate(a)), createFloor: acts((a) => this.createFloor(a)), agencyOpportunities: acts((a) => this.agencyOpportunities(a)), agencyDecide: acts((a) => this.agencyDecide(a)), agencyProposeAction: acts((a) => this.agencyProposeAction(a)), agencyActionDone: acts((a) => this.agencyActionDone(a)),
     };
   }
@@ -382,7 +382,7 @@ export abstract class SwarmCeoTools extends SwarmItDesk {
     const untagged = objectiveRefusal(String(x.body ?? ''), repo.charter);
     if (untagged) throw new Error(untagged);
     const body = `${String(x.body ?? '').trim()}\n\n---\n_Filed by ${this.ceo().name}, the cubefarm CEO._`;
-    const n = await this.backend.createIssue(repo.fullName, title, body);
+    const n = await this.createFiled(repo, title, body);
     this.ceoIssues.record(repo.id);
     this.didFor('', repo.floor, [], title, `filed #${n}`, { kind: 'issue', repoId: repo.id, number: n });
     return `Filed #${n} on floor ${repo.floor}: ${title}.`;
@@ -673,7 +673,7 @@ export abstract class SwarmCeoTools extends SwarmItDesk {
     const a = this.agentByRef(x.agent_id);
     if (a.repoId !== this.floorRepo(x.floor).id) throw new Error(`${a.name} is not on floor ${x.floor}: check their floor in company_status.`);
     const running = !!this.agentRt.get(a.id)?.session;
-    if (!running) this.refuseWhileUpdating();
+    if (!running) { if (this.noSessionToResume(a)) return this.queueNote(a, this.floorRepo(x.floor), String(x.text ?? '').trim()); this.refuseWhileUpdating(); } // #663: else their next task
     await this.message(a.id, x.text, false, `${this.ceo().name} (CEO)`);
     this.verdict(a, 'redirected');
     return running ? `Sent: ${a.name} reads it after their current step.` : `${a.name} picked their session back up with your message.`;
@@ -747,7 +747,7 @@ export abstract class SwarmCeoTools extends SwarmItDesk {
         const f = rt(floor);
         return f ? this.previews.view(f.repo).status : null;
       },
-      usage: () => this.usageNow().state,
+      usage: () => this.usageNow().state, itAnswer: (m) => this.itAnswerOf(m),
     };
   }
 

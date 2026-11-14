@@ -63,6 +63,10 @@ export abstract class SwarmMerge extends SwarmRepos {
         // Only act on PR data fetched after the record last changed (a fix may have just pushed).
         if ((rt.fetchedAt ?? 0) < rec.updatedAt) continue;
         try {
+          if (skip === 'draft' && pr.headRefName.startsWith('swarm/')) {
+            await this.backend.readyPull(repo.fullName, pr.number); // #663: the office's own draft passed QA, so it is ready
+            pr.isDraft = false;
+          }
           if (await this.advanceMerge(repo, rec, pr)) merged = true;
         } catch (err) {
           console.warn(`auto-merge of ${repo.fullName}#${pr.number} failed`, err);

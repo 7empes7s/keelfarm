@@ -560,7 +560,7 @@ export abstract class SwarmQa extends SwarmSessions {
       'Then reply with a short summary of what you changed. Do not open a new pull request; QA will re-test automatically.',
     ];
     const mergeEnd = 'Then reply with a short summary of what you did. Do not open a new pull request; the office merges it once the checks pass, after another QA round if the code changed.';
-    const prompt = (mergeFix ? [...mergeFix, ownPrLine(repo.defaultBranch), mergeEnd] : qaFix).filter((l) => l !== '').join('\n');
+    const prompt = [...(mergeFix ? [...mergeFix, ownPrLine(repo.defaultBranch), mergeEnd] : qaFix), this.takeQueuedNotes(dev)].filter((l) => l !== '').join('\n');
     const resume = original && rec.devSessionId ? rec.devSessionId : undefined;
     // A conflict-only round runs on Settings' cheaper model; the round after a cheap one escalates (#256).
     const files = rec.fixReason === 'conflict' && !rec.cheapFix ? (this.practiceRt.get(repo.id)?.prFiles.get(rec.prNumber)?.files ?? (await this.backend.prDiff(repo.fullName, rec.prNumber, false).then((d) => d.files.map((f) => f.path), () => null))) : null;

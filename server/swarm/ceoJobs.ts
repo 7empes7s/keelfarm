@@ -60,6 +60,7 @@ import {
 } from './model.ts';
 import { SKIN, lookFor, pick } from './flavour.ts';
 import { SwarmCeoLog } from './ceoLog.ts';
+import { tidyContextFile } from '../ceoNotes.ts';
 
 export abstract class SwarmCeo extends SwarmCeoLog {
   protected ceoTold: string[] = []; // for the CEO's next job: the manager's answers to agents' questions
@@ -271,6 +272,11 @@ export abstract class SwarmCeo extends SwarmCeoLog {
     this.emitCeo();
     this.save();
     await fs.mkdir(CEO_DIR, { recursive: true }).catch(() => undefined);
+    try {
+      tidyContextFile(path.join(CEO_DIR, 'NOTES.md')); // #663: only its current notes, under the Read tool's limit
+    } catch (err) {
+      console.warn("could not split the CEO's notes", err);
+    }
     const triage = job.kind === 'triage' ? await this.triagePr(job) : null;
     const plan = await this.ceoSessionPlan(a, job); // fresh, or the kept session (#28, #330)
     if (a.status !== 'working') {

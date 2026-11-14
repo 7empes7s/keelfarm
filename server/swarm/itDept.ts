@@ -30,7 +30,15 @@ import { itRedact } from '../itDesk.ts';
 const IT_DIR = path.join(HOME_DIR, 'it');
 const OFF = 'The IT department is off: the manager turns it on in Settings → The IT department.';
 
+/** IT's answer as it_answer and wait_for give it: whole, up to 8 KB (#663). */
+const itAnswerText = (parts: string[]) => {
+  const t = parts.join('\n\n').trim();
+  return t.length > 8000 ? `${t.slice(0, 8000)}\n… cut at 8 KB: the rest is in the IT chat.` : t;
+};
+
 export abstract class SwarmItDept extends SwarmSetup {
+  /** IT's answers to the CEO's ask_it by message id (#663), for it_answer and wait_for. */
+  protected itAnswers = new Map<number, { question: string; parts: string[]; done: boolean }>();
   /** IT's own bot, under "telegramIt" in the secrets file; on the same Telegram switch as the CEO's. */
   readonly itBot = new TelegramBot({
     api: this.backend.telegramIt,
@@ -181,7 +189,24 @@ export abstract class SwarmItDept extends SwarmSetup {
     const ceo = this.ceo().name;
     const m = this.postIt('office', `📨 ${ceo} asks: ${q}`);
     this.enqueueIt({ kind: 'ask', from: ceo, text: q, messageId: m.id, at: Date.now() });
-    return `Asked ${s.name} in the IT chat (message ${m.id}). Their answer comes back to you in your next job; any change goes to the manager on a card.`;
+    this.itAnswers.set(m.id, { question: q, parts: [], done: false });
+    for (const old of [...this.itAnswers.keys()].slice(0, -20)) this.itAnswers.delete(old);
+    return `Asked ${s.name} in the IT chat (message ${m.id}). Their answer comes back to you in your next job, or wait_for it_answer (message ${m.id}) and read it with it_answer; any change goes to the manager on a card.`;
+  }
+
+  /** it_answer (#663): IT's whole answer to an ask_it, or how far they are. */
+  protected itAnswer(x: { message: number }): string {
+    const a = this.itAnswers.get(Number(x.message));
+    if (!a) throw new Error(`No ask_it has message ${x.message} (only this office run's are kept): ask again with ask_it.`);
+    const text = itAnswerText(a.parts);
+    if (!a.done) return `IT is still working on it${text ? `; so far:\n${text}` : '.'} wait_for it_answer to hold until they finish.`;
+    return text || 'IT finished without a written answer: look in the IT chat.';
+  }
+
+  /** wait_for's view of an ask_it's answer (#663). */
+  protected itAnswerOf(m: number): { done: boolean; text: string } | null {
+    const a = this.itAnswers.get(m);
+    return a ? { done: a.done, text: itAnswerText(a.parts) } : null;
   }
 
   protected enqueueIt(job: ItJob) {
@@ -260,6 +285,7 @@ export abstract class SwarmItDept extends SwarmSetup {
           const text = stripHarness(raw);
           if (!text.trim()) return;
           replied.push(text);
+          if (job.kind === 'ask') this.itAnswers.get(job.messageId)?.parts.push(text);
           const m = this.postIt('ceo', text);
           if (job.kind === 'chat') this.itDelivery(job.messageIds, 'replied');
           if (this.itViaTelegram || this.state.settings.notify.telegramMirror) void this.itTelegram(`💬 ${s.name}\n${plainText(m.text)}`);
@@ -275,7 +301,13 @@ export abstract class SwarmItDept extends SwarmSetup {
           Object.assign(a, { costUsd: this.state.it.costUsd, turns: a.turns + result.turns, endedAt: Date.now(), status: (result.ok ? 'done' : 'error') as AgentStatus, lastError: result.ok ? null : result.errors.join('; ') || 'Session failed' });
           if (!result.ok && !result.interrupted) this.postIt('office', `⚠️ ${s.name} hit a problem: ${(a.lastError ?? '').slice(0, 240)}`);
           // The CEO's question: IT's answer, in the CEO's next job.
-          if (job.kind === 'ask' && replied.length) this.ceoTold.push(`${s.name} (IT) answered your ask_it "${job.text.slice(0, 120)}": ${replied.join(' ').slice(0, 600)}`);
+          if (job.kind === 'ask') {
+            const answer = this.itAnswers.get(job.messageId);
+            if (answer) answer.done = true;
+            this.holds.check(); // a wait_for it_answer returns now
+            const all = replied.join(' ');
+            if (all) this.ceoTold.push(`${s.name} (IT) answered your ask_it "${job.text.slice(0, 120)}" (message ${job.messageId}): ${all.length > 600 ? `${all.slice(0, 600)}… (all of it: it_answer message ${job.messageId})` : all}`);
+          }
           this.state.it.job = null;
           this.itChanged();
           setTimeout(() => this.startItWork(), 200);

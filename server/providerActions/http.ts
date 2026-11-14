@@ -41,7 +41,7 @@ export async function realProviderHttp(key: string, req: ActionRequest): Promise
     const send = req.auth === 'entra-token' ? { body: entraForm(key, req.form) } : req.body === undefined ? {} : { body: JSON.stringify(req.body) };
     const headers = req.auth === 'entra-token' ? { 'Content-Type': 'application/x-www-form-urlencoded' } : headersFor(key, req);
     const res = await fetch(req.url, { method: req.method, headers, ...send, signal: AbortSignal.timeout(20_000) });
-    const body = req.auth === 'cf-access' ? await appBody(res) : await res.json().catch(() => undefined);
+    const body = req.auth === 'cf-access' || req.auth === 'none' ? await appBody(res) : await res.json().catch(() => undefined);
     const perm = res.headers.get('x-accepted-github-permissions');
     return { status: res.status, body, ...(perm !== null && { headers: { 'x-accepted-github-permissions': perm } }) };
   } catch {
