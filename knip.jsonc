@@ -20,6 +20,8 @@
     "bin/**/*.js",
     "e2e/**/*.ts"
   ],
+  // Optional on the office's computer: server/clipProbe.ts checks clips with it when it's there (#658).
+  "ignoreBinaries": ["ffprobe"],
   "ignoreDependencies": [
     // Resolved by path at runtime (server/browser.ts) and pinned for agents' browsers.
     "@playwright/mcp",

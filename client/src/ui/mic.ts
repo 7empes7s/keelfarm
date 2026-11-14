@@ -5,7 +5,7 @@
 // while one of those shows its pulsing 🎙; while it is, the jukebox and the CEO's voice dip and cues wait (sfx.ts).
 // The rules are pure (micSilence.ts, handsFree.ts, micKeys.ts, micText.ts); window.__swarmMic is the probe.
 import { create } from 'zustand';
-import { CLIP_MAX_BYTES, clipProblem } from '../../../shared/clipLimits';
+import { CLIP_MAX_BYTES, CLIP_MAX_MS, clipProblem } from '../../../shared/clipLimits';
 import type { ListenProvider } from '../../../shared/types';
 import { api } from '../api';
 import { callAudio } from './agentCallStore';
@@ -72,7 +72,7 @@ const browserRecognition = (): RecognitionClass | null => {
   const w = window as unknown as { SpeechRecognition?: RecognitionClass; webkitSpeechRecognition?: RecognitionClass };
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 };
-const recognitionClass = (): RecognitionClass | null => (fakeOn ? FakeRecognition : browserRecognition());
+export const recognitionClass = (): RecognitionClass | null => (fakeOn ? FakeRecognition : browserRecognition());
 
 export function micCaps(): MicCaps {
   return {
@@ -446,7 +446,9 @@ async function recordClip(n: number) {
     if (traced) trace({ recorder: { mime: rec.mimeType || type || '', chunks: chunks.length, bytes } });
     if (bytes > CLIP_MAX_BYTES * 0.95) finish(); // the cap is near: send what there is
   };
+  const cap = setTimeout(() => live(n) && finish(), CLIP_MAX_MS - 1000); // the longest clip: send what there is
   rec.onstop = () => {
+    clearTimeout(cap);
     off();
     levels();
     const cur = live(n);
@@ -463,7 +465,7 @@ async function recordClip(n: number) {
       else off();
     },
   };
-  rec.start(1000);
+  rec.start(); // one whole file at the stop: Safari's 1 s slices joined made MP4s ElevenLabs called corrupted (#658)
   started(n);
 }
 
@@ -778,11 +780,10 @@ const probe = {
     fakeLive.now.ends(error);
     return true;
   },
-  /** What the mic hears now: words for the (fake) recognition, `final` once they're settled; or speech for a recording. */
+  /** What the mic hears now: words for the (fake) recognition, `final` once they're settled (a Jarvis call's too, #658); or speech for a recording. */
   say(text: string, final = true) {
     const s = session;
-    if (!s) return false;
-    if (s.provider === 'elevenlabs') {
+    if (s?.provider === 'elevenlabs') {
       if (s.ears) s.ears = heardWords(s.ears, performance.now());
       return true;
     }

@@ -8,6 +8,9 @@ import type * as AgentStore from './agentCallStore';
 import type * as Engine from './voiceCallEngine';
 import type * as CallStore from './voiceCallStore';
 import type * as Wake from './wake/wakeEngine';
+import type * as Jarvis from './agentCallEngine';
+import type * as MicFake from './micFake';
+import { currentTrace } from './callTrace';
 
 vi.mock('onnxruntime-web/wasm', () => ({ env: { wasm: {} } }));
 vi.mock('./voiceMessages', () => ({ stopSpeaking() {}, pauseVoice() {}, resumeVoice() {}, skipSentence() {}, stopLine() {}, voicePosition: () => null })); // the CEO's voice isn't under test
@@ -32,6 +35,7 @@ let speech = { from: 0, to: 0 };
 let interrupt: 'off' | 'capture' | 'tap' = 'off';
 const contexts: Ctx[] = [];
 const capturing = () => tracks.some((t) => t.readyState === 'live' && !t.muted);
+let sttKey = false; // the office has an OpenAI key for its transcription relay (#658)
 let transcribeReply: { status: number; body: unknown } = { status: 200, body: { text: 'Ship the login page today' } };
 const posts: { url: string; body: unknown; call?: string; type?: string }[] = [];
 
@@ -53,6 +57,9 @@ class Node {
   source: Src | null = null;
   out: unknown[] = [];
   constructor(public ctx: Ctx) {}
+  get context() {
+    return this.ctx;
+  }
   connect(to: unknown) {
     this.out.push(to);
     return to;
@@ -117,6 +124,13 @@ class Ctx {
   createGain() {
     return Object.assign(new Node(this), { gain: { value: 1 } });
   }
+  createBuffer(_ch: number, length: number, rate: number) {
+    const data = new Float32Array(length);
+    return { duration: length / rate, getChannelData: () => data };
+  }
+  createBufferSource() {
+    return Object.assign(new Node(this), { buffer: null, onended: null, start() {}, stop() {} });
+  }
 }
 
 /** The audio thread: every 100 ms, each worklet something pulls on (wired to the speakers) gets the mic's samples. */
@@ -151,7 +165,7 @@ class Sock {
   onopen: (() => void) | null = null;
   onmessage: ((e: { data: string }) => void) | null = null;
   onclose: (() => void) | null = null;
-  constructor() {
+  constructor(public url = '') {
     sockets.push(this);
     queueMicrotask(() => this.onopen?.());
   }
@@ -166,7 +180,7 @@ async function fakeFetch(url: string, init?: { method?: string; body?: unknown; 
   if (init?.method === 'POST' && typeof init.body === 'string') posts.push({ url, body: JSON.parse(init.body) });
   else if (init?.method === 'POST') posts.push({ url, body: null, call: init.headers?.['X-Voice-Call'], type: init.headers?.['Content-Type'] });
   if (url === '/api/voice/transcribe') return json(transcribeReply.status, transcribeReply.body);
-  if (url === '/api/voice/agent/start') return json(200, { session: 's1', url: '/fake-agent' });
+  if (url === '/api/voice/agent/start') return json(200, { session: 's1', url: '/fake-agent', stt: sttKey });
   return json(200, {});
 }
 
@@ -175,6 +189,7 @@ let wake: typeof Wake;
 let store: typeof Store;
 let call: typeof CallStore;
 let agentStore: typeof AgentStore;
+let jarvis: typeof Jarvis;
 
 beforeAll(async () => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'performance', 'queueMicrotask'] });
@@ -204,7 +219,7 @@ beforeAll(async () => {
   agentStore = await import('./agentCallStore');
   engine = await import('./voiceCallEngine');
   wake = await import('./wake/wakeEngine');
-  await import('./agentCallEngine'); // loaded on a call: here, so fake time needn't wait for it
+  jarvis = await import('./agentCallEngine'); // loaded on a call: here, so fake time needn't wait for it
 });
 
 afterAll(() => {
@@ -261,6 +276,7 @@ beforeEach(async () => {
   interrupt = 'off';
   for (const c of contexts) c.interrupted = false; // the call's audio lives on between calls
   transcribeReply = { status: 200, body: { text: 'Ship the login page today' } };
+  sttKey = false;
 });
 
 describe("a call's mic with the wake word on (#645)", () => {
@@ -384,9 +400,9 @@ describe("an iPhone stops the call's audio as the mic opens (#648)", () => {
     await wait(6000);
     expect(agentStore.useAgentCall.getState().mode).toBe('live');
     expect(heardChunks()).toBe(true);
-    // The manager talked and this fake ElevenLabs sends no user_transcript: the call says so, never silent (#656).
-    expect(agentStore.useAgentCall.getState().micWhy).toMatch(/^The voice isn't hearing you: ElevenLabs gets your audio/);
-    expect(problems()).toEqual([expect.stringMatching(/isn't hearing you/)]);
+    // The manager talked and this fake ElevenLabs sends no user_transcript: the call moves on and says so, never silent (#656, #658).
+    expect(agentStore.useAgentCall.getState().listener).toBe('clip'); // this office has no OpenAI key
+    expect(agentStore.useAgentCall.getState().micWhy).toMatch(/recorded and sent to the office/);
   });
 
   it('when only a tap starts it, the call says tap the screen, keeps the Jarvis voice, and a tap hears the manager', async () => {
@@ -426,5 +442,123 @@ describe("an iPhone stops the call's audio as the mic opens (#648)", () => {
     speech = { from: now + 600, to: now + 2600 };
     await wait(7000);
     expect(ceoGot()).toEqual(['Ship the login page today']);
+  });
+});
+
+// ---------- who listens on a Jarvis call (#658) ----------
+
+const agentSock = () => sockets.filter((x) => x.url === 'ws://office.test/fake-agent').at(-1)!;
+const sentOf = (sock: Sock, type: string) => sock.sent.map((m) => JSON.parse(m) as { type?: string; text?: string; user_audio_chunk?: string }).filter((m) => (type === 'audio' ? m.user_audio_chunk : m.type === type));
+/** The agent "says" a second of audio: the voice is talking. */
+const agentTalks = (event: number) => agentSock().onmessage?.({ data: JSON.stringify({ type: 'audio', audio_event: { event_id: event, audio_base_64: Buffer.alloc(32_000).toString('base64') } }) });
+
+async function jarvisCall() {
+  settings(true);
+  gesture = true;
+  engine.startCall();
+  gesture = false;
+  await wait(100);
+  agentReady();
+  await wait(200);
+}
+
+describe('a Jarvis call where the browser listens (#658)', () => {
+  const w = () => window as unknown as Record<string, unknown>;
+  let fakes: typeof MicFake;
+  beforeAll(async () => {
+    fakes = await import('./micFake');
+    w().webkitSpeechRecognition = fakes.FakeRecognition;
+  });
+  afterAll(() => void delete w().webkitSpeechRecognition);
+
+  it("a recognizer's final result is exactly one user_message, interim words never are, and no audio goes to ElevenLabs", async () => {
+    await jarvisCall();
+    expect(agentStore.useAgentCall.getState().listener).toBe('browser');
+    const r = fakes.fakeLive.now!;
+    r.say('ship the', false);
+    r.say('ship the login', false);
+    await wait(300);
+    expect(call.useCall.getState().heard).toBe('ship the login'); // shown live
+    expect(sentOf(agentSock(), 'user_message')).toEqual([]);
+    r.say('ship the login page today', true);
+    await wait(2000);
+    expect(sentOf(agentSock(), 'user_message').map((m) => m.text)).toEqual(['ship the login page today']);
+    expect(sentOf(agentSock(), 'audio')).toEqual([]);
+    expect(currentTrace()).toMatchObject({ listen: 'browser', utterances: 1 });
+  });
+
+  it('words that go quiet for 700 ms are sent at once, and never again when the recognizer settles them', async () => {
+    await jarvisCall();
+    const r = fakes.fakeLive.now!;
+    r.say("what's the office doing", false);
+    await wait(600);
+    expect(sentOf(agentSock(), 'user_message')).toEqual([]);
+    await wait(200);
+    expect(sentOf(agentSock(), 'user_message').map((m) => m.text)).toEqual(["what's the office doing"]);
+    r.say("what's the office doing", true);
+    await wait(1000);
+    expect(sentOf(agentSock(), 'user_message')).toHaveLength(1);
+  });
+
+  it('talking over the voice stops its playback and tells the agent', async () => {
+    await jarvisCall();
+    agentTalks(1);
+    expect(call.useCall.getState().call.phase).toBe('speaking');
+    expect(jarvis.agentProbe().playing).toBe(1);
+    const r = fakes.fakeLive.now!;
+    r.say('wait', false);
+    await wait(200);
+    r.say('wait stop there', false);
+    await wait(200);
+    r.say('wait stop there please', false);
+    await wait(100);
+    expect(call.useCall.getState().call.phase).toBe('listening');
+    expect(jarvis.agentProbe().playing).toBe(0);
+    expect(sentOf(agentSock(), 'user_activity').length).toBeGreaterThan(0);
+    agentTalks(1); // the rest of the interrupted reply never plays
+    expect(jarvis.agentProbe().playing).toBe(0);
+  });
+});
+
+describe('a Jarvis call without SpeechRecognition (Firefox, #658)', () => {
+  it('the agent listens first; when it never hears, the office relays the mic to OpenAI and its words go as a user_message', async () => {
+    sttKey = true;
+    await jarvisCall();
+    expect(agentStore.useAgentCall.getState().listener).toBe('elevenlabs');
+    const now = performance.now();
+    speech = { from: now, to: now + 3000 };
+    await wait(7000);
+    expect(sentOf(agentSock(), 'audio').length).toBeGreaterThan(0); // the agent got the mic first
+    expect(agentStore.useAgentCall.getState().listener).toBe('openai');
+    expect(agentStore.useAgentCall.getState().micWhy).toMatch(/transcribing your voice with OpenAI/);
+    const stt = sockets.at(-1)!;
+    expect(stt.url).toBe('ws://office.test/ws/voice-stt?session=s1');
+    speech = { from: performance.now(), to: performance.now() + 1000 };
+    const before = sentOf(agentSock(), 'audio').length;
+    await wait(1000);
+    expect(stt.sent.length).toBeGreaterThan(0); // the mic goes to the office now
+    expect(sentOf(agentSock(), 'audio').length).toBe(before); // and no longer to ElevenLabs
+    stt.onmessage?.({ data: JSON.stringify({ type: 'delta', text: 'Ship the' }) });
+    expect(call.useCall.getState().heard).toBe('Ship the');
+    stt.onmessage?.({ data: JSON.stringify({ type: 'final', text: 'Ship the login page today.' }) });
+    expect(sentOf(agentSock(), 'user_message').map((m) => m.text)).toEqual(['Ship the login page today.']);
+    expect(currentTrace()?.events.map((e) => e.what)).toContainEqual(expect.stringMatching(/^elevenlabs stopped hearing: .*openai takes over/));
+  });
+
+  it('when OpenAI breaks too, each turn is a clip, transcribed by the office and sent to the agent', async () => {
+    sttKey = true;
+    await jarvisCall();
+    speech = { from: performance.now(), to: performance.now() + 3000 };
+    await wait(7000);
+    expect(agentStore.useAgentCall.getState().listener).toBe('openai');
+    (sockets.at(-1)!.onclose as unknown as (e: { code: number; reason: string }) => void)({ code: 1011, reason: 'OpenAI unreachable' });
+    expect(agentStore.useAgentCall.getState().listener).toBe('clip');
+    await wait(1000);
+    const now = performance.now();
+    speech = { from: now + 600, to: now + 2600 };
+    await wait(7000);
+    expect(posts.filter((p) => p.url === '/api/voice/transcribe')).toHaveLength(1);
+    expect(sentOf(agentSock(), 'user_message').map((m) => m.text)).toEqual(['Ship the login page today']);
+    expect(ceoGot()).toEqual([]); // to the agent, not the CEO's chat
   });
 });

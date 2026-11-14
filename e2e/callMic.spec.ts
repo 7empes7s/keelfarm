@@ -46,7 +46,7 @@ const state = (page: Page) => page.evaluate(() => ({ agent: (window as unknown a
 
 async function dial(page: Page, jarvis: boolean) {
   expect((await page.request.put('/api/voice/key', { data: { key: 'demo-voice-key-1234' } })).ok()).toBe(true);
-  await page.request.patch('/api/settings', { data: { voice: { provider: 'elevenlabs', voiceId: 'demoVoiceAvery00001', voiceName: 'Avery', agent: { on: jarvis, capHours: 15 } }, listen: { provider: 'browser', autoSend: false, handsFree: false } } });
+  await page.request.patch('/api/settings', { data: { voice: { provider: 'elevenlabs', voiceId: 'demoVoiceAvery00001', voiceName: 'Avery', agent: { on: jarvis, capHours: 15, listen: 'elevenlabs' } }, listen: { provider: 'browser', autoSend: false, handsFree: false } } });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/?pocket=1&tab=chat');
   await page.waitForFunction(() => '__swarmCall' in window);

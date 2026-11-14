@@ -323,10 +323,30 @@ from the audio context's rate (48 kHz on iPhones and most desktops) to the agent
 μ-law. When the manager talks and no `user_transcript` comes back within 5 s, the call screen says "The voice isn't
 hearing you: …" (and IT gets a ticket); the next transcript clears it.
 
+**Who listens (#658).** The agent only speaks; the manager is heard by, in this order: the browser's own speech
+recognition (Chrome, Edge, Safari and iPhones: continuous with interim words, `client/src/ui/agentEars.ts`), each
+utterance sent as a text [`user_message`](https://elevenlabs.io/docs/agents-platform/customization/events/client-to-server-events)
+on its final result or after 700 ms without new words, no audio sent and a `user_activity` every 5 s so the agent's
+turn timeout never talks over it; else (Firefox) the agent's own listening on the mic's audio (#657, below); when that
+sends no `user_transcript` for 5 s of talking, the office's OpenAI Realtime transcription (`gpt-4o-mini-transcribe`, a
+transcription-only session with server VAD, relayed by `/ws/voice-stt` in `server/sttRelay.ts` so the key stays on the
+office: an OpenAI audio key from Providers, else any OpenAI key;
+[docs](https://developers.openai.com/api/docs/guides/realtime-transcription)); and last a clip per turn through the
+office's speech to text. Each switch shows once on the call screen in plain words and lands in the call trace
+(`listen`, `utterances`, `replies`, and an event with the reason). Talking over the voice (voiceCall.ts's barge-in
+rules) stops its playback at once, drops the rest of that reply and sends `user_activity`. Settings → Voice → Jarvis
+voice → **Listen**: Browser (default) or ElevenLabs (the agent's own listening first). Clips are checked before they
+cost a transcription: the bytes name the container (an MP4 labelled `audio/webm` goes as `.mp4`), an MP4 without its
+moov or audio, or slices missing their start, is refused with "The recording isn't playable audio (…)", and on the
+real office ffprobe must find an audio track; the recorder makes one whole file per turn, never 1 s slices.
+
 The demo office talks to a fake agent socket on itself (`/ws/voice-agent`, `server/voiceAgentFake.ts`) that speaks
 ElevenLabs' protocol and "speaks" a soft tone. It is strict about the mic: a chunk that isn't 100 ms of the
 `user_input_audio_format` it announced (`SWARM_DEMO_VOICE_IN`, default `pcm_16000`; `pcm_22050` or `ulaw_8000` to try
-others) closes the call with 1008 and the reason, and half a second of talking then a pause is heard as a turn; `__swarmCall.agent` is the conversation's mode (`off`, `connecting`,
+others) closes the call with 1008 and the reason, and half a second of talking then a pause is heard as a turn
+(`SWARM_DEMO_VOICE_DEAF=1`: never, as the live agent did, so the call moves on to the demo's OpenAI relay, which hears
+talking then a pause as "What's the office doing?"); `__swarmMic.fake()` then `__swarmMic.say(text)` is the browser's
+recognition on a Jarvis call; `__swarmCall.agent` is the conversation's mode (`off`, `connecting`,
 `live`, `idle`), `__swarmCall.say(text)` types a turn to it (there's no mic in a headless browser) and
 `__swarmCall.agentProbe()` gives the last turn's `ackMs`, what was said and heard, and interruptions.
 `e2e/voiceAgent.spec.ts` walks it through at 390 px (Chromium, and WebKit where installed).

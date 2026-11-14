@@ -6,7 +6,7 @@ import { expect, test } from './helpers';
 // have no mic), it answers through the office's own custom LLM and "speaks" PCM audio.
 
 type AgentProbe = { mode: string; said: string[]; ackMs: number | null; interrupted: number };
-type CallWindow = { __swarmCall: { agent: string; phase: string; say(text: string): Promise<void>; agentProbe(): Promise<AgentProbe> }; __swarmMic: { fake(): void } };
+type CallWindow = { __swarmCall: { agent: string; phase: string; trace: { listen: string; utterances: number; replies: number } | null; say(text: string): Promise<void>; agentProbe(): Promise<AgentProbe> }; __swarmMic: { fake(): void; say(text: string, final?: boolean): boolean } };
 
 const agentOn = { on: true, capHours: 15 };
 
@@ -92,4 +92,22 @@ test("over the monthly cap a call uses today's voice mode", async ({ page, reque
   } finally {
     await request.patch('/api/settings', { data: { voice: { agent: agentOn } } });
   }
+});
+
+test('the browser listens (#658): interim words show live, a final result is one turn, and Jarvis answers within 2 s', async ({ page }) => {
+  await call(page);
+  await expect.poll(() => mode(page)).toBe('live');
+  await expect.poll(() => phase(page), { timeout: 30_000 }).toBe('listening');
+  const mic = (text: string, final: boolean) => page.evaluate(([t, f]) => (window as unknown as CallWindow).__swarmMic.say(t as string, f as boolean), [text, final] as const);
+  expect(await mic('what is floor', false)).toBe(true); // the fake recognizer is the call's ears
+  await expect(page.locator('.vcall-captions')).toContainText('You: what is floor');
+  const before = await page.evaluate(() => (window as unknown as CallWindow).__swarmCall.trace!.replies);
+  expect(await mic("what's floor 1 doing", true)).toBe(true);
+  await expect.poll(async () => (await probe(page)).ackMs, { timeout: 5_000 }).not.toBeNull();
+  expect((await probe(page)).ackMs!).toBeLessThan(2000);
+  await expect.poll(() => phase(page)).toBe('speaking');
+  const trace = await page.evaluate(() => (window as unknown as CallWindow).__swarmCall.trace!);
+  expect([trace.listen, trace.utterances]).toEqual(['browser', 1]);
+  await expect.poll(async () => (await page.evaluate(() => (window as unknown as CallWindow).__swarmCall.trace!.replies)) - before).toBeGreaterThan(0);
+  await page.getByRole('button', { name: 'End call' }).click();
 });

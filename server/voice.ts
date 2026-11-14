@@ -8,7 +8,7 @@ import path from 'node:path';
 import { spokenLine } from '../shared/agentLines.ts';
 import { SAMPLE_LINE, messageSpeech, standupLine, type DayPart } from '../shared/speech.ts';
 import { clampKeepDays, KEEP_DAYS_DEFAULT } from '../shared/voiceClips.ts';
-import { clipProblem, clipType } from '../shared/clipLimits.ts';
+import { clipBroken, clipProblem, sniffClip } from '../shared/clipLimits.ts';
 import { clampSpeed, cleanFavourites, pickVoice, SPEED_DEFAULT, VOICE_ID, voicePool } from '../shared/voices.ts';
 import type { ListenSettings, PhoneMessage, VoiceCacheView, VoiceOption, VoiceSettings } from '../shared/types.ts';
 import { secretMismatch } from '../shared/secretFormats.ts';
@@ -259,6 +259,8 @@ export interface VoiceApi {
   checkKey(key: string): Promise<void>;
   listVoices(key: string): Promise<Omit<VoiceOption, 'recommended'>[]>;
   synthesize(key: string, req: SynthRequest, signal: AbortSignal): Promise<Buffer>;
+  /** Why a clip can't be decoded ('' when it can, #658: ffprobe on the real office; the demo has none). */
+  probe?(audio: Buffer): Promise<string>;
   /** Speech to Text: the words in `audio` (a clipType() type). */
   transcribe(key: string, req: { audio: Buffer; type: string }, signal: AbortSignal): Promise<string>;
   /** ElevenLabs Agents (#534): the office's agent and its LLM secret, made or brought up to date with `config`. */
@@ -492,7 +494,14 @@ export class Voice {
     if (!this.key) throw new HttpError(409, 'Add your ElevenLabs API key in Settings → Voice to talk instead of type, or pick the browser there.');
     this.requireKey();
     const key = this.key;
-    const text = await this.deps.api.transcribe(key, { audio, type: clipType(contentType) }, AbortSignal.timeout(TRANSCRIBE_TIMEOUT_MS)).catch((err) => {
+    // What the bytes really are (#658: an iPhone's "File is corrupted"): its own type and extension, and a broken clip refused here.
+    const clip = sniffClip(audio);
+    const broken = clip.problem || (await this.deps.api.probe?.(audio)) || '';
+    if (broken) {
+      this.deps.log?.(`voice: refused a clip labelled ${contentType ?? 'nothing'} (${Math.ceil(audio.length / 1024)} KB, ${clip.type || 'unknown'}): ${broken}`);
+      throw new HttpError(400, clipBroken(broken));
+    }
+    const text = await this.deps.api.transcribe(key, { audio, type: clip.type }, AbortSignal.timeout(TRANSCRIBE_TIMEOUT_MS)).catch((err) => {
       if (err instanceof VoiceApiError && err.status === 403) throw new HttpError(502, 'Your ElevenLabs key may not use Speech to Text: allow it for the key on elevenlabs.io (Developers → API Keys).');
       return this.failed(err, key, 'turn your speech into text');
     });

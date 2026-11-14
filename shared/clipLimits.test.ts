@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CLIP_MAX_BYTES, CLIP_MAX_MS, CLIP_SLACK_MS, CLIP_TOO_BIG, clipExtension, clipProblem, clipType } from './clipLimits.ts';
+import { CLIP_MAX_BYTES, CLIP_MAX_MS, CLIP_SLACK_MS, CLIP_TOO_BIG, clipExtension, clipProblem, clipType, sniffClip } from './clipLimits.ts';
 
 describe('clipType', () => {
   it("drops the codec and takes what browsers record", () => {
@@ -43,5 +43,23 @@ describe('clipProblem', () => {
     expect(clipProblem({ ...ok, bytes: 0 })?.status).toBe(400);
     expect(clipProblem({ ...ok, type: 'text/plain' })).toMatchObject({ status: 415, message: expect.stringContaining('"text/plain"') });
     expect(clipProblem({ ...ok, type: undefined })?.status).toBe(415);
+  });
+});
+
+describe('sniffClip (#658)', () => {
+  const box = (type: string, body = 0) => {
+    const b = Buffer.alloc(8 + body, 1);
+    b.writeUInt32BE(8 + body, 0);
+    b.write(type, 4, 'ascii');
+    return b;
+  };
+  it('names the container by its bytes and says what a broken one lacks', () => {
+    expect(sniffClip(Buffer.concat([box('ftyp', 12), box('moov', 40), box('moof', 20), box('mdat', 400)]))).toEqual({ type: 'audio/mp4', problem: '' });
+    expect(sniffClip(Buffer.concat([box('ftyp', 12), box('moov', 40)])).problem).toMatch(/no audio/);
+    expect(sniffClip(Buffer.concat([box('ftyp', 12), box('mdat', 400)])).problem).toMatch(/no moov/);
+    expect(sniffClip(Buffer.concat([box('moof', 20), box('mdat', 400)])).problem).toMatch(/missing its start/);
+    expect(sniffClip(Buffer.concat([Buffer.from([0x1a, 0x45, 0xdf, 0xa3]), Buffer.alloc(400)]))).toEqual({ type: 'audio/webm', problem: '' });
+    expect(sniffClip(Buffer.from('OggS0000')).type).toBe('audio/ogg');
+    expect(sniffClip(Buffer.from('<html>')).problem).toMatch(/isn't audio/);
   });
 });

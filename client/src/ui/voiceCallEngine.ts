@@ -86,7 +86,10 @@ const EFFECTS: Record<CallEffect, () => void> = {
     useCall.setState({ heard: '', managerSpeaking: false, chatTucked: useStore.getState().chatDocked }); // a docked chat tucks away behind the call
     if (useStore.getState().overlay?.kind === 'phone') useStore.getState().openOverlay(null); // and so does the phone's
     report(sendWs, false, true);
-    if (agentOn()) return void agent().then((a) => a.connectAgent(ownVoice));
+    if (agentOn()) {
+      ownEars((text) => void agent().then((a) => a.sendHeard(text))); // a clip per turn, when the Jarvis call listens that way (#658)
+      return void agent().then((a) => a.connectAgent(ownVoice));
+    }
     ownEars();
     listenChime(true);
     setTimeout(() => dispatchCall({ type: 'connected', tapToTalk: micReason() }), CHIME_MS);
@@ -114,9 +117,9 @@ const EFFECTS: Record<CallEffect, () => void> = {
 };
 
 /** Today's call: the mic through mic.ts into a message box of its own that sends to the CEO. */
-function ownEars() {
+function ownEars(send: (text: string) => void = turn) {
   unregister?.();
-  unregister = registerTarget({ id: TARGET, kind: 'call', form: () => null, text: () => '', setText: (heard) => useCall.setState({ heard }), send: turn, disabled: () => false });
+  unregister = registerTarget({ id: TARGET, kind: 'call', form: () => null, text: () => '', setText: (heard) => useCall.setState({ heard }), send, disabled: () => false });
   setCallEars(EARS);
 }
 
@@ -184,7 +187,7 @@ function soon() {
 
 function sync() {
   timer = null;
-  if (agentOn()) return; // the Jarvis voice has its own mic
+  if (agentOn() && useAgentCall.getState().listener !== 'clip') return; // the Jarvis voice has its own mic, except a clip per turn (#658)
 
   const want = wantsMic(useCall.getState().call);
   const m = useMic.getState();
@@ -195,6 +198,8 @@ function sync() {
 if (typeof window !== 'undefined') {
   // Another 🎙 (a held V in a chat) closing gives the call its mic back.
   useMic.subscribe((m, prev) => m.state === 'idle' && prev.state !== 'idle' && callOn() && soon());
+  // The Jarvis call's listener moving to a clip per turn (#658) opens the call's mic here.
+  useAgentCall.subscribe((v, prev) => v.listener !== prev.listener && callOn() && soon());
   // Never listen in the background: the tab hidden or the phone locked puts the call on hold; back, it carries on.
   document.addEventListener('visibilitychange', () => dispatchCall({ type: document.visibilityState === 'hidden' ? 'hidden' : 'visible' }));
   window.addEventListener('keydown', onKey, true);

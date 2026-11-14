@@ -1,5 +1,7 @@
-import { describe, expect, it } from 'vitest';
-import { chunkPeak, chunkProblem, fakeInFormat } from './voiceAgentFake.ts';
+import { EventEmitter } from 'node:events';
+import { describe, expect, it, vi } from 'vitest';
+import type { WebSocket } from 'ws';
+import { chunkPeak, chunkProblem, fakeAgent, fakeInFormat } from './voiceAgentFake.ts';
 
 describe("the demo's ElevenLabs agent is strict about the mic (#656)", () => {
   const pcm = (samples: number, v = 0) => {
@@ -24,5 +26,36 @@ describe("the demo's ElevenLabs agent is strict about the mic (#656)", () => {
     expect(fakeInFormat('ulaw_8000')).toBe('ulaw_8000');
     expect(fakeInFormat('nope')).toBe('pcm_16000');
     expect(fakeInFormat(undefined)).toBe('pcm_16000');
+  });
+});
+
+describe("the demo's ElevenLabs agent answers a typed turn and can be deaf (#658)", () => {
+  const talk = (deaf: boolean) => {
+    const ws = Object.assign(new EventEmitter(), { OPEN: 1, readyState: 1, sent: [] as { type: string }[], send(m: string) { this.sent.push(JSON.parse(m)); }, close() {} });
+    fakeAgent(ws as unknown as WebSocket, async () => 'On it.', () => 'Hi', () => undefined, 'pcm_16000', deaf);
+    ws.emit('message', JSON.stringify({ type: 'conversation_initiation_client_data' }));
+    return ws;
+  };
+  const loud = Buffer.alloc(3200);
+  for (let i = 0; i < 1600; i++) loud.writeInt16LE(i % 2 ? 12000 : -12000, i * 2);
+
+  it('a user_message is answered with the LLM\'s words', async () => {
+    const ws = talk(false);
+    ws.emit('message', JSON.stringify({ type: 'user_message', text: 'Ship the login page today' }));
+    await vi.waitFor(() => expect(ws.sent.filter((m) => m.type === 'agent_response')).toHaveLength(2)); // the greeting, then the answer
+  });
+
+  it('hears talking then a pause, unless it is deaf like the live agent was', async () => {
+    vi.useFakeTimers();
+    try {
+      for (const deaf of [false, true]) {
+        const ws = talk(deaf);
+        for (let i = 0; i < 8; i++) ws.emit('message', JSON.stringify({ user_audio_chunk: loud.toString('base64') }));
+        vi.advanceTimersByTime(1000);
+        expect(ws.sent.filter((m) => m.type === 'user_transcript')).toHaveLength(deaf ? 0 : 1);
+      }
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

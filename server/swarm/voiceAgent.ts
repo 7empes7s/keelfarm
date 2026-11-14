@@ -108,7 +108,7 @@ export abstract class SwarmVoiceAgent extends SwarmProblems {
   }
 
   /** POST /api/voice/agent/start: the office's agent made or brought up to date, and a signed URL for one conversation. */
-  async startVoiceAgent(): Promise<{ session: string; url: string }> {
+  async startVoiceAgent(): Promise<{ session: string; url: string; stt: boolean }> {
     this.sweepAgentSessions();
     const why = this.voiceAgentWhy();
     if (why) throw new HttpError(409, why);
@@ -125,10 +125,21 @@ export abstract class SwarmVoiceAgent extends SwarmProblems {
       const url = await this.backend.voice.agentUrl(key, ids.agentId);
       const session = crypto.randomBytes(9).toString('base64url');
       this.agentSessions.set(session, { at: Date.now(), last: Date.now(), brain: NO_BRAIN });
-      return { session, url };
+      return { session, url, stt: !!this.sttKey() };
     } catch (err) {
       throw new HttpError(502, `ElevenLabs couldn't start the call: ${(err as Error).message}`);
     }
+  }
+
+  /** The OpenAI key the call's transcription relay uses (#658: OpenAI audio first, then any OpenAI key), 'fake' in the demo, or null. Server memory only. */
+  private sttKey(): string | null {
+    if (this.backend.demo) return 'fake';
+    return this.providers.keysFor('openai-audio')[0]?.key ?? this.providers.keysFor('openai')[0]?.key ?? null;
+  }
+
+  /** /ws/voice-stt?session=: the key for a live call's relay, or null (no such call, or no OpenAI key). */
+  voiceSttKey(session: string): string | null {
+    return this.agentSessions.has(session) ? this.sttKey() : null;
   }
 
   /** POST /api/voice/agent/:session/end: the call's minutes counted (again is harmless). */

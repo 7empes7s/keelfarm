@@ -24,7 +24,7 @@ export interface CallTrace {
   final: boolean;
   ua: string;
   mode: CallTraceMode;
-  /** How the office's own voice listens: elevenlabs (speech to text) or browser. */
+  /** Who hears the manager: the office's own voice's elevenlabs (speech to text) or browser; on a Jarvis call (#658) browser, elevenlabs, openai or clip, the last one that ran. */
   listen: string;
   /** getUserMedia: '' not asked yet, 'ok', or the error's name. */
   gum: string;
@@ -47,6 +47,9 @@ export interface CallTrace {
   sentRate: number;
   /** user_transcript events back from ElevenLabs: 0 with chunks sent is a call that can't hear the manager. */
   transcripts: number;
+  /** Utterances sent to the agent as user_message (#658, a count, never the words) and the agent's replies. */
+  utterances: number;
+  replies: number;
   /** The office voice's MediaRecorder: type, chunks, bytes. */
   recorder: { mime: string; chunks: number; bytes: number } | null;
   /** /api/voice/transcribe answers: HTTP status and error text (the last 10). */
@@ -108,6 +111,8 @@ export function cleanTrace(raw: unknown, scrub: (s: string) => string = (s) => s
     inFormat: label(r.inFormat, 20),
     sentRate: int(r.sentRate, 384_000),
     transcripts: int(r.transcripts),
+    utterances: int(r.utterances),
+    replies: int(r.replies),
     recorder: rec && { mime: label(rec.mime, 40), chunks: int(rec.chunks), bytes: int(rec.bytes) },
     posts: list(r.posts, TRACE_POSTS).map((p) => ({ status: int(obj(p).status, 999), error: label(obj(p).error, 160) })),
     ws,

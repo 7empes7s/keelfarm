@@ -3,7 +3,9 @@
 // answers every typed turn (user_message) through the office's own custom LLM, "speaks" a soft tone as PCM 16 kHz
 // for about as long as saying the words would take, and is interrupted by a turn sent while it talks. It is strict about
 // the mic (#656): audio that isn't the user_input_audio_format it announced (SWARM_DEMO_VOICE_IN, default pcm_16000)
-// closes the call as ElevenLabs' ASR would hear only noise, and the manager talking then pausing is heard (a fixed reply).
+// closes the call as ElevenLabs' ASR would hear only noise, and the manager talking then pausing is heard (a fixed reply),
+// unless `deaf` (SWARM_DEMO_VOICE_DEAF=1, #658): then it never sends a user_transcript, as the live agent did, and the
+// call moves on to the office's OpenAI listener.
 import type { WebSocket } from 'ws';
 
 export const FAKE_AGENT_PATH = '/ws/voice-agent';
@@ -61,7 +63,7 @@ export function chunkPeak(b64: string, format = 'pcm_16000'): number {
 type Llm = (session: string, messages: { role: 'user' | 'assistant'; content: string }[]) => Promise<string>;
 
 /** One conversation on the fake agent socket; `llm` is the office's /v1/chat/completions, called in process. */
-export function fakeAgent(ws: WebSocket, llm: Llm, firstMessage: () => string, log: (line: string) => void = () => undefined, inFormat = fakeInFormat()) {
+export function fakeAgent(ws: WebSocket, llm: Llm, firstMessage: () => string, log: (line: string) => void = () => undefined, inFormat = fakeInFormat(), deaf = process.env.SWARM_DEMO_VOICE_DEAF === '1') {
   const history: { role: 'user' | 'assistant'; content: string }[] = [];
   let session = '';
   let event = 0;
@@ -113,7 +115,7 @@ export function fakeAgent(ws: WebSocket, llm: Llm, firstMessage: () => string, l
         if (pause) clearTimeout(pause);
         pause = setTimeout(() => {
           pause = null;
-          if (mic.talking >= 5) heardAudio();
+          if (mic.talking >= 5 && !deaf) heardAudio();
           mic.talking = 0;
         }, 800);
       }
