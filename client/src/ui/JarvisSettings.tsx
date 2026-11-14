@@ -2,7 +2,7 @@
 // (after which calls use today's voice mode), the minutes used today and this month with their estimate, and why a
 // call would fall back right now.
 import { useId } from 'react';
-import { AGENT_USD_PER_MIN, DEFAULT_VOICE_AGENT, hoursLabel, minutesCost, minutesLabel, type AgentListen } from '../../../shared/voiceAgent';
+import { AGENT_USD_PER_MIN, DEFAULT_VOICE_AGENT, hoursLabel, LISTENER_NAMES, LISTENERS, minutesCost, minutesLabel, type AgentListen } from '../../../shared/voiceAgent';
 import { useStore } from '../store';
 import { agentCallWhy } from './agentCallStore';
 import { saveVoice } from './VoiceSettings';
@@ -26,11 +26,15 @@ export function JarvisSettings() {
       </label>
       <label className="field" htmlFor={listenId}>
         <span>Listen</span>
-        <select id={listenId} value={agent.listen ?? 'browser'} onChange={(e) => save({ listen: e.target.value as AgentListen })}>
-          <option value="browser">Browser (default)</option>
-          <option value="elevenlabs">ElevenLabs</option>
+        <select id={listenId} value={agent.listen ?? 'auto'} onChange={(e) => save({ listen: e.target.value as AgentListen })}>
+          <option value="auto">Auto (default)</option>
+          {LISTENERS.map((l) => (
+            <option key={l} value={l}>
+              {LISTENER_NAMES[l]}
+            </option>
+          ))}
         </select>
-        <span className="muted small">The browser's own speech recognition hears you for free and fast; without it (Firefox) ElevenLabs listens, then the office's OpenAI key, then a recording per turn.</span>
+        <span className="muted small">Auto: the browser's own speech recognition hears you for free and fast; without it (Firefox) the ElevenLabs agent listens, then OpenAI through the office, then a clip per turn. Pick one to test it: a call that can't use it, or where it stops hearing, moves on to the next. The call screen's Call details button shows who listens and each turn's timings.</span>
       </label>
       <label className="field" htmlFor={capId}>
         <span>Monthly limit (hours)</span>

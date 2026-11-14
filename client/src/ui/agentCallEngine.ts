@@ -16,7 +16,7 @@ import { api } from '../api';
 import { useStore } from '../store';
 import { afterClose, agentEvent, closeWords, deafWhy, encodeMic, eventType, initMessage, inputFormat, level, pcmToFloat, replyLeftMs, TALK_LEVEL, type AgentMode } from './agentCall';
 import { nonZeroPcmBytes } from '../../../shared/callTrace';
-import { ctxLabel, trace, traceChunk, traceLevel, traceNote, traceReply, traceTrack, traceTranscript, traceUtterance, traceWs } from './callTrace';
+import { ctxLabel, trace, traceChunk, traceLevel, traceNote, traceReply, traceTrack, traceTranscript, traceUtterance, traceWs, turnHearing, turnSession, turnStep } from './callTrace';
 import { callAudio, onAgentRelay, releaseCallAudio, useAgentCall } from './agentCallStore';
 import { SILENT_LEVEL, SILENT_MIC_MS } from './micSilence';
 import { AUDIO_ASLEEP, MIC_QUIET, micErrorLine } from './micText';
@@ -102,13 +102,14 @@ export async function connectAgent(fallback: (why: string) => void) {
     return;
   }
   session = probe.session = start.session;
+  turnSession(session);
   stt = !!start.stt;
   const setting = (useStore.getState().settings.voice.agent ?? DEFAULT_VOICE_AGENT).listen;
   const first = agentListener(setting, caps());
   useAgentCall.setState({ listener: first });
   trace({ listen: first });
   traceNote(`listening: ${first}`);
-  if (first !== 'browser' && setting !== 'elevenlabs') note(LISTENER_WORDS[first]); // Firefox: said once
+  if (first !== 'browser' && first !== setting) note(LISTENER_WORDS[first]); // Firefox: said once (a listener picked for testing isn't news)
   const url = start.url.startsWith('/') ? `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}${start.url}` : start.url;
   const sock = new WebSocket(url);
   ws = sock;
@@ -158,8 +159,11 @@ export function closeConversation(next: 'idle' | 'off') {
   stopPlayback();
   if (session) endSession(session);
   session = '';
+  turnSession('');
   markers = [];
   endAfterReply = false;
+  droppedUpTo = -1; // a new conversation counts its audio events from 1 again: none of them was skipped
+  lastEvent = 0;
   useAgentCall.setState({ mode: next, input: 0, output: 0, micWhy: '', listener: '' });
   if (callOn() && next === 'idle') dispatchCall({ type: 'reply-ended' });
 }
@@ -207,6 +211,8 @@ function onMessage(raw: string) {
       traceTranscript();
       if (listener() !== 'elevenlabs') return; // its echo of a user_message the call sent: heard already
       probe.heard.push(ev.text);
+      turnStep('transcript', 'elevenlabs');
+      turnStep('sent', 'elevenlabs'); // the agent has the words already
       return heard(ev.text);
     case 'interrupted':
       probe.interrupted++;
@@ -239,6 +245,7 @@ export function sayToAgent(text: string) {
   probe.sentAt = performance.now();
   probe.firstAudioAt = 0;
   send({ type: 'user_message', text });
+  turnStep('sent', listener() || 'typed');
   heard(text);
 }
 
@@ -247,6 +254,7 @@ export function sendHeard(text: string) {
   if (mode() !== 'live' || !text.trim()) return;
   if (useCall.getState().call.phase === 'speaking') return traceNote('words heard while the voice talked, with no barge-in: its echo, dropped');
   traceUtterance();
+  turnStep('transcript', listener());
   sayToAgent(text);
 }
 
@@ -254,6 +262,7 @@ export function sendHeard(text: string) {
 function interim(text: string) {
   useCall.setState({ heard: text, managerSpeaking: !!text }); // the CEO's lines wait while the manager talks (flush)
   if (!text) return;
+  turnHearing(listener());
   const now = performance.now();
   if (now - activityAt > 1000) {
     activityAt = now;
@@ -354,6 +363,8 @@ function play(event: number, pcm: string) {
   src.buffer = buf;
   src.connect(out);
   playHead = Math.max(playHead, ctx.currentTime + 0.02);
+  turnStep('firstAudio', listener()); // a turn's first audio, once (the greeting or a CEO line after it: ignored)
+  turnStep('playback', listener(), (playHead - ctx.currentTime) * 1000);
   src.start(playHead);
   playHead += buf.duration;
   playing.push({ src, event });
@@ -527,6 +538,7 @@ function checkHearing(loud: number) {
     // not while the voice talks: its own echo is never a turn
     talk.first ||= now;
     talk.last = now;
+    turnHearing('elevenlabs');
   }
   if (talk.shown) return;
   const why = deafWhy({ firstTalk: talk.first, lastTalk: talk.last, now, format: inRaw, sent: inFmt });

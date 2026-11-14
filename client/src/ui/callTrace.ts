@@ -1,7 +1,9 @@
 // The call trace (#650, shared/callTrace.ts): what this browser's mic, audio and speech services really do on a call,
 // sent to the office at the call's start (before any mic code, so it arrives even when that throws), every 5 s and at
 // hang-up. Everything here is a no-op outside a call. Only counts, states and short labels: never audio.
-import { shortAgent, TRACE_EVENTS, TRACE_POSTS, type CallTrace, type CallTraceMode } from '../../../shared/callTrace';
+// Each turn's steps (#665) are timed here too, and the trace goes at once as a turn's voice starts, so a slow or deaf
+// turn is in the office's log while the call is still on.
+import { markTurn, newTurn, shortAgent, TRACE_EVENTS, TRACE_POSTS, TRACE_TURNS, type CallTrace, type CallTraceMode, type CallTurn, type TurnStep } from '../../../shared/callTrace';
 
 const EVERY_MS = 5_000;
 
@@ -10,6 +12,11 @@ let began = 0;
 let rmsSum = 0;
 let rmsCount = 0;
 let timer: ReturnType<typeof setInterval> | null = null;
+/** The turn under way: its conversation's session and its number on it, which the office matches to its own timing. */
+let turn: (CallTurn & { session: string; s: number }) | null = null;
+let turnsOnSession = { session: '', n: 0 };
+let session = ''; // the Jarvis conversation under way
+let onTurn: ((t: CallTurn | null) => void) | null = null;
 
 const since = () => Math.round(performance.now() - began);
 
@@ -27,7 +34,10 @@ export function traceStart(mode: CallTraceMode, listen: string, why = '') {
   began = performance.now();
   rmsSum = rmsCount = 0;
   const id = Date.now().toString(36);
-  cur = { id, ms: 0, final: false, ua: `${shortAgent(navigator.userAgent)}${matchMedia?.('(display-mode: standalone)').matches ? ' app' : ''}`, mode, listen, gum: '', track: null, audio: '', meter: '', worklet: '', workletMsgs: 0, rmsMax: 0, rmsMean: 0, chunks: 0, chunkBytes: 0, nonZeroBytes: 0, inFormat: '', sentRate: 0, transcripts: 0, utterances: 0, replies: 0, recorder: null, posts: [], ws: {}, close: null, events: [] };
+  turn = null;
+  turnsOnSession = { session: '', n: 0 };
+  onTurn?.(null);
+  cur = { id, ms: 0, final: false, ua: `${shortAgent(navigator.userAgent)}${globalThis.matchMedia?.('(display-mode: standalone)').matches ? ' app' : ''}`, mode, listen, gum: '', track: null, audio: '', meter: '', worklet: '', workletMsgs: 0, rmsMax: 0, rmsMean: 0, chunks: 0, chunkBytes: 0, nonZeroBytes: 0, inFormat: '', sentRate: 0, transcripts: 0, utterances: 0, replies: 0, recorder: null, posts: [], ws: {}, close: null, events: [], turns: [] };
   traceNote(`call starts: ${mode === 'jarvis' ? 'the Jarvis voice' : `the office's own voice${why ? ` (${why})` : ''}`}`);
   send(cur);
   timer = setInterval(() => cur && send(cur), EVERY_MS);
@@ -113,6 +123,58 @@ export function tracePost(status: number, error: string) {
   if (!cur) return;
   cur.posts.push({ status, error });
   if (cur.posts.length > TRACE_POSTS) cur.posts.shift();
+}
+
+// ---------- turns (#665) ----------
+
+/** The call screen's details follow the latest turn. */
+export function onTraceTurn(fn: ((t: CallTurn | null) => void) | null) {
+  onTurn = fn;
+}
+
+/** The turn's latest state, in the trace (replacing its older one) and on the call screen. */
+function keepTurn(t: CallTurn & { session: string; s: number }) {
+  turn = t;
+  if (!cur) return;
+  const i = cur.turns.findIndex((x) => x.n === t.n);
+  if (i >= 0) cur.turns[i] = t;
+  else cur.turns.push(t);
+  if (cur.turns.length > TRACE_TURNS) cur.turns.splice(0, cur.turns.length - TRACE_TURNS);
+  onTurn?.(t);
+}
+
+/**
+ * The manager is talking (words or sound heard by `listener`): a new turn once the last one has been sent, and its
+ * end of speech moves with every new word until the words are ready.
+ */
+export function turnHearing(listener: string) {
+  if (!cur) return;
+  const t = !turn || turn.sent ? startTurn(listener) : turn;
+  keepTurn(markTurn(t.speechStart ? t : markTurn(t, 'speechStart', since()), 'speechEnd', since()) as typeof t);
+}
+
+/** A step of the turn under way (one with no speech yet, a typed turn or a transcript out of nowhere, starts one). */
+export function turnStep(step: Exclude<TurnStep, 'speechStart' | 'speechEnd'>, listener: string, laterMs = 0) {
+  if (!cur) return;
+  const at = since() + laterMs;
+  const fresh = step === 'transcript' || step === 'sent';
+  const t = !turn || (fresh && turn.sent) ? startTurn(listener) : turn;
+  if ((step === 'firstAudio' || step === 'playback') && !t.sent) return; // the greeting or a CEO line: no turn of the manager's
+  const next = { ...(markTurn(t, step, at) as typeof t), ...(fresh && !t[step] && { listener }) }; // the listener that got the words
+  if (next[step] === t[step]) return;
+  keepTurn(next);
+  if (step === 'playback') send(cur); // the turn's answer is playing: the office sees the whole turn now, mid-call
+}
+
+/** The Jarvis conversation now on ('' between them): its turns are numbered from 1 for the office to match. */
+export function turnSession(id: string) {
+  session = id;
+}
+
+function startTurn(listener: string) {
+  if (turnsOnSession.session !== session) turnsOnSession = { session, n: 0 };
+  turnsOnSession.n++;
+  return { ...newTurn((cur?.turns.at(-1)?.n ?? 0) + 1, listener), session, s: turnsOnSession.n };
 }
 
 /** The trace so far (the probe's). */
