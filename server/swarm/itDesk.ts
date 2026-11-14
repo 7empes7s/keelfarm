@@ -286,7 +286,7 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
     const out = this.itMask(r.text);
     this.itLog({ kind: 'change', auto: true, by: 'The office (Entra secret renewal)', argv: ['entra', `${what}_renew`], code: r.ok ? 0 : 1, out, why });
     this.itDeskChanged();
-    this.postMessage('office', `🔑 ${r.ok ? 'Renewed' : "Couldn't renew"} ${words}`, undefined, { notice: { details: out } });
+    this.postMessage('office', `🔑 ${r.ok ? 'Renewed' : "Couldn't renew"} ${words}`, undefined, { notice: { details: out }, origin: 'it' });
   }
 
   /** Where a service token's secret goes (#607): the env file asked for, else one under the office's home (the demo's always is). */
@@ -369,7 +369,7 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
         this.itLog({ kind: 'change', by, argv: p.argv, code: ran.code, out, why: p.why });
         const how = ran.code === 0 ? (p.cf || p.pa || p.ki ? 'Applied' : 'Ran') : ran.code === null ? "Couldn't finish" : `Exit ${ran.code} for`;
         this.itRan(p, `🖥️ ${how} \`${line}\` for ${p.by ?? this.ceo().name}`, out, { code: ran.code });
-        if (p.cf || p.pa || p.ki) this.postMessage('office', `${p.cf ? '☁️' : '🔑'} ${ran.code === 0 ? 'Applied' : "Couldn't apply"} \`${line}\``, undefined, { notice: { details: out } }); // the CEO's chat too
+        if (p.cf || p.pa || p.ki) this.postMessage('office', `${p.cf ? '☁️' : '🔑'} ${ran.code === 0 ? 'Applied' : "Couldn't apply"} \`${line}\``, undefined, { notice: { details: out }, origin: 'it' }); // the CEO's chat too
         results.push({ id: p.id, code: ran.code });
       } finally {
         this.itRunning.delete(p.id);
@@ -747,7 +747,7 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
     const text = job.state === 'done' ? `✅ ${job.title}: all ${job.steps.length} steps done, ${check}.` : `⚠️ ${job.title} stopped at step ${failed + 1} of ${job.steps.length}${job.check && !job.check.ok ? ' (the health check)' : ''}.`;
     const details = failed >= 0 ? `${job.steps[failed].label}\n${job.steps[failed].out ?? ''}`.trim() : (job.check?.out ?? '');
     this.itRunbookPosted(job, `${text}${job.undoable ? ' Undo puts it all back.' : ''}`, details || '(no output)');
-    this.postMessage('office', `🖥️ IT: ${text}`, undefined, { notice: { details: details || '(no output)' } });
+    this.postMessage('office', `🖥️ IT: ${text}`, undefined, { notice: { details: details || '(no output)' }, origin: 'it' });
     if (job.state !== 'done') this.notifier.notify('decisions', text, details.slice(0, 300));
   }
 

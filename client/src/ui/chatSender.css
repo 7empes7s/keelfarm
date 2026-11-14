@@ -1,0 +1,158 @@
+/* Who a chat item is really from (#679, ChatSender.tsx): a tinted card with its own header for what the CEO didn't
+   write itself, so it never reads as the CEO's own bubble. */
+.bubble-src {
+  --src-tint: var(--ds-surface-sunken);
+  background: color-mix(in srgb, var(--src-tint) 22%, var(--ds-surface-raised));
+  border-radius: var(--ds-radius-md);
+  border-bottom-left-radius: var(--ds-radius-md);
+  border-style: solid;
+  width: min(100%, 30rem);
+}
+.bubble-src-research { --src-tint: var(--ds-series-5); }
+.bubble-src-it { --src-tint: var(--ds-series-7); }
+.bubble-src-agent { --src-tint: var(--ds-series-4); }
+.bubble-src-job {
+  --src-tint: var(--ds-series-8);
+  border-style: dashed;
+}
+
+.bubble-src-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin-bottom: 4px;
+}
+/* a background job's header folds it open and shut: the whole row is the 44px target */
+.bubble-src-toggle {
+  width: 100%;
+  min-height: var(--ds-target);
+  margin: -6px 0 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.bubble-src-toggle > .ds-icon:last-child {
+  flex: none;
+  margin-left: auto;
+  color: var(--ds-text-muted);
+}
+.bubble-src-jobname {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.78rem;
+  color: var(--ds-text-muted);
+}
+.bubble-src-preview {
+  margin: 0 0 2px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  color: var(--ds-text-muted);
+}
+
+.src-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: none;
+  font-size: 0.78rem;
+}
+.src-glyph {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-raised);
+  color: var(--ds-on-color);
+  font-size: 0.75rem; /* the glyph at about 55% of its circle */
+}
+.src-glyph-research { background: var(--ds-series-5); }
+.src-glyph-it { background: var(--ds-series-7); }
+.src-glyph-agent { background: var(--ds-series-4); }
+.src-glyph-job { background: var(--ds-series-8); }
+.src-name {
+  font-weight: 800;
+  color: var(--ds-text);
+}
+.src-role {
+  font-weight: 600;
+  color: var(--ds-text-muted);
+}
+/* IT's notes among the office's cards: the header above the card */
+.bubble-row-src {
+  gap: 4px;
+}
+
+/* ---------- the research card ---------- */
+.research-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.research-card-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.research-card-topic {
+  flex: 1;
+  min-width: 0;
+  font-weight: 800;
+  font-size: 0.95rem;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.research-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  padding: 2px 8px;
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-raised);
+  color: var(--ds-on-color);
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+.research-chip-running { background: var(--ds-warn-fill); }
+.research-chip-done { background: var(--ds-good-fill); }
+.research-chip-partial { background: var(--ds-bad-fill); }
+.research-spin {
+  animation: research-spin 1s linear infinite;
+}
+@keyframes research-spin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .research-spin { animation: none; }
+}
+.research-card-meta {
+  font-size: 0.75rem;
+  color: var(--ds-text-muted);
+}
+.research-card-summary {
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.research-card-open {
+  align-self: flex-start;
+}

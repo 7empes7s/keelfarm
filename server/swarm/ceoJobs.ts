@@ -33,6 +33,8 @@ import { forwardText, isHarnessText, stripHarness } from '../../shared/chat.ts';
 import { feedbackPrompt, replyTarget } from '../../shared/reactions.ts';
 import { researchJob, researchRef } from '../research.ts';
 import { makeArtifacts, parseMessage } from '../../shared/chatParts.ts';
+import { chatOrigin, senderLook } from '../../shared/chatSender.ts';
+import { RESEARCHER_NAME } from '../../shared/research.ts';
 import { withVisualsText } from '../../shared/chatVisuals.ts';
 import { fileUrl, parseRefs, refsLine, type RefContext } from '../../shared/chatRefs.ts';
 import type { QuickPicks } from '../../shared/used.ts';
@@ -599,7 +601,7 @@ export abstract class SwarmCeo extends SwarmCeoLog {
   // ---------- the phone ----------
 
   /** `changes`: the team changes a CEO message proposes (Telegram gets their buttons); `telegram: 'in'`: sent from there; `closing`: a CEO turn's closing text (ceoSpoken). */
-  protected postMessage(from: PhoneMessage['from'], text: string, requestId?: string, opts: Pick<PhoneMessage, 'replyTo' | 'clientId' | 'delivery' | 'telegram' | 'voiceCall' | 'tg' | 'attachments' | 'used' | 'research' | 'log' | 'actions' | 'question' | 'notice' | 'signIn' | 'switch' | 'ceoStuck' | 'accountOut' | 'ceoRuns' | 'pacing' | 'ceoJob' | 'problems' | 'checklist'> & { changes?: TeamChange[]; closing?: boolean } = {}) {
+  protected postMessage(from: PhoneMessage['from'], text: string, requestId?: string, opts: Pick<PhoneMessage, 'replyTo' | 'clientId' | 'delivery' | 'telegram' | 'voiceCall' | 'tg' | 'attachments' | 'used' | 'research' | 'origin' | 'background' | 'log' | 'actions' | 'question' | 'notice' | 'signIn' | 'switch' | 'ceoStuck' | 'accountOut' | 'ceoRuns' | 'pacing' | 'ceoJob' | 'problems' | 'checklist'> & { changes?: TeamChange[]; closing?: boolean } = {}) {
     const { changes, closing = false, ...extra } = opts;
     // The CEO's suggestion boxes and artifacts come out of the text; the office's notes are cleaned (shared/chatParts.ts).
     const parts = parseMessage(from, text);
@@ -615,7 +617,7 @@ export abstract class SwarmCeo extends SwarmCeoLog {
     if (v.provider !== 'off' && speaks(m, v)) m.voice = v.provider; // what the phone's ▶ replays it with
     if (from === 'ceo' && this.mirrorsToTelegram()) {
       m.telegram = 'out';
-      void this.telegram.send(telegramMessage(this.ceo().name, m, this.state.settings.notify.officeUrl), changes ? teamKeyboard(changes) : undefined, id, this.state.messages.find((x) => x.id === m.replyTo)?.tg).then((why) => {
+      void this.telegram.send(telegramMessage(this.senderName(m), m, this.state.settings.notify.officeUrl), changes ? teamKeyboard(changes) : undefined, id, this.state.messages.find((x) => x.id === m.replyTo)?.tg).then((why) => {
         if (why) this.postMessage('office', `That message didn't reach Telegram: ${why}.`);
       });
     }
@@ -627,9 +629,17 @@ export abstract class SwarmCeo extends SwarmCeoLog {
     // Proposals and agents' questions are notified as such (proposeHire, proposeLetGo, notifyQuestion).
     if (from === 'ceo' && !requestId && !m.question && !m.voiceCall) {
       const said = m.text || (m.visuals ? withVisualsText('', m.visuals) : `📎 ${[...(m.artifacts ?? []).map((a) => a.title), ...(m.attachments ?? []).map((f) => f.name)].join(', ')}`);
-      this.notice({ kind: 'ceo', title: this.ceo().name, text: plainText(said), actions: ['reply'] }, { event: 'ceoMessage', line: `${this.ceo().name}: ${plainText(said, 100)}`, message: m.id });
+      this.notice({ kind: 'ceo', title: this.senderName(m), text: plainText(said), actions: ['reply'] }, { event: 'ceoMessage', line: `${this.senderName(m)}: ${plainText(said, 100)}`, message: m.id });
     }
     return m;
+  }
+
+  /** Who a message is from, as its push and Telegram name it (#679): the CEO, or the Researcher, IT, a background job… */
+  protected senderName(m: PhoneMessage): string {
+    const o = chatOrigin(m);
+    if (o === 'manager' || o === 'ceo') return this.ceo().name;
+    const l = senderLook(o, { ceo: this.ceo().name, researcher: RESEARCHER_NAME, it: this.state.settings.itDept.name, agent: this.state.questions.find((q) => q.id === m.question)?.agentName });
+    return l.role ? `${l.name} · ${l.role}` : l.name;
   }
 
   protected refContext(): RefContext {
@@ -662,7 +672,7 @@ export abstract class SwarmCeo extends SwarmCeoLog {
   protected postCeoReply(raw: string) {
     const text = stripHarness(raw); // harness output it echoed stays backend (#193)
     const job = this.state.ceo.job;
-    const extra = { ...this.ceoFiles.takeReply(), ...researchRef(job), ...this.ceoChat.finishTurn(text) };
+    const extra = { ...this.ceoFiles.takeReply(), ...researchRef(job), ...this.ceoChat.finishTurn(text), ...(job && job.kind !== 'research' && BACKGROUND_KINDS.includes(job.kind) && { background: jobLabel(job, this.ceoFloor(job.repoId)) }) };
     if (job && BACKGROUND_KINDS.includes(job.kind) && text.trim()) this.state.ceo.lastJob = jobNote(job.kind, jobLabel(job, this.ceoFloor(job.repoId)), text, extra, Date.now()); // for the chat's digest (#330)
     const replyTo = replyTarget(this.state.messages); // the message it answers, when others came after it
     if (this.foldTurn(text, extra)) return; // folded into this turn's reply, a quiet note, or nothing to say (#378)
