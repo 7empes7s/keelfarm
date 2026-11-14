@@ -9,7 +9,8 @@ import { BoxMachines } from '../boxMachines.ts';
 import { Cloud, officeId } from '../cloud.ts';
 import { DEFAULT_PROJECTS_DIR, HOME_DIR, LOG_BUFFER, PUBLIC_DEMO, PR_PREVIEW_IDLE_MIN, PUBLIC_DEMO_RESET_H, STATE_FILE, VERSION } from '../config.ts';
 import { IssueCap } from '../ceo.ts';
-import { DEFAULT_RESEARCH_MIN, ResearchGuard } from '../research.ts';
+import { DEFAULT_RESEARCH_MIN } from '../research.ts';
+import { emptyResearch } from '../../shared/research.ts';
 import type { PrepStrikes } from '../handOut.ts';
 import { HttpError } from '../httpError.ts';
 import { IssueAges } from '../issueAges.ts';
@@ -154,7 +155,7 @@ export abstract class SwarmCore extends SwarmContract {
     pong: {},
     officeId: officeId(),
     claudeUsage: [], usageWatch: [],
-    questions: [], decisions: { list: [], digestAt: 0 }, taskAccounts: {}, itDesk: { waiting: [], log: [] }, it: loadIt(undefined), itTickets: { seq: 0, list: [] }, itImprove: { records: [], cards: [], changes: [], reviewWeek: '', reviewedAt: 0 }, problems: { seq: 0, list: [], digestDay: '' }, checklists: { seq: 0, list: [] }, itWatch: { checks: [], marks: {}, recs: [], digestDay: '', samples: [] },
+    questions: [], decisions: { list: [], digestAt: 0 }, taskAccounts: {}, itDesk: { waiting: [], log: [] }, it: loadIt(undefined), itTickets: { seq: 0, list: [] }, itImprove: { records: [], cards: [], changes: [], reviewWeek: '', reviewedAt: 0 }, problems: { seq: 0, list: [], digestDay: '' }, checklists: { seq: 0, list: [] }, research: emptyResearch(), itWatch: { checks: [], marks: {}, recs: [], digestDay: '', samples: [] },
     experiments: loadLab(undefined, Date.now()),
   };
   /** The chat's files store; every change goes out to the tabs as a `files` event. */
@@ -163,7 +164,6 @@ export abstract class SwarmCore extends SwarmContract {
 
   protected ceoIssues = new IssueCap(MAX_ISSUES_PER_JOB); // issues filed during the current CEO job
   protected ceoAsked = false; // the manager asked for work in the current CEO job (a plan, or a message): only then are issues filed
-  protected researchGuard = new ResearchGuard(); // the running research job's time budget
   protected consults: Consult[] = []; // the CEO's consults (#28), queued and running, oldest first
   protected messageSeq = 1;
   protected usageCheck: UsageCheckError | null = null; // the office's last idle check of Claude's usage failed (#89)

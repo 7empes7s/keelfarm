@@ -325,6 +325,10 @@ export const CEO_ROOM = { minX: 6.5, maxX: HALF_W, minZ: -HALF_D, maxZ: -3.5, do
 export const CEO_DESK = { x: 12, z: -7.4 };
 // The map table (#137) in the CEO's office, west of the desk and clear of the door: E walks into the map room.
 export const MAP_TABLE = { x: 8.2, z: -8.6, r: 0.6, h: 1.0 };
+// The Researcher's desk (#664) in the CEO office's south-east corner, between the CEO and the IT office: they sit on
+// its south side facing north (w along x, d along z).
+export const RESEARCH_DESK = { x: 14.3, z: -5.6, w: 1.4, d: 0.7, h: 0.76 };
+export const RESEARCHER_SEAT = { x: RESEARCH_DESK.x, z: RESEARCH_DESK.z + 0.8 };
 // The IT office (#535), right next to the CEO's: from the CEO office's south wall to just short of the east door, its
 // glass west wall (door towards its north end) facing the lobby, a solid south wall holding the ticket board, and the
 // east window. Inside: the help-desk counter running north-south with the IT lead behind it facing the door's side, the
@@ -476,6 +480,8 @@ export function lobbyFurnitureColliders(): Rect[] {
   out.push(rect(CEO_DESK.x, CEO_DESK.z, DESK.w + 0.1, DESK.d + 0.1, SOLID_H.desk));
   out.push(rect(CEO_DESK.x, CEO_DESK.z + 0.8, 0.7, 0.6, SOLID_H.seated)); // CEO chair
   out.push(rect(MAP_TABLE.x, MAP_TABLE.z, MAP_TABLE.r * 2, MAP_TABLE.r * 2, MAP_TABLE.h));
+  out.push(rect(RESEARCH_DESK.x, RESEARCH_DESK.z, RESEARCH_DESK.w + 0.1, RESEARCH_DESK.d + 0.1, SOLID_H.desk));
+  out.push(rect(RESEARCHER_SEAT.x, RESEARCHER_SEAT.z, 0.7, 0.7, SOLID_H.seated)); // the Researcher's chair
   for (const z of WAITING.seats) out.push(rect(WAITING.x, z, 0.7, 0.7, SOLID_H.seated));
   out.push(rect(WAITING_TABLE.x, WAITING_TABLE.z, WAITING_TABLE.w, WAITING_TABLE.d, SOLID_H.coffeeTable));
   out.push(rect(MANAGER_DESK.x, MANAGER_DESK.z, MANAGER_DESK.w, MANAGER_DESK.d, SOLID_H.desk));

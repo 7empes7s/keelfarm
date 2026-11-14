@@ -3,6 +3,7 @@
 // draws it (pocket's Company tab, and a HUD button in the 3D office).
 import type { CeoMandate } from '../../../shared/followups';
 import type { LabView } from '../../../shared/experiments';
+import type { ResearcherView } from '../../../shared/research';
 import type { CeoInfo, NotifyChannelsView, RepoView, SwarmSettings } from '../../../shared/types';
 import { DOCS } from './emptyStates';
 import type { Target } from './goTo';
@@ -14,6 +15,8 @@ export interface GuideInput {
   experiments: Pick<LabView, 'experiments'>;
   /** The CEO's jobs: research done (kept by the server, #496) or under way. */
   ceo: Pick<CeoInfo, 'job' | 'queue' | 'researchedAt'>;
+  /** The Researcher's desk (#664), where research runs. */
+  research?: Pick<ResearcherView, 'job' | 'queue'> | null;
   /** This browser runs the office as an installed app (display-mode: standalone). */
   installed: boolean;
 }
@@ -90,7 +93,7 @@ export function guideItems(s: GuideInput): GuideItem[] {
       title: 'The CEO researched before planning',
       why: 'A plan built on sources and the code beats one from memory.',
       done: researched,
-      busy: !researched && [s.ceo.job, ...s.ceo.queue].some((j) => j?.kind === 'research'),
+      busy: !researched && (!!s.research?.job || !!s.research?.queue.length),
       target: { kind: 'ceo', text: 'Research: how comparable projects solve our biggest open problem, then propose a plan' }, // "Research:" makes it a research job (server/research.ts)
     },
   ];

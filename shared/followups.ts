@@ -6,7 +6,7 @@ import { blockers } from './issues.ts';
 // file issues. Pure: the swarm keeps the state, the client shows the settings.
 
 /** Office events that wake the CEO for a follow-up job */
-export type FollowupKind = 'question' | 'merged' | 'qaFailed' | 'agentError' | 'agentBlocked' | 'stalled' | 'unblocked' | 'audit' | 'usage' | 'burst';
+export type FollowupKind = 'question' | 'merged' | 'qaFailed' | 'agentError' | 'agentBlocked' | 'stalled' | 'unblocked' | 'audit' | 'usage' | 'burst' | 'research';
 
 export interface FollowupSettings {
   kinds: Record<FollowupKind, boolean>;
@@ -34,10 +34,11 @@ export const FOLLOWUP_KINDS: { id: FollowupKind; label: string }[] = [
   { id: 'audit', label: 'A code-health audit (docs/code-health.md) landed' },
   { id: 'usage', label: "Claude's usage changed state" },
   { id: 'burst', label: 'Hybrid added a cloud agent because this computer was full' },
+  { id: 'research', label: 'The Researcher finished research I asked for' },
 ];
 
 export const DEFAULT_FOLLOWUPS: FollowupSettings = {
-  kinds: { question: true, merged: true, qaFailed: true, agentError: true, agentBlocked: true, stalled: true, unblocked: true, audit: true, usage: true, burst: true },
+  kinds: { question: true, merged: true, qaFailed: true, agentError: true, agentBlocked: true, stalled: true, unblocked: true, audit: true, usage: true, burst: true, research: true },
   windowMin: 10,
   perHour: 4,
 };

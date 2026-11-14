@@ -15,7 +15,6 @@ import {
   type OfficeHandlers,
   type OfficeTools,
 } from '../ceo.ts';
-import { researchReadOnly } from '../research.ts';
 import { anyMet, ASK_DEFAULT_MIN, ASK_MAX_MIN, waitLabel, waitMs, waitProblem, type WaitCondition, type WaitWorld } from '../ceoWaits.ts';
 import type { Consult } from '../consult.ts';
 import { nameList } from '../closeCleanup.ts';
@@ -63,9 +62,10 @@ export abstract class SwarmCeoTools extends SwarmItDesk {
    * a shared one left the next session connected but without any tools while an earlier session still held it.
    */
   protected officeTools(): OfficeTools {
-    const acts = this.spend.acts;
-    // Every call is noted for a Stop's reply (ceoChat.ts).
-    return createOfficeTools(this.ceoChat.track(researchReadOnly({
+    return createOfficeTools(this.ceoChat.track(this.officeHandlers())); // every call is noted for a Stop's reply (ceoChat.ts)
+  }
+  protected officeHandlers(acts = this.spend.acts): OfficeHandlers {
+    return {
       companyStatus: (a) => this.companyStatus(a),
       floorDetail: (a) => JSON.stringify(floorDetail(this.fullStatus(), a.floor), null, 1),
       agentDetail: (a) => this.agentDetail(a),
@@ -116,8 +116,8 @@ export abstract class SwarmCeoTools extends SwarmItDesk {
       applyCharter: acts((a) => this.askApplyCharter(a)),
       mergePull: acts((a) => this.askMergePull(a)), applyUpdate: acts((a) => this.askApplyUpdate(a)),
       askIt: (a) => this.askIt(a), cloudflare: (a) => this.cloudflareAct(a, this.ceo().name), providerAction: (a) => this.providerAct(a, this.ceo().name), installKey: (a) => this.installKey(a, this.ceo().name), saveProviderKey: (a) => this.saveProviderKey(a),
-      itReport: (a) => this.itReport(a, { id: 'ceo', name: this.ceo().name }), problemsList: (a) => this.problemsList(a), noteProblem: (a) => this.noteProblem(a), checklistCreate: acts((a) => this.checklistCreate(a)), checklistUpdate: acts((a) => this.checklistUpdate(a)), checklistRead: (a) => this.checklistRead(a),
-    }, () => this.state.ceo.job?.kind === 'research')));
+      itReport: (a) => this.itReport(a, { id: 'ceo', name: this.ceo().name }), problemsList: (a) => this.problemsList(a), noteProblem: (a) => this.noteProblem(a), checklistCreate: acts((a) => this.checklistCreate(a)), checklistUpdate: acts((a) => this.checklistUpdate(a)), checklistRead: (a) => this.checklistRead(a), requestResearch: (a) => this.requestResearch(a),
+    };
   }
 
   // ---------- the CEO's office tools ----------
