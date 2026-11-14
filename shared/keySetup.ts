@@ -11,8 +11,8 @@ export interface SetupGuide {
   limits?: string;
   /** What its Test calls: always free and read-only. */
   test: string;
-  /** Asks for an Account ID beside the key. */
-  accountId?: { label: string; hint: string };
+  /** Asks for an Account ID beside the key; `required` when the office can't use the key without it (Entra's Tenant ID, not Cloudflare's). */
+  accountId?: { label: string; hint: string; required?: true };
 }
 
 // ---------- pre-filled create-token links ----------
@@ -156,7 +156,7 @@ const GUIDES: Record<string, SetupGuide> = {
     ],
     limits: 'Free. Only this tenant is ever used.',
     test: 'Signs the admin app in to the tenant (free, nothing is changed).',
-    accountId: { label: 'Tenant ID', hint: 'Directory (tenant) ID, from Entra → Overview' },
+    accountId: { label: 'Tenant ID', hint: 'Directory (tenant) ID, from Entra → Overview', required: true },
   },
 };
 

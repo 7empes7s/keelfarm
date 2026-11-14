@@ -195,7 +195,8 @@ function CardRow({ c, twins, onWho, onEdit }: { c: ProviderCard; twins: Provider
   const source = useStore((s) => (c.usageId ? s.accounts.sources?.find((x) => x.id === c.usageId) : undefined));
   const [busy, setBusy] = useState(false);
   const [kind, id] = [c.key.slice(0, c.key.indexOf(':')), c.key.slice(c.key.indexOf(':') + 1)];
-  const needs = kind === 'connection' && !c.accountId ? setupGuide(c.provider).accountId : undefined; // #677: Entra's Tenant ID
+  const ask = kind === 'connection' && !c.accountId ? setupGuide(c.provider).accountId : undefined;
+  const needs = ask?.required ? ask : undefined; // #677: Entra's Tenant ID, not Cloudflare's optional Account ID
   const [word, tone] = kind === 'connection' ? (needs ? [`Needs ${needs.label}`, 'warn' as ChipTone] : c.missing ? ['Needs permissions', 'warn' as ChipTone] : [checkWord(c), CHECK_TONE[c.check]]) : STATUS[c.status];
   const now = Date.now();
   const test = async () => {

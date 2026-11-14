@@ -25,6 +25,15 @@ describe("each Providers key's completeness (#677)", () => {
     expect(providerStatusText([fine], 'entra')).toMatch(/^No Microsoft Entra key/);
   });
 
+  it("doesn't flag a working Cloudflare key without its optional Account ID", () => {
+    const cf = conn({ id: 'cf3', provider: 'cloudflare', label: 'Cloudflare', keyHint: '9f0e' });
+    expect(entryStatus(cf).lacks).toEqual([]);
+    expect(needsAttention(cf)).toBe(false);
+    const text = providerStatusText([cf]);
+    expect(text).not.toMatch(/lacks/);
+    expect(text).toMatch(/^1 key, all complete:\ncf3 "Cloudflare" \(cloudflare, ••••9f0e\) · working/);
+  });
+
   it("reads the tenant GUID from a sign-in's token and lists each domain to try once", () => {
     const tid = '73b6beef-9d40-4ea6-8ad6-2da6b4818f29';
     const jwt = (o: unknown) => `e30.${btoa(JSON.stringify(o)).replace(/=+$/, '')}.sig`;
