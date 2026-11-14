@@ -54,8 +54,9 @@ describe('tidyContextFile', () => {
 
 describe("the CEO's prompt", () => {
   it('reads only the current notes and greps the archive', () => {
-    const p = ceoSystemPrompt({ name: 'Luna', company: 'Acme', manager: 'Sam', notesFile: '/x/ceo/NOTES.md', sessionLimit: 0, maxAgents: 10, scaling: 'approve' });
-    expect(p).toContain('/x/ceo/NOTES-archive.md');
+    const notesFile = path.join('/x', 'ceo', 'NOTES.md');
+    const p = ceoSystemPrompt({ name: 'Luna', company: 'Acme', manager: 'Sam', notesFile, sessionLimit: 0, maxAgents: 10, scaling: 'approve' });
+    expect(p).toContain(path.join('/x', 'ceo', 'NOTES-archive.md'));
     expect(p).toMatch(/Grep it/);
   });
 });
