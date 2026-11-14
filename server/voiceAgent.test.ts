@@ -86,6 +86,10 @@ describe('the Jarvis voice: ElevenLabs plumbing', () => {
     const body = agentBody({ name: 'Acme office voice', llmUrl: 'https://o.example/v1', llmSecretId: 'sec1', voiceId: 'v1', firstMessage: 'Hi' });
     expect(body.conversation_config.agent.prompt).toMatchObject({ llm: 'custom-llm', custom_llm: { url: 'https://o.example/v1', api_key: { secret_id: 'sec1' } } });
     expect(body.platform_settings.overrides.custom_llm_extra_body).toBe(true);
+    // #656: the call's input format and the events it needs are set, never left to the account's defaults.
+    expect(body.conversation_config.asr.user_input_audio_format).toBe('pcm_16000');
+    expect(body.conversation_config.tts.agent_output_audio_format).toBe('pcm_16000');
+    expect(body.conversation_config.conversation.client_events).toEqual(expect.arrayContaining(['conversation_initiation_metadata', 'audio', 'user_transcript', 'agent_response', 'interruption', 'ping']));
     expect(sessionOf({ cubefarm_session: 'abc_1' })).toBe('abc_1');
     expect(sessionOf({ cubefarm_session: 'bad id!' })).toBe('');
     expect(bearerOk('Bearer tok123', 'tok123')).toBe(true);

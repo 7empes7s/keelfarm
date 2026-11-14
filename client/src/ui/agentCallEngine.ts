@@ -9,22 +9,33 @@ import { cameraWords } from './agentCameraStore';
 import { marker, wantsToEnd } from '../../../shared/voiceBrain';
 import { api } from '../api';
 import { useStore } from '../store';
-import { afterClose, agentEvent, closeWords, downsample, eventType, floatToPcm, formatRate, initMessage, level, pcmToFloat, replyLeftMs, type AgentMode } from './agentCall';
+import { afterClose, agentEvent, closeWords, deafWhy, encodeMic, eventType, initMessage, inputFormat, level, pcmToFloat, replyLeftMs, TALK_LEVEL, type AgentMode } from './agentCall';
 import { nonZeroPcmBytes } from '../../../shared/callTrace';
-import { ctxLabel, trace, traceChunk, traceLevel, traceNote, traceTrack, traceWs } from './callTrace';
+import { ctxLabel, trace, traceChunk, traceLevel, traceNote, traceTrack, traceTranscript, traceWs } from './callTrace';
 import { callAudio, onAgentRelay, releaseCallAudio, useAgentCall } from './agentCallStore';
 import { SILENT_LEVEL, SILENT_MIC_MS } from './micSilence';
 import { AUDIO_ASLEEP, MIC_QUIET, micErrorLine } from './micText';
 import { wantsMic } from './voiceCall';
 import { callOn, dispatchCall, useCall } from './voiceCallStore';
 
-let micRate = 16_000; // ElevenLabs' user_input_audio_format, 16 kHz PCM unless it says otherwise
+let inRaw = ''; // ElevenLabs' user_input_audio_format, as it said it (#656)
+let inFmt = inputFormat(''); // what the mic is sent as: its rate and codec (pcm_16000 until it says otherwise)
+const talk = { first: 0, last: 0, shown: false }; // the manager talking since the last user_transcript (#656)
 /** The turn is handed back this long after the voice's last audio, unless more comes. */
 const DONE_MS = 300;
 
-// The mic's samples into the page, from the audio thread (an AudioWorklet module from a blob: no extra file to serve).
+// The mic's samples into the page, from the audio thread (an AudioWorklet module from a blob: no extra file to serve),
+// a stereo mic (a laptop's array, #656) mixed down to mono.
 const WORKLET = `registerProcessor('cubefarm-mic', class extends AudioWorkletProcessor {
-  process(inputs) { const ch = inputs[0] && inputs[0][0]; if (ch) this.port.postMessage(ch.slice(0)); return true; }
+  process(inputs) {
+    const chs = inputs[0] || [];
+    if (!chs.length) return true;
+    const out = chs[0].slice(0);
+    for (let c = 1; c < chs.length; c++) for (let i = 0; i < out.length; i++) out[i] += chs[c][i];
+    if (chs.length > 1) for (let i = 0; i < out.length; i++) out[i] /= chs.length;
+    this.port.postMessage(out);
+    return true;
+  }
 });`;
 
 let ws: WebSocket | null = null;
@@ -41,7 +52,7 @@ let wallEnd = 0; // when the queued audio ends, on the wall clock
 let clockAt = 0; // the audio clock at the last look: one that stands still isn't playing
 let endAfterReply = false;
 let markers: string[] = []; // the CEO's replies and progress lines, said when the voice is free
-let mic: { stream: MediaStream; node: AudioWorkletNode; src: MediaStreamAudioSourceNode; buf: Float32Array[]; len: number; heard: boolean; check: ReturnType<typeof setTimeout> } | null = null;
+let mic: { stream: MediaStream; node: AudioWorkletNode; src: MediaStreamAudioSourceNode; rate: number; buf: Float32Array[]; len: number; heard: boolean; check: ReturnType<typeof setTimeout> } | null = null;
 let wasLive = false; // the conversation was on when the tab was hidden: it starts again on return
 let drops = 0; // conversations ElevenLabs closed in this call (#650)
 
@@ -142,8 +153,12 @@ function onMessage(raw: string) {
   switch (ev.kind) {
     case 'ready':
       rate = ev.rate;
-      micRate = ev.inFormat.startsWith('pcm_') ? formatRate(ev.inFormat) : 16_000;
-      trace({ inFormat: ev.inFormat });
+      inRaw = ev.inFormat;
+      inFmt = inputFormat(ev.inFormat);
+      talk.first = talk.last = 0;
+      talk.shown = false;
+      trace({ inFormat: ev.inFormat || '(none: pcm_16000)', sentRate: inFmt.rate });
+      if (!inFmt.ok) traceNote(`the agent wants ${ev.inFormat} audio, which this call can't send: it sends pcm_16000`);
       setMode('live');
       dispatchCall({ type: 'connected', tapToTalk: '' });
       return;
@@ -155,6 +170,7 @@ function onMessage(raw: string) {
       return;
     case 'heard':
       probe.heard.push(ev.text);
+      traceTranscript();
       return heard(ev.text);
     case 'interrupted':
       probe.interrupted++;
@@ -172,6 +188,9 @@ function onMessage(raw: string) {
 
 /** The manager's turn, as ElevenLabs heard it (or typed by the demo's probe): captions, thinking, and "that's all". */
 function heard(text: string) {
+  talk.first = talk.last = 0;
+  if (talk.shown) useAgentCall.setState({ micWhy: '' });
+  talk.shown = false;
   useCall.setState({ heard: text });
   cameraWords(text, CEO_ID); // "turn on your camera" (#539)
   if (wantsToEnd(text)) endAfterReply = true;
@@ -336,11 +355,11 @@ async function startMic(ctx: AudioContext) {
     useAgentCall.setState({ micWhy: why });
     void api.voiceProblem(`${why} (the Jarvis voice's mic: ${probe.mic.blocks} blocks, audio ${ctx.state})`).catch(() => undefined);
   }, SILENT_MIC_MS);
-  mic = { stream, node, src, buf: [], len: 0, heard: false, check };
+  mic = { stream, node, src, rate: ctx.sampleRate, buf: [], len: 0, heard: false, check };
   trace({ audio: ctxLabel(ctx) });
   node.port.onmessage = (e: MessageEvent<Float32Array>) => {
     traceLevel(rmsOf(e.data), true);
-    onMic(downsample(e.data, ctx.sampleRate, micRate));
+    onMic(e.data);
   };
   src.connect(node);
   node.connect(ctx.destination); // silent: it outputs nothing, but Safari only runs a node something pulls on
@@ -362,15 +381,34 @@ function onMic(samples: Float32Array) {
   if (!open) return; // muted, paused or away: nothing leaves the phone
   mic.buf.push(samples);
   mic.len += samples.length;
-  if (mic.len < micRate / 10) return; // 100 ms of audio per message
+  if (mic.len < mic.rate / 10) return; // 100 ms of audio per message, resampled as one so no block edge drifts
   const all = new Float32Array(mic.len);
   let o = 0;
   for (const b of mic.buf) all.set(b, (o += b.length) - b.length);
   mic.buf = [];
   mic.len = 0;
+  const chunk = encodeMic(all, mic.rate, inFmt);
   probe.mic.chunks++;
-  traceChunk(all.length * 2, nonZeroPcmBytes(all));
-  send({ user_audio_chunk: floatToPcm(all) });
+  traceChunk(chunk.samples.length * (inFmt.codec === 'pcm' ? 2 : 1), nonZeroPcmBytes(chunk.samples));
+  send({ user_audio_chunk: chunk.b64 });
+  checkHearing(level(chunk.samples));
+}
+
+/** The manager talked and no user_transcript came back (#656): the call says so, once a conversation, never silent. */
+function checkHearing(loud: number) {
+  const now = performance.now();
+  if (loud >= TALK_LEVEL && useCall.getState().call.phase !== 'speaking') {
+    // not while the voice talks: its own echo is never a turn
+    talk.first ||= now;
+    talk.last = now;
+  }
+  if (talk.shown) return;
+  const why = deafWhy({ firstTalk: talk.first, lastTalk: talk.last, now, format: inRaw, sent: inFmt });
+  if (!why) return;
+  talk.shown = true;
+  traceNote(`no user_transcript ${Math.round(now - talk.first)} ms after the manager talked (sent ${inFmt.codec} ${inFmt.rate} Hz, agent wants ${inRaw || 'its default'})`);
+  useAgentCall.setState({ micWhy: why });
+  void api.voiceProblem(why).catch(() => undefined);
 }
 
 /** A block's loudness (RMS, 0..1), for the trace. */

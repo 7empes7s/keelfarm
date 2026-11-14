@@ -315,9 +315,18 @@ the call is exactly today's voice mode (a toast says why when it falls back).
 A mic that stays silent for 5 s never drops the Jarvis voice: the call screen says so under the status (and the
 office gets an IT ticket), and the first sound clears it. On iPhones opening the mic can stop the call's audio: the
 call starts it again, or asks for a tap on the screen (#648).
+The mic goes in as the agent asks (#656): the office makes the agent with `asr.user_input_audio_format` and
+`tts.agent_output_audio_format` at `pcm_16000` and `conversation.client_events` listing what the call needs
+(`user_transcript`, `agent_response`, `audio`, `interruption`, `vad_score`, `ping`…), and the call reads
+`user_input_audio_format` from `conversation_initiation_metadata`: a stereo mic mixed to mono, 100 ms chunks resampled
+from the audio context's rate (48 kHz on iPhones and most desktops) to the agent's, as 16-bit little-endian PCM or
+μ-law. When the manager talks and no `user_transcript` comes back within 5 s, the call screen says "The voice isn't
+hearing you: …" (and IT gets a ticket); the next transcript clears it.
 
 The demo office talks to a fake agent socket on itself (`/ws/voice-agent`, `server/voiceAgentFake.ts`) that speaks
-ElevenLabs' protocol and "speaks" a soft tone; `__swarmCall.agent` is the conversation's mode (`off`, `connecting`,
+ElevenLabs' protocol and "speaks" a soft tone. It is strict about the mic: a chunk that isn't 100 ms of the
+`user_input_audio_format` it announced (`SWARM_DEMO_VOICE_IN`, default `pcm_16000`; `pcm_22050` or `ulaw_8000` to try
+others) closes the call with 1008 and the reason, and half a second of talking then a pause is heard as a turn; `__swarmCall.agent` is the conversation's mode (`off`, `connecting`,
 `live`, `idle`), `__swarmCall.say(text)` types a turn to it (there's no mic in a headless browser) and
 `__swarmCall.agentProbe()` gives the last turn's `ackMs`, what was said and heard, and interruptions.
 `e2e/voiceAgent.spec.ts` walks it through at 390 px (Chromium, and WebKit where installed).
@@ -477,7 +486,8 @@ starts (before any mic code runs, so it arrives even when that code throws), eve
 for the home-screen app), the mode (`jarvis`, `office`, `tap`) and listen provider, getUserMedia's result (`ok` or the
 error's name), the track (label, enabled, muted, readyState, sample rate, channels), the call's audio context and the
 office voice's meter (`state Hz`), the Jarvis worklet (`ok` or its error) and its message count, the mic's max and
-mean RMS, the user_audio_chunk count, bytes and non-zero bytes, the input format ElevenLabs asked for, the
+mean RMS, the user_audio_chunk count, bytes and non-zero bytes, the input format ElevenLabs asked for (`inFormat`), the rate the mic
+was actually sent at (`sentRate`), the `user_transcript` count (`transcripts`), the
 MediaRecorder's type, chunks and bytes, each transcribe answer's status and error, ElevenLabs' socket messages by
 type, its close code and reason, and `events`: every voice switch, silent-mic, tap-to-talk and fallback decision with
 its reason. Never audio, never a key. Every voice route's answer is logged too: `voice: POST /api/voice/transcribe

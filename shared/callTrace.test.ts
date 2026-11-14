@@ -6,9 +6,9 @@ const base = { id: 'abc123', ms: 5000, mode: 'jarvis', listen: 'elevenlabs', gum
 
 describe('a call trace (#650)', () => {
   it('keeps exactly its known fields, with their types', () => {
-    const t = cleanTrace({ ...base, track: { label: 'iPhone Microphone', enabled: true, muted: false, state: 'live', rate: 48000, channels: 1 }, ws: { audio: 12, user_transcript: 2 }, close: { code: 1008, reason: 'custom llm error' }, events: [{ ms: 10, what: 'call starts' }] });
-    expect(t).toMatchObject({ id: 'abc123', mode: 'jarvis', gum: 'ok', workletMsgs: 120, rmsMax: 0.21, nonZeroBytes: 127000, track: { label: 'iPhone Microphone', rate: 48000, channels: 1 }, ws: { audio: 12, user_transcript: 2 }, close: { code: 1008, reason: 'custom llm error' } });
-    expect(Object.keys(t!).sort()).toEqual(['audio', 'chunkBytes', 'chunks', 'close', 'events', 'final', 'gum', 'id', 'inFormat', 'listen', 'meter', 'mode', 'ms', 'nonZeroBytes', 'posts', 'recorder', 'rmsMax', 'rmsMean', 'track', 'ua', 'worklet', 'workletMsgs', 'ws']);
+    const t = cleanTrace({ ...base, track: { label: 'iPhone Microphone', enabled: true, muted: false, state: 'live', rate: 48000, channels: 1 }, ws: { audio: 12, user_transcript: 2 }, close: { code: 1008, reason: 'custom llm error' }, events: [{ ms: 10, what: 'call starts' }], inFormat: 'pcm_16000', sentRate: 16000, transcripts: 2 });
+    expect(t).toMatchObject({ id: 'abc123', mode: 'jarvis', gum: 'ok', workletMsgs: 120, rmsMax: 0.21, nonZeroBytes: 127000, inFormat: 'pcm_16000', sentRate: 16000, transcripts: 2, track: { label: 'iPhone Microphone', rate: 48000, channels: 1 }, ws: { audio: 12, user_transcript: 2 }, close: { code: 1008, reason: 'custom llm error' } });
+    expect(Object.keys(t!).sort()).toEqual(['audio', 'chunkBytes', 'chunks', 'close', 'events', 'final', 'gum', 'id', 'inFormat', 'listen', 'meter', 'mode', 'ms', 'nonZeroBytes', 'posts', 'recorder', 'rmsMax', 'rmsMean', 'sentRate', 'track', 'transcripts', 'ua', 'worklet', 'workletMsgs', 'ws']);
   });
 
   it('carries no audio and no secrets, whatever the browser sends', () => {

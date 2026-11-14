@@ -27,7 +27,7 @@ export function traceStart(mode: CallTraceMode, listen: string, why = '') {
   began = performance.now();
   rmsSum = rmsCount = 0;
   const id = Date.now().toString(36);
-  cur = { id, ms: 0, final: false, ua: `${shortAgent(navigator.userAgent)}${matchMedia?.('(display-mode: standalone)').matches ? ' app' : ''}`, mode, listen, gum: '', track: null, audio: '', meter: '', worklet: '', workletMsgs: 0, rmsMax: 0, rmsMean: 0, chunks: 0, chunkBytes: 0, nonZeroBytes: 0, inFormat: '', recorder: null, posts: [], ws: {}, close: null, events: [] };
+  cur = { id, ms: 0, final: false, ua: `${shortAgent(navigator.userAgent)}${matchMedia?.('(display-mode: standalone)').matches ? ' app' : ''}`, mode, listen, gum: '', track: null, audio: '', meter: '', worklet: '', workletMsgs: 0, rmsMax: 0, rmsMean: 0, chunks: 0, chunkBytes: 0, nonZeroBytes: 0, inFormat: '', sentRate: 0, transcripts: 0, recorder: null, posts: [], ws: {}, close: null, events: [] };
   traceNote(`call starts: ${mode === 'jarvis' ? 'the Jarvis voice' : `the office's own voice${why ? ` (${why})` : ''}`}`);
   send(cur);
   timer = setInterval(() => cur && send(cur), EVERY_MS);
@@ -51,7 +51,7 @@ export function traceNote(what: string) {
 }
 
 /** Changes fields of the trace (mode, gum, worklet…). */
-export function trace(patch: Partial<Pick<CallTrace, 'mode' | 'gum' | 'audio' | 'meter' | 'worklet' | 'inFormat' | 'close' | 'recorder'>>) {
+export function trace(patch: Partial<Pick<CallTrace, 'mode' | 'gum' | 'audio' | 'meter' | 'worklet' | 'inFormat' | 'sentRate' | 'close' | 'recorder'>>) {
   if (cur) Object.assign(cur, patch);
 }
 
@@ -86,6 +86,11 @@ export function traceChunk(bytes: number, nonZero: number) {
   cur.chunks++;
   cur.chunkBytes += bytes;
   cur.nonZeroBytes += nonZero;
+}
+
+/** A user_transcript from ElevenLabs: the agent heard the manager. */
+export function traceTranscript() {
+  if (cur) cur.transcripts++;
 }
 
 /** A message from ElevenLabs' socket, by type. */
