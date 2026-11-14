@@ -37,12 +37,12 @@ export abstract class SwarmEarnings extends SwarmResearcher {
   }
 
   /** The rollup brought up to date, saved, and the view sent when it changed. */
-  private earningsChanged(save = true) {
+  private earningsChanged() {
     const e = this.state.earnings;
     e.spend = rollSpend(e.spend, this.spend.ledger.all(), providerSpend(this.usageSources()), Date.now());
     const view = this.earningsNow();
     const sig = JSON.stringify(view);
-    if (save) this.save();
+    this.save(); // the rollup keeps spend past the ledger's 30 days
     if (sig === this.sentEarnings) return view;
     this.sentEarnings = sig;
     this.broadcast({ type: 'earnings', earnings: view });
@@ -66,7 +66,7 @@ export abstract class SwarmEarnings extends SwarmResearcher {
     this.state.earnings.feeds = this.state.earnings.feeds.map((x) => (x === now ? applyFeedRead(x, readFeed(res.status, res.body), Date.now()) : x));
   }
 
-  protected async readEarningFeeds() {
+  private async readEarningFeeds() {
     await Promise.all(this.state.earnings.feeds.map((f) => this.readOneFeed(f)));
     this.earningsChanged();
   }
@@ -74,7 +74,7 @@ export abstract class SwarmEarnings extends SwarmResearcher {
   /** The rollup every 5 minutes and the feeds every hour, a fresh demo office's sample first (not in tests). */
   protected override async startUsage() {
     if (!process.env.VITEST && !this.earningsTimers.length) {
-      this.earningsTimers = [setInterval(() => this.earningsChanged(false), ROLL_MS), setInterval(() => void this.readEarningFeeds(), FEED_MS)];
+      this.earningsTimers = [setInterval(() => this.earningsChanged(), ROLL_MS), setInterval(() => void this.readEarningFeeds(), FEED_MS)];
       for (const t of this.earningsTimers) t.unref?.();
       setTimeout(() => {
         const e = this.state.earnings; // a fresh demo's sample, once its floors are connected
