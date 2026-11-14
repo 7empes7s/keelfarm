@@ -57,8 +57,13 @@ function shim() {
     const b = bus();
     const buf = await b.mix.decodeAudioData(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)).buffer);
     const data = buf.getChannelData(0);
+    const win = Math.round(buf.sampleRate / 100); // 10 ms windows: the first as loud as barge-in's level is the onset
     let first = 0;
-    while (first < data.length && Math.abs(data[first]) < 0.1) first++;
+    for (; first + win < data.length; first += win) {
+      let sum = 0;
+      for (let i = first; i < first + win; i++) sum += data[i] * data[i];
+      if (Math.sqrt(sum / win) >= 0.03) break;
+    }
     const src = b.mix.createBufferSource();
     src.buffer = buf;
     connect.call(src, b.dest);
@@ -106,7 +111,9 @@ test('a call never posts its own voice or noise, cuts its voice when the manager
   await page.waitForTimeout(1200);
   const { onset } = await say(page);
   await expect.poll(() => phase(page), { timeout: 5000 }).not.toBe('speaking');
-  const cut = await win(page)((t) => (window as unknown as CallWindow).__phases.find((p) => p.at >= t - 50 && p.phase !== 'speaking')?.at ?? Infinity, onset);
+  const phases = await win(page)(() => (window as unknown as CallWindow).__phases);
+  console.log(`phases (ms from sentence 2's onset): ${phases.map((p) => `${p.phase} ${Math.round(p.at - onset)}`).join(', ')}`);
+  const cut = phases.findLast((p, i) => i > 0 && phases[i - 1].phase === 'speaking' && p.phase !== 'speaking')!.at;
   console.log(`barge-in: the voice stopped ${Math.round(cut - onset)} ms after the manager started talking`);
   expect(cut - onset).toBeLessThanOrEqual(300);
   await expect.poll(() => phase(page), { timeout: 30_000 }).toBe('speaking'); // its answer to sentence 2
