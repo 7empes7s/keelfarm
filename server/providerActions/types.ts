@@ -11,9 +11,9 @@ import type { KeyMint } from '../../shared/types.ts';
 /**
  * How the key goes on a request: a bearer token, ElevenLabs' header, GitHub's bearer with its API headers, (#621) an
  * Entra "client id:secret" as a client-credentials form, a Google service account's JSON (an access token minted from
- * it, #622) or a Cloudflare Access service token "id:secret".
+ * it, #622), a Cloudflare Access service token "id:secret", or none (the office's own API on localhost, #663).
  */
-type ActionAuth = 'bearer' | 'xi-api-key' | 'github' | 'entra-token' | 'google-sa' | 'cf-access';
+type ActionAuth = 'bearer' | 'xi-api-key' | 'github' | 'entra-token' | 'google-sa' | 'cf-access' | 'none';
 
 export interface ActionRequest {
   method: 'GET' | 'HEAD' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';

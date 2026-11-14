@@ -61,6 +61,7 @@ registerDemo('github', ({ scale }) => ({
   editIssue: async (fullName, number, edit) => {
     const i = repos.get(fullName)?.issues.find((x) => x.number === number);
     if (!i) throw new Error(`Unknown issue #${number}`);
+    if (edit.title) i.title = edit.title;
     if (edit.body !== undefined) i.body = edit.body;
     if (edit.addLabels?.includes(TRUST_LABEL)) i.trustedBy = 'demo-manager';
     i.labels = [...i.labels.filter((l) => !edit.removeLabels?.includes(l)), ...(edit.addLabels ?? []).filter((l) => !i.labels.includes(l))];
@@ -81,6 +82,11 @@ registerDemo('github', ({ scale }) => ({
       for (const n of pr.closesIssues) closedIssues.add(`${fullName}#${n}`);
       r.issues = r.issues.filter((i) => !pr.closesIssues.includes(i.number));
     }, 20_000).unref();
+  },
+  readyPull: async (fullName, number) => {
+    const pr = repos.get(fullName)?.pulls.find((p) => p.number === number);
+    if (!pr) throw new Error('Unknown PR');
+    pr.isDraft = false;
   },
   closeIssue: async (fullName, number) => {
     const r = repos.get(fullName);

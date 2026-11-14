@@ -70,7 +70,7 @@ export function askTools(h: AskHandlers, run: Run) {
     ),
     tool(
       'merge_pull',
-      `Merge a pull request whose QA passed, even with a red or pending check (the console's Merge anyway). ${WHEN}`,
+      `Merge a pull request whose QA passed, even with a red or pending check (the console's Merge anyway); a draft is marked ready first. ${WHEN}`,
       { floor: z.number().int(), pr: z.number().int().positive(), asked_in: ASKED_IN },
       (a) => run(() => h.mergePull(a)),
     ),

@@ -261,6 +261,12 @@ registerCeoReply('it desk', async ({ text, use }) => {
   if (!/\b(gain|free up|free)\b.*\bspace\b|\bcheck (the|this) machine\b|\bit desk\b|\bcloudflare\b|\btunnel\b|\bservice token\b/i.test(text)) return null;
   const out = await use('ask_it', { question: text });
   if (out.startsWith('Refused')) return `I can't hand that to IT right now: ${out.replace(/^Refused:\s*/, '')}`;
+  // #663: wait in the foreground for IT's whole answer, not the next job.
+  const message = Number(out.match(/message (\d+)/)?.[1]);
+  if (message && !(await use('wait_for', { conditions: [{ kind: 'it_answer', message }], timeout_min: 1 })).startsWith('Timed out')) {
+    const answer = await use('it_answer', { message });
+    if (!answer.startsWith('Refused')) return `IT looked: ${answer.slice(0, 600)}\n\nAny change comes to you on a card with Run / Not now.\n\`\`\`spoken\nIT looked into it. Their answer is above, and any change comes to you on a card.\n\`\`\``;
+  }
   return `That's the IT department's: I've asked them in the IT chat. They'll look, and any change comes to you on a card with Run / Not now.\n\`\`\`spoken\nI've passed that to IT. Their answer is in the IT chat.\n\`\`\``;
 }, { early: true });
 

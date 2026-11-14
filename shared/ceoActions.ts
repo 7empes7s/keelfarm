@@ -40,6 +40,7 @@ const TEXT_MAX = 120;
 const ACTS: Record<string, string> = {
   file_issue: '📝',
   close_issue: '🗂️',
+  edit_issue: '✏️',
   set_dependencies: '🔗',
   scale_team: '👥',
   configure_agent: '⚙️',
@@ -86,7 +87,7 @@ const ACTS: Record<string, string> = {
 };
 
 /** The office tools that aren't cards: reads, and what shows in the chat itself (files, edits, reactions, questions). */
-export const NOT_CARDS = new Set(['company_status', 'floor_detail', 'agent_detail', 'agent_log', 'qa_report', 'worktree_file', 'pr_diff', 'session_history', 'it_run', 'consult', 'attach_file', 'keep_file', 'edit_message', 'react', 'reply', 'ask_manager', 'problems', 'checklist_read']);
+export const NOT_CARDS = new Set(['company_status', 'floor_detail', 'agent_detail', 'agent_log', 'qa_report', 'worktree_file', 'pr_diff', 'session_history', 'it_run', 'consult', 'attach_file', 'keep_file', 'edit_message', 'react', 'reply', 'ask_manager', 'problems', 'checklist_read', 'it_answer']);
 
 // Tools whose card opens a console section (with the floor, when the call names one).
 const SECTIONS: Partial<Record<string, ActionSection>> = {

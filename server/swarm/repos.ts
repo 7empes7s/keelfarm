@@ -15,7 +15,7 @@ import { charterMarkdown, charterOf, cleanCharter, isEmptyCharter, isObjectiveSt
 import { STATUS_LABELS } from '../../shared/charterStats.ts';
 import { PLAYBOOK_MAX } from '../../shared/types.ts';
 import { cleanTrustedAuthors, markTrust, trustContext, TRUST_LABEL, type TrustContext } from '../../shared/trust.ts';
-import type { ManagerChangeKind, MergedPage, PreviewView, PrPreviewView, ProjectFolderView, PullInfo, RepoView } from '../../shared/types.ts';
+import type { IssueInfo, ManagerChangeKind, MergedPage, PreviewView, PrPreviewView, ProjectFolderView, PullInfo, RepoView } from '../../shared/types.ts';
 import { recordChange } from '../../shared/managerChanges.ts';
 import { takeSteps, tryThis, type TryThis } from '../../shared/tryIt.ts';
 import { issuesResolvedBy } from '../issueClaims.ts';
@@ -25,7 +25,11 @@ import { type PersistedRepo, type FloorOptions, type RepoRuntime, BUSY, QA_SHOTS
 import { FLOOR_COLORS } from './flavour.ts';
 import { SwarmCore } from './core.ts';
 
+/** How long a just-filed issue stays on its floor while GitHub's list doesn't have it yet (#663). */
+const JUST_FILED_MS = 120_000;
+
 export abstract class SwarmRepos extends SwarmCore {
+  private justFiled = new Map<string, { issue: IssueInfo; at: number }[]>(); // repo id -> the CEO's issues GitHub doesn't list yet
   private readonly mergedPages = new MergedPages();
   // ---------- GitHub / repos ----------
 
@@ -392,6 +396,27 @@ export abstract class SwarmRepos extends SwarmCore {
     if (this.repoRt.has(id)) this.emitRepo(repo);
   }
 
+  // ---------- issues the CEO just filed (#663) ----------
+
+  /** The CEO's new issue, on the floor at once: GitHub's list lags behind its create by up to a minute or so. Returns its number. */
+  protected async createFiled(repo: PersistedRepo, title: string, body: string): Promise<number> {
+    const number = await this.backend.createIssue(repo.fullName, title, body);
+    const issue: IssueInfo = { number, title, body, url: `https://github.com/${repo.fullName}/issues/${number}`, labels: [], createdAt: new Date().toISOString() };
+    this.justFiled.set(repo.id, [...(this.justFiled.get(repo.id) ?? []), { issue, at: Date.now() }]);
+    const rt = this.repoRt.get(repo.id);
+    if (rt && !rt.issues.some((i) => i.number === number)) rt.issues = [...rt.issues, issue];
+    return number;
+  }
+
+  /** The sync's open issues plus the ones just filed that GitHub doesn't list yet (for JUST_FILED_MS, unless closed meanwhile). */
+  private withJustFiled(repoId: string, listed: IssueInfo[], closed: { has(n: number): boolean }): IssueInfo[] {
+    const now = Date.now();
+    const waiting = (this.justFiled.get(repoId) ?? []).filter((f) => now - f.at < JUST_FILED_MS && !closed.has(f.issue.number) && !listed.some((i) => i.number === f.issue.number));
+    if (waiting.length) this.justFiled.set(repoId, waiting);
+    else this.justFiled.delete(repoId);
+    return waiting.length ? [...listed, ...waiting.map((f) => f.issue)] : listed;
+  }
+
   async syncRepo(id: string) {
     const repo = this.state.repos.find((r) => r.id === id);
     const rt = this.repoRt.get(id);
@@ -400,7 +425,9 @@ export abstract class SwarmRepos extends SwarmCore {
     try {
       const started = Date.now();
       const [listed, pulled, trust] = await Promise.all([this.backend.listIssues(repo.fullName), this.backend.listPulls(repo.fullName), this.trustOf(repo, rt)]);
-      const { issues, pulls } = markTrust(listed, pulled, trust);
+      const trusted = markTrust(listed, pulled, trust);
+      const pulls = trusted.pulls;
+      const issues = this.withJustFiled(repo.id, trusted.issues, rt.closedIssues);
       const before = rt.lastSync != null ? rt.issues : null;
       rt.issues = issues;
       for (const i of before ? unblockedIssues(before, issues) : []) {

@@ -424,8 +424,8 @@ describe('message_agent', () => {
     const onTwo = x.state.agents.find((a) => a.repoId === x.state.repos[1].id)!;
     const tools = x.officeTools();
     expect(await tools.call('message_agent', { floor: 1, agent_id: onTwo.id, text: 'Rerun the flaky test.' })).toBe(`Refused: ${onTwo.name} is not on floor 1: check their floor in company_status.`);
-    // On their own floor it goes through to them (with nothing to resume, they say so).
-    expect(await tools.call('message_agent', { floor: 2, agent_id: onTwo.id, text: 'Rerun the flaky test.' })).toMatch(/^Refused: .* has no session to continue/);
+    // On their own floor it goes through to them (with nothing to resume, it waits for their next task, #663).
+    expect(await tools.call('message_agent', { floor: 2, agent_id: onTwo.id, text: 'Rerun the flaky test.' })).toMatch(/has no session now: they get it in their next task's prompt/);
     expect(await tools.call('restart_agent', { agent_id: onTwo.id })).toMatch(/^Refused: .* has no task to restart/);
   });
 });

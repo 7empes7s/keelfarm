@@ -157,6 +157,7 @@ export interface PersistedAgent {
   prNumber: number | null;
   prUrl: string | null;
   nextIssue?: number | null; // Assign to… while they were busy (#265, shared/assignIssue.ts): starts when they're free
+  queuedNotes?: string[]; // the CEO's message_agent while they had no session (#663): in their next task's prompt
   answeredAt?: number | null; // when the latest answer to their question reached them (#508): their card says so
   startedAt: number | null;
   endedAt: number | null;

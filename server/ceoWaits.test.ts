@@ -11,6 +11,7 @@ const world = (o: Partial<WaitWorld> = {}): WaitWorld => ({
   agent: (id) => (id === 'ada' ? { name: 'Ada', status: 'working' } : null),
   preview: () => 'starting',
   usage: () => 'pacing',
+  itAnswer: () => null,
   ...o,
 });
 
