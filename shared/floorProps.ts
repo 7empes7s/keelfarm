@@ -49,6 +49,7 @@ const USE_CASE_SET: Record<UseCase, PropSet> = {
   mobile: 'devices',
   design: 'devices',
   marketing: 'devices',
+  agency: 'civic',
 };
 
 /** The set a floor's profile picks: the words it uses, else its use case's default, else the device lab. */
@@ -89,6 +90,7 @@ const USE_CASE_TOOL: Record<UseCase, DeskTool> = {
   mobile: 'phone',
   'web-app': 'phone',
   'static-site': 'phone',
+  agency: 'notebook',
 };
 const SET_TOOL: Record<PropSet, DeskTool> = { vault: 'terminal', civic: 'notebook', workshop: 'terminal', broadcast: 'camera', devices: 'phone', servers: 'terminal', arcade: 'controller' };
 

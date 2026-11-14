@@ -534,6 +534,8 @@ app.delete('/api/earnings/entries/:id', route((req) => swarm.removeEarning(Strin
 app.post('/api/earnings/fixed', route((req) => swarm.addFixedCost(req.body ?? {})));
 app.delete('/api/earnings/fixed/:id', route((req) => swarm.removeFixedCost(String(req.params.id))));
 app.put('/api/earnings/feeds/:repo', route((req) => swarm.setEarningsFeed(repoId(req), req.body?.url)));
+app.post('/api/agency/opportunities/:slug', route((req) => swarm.decideOpportunityByManager(String(req.params.slug), req.body ?? {})));
+app.post('/api/agency/actions/:id', route((req) => swarm.decideActionByManager(String(req.params.id), req.body ?? {})));
 // Comms (#668): a draft approved, edited or discarded; a thread's label; leads; the mailboxes' settings; the suppression list.
 app.post('/api/comms/drafts/:id/approve', route((req) => swarm.approveDraft(String(req.params.id), req.body ?? {})));
 app.post('/api/comms/drafts/:id', route((req) => swarm.editDraft(String(req.params.id), req.body ?? {})));

@@ -16,6 +16,7 @@ import type { Problem } from '../problems.ts';
 import type { Checklist } from '../checklists.ts';
 import type { ResearcherView } from '../research.ts';
 import type { EarningsView } from '../earnings.ts';
+import type { AgencyView } from '../agency.ts';
 import type { CommsView } from '../comms.ts';
 import type { HistoryEntry } from '../history.ts';
 import type { OpsView } from '../ops.ts';
@@ -73,6 +74,7 @@ export interface WorldSnapshot {
   checklists?: Checklist[]; // the CEO's checklists for the manager (#612), newest first; absent while there are none
   research?: ResearcherView; // the Researcher's desk (#664): the job running, the queue, the last brief; absent in a replay
   earnings?: EarningsView; // the office's weekly earnings vs. spend (#666); absent in a replay
+  agency?: AgencyView; // the agency floors' opportunities and external actions (#667); absent until there is one
   comms?: CommsView; // the shared mailboxes' threads, drafts and leads (#668); absent in a replay
   claudeUsage: UsageReading[]; // the latest reading per limit, for the usage meter (none until a session reports)
   claudeUsageCheck?: UsageCheckError | null; // the office's last idle check failed (#89), null once one reads
@@ -160,6 +162,7 @@ export type ServerEvent =
   | { type: 'checklist'; checklist: Checklist }
   | { type: 'research'; research: ResearcherView }
   | { type: 'earnings'; earnings: EarningsView }
+  | { type: 'agency'; agency: AgencyView }
   | { type: 'comms'; comms: CommsView }
   | { type: 'testLab'; testLab: TestLabView }
   | { type: 'claudeUsage'; readings: UsageReading[]; check?: UsageCheckError | null; shares?: UsageShares[] }
