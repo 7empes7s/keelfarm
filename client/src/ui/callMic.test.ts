@@ -11,6 +11,8 @@ import type * as Wake from './wake/wakeEngine';
 import type * as Jarvis from './agentCallEngine';
 import type * as MicFake from './micFake';
 import { currentTrace } from './callTrace';
+import { TURN_STEPS, type CallTrace, type CallTurn } from '../../../shared/callTrace';
+import type { AgentListen } from '../../../shared/voiceAgent';
 
 vi.mock('onnxruntime-web/wasm', () => ({ env: { wasm: {} } }));
 vi.mock('./voiceMessages', () => ({ stopSpeaking() {}, pauseVoice() {}, resumeVoice() {}, skipSentence() {}, stopLine() {}, voicePosition: () => null })); // the CEO's voice isn't under test
@@ -227,12 +229,12 @@ afterAll(() => {
   vi.unstubAllGlobals();
 });
 
-function settings(jarvis: boolean, listen: 'browser' | 'elevenlabs' = 'elevenlabs', keySet = true) {
+function settings(jarvis: boolean, listen: 'browser' | 'elevenlabs' = 'elevenlabs', keySet = true, agentListen: AgentListen = 'auto') {
   const st = store.useStore.getState();
   store.useStore.setState({
     voiceKeySet: keySet,
     voiceAgent: { ...st.voiceAgent, fake: true, minutesMonth: 0 },
-    settings: { ...st.settings, listen: { provider: listen, autoSend: true, handsFree: false }, voice: { ...st.settings.voice, agent: { ...st.settings.voice.agent!, on: jarvis } } },
+    settings: { ...st.settings, listen: { provider: listen, autoSend: true, handsFree: false }, voice: { ...st.settings.voice, agent: { ...st.settings.voice.agent!, on: jarvis, listen: agentListen } } },
   });
 }
 
@@ -452,14 +454,27 @@ const sentOf = (sock: Sock, type: string) => sock.sent.map((m) => JSON.parse(m) 
 /** The agent "says" a second of audio: the voice is talking. */
 const agentTalks = (event: number) => agentSock().onmessage?.({ data: JSON.stringify({ type: 'audio', audio_event: { event_id: event, audio_base_64: Buffer.alloc(32_000).toString('base64') } }) });
 
-async function jarvisCall() {
-  settings(true);
+async function jarvisCall(listen: AgentListen = 'auto') {
+  settings(true, 'elevenlabs', true, listen);
   gesture = true;
   engine.startCall();
   gesture = false;
   await wait(100);
   agentReady();
   await wait(200);
+}
+
+/** The turn in the latest mid-call trace sent to the office (#665), checked to be in order. */
+function postedTurn(listener: string): CallTurn & { session?: string; s?: number } {
+  const sent = posts.filter((p) => p.url === '/api/voice/trace').map((p) => p.body as CallTrace & { turns: (CallTurn & { session?: string; s?: number })[] });
+  const mid = sent.filter((t) => !t.final && t.turns.some((x) => x.playback));
+  expect(mid.length).toBeGreaterThan(0); // sent as the turn's voice started, not at hang-up
+  const t = mid.at(-1)!.turns.at(-1)!;
+  expect(t.listener).toBe(listener);
+  const at = TURN_STEPS.map((s) => t[s]);
+  expect(at.every((ms) => ms > 0)).toBe(true);
+  expect([...at].sort((a, b) => a - b)).toEqual(at); // speech start, end, words, sent, first audio, playback: in order
+  return t;
 }
 
 describe('a Jarvis call where the browser listens (#658)', () => {
@@ -487,11 +502,11 @@ describe('a Jarvis call where the browser listens (#658)', () => {
     expect(currentTrace()).toMatchObject({ listen: 'browser', utterances: 1 });
   });
 
-  it('words that go quiet for 700 ms are sent at once, and never again when the recognizer settles them', async () => {
+  it('words that go quiet for 550 ms are sent at once, and never again when the recognizer settles them', async () => {
     await jarvisCall();
     const r = fakes.fakeLive.now!;
     r.say("what's the office doing", false);
-    await wait(600);
+    await wait(450);
     expect(sentOf(agentSock(), 'user_message')).toEqual([]);
     await wait(200);
     expect(sentOf(agentSock(), 'user_message').map((m) => m.text)).toEqual(["what's the office doing"]);
@@ -517,6 +532,39 @@ describe('a Jarvis call where the browser listens (#658)', () => {
     expect(sentOf(agentSock(), 'user_activity').length).toBeGreaterThan(0);
     agentTalks(1); // the rest of the interrupted reply never plays
     expect(jarvis.agentProbe().playing).toBe(0);
+  });
+
+  it("times the turn's steps and sends them to the office as the voice answers (#665)", async () => {
+    await jarvisCall();
+    const r = fakes.fakeLive.now!;
+    await wait(200);
+    r.say('how is', false);
+    await wait(300);
+    r.say('how is floor one', false);
+    await wait(300);
+    r.say('how is floor one', true);
+    await wait(400);
+    agentTalks(1);
+    const t = postedTurn('browser');
+    expect(t.transcript - t.speechEnd).toBe(300); // the last new word to the recognizer's final: its delay, measured
+    expect(t).toMatchObject({ session: 's1', s: 1, n: 1 }); // the office finds its own timing for it
+    expect(agentStore.useAgentCall.getState().turn?.n).toBe(1); // the call screen's details
+  });
+
+  it('a call set to OpenAI listens with OpenAI from the start, though the browser could (#665)', async () => {
+    sttKey = true;
+    await jarvisCall('openai');
+    expect(agentStore.useAgentCall.getState().listener).toBe('openai');
+    expect(currentTrace()?.listen).toBe('openai');
+    const stt = sockets.at(-1)!;
+    expect(stt.url).toBe('ws://office.test/ws/voice-stt?session=s1');
+    await wait(200);
+    stt.onmessage?.({ data: JSON.stringify({ type: 'delta', text: 'Ship' }) });
+    await wait(300);
+    stt.onmessage?.({ data: JSON.stringify({ type: 'final', text: 'Ship it.' }) });
+    await wait(400);
+    agentTalks(1);
+    postedTurn('openai');
   });
 });
 
@@ -560,5 +608,19 @@ describe('a Jarvis call without SpeechRecognition (Firefox, #658)', () => {
     expect(posts.filter((p) => p.url === '/api/voice/transcribe')).toHaveLength(1);
     expect(sentOf(agentSock(), 'user_message').map((m) => m.text)).toEqual(['Ship the login page today']);
     expect(ceoGot()).toEqual([]); // to the agent, not the CEO's chat
+    agentTalks(3);
+    postedTurn('clip'); // #665: the recording's sound, its transcription and the answer, timed
+  });
+
+  it("the agent's own listening is timed too: talking, its user_transcript, its answer (#665)", async () => {
+    await jarvisCall();
+    expect(agentStore.useAgentCall.getState().listener).toBe('elevenlabs');
+    await wait(200);
+    speech = { from: performance.now(), to: performance.now() + 1000 };
+    await wait(1500);
+    agentSock().onmessage?.({ data: JSON.stringify({ type: 'user_transcript', user_transcription_event: { user_transcript: 'How is floor one?' } }) });
+    await wait(300);
+    agentTalks(1);
+    postedTurn('elevenlabs');
   });
 });

@@ -21,6 +21,7 @@ import type { VoiceAgentView } from '../../shared/voiceAgent';
 import type { Problem } from '../../shared/problems';
 import type { Checklist } from '../../shared/checklists';
 import type { ResearcherView } from '../../shared/research';
+import type { EarningsView } from '../../shared/earnings';
 import { DEFAULT_CEO_AWAKE } from '../../shared/ceoAwake';
 import { DEFAULT_CLOUD, EMPTY_CLOUD } from '../../shared/cloud';
 import { DEFAULT_TOOL_SETTINGS, EMPTY_INVENTORY, type ToolInventory } from '../../shared/tooling';
@@ -176,6 +177,7 @@ export interface State {
   problems: Problem[]; // the problems register's own entries (#544), newest first; IT's tickets join them on the page
   checklists: Checklist[]; // the CEO's checklists for the manager (#612), newest first
   research: ResearcherView | null; // the Researcher's desk (#664): the job running, the queue, the last brief
+  earnings: EarningsView | null; // the office's weekly earnings vs. spend (#666)
   claudeUsage: UsageReading[]; // Claude's latest reading per usage limit (empty until a session reports)
   claudeUsageCheck: UsageCheckError | null; // why the office's idle check couldn't read it (#89), null when it could
   claudeUsageShares: UsageShares[]; // each usage bar's floor shares of the office's spend in its window (#334)
@@ -358,6 +360,7 @@ export const useStore = create<State>((set, get) => ({
   problems: [],
   checklists: [],
   research: null,
+  earnings: null,
   claudeUsage: [],
   claudeUsageCheck: null,
   claudeUsageShares: [],

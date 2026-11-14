@@ -385,7 +385,7 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
   // ---------- app_call (#625) ----------
 
   /** The Access token file for a host: the one asked for, else the one in the office's secrets folder naming the host. */
-  private async appTokenFile(host: string, envFile?: string): Promise<string> {
+  protected async appTokenFile(host: string, envFile?: string): Promise<string> {
     const dir = path.join(HOME_DIR, 'secrets');
     if (envFile) {
       const no = envPathRefusal(envFile, []);

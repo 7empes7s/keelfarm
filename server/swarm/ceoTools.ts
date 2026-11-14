@@ -277,7 +277,7 @@ export abstract class SwarmCeoTools extends SwarmItDesk {
     return {
         company: {
           ceo: this.ceo().name,
-          ceoSpend: ceoSpend(this.spend.ledger.all(), Date.now()), // the CEO's own jobs, kept out of each floor's spend (#254)
+          ceoSpend: ceoSpend(this.spend.ledger.all(), Date.now()), earnings: this.earningsStatus(), // the CEO's own jobs, kept out of each floor's spend (#254); the week's earnings vs. spend (#666)
           scaling: s.scaling === 'auto' ? 'team changes apply straight away' : 'the manager approves every team change',
           maxAgentsPerFloor: s.maxAgents,
           sessionLimit: s.sessionLimit || 'none',

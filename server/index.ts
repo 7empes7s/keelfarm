@@ -26,7 +26,7 @@ import { serviceWorkerSource, swVersion } from './pwa.ts';
 import { screenStatus } from './screenReply.ts';
 import { parseSendBackNote } from './sendBack.ts';
 import { handleGateway, upgradeGateway } from './previewGateway.ts';
-import { completionEvents, completionJson, voiceRouteLine } from './voiceAgent.ts';
+import { completionJson, streamCompletion, voiceRouteLine } from './voiceAgent.ts';
 import { FAKE_AGENT_PATH, fakeAgent } from './voiceAgentFake.ts';
 import { fakeRelay, openaiRelay, STT_PATH } from './sttRelay.ts';
 import { PresenceHub } from './presence.ts';
@@ -464,12 +464,14 @@ app.post('/api/voice/agent/:session/end', route((req) => swarm.endVoiceAgent(Str
 app.post(
   '/v1/chat/completions',
   route(async (req, res) => {
-    const text = await swarm.voiceLlm(req.body, req.get('authorization'));
     const model = typeof req.body?.model === 'string' ? req.body.model : 'cubefarm-voice';
-    if (req.body?.stream !== true) return completionJson(text, model);
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    for (const ev of completionEvents(text, model)) res.write(ev);
+    if (req.body?.stream !== true) return completionJson(await swarm.voiceLlm(req.body, req.get('authorization')), model);
+    const start = () => {
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.flushHeaders();
+    };
+    await streamCompletion(swarm.voiceTurn(req.body, req.get('authorization')), model, start, (ev) => res.write(ev));
     res.end();
   }),
 );
@@ -526,6 +528,12 @@ app.post('/api/it/telegram/demo', route((req) => swarm.itTelegramDemo(req.body ?
 app.post('/api/checklists/:id/steps/:step', route((req) => swarm.checklistStep(String(req.params.id), String(req.params.step), req.body ?? {})));
 app.post('/api/checklists/:id/steps/:step/secret', route((req) => swarm.checklistSecret(String(req.params.id), String(req.params.step), req.body?.value)));
 app.post('/api/checklists/:id/duplicate', route((req) => swarm.checklistDuplicate(String(req.params.id), req.body?.title)));
+// Earnings vs. spend (#666): manual entries, fixed monthly costs, a floor's feed URL.
+app.post('/api/earnings/entries', route((req) => swarm.addEarning(req.body ?? {})));
+app.delete('/api/earnings/entries/:id', route((req) => swarm.removeEarning(String(req.params.id))));
+app.post('/api/earnings/fixed', route((req) => swarm.addFixedCost(req.body ?? {})));
+app.delete('/api/earnings/fixed/:id', route((req) => swarm.removeFixedCost(String(req.params.id))));
+app.put('/api/earnings/feeds/:repo', route((req) => swarm.setEarningsFeed(repoId(req), req.body?.url)));
 // IT monitoring (#525): the checks now, a recommendation's option picked, Not now.
 app.post('/api/it/watch/check', route(() => swarm.itWatchTick()));
 app.post('/api/agent-sdk/check', route(() => swarm.checkAgentSdk()));
