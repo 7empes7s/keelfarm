@@ -619,14 +619,14 @@ describe('Voice', () => {
   });
 
   describe('transcribe', () => {
-    const clip = Buffer.alloc(30_000, 1);
+    const clip = Buffer.concat([Buffer.from([0x1a, 0x45, 0xdf, 0xa3]), Buffer.alloc(30_000, 1)]); // a WebM (its EBML header), as Chrome records
     const webm = 'audio/webm;codecs=opus';
 
     it('sends the clip with the key and gives back the words, logging neither', async () => {
       const v = make();
       await v.setKey('sk_secret_stt_1234');
       expect(await v.transcribe(clip, webm, 2400)).toBe('Ship the login page today.');
-      expect(heard).toEqual([{ key: 'sk_secret_stt_1234', type: 'audio/webm', bytes: 30_000 }]);
+      expect(heard).toEqual([{ key: 'sk_secret_stt_1234', type: 'audio/webm', bytes: 30_004 }]);
       expect(logs).toEqual(['voice: transcribed a 2.4 s clip (30 KB)']);
       expect(logs.join(' ')).not.toContain('sk_secret');
       expect(logs.join(' ')).not.toContain('login page');

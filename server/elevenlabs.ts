@@ -3,6 +3,7 @@
 // ElevenLabs' own words, never the key.
 import type { VoiceOption } from '../shared/types.ts';
 import { clipExtension } from '../shared/clipLimits.ts';
+import { probeClip } from './clipProbe.ts';
 import { isV4Voice } from '../shared/voices.ts';
 import { STT_MODEL, synthBody, VoiceApiError, type VoiceApi } from './voice.ts';
 import { agentBody, agentHash } from './voiceAgent.ts';
@@ -97,6 +98,8 @@ export const elevenLabs: VoiceApi = {
     );
     return Buffer.from(await res.arrayBuffer());
   },
+
+  probe: probeClip, // a clip ffprobe can't decode never costs a transcription (#658)
 
   // Speech to Text (POST /v1/speech-to-text, multipart): no "(laughter)" tags and no timestamps, just the words.
   async transcribe(key, { audio, type }, signal) {

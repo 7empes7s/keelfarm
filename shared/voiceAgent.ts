@@ -15,7 +15,11 @@ const SESSION_MAX_S = 4 * 3600;
 export interface VoiceAgentSettings {
   on: boolean;
   capHours: number; // a month's minutes up to this many hours, then calls fall back to today's voice mode
+  /** Who hears the manager on a Jarvis call (#658): the browser's speech recognition (absent: the default) or ElevenLabs' own, from the mic's audio. */
+  listen?: AgentListen;
 }
+
+export type AgentListen = 'browser' | 'elevenlabs';
 
 export const DEFAULT_VOICE_AGENT: VoiceAgentSettings = { on: true, capHours: AGENT_CAP_HOURS_DEFAULT };
 
@@ -25,8 +29,45 @@ export function voiceAgentSettings(base: VoiceAgentSettings, patch: unknown): Vo
   const out = { ...base };
   if (typeof p.on === 'boolean') out.on = p.on;
   if (typeof p.capHours === 'number' && Number.isFinite(p.capHours)) out.capHours = Math.max(0, Math.min(CAP_HOURS_MAX, Math.round(p.capHours * 4) / 4));
+  if (p.listen === 'browser' || p.listen === 'elevenlabs') out.listen = p.listen;
   return out;
 }
+
+/** Who hears the manager on a Jarvis call (#658), in the order they're tried. */
+const LISTENERS = ['browser', 'elevenlabs', 'openai', 'clip'] as const;
+export type AgentListener = (typeof LISTENERS)[number];
+
+/** What this call can listen with: the browser's recognition, the mic as a stream (AudioWorklet), the office's OpenAI transcription, a recorder. */
+export interface ListenCaps {
+  recognition: boolean;
+  stream: boolean;
+  stt: boolean;
+  recorder: boolean;
+}
+
+const can = (l: AgentListener, c: ListenCaps) => (l === 'browser' ? c.recognition : l === 'elevenlabs' ? c.stream : l === 'openai' ? c.stream && c.stt : c.recorder);
+
+/**
+ * The listener a call starts with (#658): the browser's own recognition (no cost; Chrome, Edge, Safari), else the
+ * agent's own listening on the mic's stream (#657; first whenever the setting says ElevenLabs), else the office's
+ * OpenAI Realtime transcription, else a clip per turn. The agent speaks in every case.
+ */
+export function agentListener(setting: AgentListen | undefined, caps: ListenCaps): AgentListener {
+  return nextListener(setting === 'elevenlabs' ? 'browser' : null, caps) ?? 'elevenlabs';
+}
+
+/** The listener after `cur` failed (couldn't start, or the agent never heard the manager), or null when none is left; null `cur` is the first. */
+export function nextListener(cur: AgentListener | null, caps: ListenCaps): AgentListener | null {
+  return LISTENERS.slice(cur ? LISTENERS.indexOf(cur) + 1 : 0).find((l) => can(l, caps)) ?? null;
+}
+
+/** The words a switch is shown in, once, on the call screen and in the trace. */
+export const LISTENER_WORDS: Record<AgentListener, string> = {
+  browser: "This browser's own speech recognition is listening",
+  elevenlabs: 'ElevenLabs is listening to your microphone',
+  openai: 'The office is transcribing your voice with OpenAI',
+  clip: 'Each thing you say is recorded and sent to the office to transcribe, so replies take a few seconds longer',
+};
 
 /** Seconds of calls per local day ('YYYY-MM-DD'). */
 export type AgentUsage = Record<string, number>;

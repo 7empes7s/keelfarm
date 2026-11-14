@@ -3,7 +3,7 @@
 // that starts the call: iPhones only let sound start from a tap, and set the audio session for talking both ways.
 import { create } from 'zustand';
 import type { SwarmSettings } from '../../../shared/types';
-import { agentWhy, DEFAULT_VOICE_AGENT, type VoiceAgentView } from '../../../shared/voiceAgent';
+import { agentWhy, DEFAULT_VOICE_AGENT, type AgentListener, type VoiceAgentView } from '../../../shared/voiceAgent';
 import type { AgentMode } from './agentCall';
 import { traceNote } from './callTrace';
 
@@ -16,9 +16,11 @@ export interface AgentCallView {
   output: number;
   /** Why the conversation may not hear the manager (a silent mic, #648), shown on the call; '' when it hears. */
   micWhy: string;
+  /** Who hears the manager now (#658), '' with no conversation. */
+  listener: AgentListener | '';
 }
 
-export const useAgentCall = create<AgentCallView>(() => ({ mode: 'off', saying: '', input: 0, output: 0, micWhy: '' }));
+export const useAgentCall = create<AgentCallView>(() => ({ mode: 'off', saying: '', input: 0, output: 0, micWhy: '', listener: '' }));
 
 /** The Jarvis voice drives the call now. */
 export const agentOn = () => useAgentCall.getState().mode !== 'off';

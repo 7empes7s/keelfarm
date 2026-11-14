@@ -66,6 +66,7 @@ const demoVoice: VoiceApi = {
     await new Promise((r) => setTimeout(r, text === SAMPLE_LINE ? DEMO_SAMPLE_MS : 300));
     return demoChime(text, voiceId, speed);
   },
+  probe: async () => '', // no ffprobe in the demo: the header check (sniffClip) still runs (#658)
   transcribe: async () => {
     await new Promise((r) => setTimeout(r, 400));
     return DEMO_TRANSCRIPT;

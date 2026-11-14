@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_VOICE_AGENT, addCallSeconds, agentWhy, minutesCost, minutesLabel, parseUsage, usageMinutes, voiceAgentSettings } from './voiceAgent';
+import { DEFAULT_VOICE_AGENT, addCallSeconds, agentListener, agentWhy, minutesCost, minutesLabel, nextListener, parseUsage, usageMinutes, voiceAgentSettings } from './voiceAgent';
 
 describe('the Jarvis voice minutes and cap', () => {
   it('counts minutes per day, today and this month, a started minute counting', () => {
@@ -30,5 +30,21 @@ describe('the Jarvis voice minutes and cap', () => {
     expect(minutesLabel(42)).toBe('42 min');
     expect(minutesLabel(185)).toBe('3 h 05 min');
     expect(minutesCost(90)).toBe('$7.20');
+  });
+
+  it('listens with the browser, then the agent, then OpenAI through the office, then a clip per turn (#658)', () => {
+    const all = { recognition: true, stream: true, stt: true, recorder: true };
+    expect(agentListener(undefined, all)).toBe('browser');
+    expect(agentListener('browser', all)).toBe('browser');
+    expect(agentListener('browser', { ...all, recognition: false })).toBe('elevenlabs'); // Firefox
+    expect(agentListener('elevenlabs', all)).toBe('elevenlabs');
+    expect(agentListener(undefined, { recognition: false, stream: false, stt: true, recorder: true })).toBe('clip');
+    expect(nextListener('browser', all)).toBe('elevenlabs');
+    expect(nextListener('elevenlabs', all)).toBe('openai'); // the agent never heard: OpenAI next
+    expect(nextListener('elevenlabs', { ...all, stt: false })).toBe('clip'); // no OpenAI key
+    expect(nextListener('openai', all)).toBe('clip');
+    expect(nextListener('clip', all)).toBeNull();
+    expect(voiceAgentSettings(DEFAULT_VOICE_AGENT, { listen: 'elevenlabs' }).listen).toBe('elevenlabs');
+    expect(voiceAgentSettings(DEFAULT_VOICE_AGENT, { listen: 'whisper' }).listen).toBeUndefined();
   });
 });

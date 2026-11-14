@@ -28,6 +28,7 @@ import { parseSendBackNote } from './sendBack.ts';
 import { handleGateway, upgradeGateway } from './previewGateway.ts';
 import { completionEvents, completionJson, voiceRouteLine } from './voiceAgent.ts';
 import { FAKE_AGENT_PATH, fakeAgent } from './voiceAgentFake.ts';
+import { fakeRelay, openaiRelay, STT_PATH } from './sttRelay.ts';
 import { PresenceHub } from './presence.ts';
 import { PUBLIC_DEMO_FILE_BYTES, RateLimiter, clientIp, demoUploadProblem, filesOverCap, pathScrubber, publicDemoBlock, publicDemoProblem, resetDue, routePath, scrubRoots } from './publicDemo.ts';
 import { HttpError, Swarm } from './swarm.ts';
@@ -664,6 +665,14 @@ const terms = new WebSocketServer({ noServer: true });
 // The demo's ElevenLabs agent (#534, server/voiceAgentFake.ts): the client's Jarvis call with no network.
 const fakeAgents = DEMO ? new WebSocketServer({ noServer: true }) : null;
 fakeAgents?.on('connection', (ws) => fakeAgent(ws, (session, messages) => swarm.voiceLlm({ cubefarm_session: session, messages }, undefined, true), () => swarm.agentGreeting(), (line) => console.log(line)));
+// A Jarvis call's OpenAI listener (#658, server/sttRelay.ts): the mic relayed to OpenAI Realtime transcription, the key kept here.
+const sttRelays = new WebSocketServer({ noServer: true });
+sttRelays.on('connection', (ws, req) => {
+  const key = swarm.voiceSttKey(new URL(req.url ?? '', 'http://localhost').searchParams.get('session') ?? '');
+  if (!key) return ws.close(1008, 'No call or no OpenAI key');
+  if (key === 'fake') fakeRelay(ws, (line) => console.log(line));
+  else openaiRelay(ws, key, (line) => console.log(line));
+});
 // The public demo's scrubber sees everything a tab is sent.
 const scrubbed = (ws: WebSocket) => {
   if (!scrub) return ws;
@@ -684,7 +693,7 @@ setInterval(() => {
 terms.on('connection', (ws, req) => swarm.attachTerminal(new URL(req.url ?? '', 'http://localhost').searchParams.get('agent') ?? '', scrubbed(ws)));
 server.on('upgrade', (req, socket, head) => {
   const { pathname } = new URL(req.url ?? '', 'http://localhost');
-  const target = pathname === '/ws' ? wss : pathname === '/ws/term' ? terms : pathname === FAKE_AGENT_PATH ? fakeAgents : null;
+  const target = pathname === '/ws' ? wss : pathname === '/ws/term' ? terms : pathname === FAKE_AGENT_PATH ? fakeAgents : pathname === STT_PATH ? sttRelays : null;
   if (!target && upgradeGateway(req, socket as Socket, head, proxied, previewUse)) return;
   if (!target) return void socket.destroy();
   if (PUBLIC_DEMO && !wsLimit.take(ipOf(req))) return void socket.end('HTTP/1.1 429 Too Many Requests\r\nConnection: close\r\n\r\n');

@@ -13,6 +13,15 @@ const { VoiceApiError } = await import('./voice.ts');
 const { elevenLabs } = await import('./elevenlabs.ts');
 afterAll(() => fs.rmSync(home, { recursive: true, force: true, maxRetries: 5 }));
 
+/** A real fragmented-MP4 recording of a spoken sentence (AAC, 48 kHz mono), as Safari's MediaRecorder makes. */
+const safariMp4 = fs.readFileSync(path.join(import.meta.dirname, 'fixtures', 'safari-recording.mp4'));
+/** Where each top-level MP4 box starts. */
+function mp4Boxes(b: Buffer): { type: string; at: number }[] {
+  const out: { type: string; at: number }[] = [];
+  for (let o = 0; o + 8 <= b.length; o += b.readUInt32BE(o)) out.push({ type: b.toString('ascii', o + 4, o + 8), at: o });
+  return out;
+}
+
 /** One second of a 440 Hz tone, 16 kHz mono WAV: what a phone's recorder might send. */
 function toneWav(): Buffer {
   const n = 16_000;
@@ -54,8 +63,8 @@ describe("a call's speech to text (#645)", () => {
   });
 
   it("an iPhone's recording (Safari's MediaRecorder: audio/mp4) is taken and sent to ElevenLabs as an MP4 file (#648)", async () => {
-    // What Safari's recorder makes: an MP4 (ftyp box first) labelled with its codec.
-    const mp4 = Buffer.concat([Buffer.from([0, 0, 0, 0x18]), Buffer.from('ftypM4A '), Buffer.alloc(4000, 1)]);
+    // What Safari's recorder makes: a fragmented MP4 (ftyp, moov, then moof + mdat pairs) of AAC, labelled with its codec.
+    const mp4 = safariMp4;
     types.length = 0;
     swarm.updateSettings({ listen: { provider: 'browser', autoSend: true, handsFree: false } });
     expect(await swarm.voice.transcribe(mp4, 'audio/mp4;codecs=mp4a.40.2', 2400, true)).toBe("What's everyone working on?");
@@ -71,6 +80,20 @@ describe("a call's speech to text (#645)", () => {
     }
     const file = sent[0].get('file') as File;
     expect([file.name, file.type, file.size]).toEqual(['speech.mp4', 'audio/mp4', mp4.length]);
+  });
+
+  it("a recording that isn't playable is refused before ElevenLabs, and one labelled wrong goes as what it is (#658)", async () => {
+    types.length = 0;
+    const boxes = mp4Boxes(safariMp4);
+    const initOnly = safariMp4.subarray(0, boxes[2].at); // ftyp + moov: a recording with no audio
+    const noStart = safariMp4.subarray(boxes[2].at); // moof + mdat only: slices joined without their init segment
+    for (const bad of [initOnly, noStart, Buffer.from('<html>not audio</html>')]) {
+      const err = (await swarm.voice.transcribe(bad, 'audio/mp4', 2000, true).catch((e: unknown) => e)) as { status?: number; message: string };
+      expect([err.status, err.message]).toEqual([400, expect.stringMatching(/^The recording isn't playable audio \(/)]);
+    }
+    expect(types).toEqual([]); // ElevenLabs never saw them
+    expect(await swarm.voice.transcribe(safariMp4, 'audio/webm;codecs=opus', 4200, true)).toBe("What's everyone working on?");
+    expect(types).toEqual(['audio/mp4']); // the bytes, not the label
   });
 
   it('a failure surfaces with a message and becomes an IT ticket, without the key', async () => {

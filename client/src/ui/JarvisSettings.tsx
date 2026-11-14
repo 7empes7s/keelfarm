@@ -1,8 +1,8 @@
-// Settings → Voice → Jarvis voice on calls (#534, docs/voice.md "ElevenLabs Agents"): the switch, the monthly cap
+// Settings → Voice → Jarvis voice on calls (#534, docs/voice.md "ElevenLabs Agents"): the switch, who listens (#658), the monthly cap
 // (after which calls use today's voice mode), the minutes used today and this month with their estimate, and why a
 // call would fall back right now.
 import { useId } from 'react';
-import { AGENT_USD_PER_MIN, DEFAULT_VOICE_AGENT, hoursLabel, minutesCost, minutesLabel } from '../../../shared/voiceAgent';
+import { AGENT_USD_PER_MIN, DEFAULT_VOICE_AGENT, hoursLabel, minutesCost, minutesLabel, type AgentListen } from '../../../shared/voiceAgent';
 import { useStore } from '../store';
 import { agentCallWhy } from './agentCallStore';
 import { saveVoice } from './VoiceSettings';
@@ -13,6 +13,7 @@ export function JarvisSettings() {
   const settings = useStore((s) => s.settings);
   const agent = settings.voice.agent ?? DEFAULT_VOICE_AGENT;
   const capId = useId();
+  const listenId = useId();
   const why = agentCallWhy({ settings, voiceKeySet: keySet, voiceAgent: used });
   const save = (patch: Partial<typeof agent>) => saveVoice({ agent: { ...agent, ...patch } });
   return (
@@ -20,8 +21,16 @@ export function JarvisSettings() {
       <label className="toggle">
         <input type="checkbox" checked={agent.on} onChange={(e) => save({ on: e.target.checked })} />
         <span>
-          Jarvis voice on calls<span className="muted small"> · ElevenLabs Agents listens and talks, answers at once and hands real work to the CEO</span>
+          Jarvis voice on calls<span className="muted small"> · ElevenLabs Agents talks, answers at once and hands real work to the CEO</span>
         </span>
+      </label>
+      <label className="field" htmlFor={listenId}>
+        <span>Listen</span>
+        <select id={listenId} value={agent.listen ?? 'browser'} onChange={(e) => save({ listen: e.target.value as AgentListen })}>
+          <option value="browser">Browser (default)</option>
+          <option value="elevenlabs">ElevenLabs</option>
+        </select>
+        <span className="muted small">The browser's own speech recognition hears you for free and fast; without it (Firefox) ElevenLabs listens, then the office's OpenAI key, then a recording per turn.</span>
       </label>
       <label className="field" htmlFor={capId}>
         <span>Monthly limit (hours)</span>
