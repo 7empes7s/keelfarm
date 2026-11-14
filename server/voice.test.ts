@@ -265,6 +265,7 @@ describe('Voice', () => {
     },
     ensureAgent: async () => ({ agentId: 'a', secretId: 's', hash: 'h' }),
     agentUrl: async () => 'wss://example/x',
+    chatStream: async function* () {},
   };
 
   const make = () =>

@@ -6,12 +6,14 @@
 // table; folded, or while you sit at that table yourself, it isn't drawn. The orb is ElevenLabs UI's (AgentOrb.tsx);
 // with the Jarvis voice (#534) it leads the phone's call screen, and after "that's all" a tap on it talks again.
 import { lazy, Suspense, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { turnParts, turnWords } from '../../../shared/callTrace';
 import { CEO_ID } from '../../../shared/types';
+import { LISTENER_NAMES } from '../../../shared/voiceAgent';
 import { useStore } from '../store';
 import { Icon } from './Icon';
 import type { IconName } from './icons';
 import { orbState } from './agentCall';
-import { useAgentCall } from './agentCallStore';
+import { toggleCallDetails, useAgentCall } from './agentCallStore';
 import { toggleCamera, useCamera } from './agentCameraStore';
 import { agentStatus, useCallCaptions } from './callCaptions';
 import { callClock, callStatus, inCall, type Call } from './voiceCall';
@@ -104,6 +106,31 @@ function CaptionsLine() {
     <p className="vcall-captions" aria-live="polite">
       {line || ' '}
     </p>
+  );
+}
+
+/** "Call details" (#665): who listens on the Jarvis call, and the last turn's timings, for finding what's slow. */
+function CallDetails() {
+  const { details, mode, listener, turn } = useAgentCall();
+  if (!details || mode === 'off') return null;
+  const total = turn ? turnParts(turn).total : null;
+  return (
+    <p className="vcall-details" data-testid="call-details" aria-live="polite">
+      <span className="vcall-details-who">Listening: {listener ? LISTENER_NAMES[listener] : 'nobody yet'}</span>
+      <span>{turn ? `Turn ${turn.n}: ${turnWords(turn)}` : 'Say something to time a turn'}</span>
+      {total !== null && turn?.playback ? <span>{(total / 1000).toFixed(1)} s from your last word to the voice</span> : null}
+    </p>
+  );
+}
+
+/** The gauge button that shows or hides the call's details, on a Jarvis call. */
+function DetailsButton() {
+  const { details, mode } = useAgentCall();
+  if (mode === 'off') return null;
+  return (
+    <button type="button" className={`ds-btn ds-btn-ghost ds-btn-icon ${details ? 'vcall-key-on' : ''}`} aria-pressed={details} aria-label="Call details" title="Call details: who listens and how long each turn takes" data-key="details" onClick={toggleCallDetails}>
+      <Icon name="gauge" />
+    </button>
   );
 }
 
@@ -210,6 +237,7 @@ function PhoneCall() {
         </button>
         <span className="vcall-clock">{clock}</span>
         <span className="vcall-top-end">
+          <DetailsButton />
           <CameraButton ceo={ceo} />
           <button type="button" className="ds-btn ds-btn-ghost ds-btn-icon" aria-label="Open chat" title="The chat, while the call goes on" onClick={openChat}>
             <Icon name="message-circle" />
@@ -223,6 +251,7 @@ function PhoneCall() {
         <p className="vcall-status">{status}</p>
         <TapToTalk />
         <CaptionsLine />
+        <CallDetails />
       </div>
       <Keys />
     </div>
@@ -303,6 +332,7 @@ function CallOrb() {
                 {status} · <span className="vcall-clock">{clock}</span>
               </span>
             </div>
+            <DetailsButton />
             <CameraButton ceo={ceo} />
             <button type="button" className="ds-btn ds-btn-ghost ds-btn-icon" aria-label="Fold the call card" title="Fold to the orb; the call goes on" onClick={() => setMinimised(true)}>
               <Icon name="chevron-down" />
@@ -311,6 +341,7 @@ function CallOrb() {
           <RoomView ceo={ceo} fallback={null} />
           <TapToTalk />
           <CaptionsLine />
+          <CallDetails />
           <Keys small />
           <button type="button" className="ds-btn" onClick={openChat}>
             <Icon name="message-circle" /> Open chat

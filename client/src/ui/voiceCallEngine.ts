@@ -17,7 +17,7 @@ import { CHIME_MS } from './handsFree';
 import { callProvider, listen, micCaps, registerTarget, setCallEars, stopListening, useMic } from './mic';
 import { cantListen } from './micText';
 import { listenChime, setCallQuiet, unlockAudio } from './sfx';
-import { currentTrace, trace, traceEnd, traceNote, traceStart } from './callTrace';
+import { currentTrace, trace, traceEnd, traceNote, traceStart, turnHearing } from './callTrace';
 import { inCall, wantsMic, type CallEffect } from './voiceCall';
 import { callOn, dispatchCall, onCallStep, useCall } from './voiceCallStore';
 import { releaseWakeMic } from './wake/wakeStore';
@@ -149,6 +149,7 @@ onCallStep((step, ev) => {
 /** What the mic heard on a call turn. */
 const EARS = {
   speech: (text: string) => {
+    if (agentOn()) turnHearing('clip'); // a Jarvis call listening with a clip per turn (#665): words, or a recording's sound
     useCall.setState({ managerSpeaking: true });
     void voice().then((v) => v.stopLine()); // barge-in stops an ack or progress line too (#286)
     dispatchCall({ type: 'speech', now: performance.now(), text });

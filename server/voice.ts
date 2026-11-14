@@ -14,6 +14,7 @@ import type { ListenSettings, PhoneMessage, VoiceCacheView, VoiceOption, VoiceSe
 import { secretMismatch } from '../shared/secretFormats.ts';
 import { DEFAULT_VOICE_AGENT, voiceAgentSettings } from '../shared/voiceAgent.ts';
 import type { AgentConfig, AgentIds } from './voiceAgent.ts';
+import type { FastModel } from './voiceFast.ts';
 import { HttpError } from './httpError.ts';
 import { mergeSecrets, readSecrets } from './secrets.ts';
 
@@ -267,6 +268,8 @@ export interface VoiceApi {
   ensureAgent(key: string, config: AgentConfig, have: AgentIds | null, llmToken: string): Promise<AgentIds>;
   /** A short-lived signed URL for one conversation with the agent (the key never reaches the browser). */
   agentUrl(key: string, agentId: string): Promise<string>;
+  /** The Jarvis voice's fast answer (#665): a streamed OpenAI-style chat completion's words (voiceFast.ts). */
+  chatStream(model: FastModel, history: { role: 'user' | 'assistant'; content: string }[], system: string, signal: AbortSignal): AsyncIterable<string>;
 }
 
 export interface VoiceKeyView {

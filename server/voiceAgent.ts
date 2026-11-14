@@ -22,6 +22,14 @@ export interface AgentIds {
 /** English agents speak with Flash v2 (ElevenLabs Agents' low-latency voice for English). */
 const AGENT_TTS_MODEL = 'eleven_flash_v2';
 
+/**
+ * Faster first audio (#665): the TTS's streaming latency optimisation (0–4; 4 also skips text normalisation, which
+ * misreads numbers, so 3), and turn eagerness "eager", which answers at the earliest pause instead of "normal"'s
+ * natural break (https://elevenlabs.io/docs/eleven-agents/customization/conversation-flow). Speculative turns stay
+ * off: a turn the office answers can hand work to the CEO, which a discarded guess must never do.
+ */
+const AGENT_TTS_LATENCY = 3;
+
 /** The audio both ways: 16 kHz PCM16, which the call's mic is resampled to (#656). */
 const AGENT_AUDIO = 'pcm_16000';
 
@@ -46,8 +54,8 @@ export function agentBody(c: AgentConfig) {
         prompt: { prompt: 'You are the voice of the cubefarm office. The custom LLM writes every reply.', llm: 'custom-llm', custom_llm: { url: c.llmUrl, model_id: 'cubefarm-voice', api_key: { secret_id: c.llmSecretId } } },
       },
       asr: { user_input_audio_format: AGENT_AUDIO },
-      tts: { model_id: AGENT_TTS_MODEL, voice_id: c.voiceId, agent_output_audio_format: AGENT_AUDIO },
-      turn: { turn_eagerness: 'normal' },
+      tts: { model_id: AGENT_TTS_MODEL, voice_id: c.voiceId, agent_output_audio_format: AGENT_AUDIO, optimize_streaming_latency: AGENT_TTS_LATENCY },
+      turn: { turn_eagerness: 'eager' },
       conversation: { client_events: [...AGENT_CLIENT_EVENTS] },
     },
     platform_settings: { overrides: { custom_llm_extra_body: true } },
@@ -72,15 +80,38 @@ export function completionJson(text: string, model: string, now = Date.now()) {
   return { id: `chatcmpl-${now}`, object: 'chat.completion', created: Math.floor(now / 1000), model, choices: [{ index: 0, message: { role: 'assistant', content: text }, finish_reason: 'stop' }] };
 }
 
-/** The same as server-sent events (stream: true): a chunk per sentence, so ElevenLabs starts speaking at once, then [DONE]. */
-export function completionEvents(text: string, model: string, now = Date.now()): string[] {
+const sentences = (text: string) => text.match(/[^.!?…]+[.!?…]*\s*/g) ?? [text];
+
+/** One streamed completion's events: a piece (the first carries the role), then the stop and [DONE]. */
+function completionChunks(model: string, now: number) {
   const base = { id: `chatcmpl-${now}`, object: 'chat.completion.chunk', created: Math.floor(now / 1000), model };
-  const parts = text.match(/[^.!?…]+[.!?…]*\s*/g) ?? [text];
-  return [
-    ...parts.map((content, i) => `data: ${JSON.stringify({ ...base, choices: [{ index: 0, delta: i ? { content } : { role: 'assistant', content }, finish_reason: null }] })}\n\n`),
-    `data: ${JSON.stringify({ ...base, choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] })}\n\n`,
-    'data: [DONE]\n\n',
-  ];
+  let first = true;
+  return {
+    piece(content: string) {
+      const delta = first ? { role: 'assistant', content } : { content };
+      first = false;
+      return `data: ${JSON.stringify({ ...base, choices: [{ index: 0, delta, finish_reason: null }] })}\n\n`;
+    },
+    end: () => [`data: ${JSON.stringify({ ...base, choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] })}\n\n`, 'data: [DONE]\n\n'],
+  };
+}
+
+/**
+ * Streams a turn's pieces as they come (#665): each written the moment it exists (a sentence per event), so ElevenLabs
+ * speaks the first sentence while the rest is still being made. `start` runs before the first write (the headers);
+ * an error before the first piece is thrown, so the route can answer it as an error.
+ */
+export async function streamCompletion(pieces: AsyncIterable<string>, model: string, start: () => void, write: (ev: string) => void, now = Date.now()) {
+  const it = pieces[Symbol.asyncIterator]();
+  let r = await it.next();
+  start();
+  const c = completionChunks(model, now);
+  try {
+    for (; !r.done; r = await it.next()) for (const part of sentences(r.value)) write(c.piece(part));
+  } catch (err) {
+    console.log(`voice agent: a turn failed while streaming: ${(err as Error).message}`);
+  }
+  for (const ev of c.end()) write(ev);
 }
 
 /** The call a turn belongs to: the client's conversation_initiation_client_data puts it in custom_llm_extra_body. */

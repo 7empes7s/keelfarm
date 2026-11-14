@@ -326,7 +326,7 @@ hearing you: …" (and IT gets a ticket); the next transcript clears it.
 **Who listens (#658).** The agent only speaks; the manager is heard by, in this order: the browser's own speech
 recognition (Chrome, Edge, Safari and iPhones: continuous with interim words, `client/src/ui/agentEars.ts`), each
 utterance sent as a text [`user_message`](https://elevenlabs.io/docs/agents-platform/customization/events/client-to-server-events)
-on its final result or after 700 ms without new words, no audio sent and a `user_activity` every 5 s so the agent's
+on its final result or after 550 ms without new words (700 ms before #665), no audio sent and a `user_activity` every 5 s so the agent's
 turn timeout never talks over it; else (Firefox) the agent's own listening on the mic's audio (#657, below); when that
 sends no `user_transcript` for 5 s of talking, the office's OpenAI Realtime transcription (`gpt-4o-mini-transcribe`, a
 transcription-only session with server VAD, relayed by `/ws/voice-stt` in `server/sttRelay.ts` so the key stays on the
@@ -335,7 +335,8 @@ office: an OpenAI audio key from Providers, else any OpenAI key;
 office's speech to text. Each switch shows once on the call screen in plain words and lands in the call trace
 (`listen`, `utterances`, `replies`, and an event with the reason). Talking over the voice (voiceCall.ts's barge-in
 rules) stops its playback at once, drops the rest of that reply and sends `user_activity`. Settings → Voice → Jarvis
-voice → **Listen**: Browser (default) or ElevenLabs (the agent's own listening first). Clips are checked before they
+voice → **Listen** (#665): Auto (default, the order above), or Browser, ElevenLabs agent, OpenAI or Clip to test one:
+the call starts with it when it can (else Auto's choice) and still moves on when it stops hearing. Clips are checked before they
 cost a transcription: the bytes name the container (an MP4 labelled `audio/webm` goes as `.mp4`), an MP4 without its
 moov or audio, or slices missing their start, is refused with "The recording isn't playable audio (…)", and on the
 real office ffprobe must find an audio track; the recorder makes one whole file per turn, never 1 s slices.
@@ -512,6 +513,37 @@ MediaRecorder's type, chunks and bytes, each transcribe answer's status and erro
 type, its close code and reason, and `events`: every voice switch, silent-mic, tap-to-talk and fallback decision with
 its reason. Never audio, never a key. Every voice route's answer is logged too: `voice: POST /api/voice/transcribe
 200 (812 ms)` (a session id never), so a request that never reached the office shows as a missing line.
+
+**Turns (#665).** Each turn is timed (ms since the call started, never the words): the manager's speech start and
+end (the first and last new word or loud mic block, whoever listens), the words ready (recognizer final, the 550 ms
+rule, OpenAI's final, ElevenLabs' `user_transcript` or a clip's transcription) with which listener heard them, sent to
+the agent (`user_message`), the agent's first audio chunk and when it plays. The trace carries the last 10 turns
+(`turns`) and goes at once when a turn's voice starts, not only every 5 s, with the conversation's session and the
+turn's number on it, which the office uses to add its own `/v1/chat/completions` timing (`office`: request to first
+words and to the end, on its own clock) and drops. The office logs each finished turn once: `voice: turn {…}` with
+`words`, e.g. "heard 0.3 s · thinking 0.9 s (office 0.0 s) · voice 0.0 s". The call screen's **Call details** button
+(the gauge beside the camera, remembered per browser) shows who listens, the last turn in those words, and the
+seconds from the last word to the voice.
+
+### How fast a call answers (#665)
+
+The target is under 1.5 s from the end of speech to the first audio. What each part costs and what's done about it:
+- *Heard*: the browser's recognizer settles a phrase late, so words that go quiet for 550 ms are sent anyway.
+- *Thinking*: the office's answer streams (`server/voiceAgent.ts` `streamCompletion`): each sentence is written the
+  moment it exists, so ElevenLabs starts speaking it while the rest is made
+  ([custom LLM docs](https://elevenlabs.io/docs/agents-platform/customization/llm/custom-llm): SSE with
+  `text/event-stream`; [conversation flow](https://elevenlabs.io/docs/eleven-agents/customization/conversation-flow):
+  the agent speaks once it has enough words). The office's own answers (status, floors, decisions, IT) take
+  milliseconds. An open question that used to wait for the CEO now goes to a fast model with the office's facts when a
+  key for one is in Providers (Groq, then Cerebras, then OpenAI `gpt-4.1-mini`, then OpenRouter; `server/voiceFast.ts`),
+  streamed sentence by sentence; when it answers `HANDOFF` (real work, research, a change, facts it doesn't have) the
+  turn is handed to the CEO as before ("On it. I'm asking …"). The hand-off itself runs in the background: the voice's
+  words never wait on the CEO's queue. The demo's fake model answers small talk ("hi, how are you?") and hands the rest on.
+- *Voice*: the agent speaks with Flash v2 with `optimize_streaming_latency: 3` (4 also skips text normalisation, which
+  misreads numbers) and `turn_eagerness: "eager"` (answers at the earliest pause instead of a natural break). Its
+  speculative turn stays off: a guessed turn the office answers could hand work to the CEO before the manager finished.
+- A redialled conversation no longer drops its first audio events (the old conversation's interrupted event ids were
+  kept, and ElevenLabs counts from 1 again).
 
 When ElevenLabs closes the conversation in the middle of a call, the call dials it again once; a second close hands
 the call to the office's own voice, whose mic goes on hearing the manager, and the toast says ElevenLabs' code and

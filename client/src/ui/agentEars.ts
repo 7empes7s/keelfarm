@@ -6,8 +6,12 @@ import { encodeMic, inputFormat } from './agentCall';
 import type { Recognition, RecognitionClass } from './micFake';
 import type { Phrase } from './micText';
 
-/** An utterance is sent this long after its last new interim word, if the recognizer hasn't settled it by then. */
-const QUIET_MS = 700;
+/**
+ * An utterance is sent this long after its last new interim word, if the recognizer hasn't settled it by then (#665:
+ * 700 ms before, all of it waited on every turn the recognizer is slow to settle; a longer pause mid-thought sends the
+ * rest as its own turn).
+ */
+const QUIET_MS = 550;
 
 /** What the call does with what it hears. */
 export interface EarsHooks {

@@ -2,10 +2,11 @@
 // and the call screens can ask "is ElevenLabs talking?" without loading it. Also the call's audio, made in the tap
 // that starts the call: iPhones only let sound start from a tap, and set the audio session for talking both ways.
 import { create } from 'zustand';
+import type { CallTurn } from '../../../shared/callTrace';
 import type { SwarmSettings } from '../../../shared/types';
 import { agentWhy, DEFAULT_VOICE_AGENT, type AgentListener, type VoiceAgentView } from '../../../shared/voiceAgent';
 import type { AgentMode } from './agentCall';
-import { traceNote } from './callTrace';
+import { onTraceTurn, traceNote } from './callTrace';
 
 export interface AgentCallView {
   mode: AgentMode;
@@ -18,9 +19,35 @@ export interface AgentCallView {
   micWhy: string;
   /** Who hears the manager now (#658), '' with no conversation. */
   listener: AgentListener | '';
+  /** The call's latest turn and its timings (#665), for the call screen's details. */
+  turn: CallTurn | null;
+  /** The call screen shows its details: who listens and the last turn's timings (remembered in this browser). */
+  details: boolean;
 }
 
-export const useAgentCall = create<AgentCallView>(() => ({ mode: 'off', saying: '', input: 0, output: 0, micWhy: '', listener: '' }));
+const DETAILS_KEY = 'cubefarm:call-details';
+function savedDetails(): boolean {
+  try {
+    return localStorage.getItem(DETAILS_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export const useAgentCall = create<AgentCallView>(() => ({ mode: 'off', saying: '', input: 0, output: 0, micWhy: '', listener: '', turn: null, details: savedDetails() }));
+
+onTraceTurn((turn) => useAgentCall.setState({ turn }));
+
+/** The call screen's "Call details" switch. */
+export function toggleCallDetails() {
+  const details = !useAgentCall.getState().details;
+  useAgentCall.setState({ details });
+  try {
+    localStorage.setItem(DETAILS_KEY, details ? '1' : '0');
+  } catch {
+    // for this visit only
+  }
+}
 
 /** The Jarvis voice drives the call now. */
 export const agentOn = () => useAgentCall.getState().mode !== 'off';
