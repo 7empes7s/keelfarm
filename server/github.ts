@@ -301,9 +301,10 @@ export async function closeIssue(fullName: string, number: number, comment: stri
   await gh(['issue', 'close', String(number), '-R', fullName, '--reason', reason, '--comment', comment]);
 }
 
-/** Replace an issue's body and/or add and remove labels. */
-export async function editIssue(fullName: string, number: number, edit: { body?: string; addLabels?: string[]; removeLabels?: string[] }): Promise<void> {
+/** Replace an issue's title or body and/or add and remove labels. */
+export async function editIssue(fullName: string, number: number, edit: { title?: string; body?: string; addLabels?: string[]; removeLabels?: string[] }): Promise<void> {
   const args = ['issue', 'edit', String(number), '-R', fullName];
+  if (edit.title) args.push('--title', edit.title);
   if (edit.body !== undefined) args.push('--body-file', '-');
   for (const l of edit.addLabels ?? []) {
     await ensureLabel(fullName, l);
@@ -312,6 +313,11 @@ export async function editIssue(fullName: string, number: number, edit: { body?:
   for (const l of edit.removeLabels ?? []) args.push('--remove-label', l);
   if (args.length === 5) return;
   await gh(args, edit.body !== undefined ? { input: edit.body || ' ' } : undefined);
+}
+
+/** Mark a draft PR ready for review (#663). */
+export async function readyPull(fullName: string, number: number): Promise<void> {
+  await gh(['pr', 'ready', String(number), '-R', fullName]);
 }
 
 /** Merge a PR. With headSha, GitHub refuses if anything was pushed after that commit (e.g. after QA signed it off). */

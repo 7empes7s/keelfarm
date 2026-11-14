@@ -3,7 +3,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { createDemoBackend } from './demo.ts';
 import { Swarm } from './swarm.ts';
-import { HOME_DIR } from './config.ts';
+import { HOME_DIR, PORT } from './config.ts';
 import { DEMO_ACCESS } from './demo/gcloud.ts';
 import { headersFor } from './providerActions/http.ts';
 import type { ActionRequest } from './providerActions/types.ts';
@@ -92,5 +92,16 @@ describe('app_call (#625)', () => {
     expect(await tools.call('app_call', { method: 'POST', url: 'https://keel.techinsiderbytes.com/api/x' })).toMatch(/^Refused: POST isn't allowed on keel/);
     expect(await tools.call('app_call', { method: 'GET', url: 'http://clip.techinsiderbytes.com/' })).toMatch(/https only/);
     expect(calls).toEqual([]);
+  });
+  it("reads the live office's own API on localhost with no token, and refuses writes to it (#663)", async () => {
+    const { o, calls, tools } = await office();
+    const url = `http://localhost:${PORT}/api/voice/traces`;
+    const out = await tools.call('app_call', { method: 'GET', url });
+    expect(out).toMatch(/^\$ app_call GET http:\/\/localhost:\d+\/api\/voice\/traces\nHTTP 200\n/);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({ method: 'GET', auth: 'none', key: '' });
+    expect(o.state.itDesk.log[0]).toMatchObject({ kind: 'read', argv: ['app_call', 'GET', url], code: 0 });
+    expect(await tools.call('app_call', { method: 'POST', url })).toMatch(/^Refused: app_call only reads the office's API/);
+    expect(calls).toHaveLength(1);
   });
 });

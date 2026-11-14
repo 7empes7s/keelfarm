@@ -53,6 +53,9 @@ import { fixCause } from '../../shared/rounds.ts';
 const LAB_VIEWER = 'testlab';
 const LAB_PREVIEW_MS = 5 * 60_000;
 
+/** The most of the CEO's notes an agent with no session keeps for their next task (#663). */
+const QUEUED_NOTES_MAX = 5;
+
 export abstract class SwarmSessions extends SwarmRotation {
   // ---------- terminals ----------
 
@@ -307,12 +310,48 @@ export abstract class SwarmSessions extends SwarmRotation {
       issue.body?.trim() || '(The issue has no description.)',
       this.ceoFiles.issueLines(issue.body),
       note ? `\nNote from the manager: ${note}` : '',
+      this.takeQueuedNotes(a),
     ]
       .filter(Boolean)
       .join('\n');
 
     this.lab.assign(repo.id, issue);
     this.startAgentSession(a, repo, cwd, prompt, this.buildSystemAppend(a, repo, cwd, branch, undefined, desk.deps));
+  }
+
+  /** No session of theirs for message_agent to resume (#663): the message waits for their next task. */
+  protected noSessionToResume(a: PersistedAgent): boolean {
+    return a.status === 'preparing' || !a.sessionId || !a.branch || a.task === 'qa';
+  }
+
+  /** message_agent with no session to continue (#663): kept for their next task's prompt, and posted on an open issue it names. */
+  protected async queueNote(a: PersistedAgent, repo: PersistedRepo, text: string) {
+    if (!text) throw new Error('Say what they should know.');
+    const who = `${this.ceo().name} (CEO)`;
+    a.queuedNotes = [...(a.queuedNotes ?? []), `${who}: ${text}`].slice(-QUEUED_NOTES_MAX);
+    this.appendLog(a, [{ kind: 'manager', text: `📌 For the next task, from ${who}: ${text}` }]);
+    this.save();
+    const open = new Set((this.repoRt.get(repo.id)?.issues ?? []).map((i) => i.number));
+    const named = [...new Set([...text.matchAll(/#(\d+)/g)].map((m) => Number(m[1])))].filter((n) => open.has(n)).slice(0, 3);
+    const posted: number[] = [];
+    for (const n of named) {
+      try {
+        await this.backend.commentIssue(repo.fullName, n, `${who}, for whoever builds this: ${text}`);
+        posted.push(n);
+      } catch (err) {
+        console.warn(`could not comment on ${repo.fullName}#${n}`, err);
+      }
+    }
+    return `${a.name} has no session now: they get it in their next task's prompt.${posted.length ? ` Also posted on ${posted.map((n) => `#${n}`).join(', ')} for whoever builds it.` : ''}`;
+  }
+
+  /** The CEO's notes kept while they had no session (#663), for this task's prompt, used once. */
+  protected takeQueuedNotes(a: PersistedAgent): string {
+    const notes = a.queuedNotes ?? [];
+    if (!notes.length) return '';
+    a.queuedNotes = [];
+    this.save();
+    return `\nMessages for you from while you were free:\n${notes.map((n) => `- ${n}`).join('\n')}`;
   }
 
   protected startAgentSession(

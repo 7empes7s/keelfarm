@@ -10,6 +10,7 @@ import { runTool, toolServer, type OfficeTools } from './ceo.ts';
 import { TICKET_WHERE } from '../shared/itTickets.ts';
 import type { AppCallArgs, ItProposeArgs, ItRunArgs, ItRunbookArgs } from './swarm/itDesk.ts';
 import { APP_CALL_HOSTS } from './appCall.ts';
+import { PORT } from './config.ts';
 import type { ItRecommendArgs } from './swarm/itWatch.ts';
 import type { ItImproveArgs } from './swarm/itImprove.ts';
 import { IMPROVE_KINDS } from '../shared/itImprove.ts';
@@ -94,6 +95,7 @@ export interface ReportHandlers {
 
 export interface AskItHandlers {
   askIt(a: { question: string }): string;
+  itAnswer(a: { message: number }): string;
 }
 
 type Run = typeof runTool;
@@ -134,10 +136,10 @@ function itTools(h: ItHandlers, run: Run) {
     ),
     tool(
       'app_call',
-      `Call a live app over HTTPS past Cloudflare Access: the office loads its service token from the env file (CF_ACCESS_CLIENT_ID/SECRET) into the headers; you never see it, and the answer comes back masked. Hosts: ${Object.entries(APP_CALL_HOSTS).map(([h, m]) => `${h} (${m.join('/')})`).join(', ')}.`,
+      `Call a live app over HTTPS past Cloudflare Access: the office loads its service token from the env file (CF_ACCESS_CLIENT_ID/SECRET) into the headers; you never see it, and the answer comes back masked. Hosts: ${Object.entries(APP_CALL_HOSTS).map(([h, m]) => `${h} (${m.join('/')})`).join(', ')}; and the live office's own API, GET http://localhost:${PORT}/api/… (no token).`,
       {
         method: z.enum(['GET', 'HEAD', 'POST', 'PUT', 'PATCH']),
-        url: z.string().url().max(2000).describe('e.g. "https://clip.techinsiderbytes.com/api/settings"'),
+        url: z.string().url().max(2000).describe(`e.g. "https://clip.techinsiderbytes.com/api/settings" or "http://localhost:${PORT}/api/voice/traces"`),
         env_file: z.string().min(2).max(500).optional().describe("The token's env file; left out, the one in the office's secrets folder naming the host"),
         body: z.unknown().optional().describe('JSON body for POST/PUT/PATCH'),
         why: z.string().min(1).max(300).optional().describe('For the log, in a sentence'),
@@ -287,9 +289,15 @@ export function askItTools(h: AskItHandlers, run: Run) {
   return [
     tool(
       'ask_it',
-      "Hand a question or job about this machine (disk, memory, services, logs, clean-ups) to the IT department: it opens in IT's chat, IT looks and proposes changes for the manager to run, and IT's answer reaches you in your next job. You never run machine commands yourself.",
+      "Hand a question or job about this machine (disk, memory, services, logs, clean-ups) to the IT department: it opens in IT's chat, IT looks and proposes changes for the manager to run, and IT's answer reaches you in your next job, or now: wait_for it_answer with the message id, then it_answer. You never run machine commands yourself.",
       { question: z.string().min(1).max(2000).describe('What to find out or fix, with what you know, e.g. "Uploads are refused: the disk is at 95%. What can go?"') },
       (a) => run(() => h.askIt(a)),
+    ),
+    tool(
+      'it_answer',
+      "IT's whole answer to one of your ask_it questions (up to 8 KB), by its message id, or how far they are. Read-only.",
+      { message: z.number().int().positive().describe("ask_it's message id") },
+      (a) => run(async () => h.itAnswer(a)),
     ),
   ];
 }

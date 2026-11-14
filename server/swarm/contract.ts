@@ -166,6 +166,8 @@ export abstract class SwarmContract {
   // itDept.ts
   protected abstract itBotSecret(...a: Parameters<Swarm['itBotSecret']>): ReturnType<Swarm['itBotSecret']>;
   protected abstract askIt(...a: Parameters<Swarm['askIt']>): ReturnType<Swarm['askIt']>;
+  protected abstract itAnswer(...a: Parameters<Swarm['itAnswer']>): ReturnType<Swarm['itAnswer']>;
+  protected abstract itAnswerOf(...a: Parameters<Swarm['itAnswerOf']>): ReturnType<Swarm['itAnswerOf']>;
   protected abstract itDecide(...a: Parameters<Swarm['itDecide']>): ReturnType<Swarm['itDecide']>;
   protected abstract itProposed(...a: Parameters<Swarm['itProposed']>): ReturnType<Swarm['itProposed']>;
   protected abstract itRan(...a: Parameters<Swarm['itRan']>): ReturnType<Swarm['itRan']>;

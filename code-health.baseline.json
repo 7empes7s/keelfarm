@@ -573,7 +573,7 @@
     "client/src/world/jukeboxSongs.ts": 916,
     "client/src/world/ritualRunner.ts": 854,
     "client/src/world/toys/dogBrain.ts": 1257,
-    "server/ceo.ts": 844,
+    "server/ceo.ts": 846,
     "server/cliRunner.ts": 989,
     "server/swarm/core.ts": 844,
     "server/workspace.ts": 909

@@ -40,6 +40,16 @@ registerCeoReply('close_issue', async ({ text, s, use }) => {
   return out.startsWith('Refused') ? `I couldn't close #${close[1]}: ${refused(out)}` : `Done: ${out} I left "${short(reason, 80)}" on it as a comment.`;
 });
 
+// "rename #3 to Dark mode everywhere" / "add to #3: works offline": the issue changed in place through the real tool (#663).
+registerCeoReply('edit_issue', async ({ text, s, use }) => {
+  const m = text.match(/\b(?:rename #(\d+) to (.+)|add to #(\d+):\s*(.+))/i);
+  const n = m && Number(m[1] ?? m[3]);
+  const f = n && (s.floors.find((x) => x.backlog.some((i) => i.number === n)) ?? s.floors[0]);
+  if (!m || !n || !f) return null;
+  const out = await use('edit_issue', { floor: f.floor, number: n, ...(m[2] ? { title: short(m[2].trim(), 120) } : { append: m[4].trim() }) });
+  return out.startsWith('Refused') ? `I couldn't change #${n}: ${refused(out)}` : `Done: ${out} No need to close and refile it.`;
+}, { early: true });
+
 // "put the freed agent on #3" / "assign #3 to Ada": through the real tool (#265), before the demo's files.
 registerCeoReply('assign_issue', async ({ text, s, use }) => {
   const put = text.match(/\b(?:put|assign)\b(?:.*?\bon #(\d+)|\s+#(\d+)(?:\s+to\s+(\w+))?)/i);

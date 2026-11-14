@@ -299,6 +299,8 @@ export function describeOfficeTool(action: string, input: Record<string, unknown
     }
     case 'file_issue':
       return `📝 file_issue "${clip(String(input.title ?? ''), 70)}"${floor}`;
+    case 'edit_issue':
+      return `✏️ edit_issue #${String(input.number ?? '?')}${floor}`;
     case 'set_dependencies':
       return `🔗 set_dependencies #${String(input.number ?? '?')}${floor}${Array.isArray(input.depends_on) ? ` · depends on ${input.depends_on.map((n) => `#${n}`).join(', ') || 'nothing'}` : ''}`;
     case 'close_issue':
