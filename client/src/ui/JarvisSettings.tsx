@@ -21,7 +21,7 @@ export function JarvisSettings() {
       <label className="toggle">
         <input type="checkbox" checked={agent.on} onChange={(e) => save({ on: e.target.checked })} />
         <span>
-          Jarvis voice on calls<span className="muted small"> · ElevenLabs Agents talks, answers at once and hands real work to the CEO</span>
+          Jarvis voice on calls<span className="muted small"> · the ElevenLabs agent speaks, answers at once and hands real work to the CEO</span>
         </span>
       </label>
       <label className="field" htmlFor={listenId}>
