@@ -26,6 +26,6 @@ export function echoOf(heard: string, replies: readonly string[]): boolean {
 }
 
 /** The mic processing a call asks for that the browser didn't apply (its track's getSettings()). */
-export function micProcessingOff(s: { echoCancellation?: boolean; noiseSuppression?: boolean; autoGainControl?: boolean }): string[] {
-  return (['echoCancellation', 'noiseSuppression', 'autoGainControl'] as const).filter((k) => s[k] !== true);
+export function micProcessingOff(s: { echoCancellation?: boolean | string; noiseSuppression?: boolean; autoGainControl?: boolean }): string[] {
+  return (['echoCancellation', 'noiseSuppression', 'autoGainControl'] as const).filter((k) => s[k] !== true && !(typeof s[k] === 'string' && s[k] !== 'none')); // newer browsers: echoCancellation 'all' | 'remote-only'
 }
