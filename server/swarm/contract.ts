@@ -29,6 +29,14 @@ export abstract class SwarmContract {
   protected abstract fireAgent(...a: Parameters<Swarm['fireAgent']>): ReturnType<Swarm['fireAgent']>;
   protected abstract port(...a: Parameters<Swarm['port']>): ReturnType<Swarm['port']>;
 
+  // comms.ts
+  protected abstract mailList(...a: Parameters<Swarm['mailList']>): ReturnType<Swarm['mailList']>;
+  protected abstract mailRead(...a: Parameters<Swarm['mailRead']>): ReturnType<Swarm['mailRead']>;
+  protected abstract mailDraft(...a: Parameters<Swarm['mailDraft']>): ReturnType<Swarm['mailDraft']>;
+  protected abstract mailSend(...a: Parameters<Swarm['mailSend']>): ReturnType<Swarm['mailSend']>;
+  protected abstract leadUpdate(...a: Parameters<Swarm['leadUpdate']>): ReturnType<Swarm['leadUpdate']>;
+  protected abstract commsToolsFor(...a: Parameters<Swarm['commsToolsFor']>): ReturnType<Swarm['commsToolsFor']>;
+
   // earnings.ts
   protected abstract earningsStatus(...a: Parameters<Swarm['earningsStatus']>): ReturnType<Swarm['earningsStatus']>;
 

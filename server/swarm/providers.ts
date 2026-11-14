@@ -15,7 +15,7 @@ import { redact } from '../../shared/journal.ts';
 import type { KeyScanView, ProvidersView, WorldSnapshot } from '../../shared/types.ts';
 import { SwarmCloudCredit } from './cloudCredit.ts';
 import { mergeSecrets, readSecrets } from '../secrets.ts';
-import type { EntraCred, EntraStore } from '../providerActions/types.ts';
+import type { CredStore, EntraCred, EntraStore, MailCred } from '../providerActions/types.ts';
 
 export abstract class SwarmProviders extends SwarmCloudCredit {
   private readonly providerSecrets = path.join(HOME_DIR, this.backend.demo ? 'demo-providers-secrets.json' : 'secrets.json');
@@ -66,11 +66,24 @@ export abstract class SwarmProviders extends SwarmCloudCredit {
     },
   };
 
+  private mailCred: MailCred | undefined;
+  /** The mail app's secret for the shared mailboxes (#668), in the secrets file; masked everywhere like every key. */
+  protected readonly mailStore: CredStore<MailCred> = {
+    get: () => this.mailCred,
+    set: async (c) => {
+      await mergeSecrets(this.providerSecrets, { mailApp: c });
+      this.mailCred = c;
+    },
+  };
+
   /** Read the saved ones; a fresh demo office gets a made-up connection in every category. */
   protected async initProviders() {
     await this.providers.init();
-    const e = (await readSecrets(this.providerSecrets)).entraAccess as EntraCred | undefined;
+    const saved = await readSecrets(this.providerSecrets);
+    const e = saved.entraAccess as EntraCred | undefined;
     if (e && typeof e.secret === 'string' && typeof e.clientId === 'string') this.entraCred = e;
+    const m = saved.mailApp as MailCred | undefined;
+    if (m && typeof m.secret === 'string' && Array.isArray(m.mailboxes)) this.mailCred = m;
     const seed = this.backend.demoProviders?.();
     const v = this.providers.view();
     if (!seed || v.connections.length || v.mcp.length) return;
@@ -99,7 +112,7 @@ export abstract class SwarmProviders extends SwarmCloudCredit {
   }
 
   protected override secrets(): string[] {
-    return [...super.secrets(), ...this.providers.secretValues(), ...this.found.map((f) => f.value), ...(this.entraCred ? [this.entraCred.secret] : [])];
+    return [...super.secrets(), ...this.providers.secretValues(), ...this.found.map((f) => f.value), ...(this.entraCred ? [this.entraCred.secret] : []), ...(this.mailCred ? [this.mailCred.secret] : [])];
   }
 
   // ---------- keys found on this computer (#367) ----------
