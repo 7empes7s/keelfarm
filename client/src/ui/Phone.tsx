@@ -17,6 +17,7 @@ import { badgeCount } from './badgeCount';
 import type { IconName } from './icons';
 import { chatDock, VIEWPORT_EVENT } from '../viewport';
 import { isTouch } from '../world/touch/touchState';
+import { EarningsCard } from './EarningsCard';
 
 // The manager's phone: text the CEO, decide on team changes, see the whole company at a glance
 // without walking anywhere, and play a game while the team works. Press P anywhere in the office.
@@ -144,6 +145,7 @@ function Company() {
   ];
   return (
     <div className="phone-scroll">
+      <EarningsCard />
       <div className="tiles">
         {tiles.map(([icon, value, label]) => (
           <div key={label} className="tile">

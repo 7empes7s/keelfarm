@@ -8,6 +8,7 @@ import type { ActionRequest, ActionResponse } from './types.ts';
 /** The request's headers: the key goes here and nowhere else. */
 export function headersFor(key: string, req: ActionRequest): Record<string, string> {
   const json: Record<string, string> = req.body === undefined ? {} : { 'Content-Type': 'application/json' };
+  if (req.auth === 'none') return json;
   if (req.auth === 'xi-api-key') return { 'xi-api-key': key, ...json };
   if (req.auth === 'cf-access') return { 'CF-Access-Client-Id': key.slice(0, key.indexOf(':')), 'CF-Access-Client-Secret': key.slice(key.indexOf(':') + 1), ...json };
   if (req.auth === 'github') return { Authorization: `Bearer ${key}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'cubefarm', ...json };

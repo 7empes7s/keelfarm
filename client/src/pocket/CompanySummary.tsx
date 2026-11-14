@@ -1,4 +1,4 @@
-// The Company page's summary row (#345): usage on a row of its own (it holds up to four accounts, so cards beside it
+// The Company page's summary row (#345): earnings vs. spend on top (#666), usage on a row of its own (it holds up to four accounts, so cards beside it
 // were mostly empty), then the memory map and the CEO as cards of one height in summaryGrid()'s columns, so every row
 // ends at the floors' right edge; whatever comes before them (the callout, the tour, the guide) takes a row of its own.
 import { useCallback, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
@@ -6,6 +6,7 @@ import { useStore } from '../store';
 import { CEO_ID } from '../../../shared/types';
 import { buildGraph } from '../../../shared/memoryMap';
 import { UsageSources } from '../ui/UsageSources';
+import { EarningsCard } from '../ui/EarningsCard';
 import { Icon } from '../ui/Icon';
 import { summaryGrid } from './companyLayout';
 import type { PocketTab } from './pocketData';
@@ -25,6 +26,7 @@ export function CompanySummary({ go, settings, children }: { go: (tab: PocketTab
   const last = { gridColumn: `span ${lastSpan}` };
   return (
     <div className="pk-company-side" ref={measure} style={{ '--pk-side-cols': cols } as CSSProperties}>
+      <EarningsCard />
       {children}
       <div className="pk-card pk-summary pk-usage">
         <button className="pk-usage-head" onClick={() => settings('ops')} title="Open Mission control">
