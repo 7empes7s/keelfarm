@@ -42,13 +42,13 @@ describe('attach_file allow-list', () => {
     expect(ok.size).toBe(8);
   });
 
-  it('refuses relative and outside paths, missing files and wrong types', async () => {
+  it('refuses relative and outside paths and missing files, but takes any type', async () => {
     await expect(checkAttachPath('report.pdf', roots())).rejects.toThrow(/absolute/);
     await expect(checkAttachPath(path.join(dir, 'secret.pdf'), roots())).rejects.toThrow(/outside/);
     await expect(checkAttachPath(path.join(dir, 'ceo', '..', 'secret.pdf'), roots())).rejects.toThrow(/outside/);
     await expect(checkAttachPath(path.join(dir, 'ceo', 'gone.pdf'), roots())).rejects.toThrow(/no file/);
     await fs.writeFile(path.join(dir, 'ceo', 'run.exe'), 'x');
-    await expect(checkAttachPath(path.join(dir, 'ceo', 'run.exe'), roots())).rejects.toThrow(/can't be attached/);
+    expect((await checkAttachPath(path.join(dir, 'ceo', 'run.exe'), roots())).name).toBe('run.exe');
     await expect(checkAttachPath(path.join(dir, 'ceo', 'report.pdf'), roots(), 4)).rejects.toThrow(/at most/);
   });
 
@@ -89,6 +89,7 @@ describe('the store', () => {
     const GB = 1024 ** 3;
     const store = new FileStore(dir, undefined, async () => 10 * GB + 4);
     await expect(store.addStream(Readable.from([Buffer.from('hello')]), { name: 'a.txt', type: '', from: 'manager', length: 5 })).rejects.toMatchObject({ status: 507, message: expect.stringMatching(/nearly full/) });
+    await expect(store.addStream(Readable.from([Buffer.from('hello')]), { name: 'memo.m4a', type: 'audio/x-m4a', from: 'manager', length: 5 })).rejects.toMatchObject({ status: 507 });
     expect((await fs.readdir(dir)).filter((f) => f !== 'index.json')).toEqual([]);
     await fs.writeFile(path.join(dir, 'big.pdf'), '%PDF-1.4');
     await expect(store.addCopy(path.join(dir, 'big.pdf'), { name: 'big.pdf', from: 'ceo' })).rejects.toMatchObject({ status: 507 });
@@ -105,6 +106,7 @@ describe('the store', () => {
   it('refuses an upload over the limit and leaves nothing behind', async () => {
     const store = new FileStore(dir, undefined, roomy);
     await expect(store.addStream(Readable.from([Buffer.alloc(10)]), { name: 'a.txt', type: '', from: 'manager' }, 5)).rejects.toMatchObject({ status: 413 });
+    await expect(store.addStream(Readable.from([Buffer.alloc(10)]), { name: 'odd.xyz', type: '', from: 'manager' }, 5)).rejects.toMatchObject({ status: 413 });
     expect((await fs.readdir(dir)).filter((f) => f !== 'index.json')).toEqual([]);
   });
 });
@@ -138,6 +140,34 @@ describe('routes', () => {
     expect(await got.text()).toBe('png bytes');
     const md = (await (await upload('# hi', 'n.md', 'text/markdown')).json()) as { id: string };
     expect((await fetch(`${base}/api/files/${md.id}`)).headers.get('content-disposition')).toMatch(/^attachment/);
+  });
+
+  it('takes any type: voice memos, mp3s and unknown files, served as downloads that never run', async () => {
+    const m4a = await upload('m4a bytes', 'New Recording.m4a', 'audio/x-m4a');
+    expect(m4a.status).toBe(200);
+    expect(((await m4a.json()) as { type: string }).type).toBe('audio/mp4');
+    const mp3 = await upload('mp3 bytes', 'song.mp3', 'audio/mpeg');
+    expect(mp3.status).toBe(200);
+    const odd = await upload('odd bytes', 'odd.xyz', 'chemical/x-xyz');
+    expect(odd.status).toBe(200);
+    const f = (await odd.json()) as { id: string; name: string; type: string };
+    expect(f).toMatchObject({ name: 'odd.xyz', type: 'application/octet-stream' });
+    for (const q of ['', '?download']) {
+      const got = await fetch(`${base}/api/files/${f.id}${q}`);
+      expect(got.headers.get('content-type')).toBe('application/octet-stream');
+      expect(got.headers.get('content-disposition')).toMatch(/^attachment; filename="odd.xyz"/);
+      expect(got.headers.get('x-content-type-options')).toBe('nosniff');
+    }
+  });
+
+  it('never serves an uploaded page or script inline as itself', async () => {
+    for (const [name, type] of [['page.html', 'text/html'], ['page', 'text/html'], ['pic.svg', 'image/svg+xml'], ['run.js', 'text/javascript']]) {
+      const f = (await (await upload('<script>alert(1)</script>', name, type)).json()) as { id: string };
+      const got = await fetch(`${base}/api/files/${f.id}`);
+      expect(got.headers.get('content-disposition')).toMatch(/^attachment/);
+      expect(got.headers.get('x-content-type-options')).toBe('nosniff');
+      expect(got.headers.get('content-security-policy')).toMatch(/sandbox/);
+    }
   });
 
   it('answers 404 for an unknown id and 400 for path-like ones', async () => {

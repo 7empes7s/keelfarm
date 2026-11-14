@@ -1,4 +1,4 @@
-import { useEffect, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { api } from '../api';
 import { useStore } from '../store';
 import { daysLeft, fileKind, formatSize, inlineType, thumbnailable, uploadStatus, type FileKind, type FileRef, type FileView } from '../../../shared/files';
@@ -13,8 +13,8 @@ import type { IconName } from './icons';
 // Files in the CEO chat (shared/files.ts): cards in the bubbles (a thumbnail for images, a chip for the rest), the
 // full-size viewer, the tray of files being attached, the Files list, "Used" under a CEO reply and the "/" picks.
 
-export const FILE_ICONS: Record<FileKind, IconName> = { image: 'image', video: 'video', pdf: 'book-open', document: 'notebook-pen', slides: 'chart-column', sheet: 'trending-up', text: 'file-text', archive: 'archive' };
-const fileIcon = (f: Pick<FileRef, 'name' | 'type'>) => FILE_ICONS[fileKind(f.name, f.type) ?? 'text'];
+export const FILE_ICONS: Record<FileKind, IconName> = { image: 'image', video: 'video', audio: 'music', pdf: 'book-open', document: 'notebook-pen', slides: 'chart-column', sheet: 'trending-up', text: 'file-text', archive: 'archive', file: 'paperclip' };
+const fileIcon = (f: Pick<FileRef, 'name' | 'type'>) => FILE_ICONS[fileKind(f.name, f.type)];
 const url = (id: string, download = false) => `/api/files/${id}${download ? '?download' : ''}`;
 /** Images the browser can draw (HEIC is kept as it is and shown as a chip). */
 const drawable = (type: string) => type.startsWith('image/') && inlineType(type) && !/hei[cf]/.test(type);
@@ -45,6 +45,34 @@ function KeepButton({ f }: { f: FileView }) {
   );
 }
 
+/** "1:05" for a duration in seconds; '' before it is known. */
+const clock = (s: number) => (Number.isFinite(s) && s > 0 ? `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}` : '');
+
+/** The play/pause button of an audio chip (#660): one player at a time, its time left while it plays. */
+function AudioPlay({ f, onTime }: { f: FileRef; onTime: (t: string) => void }) {
+  const el = useRef<HTMLAudioElement>(null);
+  const [playing, setPlaying] = useState(false);
+  const show = () => {
+    const a = el.current;
+    if (a) onTime(clock(a.currentTime > 0 ? a.duration - a.currentTime : a.duration));
+  };
+  const toggle = () => {
+    const a = el.current;
+    if (!a) return;
+    if (!a.paused) return a.pause();
+    for (const other of document.querySelectorAll('audio')) if (other !== a) other.pause();
+    a.play().catch(() => useStore.getState().pushToast('error', `Couldn't play ${f.name}: download it to open it.`));
+  };
+  return (
+    <>
+      <audio ref={el} src={url(f.id)} preload="metadata" onLoadedMetadata={show} onTimeUpdate={show} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={(e) => (e.currentTarget.currentTime = 0, show())} />
+      <button type="button" className="btn btn-small" aria-pressed={playing} onClick={toggle} aria-label={`${playing ? 'Pause' : 'Play'} ${f.name}`}>
+        <Icon name={playing ? 'pause' : 'play'} />
+      </button>
+    </>
+  );
+}
+
 /** A file in a bubble; "expired" once the store no longer has it. */
 export function FileCard({ file, onOpen }: { file: FileRef; onOpen: (id: string) => void }) {
   const f = useStore((s) => s.files.find((x) => x.id === file.id));
@@ -60,16 +88,28 @@ export function FileCard({ file, onOpen }: { file: FileRef; onOpen: (id: string)
         <img src={url(f.id)} alt={f.name} loading="lazy" />
       </button>
     );
+  return <FileChip f={f} onOpen={onOpen} />;
+}
+
+/** A chip: the icon (play/pause for audio), name, size and duration, Preview or ⋯, and Download. */
+function FileChip({ f, onOpen }: { f: FileView; onOpen: (id: string) => void }) {
+  const [time, setTime] = useState('');
   const k = fileKind(f.name, f.type);
+  const audio = k === 'audio' && inlineType(f.type);
   const preview = k === 'pdf' || k === 'video' || drawable(f.type);
   return (
-    <div className="file-card">
-      <span className="file-icon" aria-hidden>
-        <Icon name={fileIcon(f)} />
-      </span>
+    <div className={`file-card ${audio ? 'file-audio' : ''}`}>
+      {audio ? (
+        <AudioPlay f={f} onTime={setTime} />
+      ) : (
+        <span className="file-icon" aria-hidden>
+          <Icon name={fileIcon(f)} />
+        </span>
+      )}
       <span className="grow file-body">
         <b className="file-name">{f.name}</b>
         <span className="small muted">
+          {time && `${time} · `}
           {formatSize(f.size)}
           {f.keep && (
             <>
@@ -118,6 +158,8 @@ export function FileViewer({ id, onClose, onOpenInThread }: { id: string; onClos
           <iframe src={url(f.id)} title={f.name} className="file-full file-pdf" />
         ) : k === 'video' ? (
           <video src={url(f.id)} controls playsInline className="file-full" />
+        ) : k === 'audio' && inlineType(f.type) ? (
+          <audio src={url(f.id)} controls preload="metadata" className="file-audio-full" />
         ) : (
           <p className="muted">No preview for this kind of file: download it to open it.</p>
         )}

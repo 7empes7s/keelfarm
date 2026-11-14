@@ -196,6 +196,9 @@ describe('threads (#132)', () => {
     expect(seeded).toMatchObject({ pinned: true, files: 2, count: 1 });
     expect(await chat.loadThread(seeded.id)).toMatchObject([{ id: 10, attachments: [{ id: 'f1', name: 'a.png' }], artifacts: [{ id: '10-0', title: 'Plan' }] }]);
     expect(added).toEqual(['a.png']);
+    await chat.seed(s, [], [{ repoId: 'r2', messages: [{ from: 'manager', text: 'Memo', at: 3, files: [{ name: 'memo.wav', type: 'audio/wav', data: Buffer.from('RIFF') }, { name: 'odd.xyz', type: '', data: Buffer.from('?') }] }] }], store as never, 20);
+    const memo = await chat.loadThread(s.list.find((c) => c.repoId === 'r2')!.id);
+    expect(memo).toMatchObject([{ id: 20, attachments: [{ name: 'memo.wav', from: 'manager' }, { name: 'odd.xyz', from: 'manager' }] }]);
     await fs.rm(dir, { recursive: true, force: true });
   });
 

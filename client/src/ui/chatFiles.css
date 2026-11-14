@@ -13,7 +13,15 @@
 }
 .file-card .btn {
   flex: none;
+  min-width: 44px;
+  min-height: 44px;
   text-decoration: none;
+}
+.file-audio .btn[aria-pressed='true'] {
+  border-color: var(--ds-accent);
+}
+.file-audio-full {
+  width: 100%;
 }
 .file-gone {
   border-style: dashed;

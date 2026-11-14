@@ -1,7 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useStore } from '../store';
-import { ACCEPT } from '../../../shared/files';
 import { useDialogFocus } from './dialogFocus';
 import { Icon } from './Icon';
 import { badgeCount } from './badgeCount';
@@ -47,7 +46,8 @@ export function ChatActionsSheet({ text, ceoName, onFiles, onResearch, onQuick }
   };
   return (
     <>
-      <input ref={picker} type="file" multiple accept={ACCEPT} hidden onChange={(e) => take(e.currentTarget)} />
+      {/* no accept: any file from Files, Voice Memos, iCloud… (#660) */}
+      <input ref={picker} type="file" multiple hidden onChange={(e) => take(e.currentTarget)} />
       <input ref={camera} type="file" accept="image/*,video/*" capture="environment" hidden onChange={(e) => take(e.currentTarget)} />
       <button type="button" className="chat-plus" aria-label="More: attach, research, quick prompts" aria-haspopup="dialog" aria-expanded={open} title="Attach, research, quick prompts" onClick={() => setOpen(true)}>
         <Icon name="plus" />
