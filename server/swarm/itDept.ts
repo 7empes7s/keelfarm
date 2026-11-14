@@ -233,7 +233,7 @@ export abstract class SwarmItDept extends SwarmSetup {
 
   /** IT's office tools: it_run, it_propose, it_recommend (itWatch.ts), it_health, it_ticket, it_review and it_improve (itImprove.ts; server/ceoItTools.ts). */
   protected itTools(): OfficeTools {
-    return itOfficeTools({ itRun: (a) => this.itRun(a), itPropose: (a) => this.itPropose(a), itRunbook: (a) => this.itRunbook(a), appCall: (a) => this.appCall(a), itRecommend: (a) => this.itRecommend(a), itHealth: () => this.itHealth(), itTicket: (a) => this.itTicket(a), itReview: (a) => this.itReview(a), itImprove: (a) => this.itImprove(a), cloudflare: (a) => this.cloudflareAct(a, this.itName), providerAction: (a) => this.providerAct(a, this.itName), installKey: (a) => this.installKey(a, this.itName), saveProviderKey: (a) => this.saveProviderKey(a), problemsList: (a) => this.problemsList(a), noteProblem: (a) => this.noteProblem(a) });
+    return itOfficeTools({ itRun: (a) => this.itRun(a), itPropose: (a) => this.itPropose(a), itRunbook: (a) => this.itRunbook(a), appCall: (a) => this.appCall(a), itRecommend: (a) => this.itRecommend(a), itHealth: () => this.itHealth(), itTicket: (a) => this.itTicket(a), itReview: (a) => this.itReview(a), itImprove: (a) => this.itImprove(a), cloudflare: (a) => this.cloudflareAct(a, this.itName), providerAction: (a) => this.providerAct(a, this.itName), installKey: (a) => this.installKey(a, this.itName), saveProviderKey: (a) => this.saveProviderKey(a), providerStatus: (a) => this.providerStatus(a), providerUpdate: (a) => this.providerUpdate(a), problemsList: (a) => this.problemsList(a), noteProblem: (a) => this.noteProblem(a) });
   }
 
   /** it_health: the office's readings, compact. */

@@ -372,7 +372,7 @@ app.get(callbackPath, async (req, res) => {
 app.post('/api/providers/scan', route(() => (void swarm.scanKeys(), swarm.keyScanView())));
 app.post('/api/providers/scan/import', route((req) => swarm.importKeys(parse(z.object({ ids: z.array(z.string().max(20)).max(200) }), req.body).ids)));
 app.delete('/api/providers/scan', route(() => (swarm.dismissKeys(), { dismissed: true })));
-app.patch('/api/providers/:id', route((req) => swarm.providers.update(String(req.params.id), parse(z.object({ label: z.string().max(60).optional(), tags: z.string().max(300).optional(), usedFor: z.enum(['inference', 'operations', 'both']).optional(), accountId: z.string().max(64).optional() }), req.body))));
+app.patch('/api/providers/:id', route((req) => swarm.providers.update(String(req.params.id), parse(z.object({ label: z.string().max(60).optional(), tags: z.string().max(300).optional(), usedFor: z.enum(['inference', 'operations', 'both']).optional(), accountId: z.string().max(64).optional(), usedBy: z.string().max(200).optional() }), req.body))));
 app.post('/api/providers/:id/test', route((req) => swarm.providers.test(String(req.params.id))));
 app.delete('/api/providers/:id', route(async (req) => ({ removed: await swarm.providers.remove(String(req.params.id)).then(() => true) })));
 app.post(
@@ -528,7 +528,7 @@ app.delete('/api/it/telegram', route(() => swarm.itBot.remove()));
 app.post('/api/it/telegram/demo', route((req) => swarm.itTelegramDemo(req.body ?? {})));
 // Checklists (#612): the manager's tick, untick, not needed or comment on a step, a secret field (to Providers only), a copy.
 app.post('/api/checklists/:id/steps/:step', route((req) => swarm.checklistStep(String(req.params.id), String(req.params.step), req.body ?? {})));
-app.post('/api/checklists/:id/steps/:step/secret', route((req) => swarm.checklistSecret(String(req.params.id), String(req.params.step), req.body?.value)));
+app.post('/api/checklists/:id/steps/:step/secret', route((req) => swarm.checklistSecret(String(req.params.id), String(req.params.step), req.body?.value, req.body?.accountId)));
 app.post('/api/checklists/:id/duplicate', route((req) => swarm.checklistDuplicate(String(req.params.id), req.body?.title)));
 // Earnings vs. spend (#666): manual entries, fixed monthly costs, a floor's feed URL.
 app.post('/api/earnings/entries', route((req) => swarm.addEarning(req.body ?? {})));

@@ -348,6 +348,7 @@ export interface ProviderCard {
   testedAt?: number;
   scopes?: string[]; // a company sign-in's granted scopes (#533)
   missing?: string[]; // permissions its last test found missing (#533)
+  accountId?: string; // a key's Account ID / Tenant ID (#677), not a secret
   expiresAt?: number; // a key's expiry (#609), drawn with shared/keyInstall.ts' expiryLine
   renews?: boolean; // the office made it and renews it (#609)
   renewNote?: string; // what the provider's API lets the office do about its keys (#609)
@@ -459,6 +460,7 @@ export function providerCards(i: CardInput): ProviderCard[] {
       ...(c.source ? { source: c.source } : {}),
       ...(c.test ? { testedAt: c.test.at } : {}),
       ...(c.scopes ? { scopes: c.scopes } : {}),
+      ...(c.accountId ? { accountId: c.accountId } : {}),
       ...(c.test?.missing?.length ? { missing: c.test.missing } : {}),
       ...(c.expiresAt && def.category !== 'signin' ? { expiresAt: c.expiresAt } : {}),
       ...(c.mint ? { renews: true } : RENEW_NOTE[c.provider] ? { renewNote: RENEW_NOTE[c.provider] } : {}),

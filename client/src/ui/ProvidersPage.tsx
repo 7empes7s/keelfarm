@@ -195,7 +195,9 @@ function CardRow({ c, twins, onWho, onEdit }: { c: ProviderCard; twins: Provider
   const source = useStore((s) => (c.usageId ? s.accounts.sources?.find((x) => x.id === c.usageId) : undefined));
   const [busy, setBusy] = useState(false);
   const [kind, id] = [c.key.slice(0, c.key.indexOf(':')), c.key.slice(c.key.indexOf(':') + 1)];
-  const [word, tone] = kind === 'connection' ? (c.missing ? ['Needs permissions', 'warn' as ChipTone] : [checkWord(c), CHECK_TONE[c.check]]) : STATUS[c.status];
+  const ask = kind === 'connection' && !c.accountId ? setupGuide(c.provider).accountId : undefined;
+  const needs = ask?.required ? ask : undefined; // #677: Entra's Tenant ID, not Cloudflare's optional Account ID
+  const [word, tone] = kind === 'connection' ? (needs ? [`Needs ${needs.label}`, 'warn' as ChipTone] : c.missing ? ['Needs permissions', 'warn' as ChipTone] : [checkWord(c), CHECK_TONE[c.check]]) : STATUS[c.status];
   const now = Date.now();
   const test = async () => {
     setBusy(true);
@@ -223,7 +225,7 @@ function CardRow({ c, twins, onWho, onEdit }: { c: ProviderCard; twins: Provider
           label={`More for ${c.label}`}
           items={[
             own && { label: 'Test', hint: 'One cheap read-only call', onSelect: () => void test() },
-            kind === 'connection' && { label: 'Rename and tags', hint: 'Its name, tags and what it is for', onSelect: () => onEdit(id) },
+            kind === 'connection' && { label: 'Edit details', hint: setupGuide(c.provider).accountId ? `Name, ${setupGuide(c.provider).accountId!.label}, tags, what uses it` : 'Name, tags and what uses it', onSelect: () => onEdit(id) },
             kind === 'mcp' && { label: on ? 'Turn off' : 'Turn on', onSelect: () => void api.setMcpServer(id, { on: !on }).catch(() => undefined) },
             kind === 'mcp' && { label: 'Who gets it', onSelect: () => onWho(id) },
             !!c.settings && { label: `Open ${SETTINGS_NAME[c.settings]}`, hint: 'Test, change or remove it there', onSelect: () => go(c.settings!) },
@@ -246,6 +248,17 @@ function CardRow({ c, twins, onWho, onEdit }: { c: ProviderCard; twins: Provider
           <Icon name="triangle-alert" /> {c.warning}
         </div>
       )}
+      {needs && (
+        <div className="pv-twins">
+          <div className="pv-warning" role="status">
+            <Icon name="triangle-alert" /> No {needs.label} yet: the office can't use this key until it has one.
+          </div>
+          <button className="btn btn-small" onClick={() => onEdit(id)}>
+            <Icon name="pencil" /> Add {needs.label}
+          </button>
+        </div>
+      )}
+      {c.accountId && setupGuide(c.provider).accountId && <div className="ds-row-meta">{setupGuide(c.provider).accountId!.label}: {c.accountId}</div>}
       {source?.windows.map((w) => <WindowBar key={w.name} w={w} now={now} />)}
       {source?.note && source.windows.length > 0 && <div className="ds-row-meta">{source.note}</div>}
       {own && <div className="ds-row-meta">Last test: {c.testedAt ? `${checkWord(c)}, ${ago(c.testedAt, now)} · ${c.note}` : 'not tested yet'}</div>}
@@ -264,7 +277,7 @@ function CardRow({ c, twins, onWho, onEdit }: { c: ProviderCard; twins: Provider
   );
 }
 
-/** Rename and tags (#523): a key's name, free tags and what it's for; saved on the server, kept through a re-scan. */
+/** Edit details (#523, #677): every field but the key (name, Account ID / Tenant ID, tags, Used for, what uses it), whoever saved it; kept through a re-scan. */
 function EditSheet({ id, onClose }: { id: string; onClose: () => void }) {
   const c = useStore((s) => s.providers.connections.find((x) => x.id === id));
   return c ? <EditForm c={c} onClose={onClose} /> : null;
@@ -275,15 +288,23 @@ function EditForm({ c, onClose }: { c: ProviderConnection; onClose: () => void }
   const [label, setLabel] = useState(c.label);
   const [tags, setTags] = useState(c.tags.join(', '));
   const [usedFor, setUsedFor] = useState(c.usedFor);
+  const [usedBy, setUsedBy] = useState(c.usedBy ?? '');
+  const [accountId, setAccountId] = useState(c.accountId ?? '');
   const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const ask = setupGuide(c.provider).accountId;
   const save = async (e: FormEvent) => {
     e.preventDefault();
     setNote('');
+    setBusy(true);
     try {
-      await api.updateProvider(c.id, { label, tags, usedFor });
-      onClose();
+      const after = await api.updateProvider(c.id, { label, tags, usedFor, usedBy, ...(ask && { accountId }) });
+      if (ask && accountId.trim() !== (c.accountId ?? '') && after.test && !after.test.ok) setNote(`Saved, but its test said: ${after.test.note}`);
+      else onClose();
     } catch (err) {
       setNote((err as Error).message);
+    } finally {
+      setBusy(false);
     }
   };
   return (
@@ -292,6 +313,16 @@ function EditForm({ c, onClose }: { c: ProviderConnection; onClose: () => void }
         <label className="field">
           <span>Name</span>
           <input value={label} maxLength={60} placeholder={def?.name} onChange={(e) => setLabel(e.target.value)} />
+        </label>
+        {ask && (
+          <label className="field">
+            <span>{ask.label}</span>
+            <input value={accountId} maxLength={64} spellCheck={false} autoCapitalize="off" placeholder={ask.hint} onChange={(e) => setAccountId(e.target.value)} />
+          </label>
+        )}
+        <label className="field">
+          <span>What uses it</span>
+          <input value={usedBy} maxLength={200} placeholder="clipfarm's transcription" onChange={(e) => setUsedBy(e.target.value)} />
         </label>
         <label className="field">
           <span>Tags</span>
@@ -308,8 +339,10 @@ function EditForm({ c, onClose }: { c: ProviderConnection; onClose: () => void }
             </label>
           ))}
         </fieldset>
-        {c.source && <p className="muted small">From {c.source} · ••••{c.keyHint}</p>}
-        <button className="btn btn-primary">Save</button>
+        <p className="muted small">{c.source ? `From ${c.source} · ` : ''}Key ••••{c.keyHint}: to change it, add the new key, then remove this one.</p>
+        <button className="btn btn-primary" disabled={busy}>
+          {busy ? 'Testing…' : 'Save'}
+        </button>
         {note && (
           <p className="small" role="status">
             {note}

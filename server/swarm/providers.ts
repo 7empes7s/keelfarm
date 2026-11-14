@@ -26,6 +26,7 @@ export abstract class SwarmProviders extends SwarmCloudCredit {
     changed: (view) => this.providersChanged(view),
     fakeConsent: this.backend.demo,
     repo: () => this.state.repos[0]?.fullName,
+    tenantHints: () => [this.state.comms?.settings.domain, this.mailCred?.domain],
   });
 
   /** Coding-agent CLIs installed from Settings (#493): looked for at startup and again after an install or "Check again". */

@@ -12,7 +12,7 @@ import { defaultUse, isProviderUse, keyHint, keyProblem, mcpProblem, mcpTestNote
 import { checkResult, legacyImportName } from '../shared/keyScan.ts';
 import { cleanTags } from '../shared/accounts.ts';
 import { OAUTH, authorizeUrl, callbackPath, codeForm, needsRefresh, oauthDef, readTokens, refreshForm, type OAuthDef } from '../shared/oauth.ts';
-import { cloudflareVerify, entraTokenProbe, missingClassicScopes, missingNote, permissionSteps, runPermissionSteps, turnedAwayNote } from '../shared/keySetup.ts';
+import { cloudflareVerify, entraTokenProbe, isEntraTenant, missingClassicScopes, missingNote, permissionSteps, runPermissionSteps, setupGuide, tenantGuesses, tokenTenant, turnedAwayNote } from '../shared/keySetup.ts';
 import { CAPABILITIES } from '../shared/capabilities.ts';
 import type { Capability, CapabilityChoice, KeyMint, McpServerConfig, ProviderConnection, ProvidersView, ProviderTest, ProviderUse } from '../shared/types.ts';
 import type { KeyInstall } from '../shared/keyInstall.ts';
@@ -34,6 +34,8 @@ export interface ProvidersDeps {
   fakeConsent?: boolean;
   /** The first floor's repo ("owner/name"), for a GitHub token's permission checks. */
   repo?: () => string | undefined;
+  /** The office's verified domains (the Comms floor's), tried as an Entra entry's tenant when it has no Tenant ID (#677). */
+  tenantHints?: () => (string | undefined)[];
 }
 
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
@@ -197,7 +199,7 @@ export class Providers {
     this.keys.set(keyOf(c.id), key);
     this.data.connections.push(c);
     await this.save();
-    return testRequest(provider, key) || provider === 'cloudflare' || provider === 'gcloud' ? this.test(c.id) : { ...c }; // Postiz and Other keys have no test call
+    return testRequest(provider, key) || provider === 'cloudflare' || provider === 'gcloud' || provider === 'entra' ? this.test(c.id) : { ...c }; // Postiz and Other keys have no test call
   }
 
   /** A key the office got from a provider (#622): saved, or the one of that provider and name given the new value. */
@@ -212,14 +214,23 @@ export class Providers {
     return c.label;
   }
 
-  /** Rename and tags (#523): its name (empty: the provider's), tags and what it's for. A name set here stays. */
-  async update(id: string, patch: { label?: string; tags?: unknown; usedFor?: ProviderUse; accountId?: string }): Promise<ProviderConnection> {
+  /**
+   * Every field but the key (#523, #677): its name (empty: the provider's), tags, what it's for, what uses it and its
+   * Account ID / Tenant ID, whoever made it. A name set here stays; a changed Account ID is tested at once.
+   */
+  async update(id: string, patch: { label?: string; tags?: unknown; usedFor?: ProviderUse; accountId?: string; usedBy?: string }): Promise<ProviderConnection> {
     const c = this.connection(id);
+    const before = c.accountId;
     if (patch.accountId !== undefined) {
       const acct = patch.accountId.trim();
       if (acct) accountIdCheck(c.provider, acct);
       if (acct) c.accountId = acct;
       else delete c.accountId;
+    }
+    if (patch.usedBy !== undefined) {
+      const usedBy = patch.usedBy.trim().slice(0, 200);
+      if (usedBy) c.usedBy = usedBy;
+      else delete c.usedBy;
     }
     if (patch.label !== undefined) {
       c.label = patch.label.trim().slice(0, 60) || providerDef(c.provider)!.name;
@@ -230,8 +241,15 @@ export class Providers {
       if (!isProviderUse(patch.usedFor)) throw new HttpError(400, 'Used for is AI inference, Operations or Both.');
       c.usedFor = patch.usedFor;
     }
+    if (c.accountId !== before && c.accountId && setupGuide(c.provider).accountId && this.keys.has(keyOf(id))) return this.test(id);
     await this.save();
     return { ...c };
+  }
+
+  /** Entra entries without a Tenant ID tested (#677): the office's domains tried as the tenant, the GUID kept on success. */
+  async resolveTenants(provider: string) {
+    if (provider !== 'entra') return;
+    for (const c of this.data.connections.filter((x) => x.provider === 'entra' && !x.accountId && this.keys.has(keyOf(x.id)))) await this.test(c.id);
   }
 
   async remove(id: string) {
@@ -264,8 +282,8 @@ export class Providers {
         return { ...c };
       }
     }
-    if (c.provider === 'entra' && !entraTokenProbe(key, c.accountId ?? '')) throw new HttpError(400, `Set ${c.label}'s Tenant ID, and paste the key as "client id:client secret".`);
-    const req = c.provider === 'entra' ? entraTokenProbe(key, c.accountId ?? '') : c.provider === 'cloudflare' && c.accountId ? cloudflareVerify(key, c.accountId) : testRequest(c.provider, c.provider === 'kling' ? klingToken(key) : key);
+    if (c.provider === 'entra') return this.testEntra(c, key);
+    const req = c.provider === 'cloudflare' && c.accountId ? cloudflareVerify(key, c.accountId) : testRequest(c.provider, c.provider === 'kling' ? klingToken(key) : key);
     if (!req && c.provider !== 'gcloud') throw new HttpError(400, `${c.label} is tested in its own settings.`);
     let r = req ? await this.deps.probe(req) : await gcloudProbe(key, this.deps.probe); // a service account: a token, then its project
     // an Account ID beside a user token: the user's verify call is the right one
@@ -284,6 +302,41 @@ export class Providers {
       result: checkResult(c.provider, r).result,
       ...(missing.length ? { missing } : {}),
     };
+    await this.save();
+    return { ...c };
+  }
+
+  /**
+   * An Entra admin app's test (#621): its client-credentials token. Without a Tenant ID (#677) the office's verified
+   * domains are tried as the tenant, and the one that signs in leaves its tenant GUID on the entry.
+   */
+  private async testEntra(c: ProviderConnection, key: string): Promise<ProviderConnection> {
+    const at = Date.now();
+    const tenants = c.accountId ? [c.accountId] : tenantGuesses(this.deps.tenantHints?.() ?? []);
+    if (key.indexOf(':') < 1) c.test = { at, ok: false, note: 'Not "client id:client secret": paste the Application (client) ID, a colon, then the secret', result: 'dead' };
+    else if (!tenants.length) c.test = { at, ok: false, note: 'Add its Tenant ID: Directory (tenant) ID, from Entra → Overview', result: 'unknown' };
+    else {
+      let r: ProbeResult = { status: 0 };
+      let used = '';
+      for (const t of tenants) {
+        const req = entraTokenProbe(key, t);
+        if (!req) continue;
+        [r, used] = [await this.deps.probe(req), t];
+        if (r.status >= 200 && r.status < 300) break;
+      }
+      const ok = r.status >= 200 && r.status < 300;
+      const guessed = !c.accountId;
+      const tid = ok ? tokenTenant(r.body) : null;
+      if (ok && (guessed || (tid && !/^[0-9a-f-]{36}$/i.test(c.accountId ?? '')))) c.accountId = tid ?? used;
+      const said = typeof (r.body as { error?: unknown } | undefined)?.error === 'string' ? ` (${(r.body as { error: string }).error})` : '';
+      const note = testNote(r);
+      c.test = {
+        at,
+        ...note,
+        note: ok ? (guessed ? `Key works; Tenant ID found from ${used}` : note.note) : guessed ? `Add its Tenant ID: ${tenants.join(', ')} didn't sign it in${said}` : `${turnedAwayNote('entra', r.status) ?? note.note}${said}`,
+        result: ok ? 'live' : guessed ? 'unknown' : checkResult('entra', r).result,
+      };
+    }
     await this.save();
     return { ...c };
   }
@@ -472,10 +525,10 @@ async function onPath(command: string): Promise<boolean> {
   return false;
 }
 
-/** A connection's Account ID: Cloudflare's 32 characters, or an Entra tenant's GUID (#621). */
+/** A connection's Account ID: Cloudflare's 32 characters, or an Entra tenant's GUID or domain (#621, #677). */
 function accountIdCheck(provider: string, acct: string) {
   if (provider === 'entra') {
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(acct)) throw new HttpError(400, 'A Tenant ID looks like 1a2b3c4d-…: copy the Directory (tenant) ID from Entra → Overview.');
+    if (!isEntraTenant(acct)) throw new HttpError(400, 'A Tenant ID looks like 1a2b3c4d-… (or your domain, contoso.com): copy the Directory (tenant) ID from Entra → Overview.');
   } else if (!/^[0-9a-f]{32}$/i.test(acct)) throw new HttpError(400, 'An Account ID is 32 letters and digits: copy it from any domain’s Overview page.');
 }
 
