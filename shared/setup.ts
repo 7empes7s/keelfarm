@@ -33,7 +33,7 @@ export interface SetupInput {
 /** A label inside a sentence: "web app", but "API" and "3D / browser game" keep their capitals. */
 const lower = (label: string) => (label[1] === label[1].toLowerCase() ? label[0].toLowerCase() + label.slice(1) : label);
 /** "agency" → "agencies", "ops" stays "ops". */
-const plural = (s: string) => (/s$/.test(s) ? s : /[^aeiou]y$/.test(s) ? `${s.slice(0, -1)}ies` : `${s}s`);
+const plural = (s: string) => (s.endsWith('s') ? s : /[^aeiou]y$/.test(s) ? `${s.slice(0, -1)}ies` : `${s}s`);
 
 const CATEGORY: Record<ProviderCategory, string> = { coding: 'coding agent', text: 'text model', audio: 'voice', video: 'video', image: 'image', cloud: 'cloud', signin: 'company sign-in', mcp: 'MCP server' };
 

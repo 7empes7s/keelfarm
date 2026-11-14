@@ -185,8 +185,7 @@ describe('office tools', () => {
     const { client } = await connect();
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([
-      'agency_action_done', 'agency_decide', 'agency_opportunities', 'agency_propose_action',
-      'agent_detail',
+      'agency_action_done', 'agency_decide', 'agency_opportunities', 'agency_propose_action', 'agent_detail',
       'agent_log',
       'answer_agent',
       'apply_charter',
@@ -294,8 +293,7 @@ describe('office tools', () => {
       merge_pull: { ...f, pr: 7, asked_in: 4 }, apply_update: { asked_in: 4 },
       ask_it: { question: 'Why is the disk full?' }, cloudflare: { op: 'tunnel_ingress_add', hostname: 'clip.example.com', service: 'http://localhost:80' }, provider_action: { provider: 'github', op: 'repo_get' }, install_key: { key: 'openai', target: '/etc/clipfarm/clipfarm.env', var_name: 'OPENAI_API_KEY' }, save_provider_key: { provider: 'twitch', value: 'id:secret' },
       it_report: { what: 'CI is down', where: 'ci', evidence: 'checks never started', blocking: false },
-      note_problem: { title: 'Issue #4 had no acceptance criteria', cause: 'vague-brief' }, checklist_create: { title: 'YouTube app', floor: 1, steps: [{ title: 'Open Google Cloud' }] }, checklist_update: { id: 'c1', remove: ['s2'] },
-      create_floor: { name: 'Agency', repo_slug: 'agency', use_case: 'agency', description: 'd', asked_in: 4 }, agency_opportunities: { ...f }, agency_decide: { id: 'x', approve: true, asked_in: 4 }, agency_propose_action: { ...f, kind: 'post', target: 't', summary: 's', draft: 'd' }, agency_action_done: { id: 'ax-1', result: 'r' },
+      note_problem: { title: 'Issue #4 had no acceptance criteria', cause: 'vague-brief' }, checklist_create: { title: 'YouTube app', floor: 1, steps: [{ title: 'Open Google Cloud' }] }, checklist_update: { id: 'c1', remove: ['s2'] }, create_floor: { name: 'Agency', repo_slug: 'agency', use_case: 'agency', description: 'd', asked_in: 4 }, agency_opportunities: { ...f }, agency_decide: { id: 'x', approve: true, asked_in: 4 }, agency_propose_action: { ...f, kind: 'post', target: 't', summary: 's', draft: 'd' }, agency_action_done: { id: 'ax-1', result: 'r' },
     };
     const acting = tools.map((t) => t.name).filter((name) => !NOT_CARDS.has(name));
     for (const name of acting) {
