@@ -532,6 +532,8 @@ app.delete('/api/earnings/entries/:id', route((req) => swarm.removeEarning(Strin
 app.post('/api/earnings/fixed', route((req) => swarm.addFixedCost(req.body ?? {})));
 app.delete('/api/earnings/fixed/:id', route((req) => swarm.removeFixedCost(String(req.params.id))));
 app.put('/api/earnings/feeds/:repo', route((req) => swarm.setEarningsFeed(repoId(req), req.body?.url)));
+app.post('/api/agency/opportunities/:slug', route((req) => swarm.decideOpportunityByManager(String(req.params.slug), req.body ?? {})));
+app.post('/api/agency/actions/:id', route((req) => swarm.decideActionByManager(String(req.params.id), req.body ?? {})));
 // IT monitoring (#525): the checks now, a recommendation's option picked, Not now.
 app.post('/api/it/watch/check', route(() => swarm.itWatchTick()));
 app.post('/api/agent-sdk/check', route(() => swarm.checkAgentSdk()));

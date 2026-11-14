@@ -83,6 +83,11 @@ const ACTS: Record<string, string> = {
   note_problem: '📋',
   checklist_create: '☑️',
   checklist_update: '☑️',
+  create_floor: '🏗️',
+  agency_opportunities: '💼',
+  agency_decide: '💼',
+  agency_propose_action: '✋',
+  agency_action_done: '💼',
 };
 
 /** The office tools that aren't cards: reads, and what shows in the chat itself (files, edits, reactions, questions, research handed over). */
@@ -114,6 +119,9 @@ const SECTIONS: Partial<Record<string, ActionSection>> = {
   checklist_update: 'checklists',
   make_default_account: 'accounts',
   apply_update: 'office',
+  create_floor: 'projects',
+  agency_decide: 'projects',
+  agency_action_done: 'projects',
 };
 const DETAILS: Partial<Record<string, 'now' | 'setup'>> = { restart_agent: 'now', stop_agent: 'now', configure_agent: 'setup' };
 

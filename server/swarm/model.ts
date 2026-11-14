@@ -43,6 +43,7 @@ import type { TaskAccounts } from '../../shared/accountDefault.ts';
 import type { DecisionsState } from '../../shared/decisions.ts';
 import type { ResearchState } from '../../shared/research.ts';
 import type { EarningsState } from '../../shared/earnings.ts';
+import type { AgencyState } from '../../shared/agency.ts';
 import type { RoundCause } from '../../shared/rounds.ts';
 import type { BlockedState } from '../liveState.ts';
 import { DEFAULT_MAX_AGENTS, FLOOR_SEATS } from '../../shared/types.ts';
@@ -265,6 +266,7 @@ export interface Persisted {
   checklists: ChecklistsState; // steps the CEO gave the manager as tickable cards (#612)
   research: ResearchState; // the Researcher's queue, running job and latest briefs (#664)
   earnings: EarningsState; // earnings feeds and entries, fixed costs and each day's spend (#666)
+  agency: AgencyState; // the agency floors' opportunities, external actions and scout days (#667)
   diskAlert?: DiskAlertMark | null; // the last disk notification, so a restart doesn't repeat it (#502)
   usageWatch: string[]; // usage rows the manager asked to hear about once they're back (#404, kept across restarts since #538)
   usageWaiver?: Waiver | null; // pacing the manager cleared with Resume full speed, kept for its window across restarts (#323)

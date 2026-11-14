@@ -116,7 +116,7 @@ export abstract class SwarmCeoTools extends SwarmItDesk {
       applyCharter: acts((a) => this.askApplyCharter(a)),
       mergePull: acts((a) => this.askMergePull(a)), applyUpdate: acts((a) => this.askApplyUpdate(a)),
       askIt: (a) => this.askIt(a), cloudflare: (a) => this.cloudflareAct(a, this.ceo().name), providerAction: (a) => this.providerAct(a, this.ceo().name), installKey: (a) => this.installKey(a, this.ceo().name), saveProviderKey: (a) => this.saveProviderKey(a),
-      itReport: (a) => this.itReport(a, { id: 'ceo', name: this.ceo().name }), problemsList: (a) => this.problemsList(a), noteProblem: (a) => this.noteProblem(a), checklistCreate: acts((a) => this.checklistCreate(a)), checklistUpdate: acts((a) => this.checklistUpdate(a)), checklistRead: (a) => this.checklistRead(a), requestResearch: (a) => this.requestResearch(a),
+      itReport: (a) => this.itReport(a, { id: 'ceo', name: this.ceo().name }), problemsList: (a) => this.problemsList(a), noteProblem: (a) => this.noteProblem(a), checklistCreate: acts((a) => this.checklistCreate(a)), checklistUpdate: acts((a) => this.checklistUpdate(a)), checklistRead: (a) => this.checklistRead(a), requestResearch: (a) => this.requestResearch(a), createFloor: acts((a) => this.createFloor(a)), agencyOpportunities: acts((a) => this.agencyOpportunities(a)), agencyDecide: acts((a) => this.agencyDecide(a)), agencyProposeAction: acts((a) => this.agencyProposeAction(a)), agencyActionDone: acts((a) => this.agencyActionDone(a)),
     };
   }
 

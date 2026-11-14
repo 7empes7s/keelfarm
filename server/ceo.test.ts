@@ -172,7 +172,7 @@ describe('office tools', () => {
       sessionHistory: (a) => (calls.push(['session_history', a]), 'history'),
       react: (a) => (calls.push(['react', a]), 'reacted'),
       reply: (a) => (calls.push(['reply', a]), 'answered'),
-      runExperiment: () => '', setFloorSwitches: () => '', setIssuePriority: async () => '', setCeoSetup: () => '', applyCharter: () => '', mergePull: async () => '', applyUpdate: () => '', askIt: () => '', cloudflare: async () => '', providerAction: async () => '', installKey: async () => '', saveProviderKey: async () => '', itReport: () => '', problemsList: () => '', noteProblem: () => '', checklistCreate: () => '', checklistUpdate: () => '', checklistRead: () => '', requestResearch: () => '',
+      runExperiment: () => '', setFloorSwitches: () => '', setIssuePriority: async () => '', setCeoSetup: () => '', applyCharter: () => '', mergePull: async () => '', applyUpdate: () => '', askIt: () => '', cloudflare: async () => '', providerAction: async () => '', installKey: async () => '', saveProviderKey: async () => '', itReport: () => '', problemsList: () => '', noteProblem: () => '', checklistCreate: () => '', checklistUpdate: () => '', checklistRead: () => '', requestResearch: () => '', createFloor: async () => '', agencyOpportunities: () => '', agencyDecide: async () => '', agencyProposeAction: () => '', agencyActionDone: () => '',
     });
     const [serverSide, clientSide] = InMemoryTransport.createLinkedPair();
     await office.server.instance.connect(serverSide);
@@ -185,6 +185,7 @@ describe('office tools', () => {
     const { client } = await connect();
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([
+      'agency_action_done', 'agency_decide', 'agency_opportunities', 'agency_propose_action',
       'agent_detail',
       'agent_log',
       'answer_agent',
@@ -199,7 +200,7 @@ describe('office tools', () => {
       'close_pull', 'cloudflare',
       'company_status',
       'configure_agent',
-      'consult',
+      'consult', 'create_floor',
       'define_experiment',
       'edit_message',
       'escalate',
@@ -294,6 +295,7 @@ describe('office tools', () => {
       ask_it: { question: 'Why is the disk full?' }, cloudflare: { op: 'tunnel_ingress_add', hostname: 'clip.example.com', service: 'http://localhost:80' }, provider_action: { provider: 'github', op: 'repo_get' }, install_key: { key: 'openai', target: '/etc/clipfarm/clipfarm.env', var_name: 'OPENAI_API_KEY' }, save_provider_key: { provider: 'twitch', value: 'id:secret' },
       it_report: { what: 'CI is down', where: 'ci', evidence: 'checks never started', blocking: false },
       note_problem: { title: 'Issue #4 had no acceptance criteria', cause: 'vague-brief' }, checklist_create: { title: 'YouTube app', floor: 1, steps: [{ title: 'Open Google Cloud' }] }, checklist_update: { id: 'c1', remove: ['s2'] },
+      create_floor: { name: 'Agency', repo_slug: 'agency', use_case: 'agency', description: 'd', asked_in: 4 }, agency_opportunities: { ...f }, agency_decide: { id: 'x', approve: true, asked_in: 4 }, agency_propose_action: { ...f, kind: 'post', target: 't', summary: 's', draft: 'd' }, agency_action_done: { id: 'ax-1', result: 'r' },
     };
     const acting = tools.map((t) => t.name).filter((name) => !NOT_CARDS.has(name));
     for (const name of acting) {
@@ -719,7 +721,7 @@ describe('follow-ups (#27)', () => {
           closePull: async () => 'ok', escalate: async () => 'ok', attachFile: async () => 'ok', worktreeFile: async () => 'ok', prDiff: async () => 'ok', sendTelegram: async () => 'ok', scanKeys: async () => 'ok', makeDefaultAccount: () => 'ok', editMessage: async () => 'ok',
           restartAgent: ok, stopAgent: ok, messageAgent: async () => 'ok', assignIssue: async () => 'ok', answerAgent: async () => 'ok', askManagerChoice: ok, defineExperiment: ok, sessionHistory: ok, proposeCharter: ok, resolveDecision: ok, proposeDesign: async () => 'ok',
           waitFor: async () => 'ok', askManager: async () => 'ok', consult: async () => 'ok', react: ok, reply: ok, problemsList: ok, noteProblem: ok, checklistCreate: ok, checklistUpdate: ok, checklistRead: ok,
-          runExperiment: ok, setFloorSwitches: ok, setIssuePriority: async () => 'ok', setCeoSetup: ok, applyCharter: ok, mergePull: async () => 'ok', applyUpdate: ok, askIt: ok, cloudflare: async () => 'ok', providerAction: async () => 'ok', installKey: async () => 'ok', saveProviderKey: async () => 'ok', itReport: ok, requestResearch: ok,
+          runExperiment: ok, setFloorSwitches: ok, setIssuePriority: async () => 'ok', setCeoSetup: ok, applyCharter: ok, mergePull: async () => 'ok', applyUpdate: ok, askIt: ok, cloudflare: async () => 'ok', providerAction: async () => 'ok', installKey: async () => 'ok', saveProviderKey: async () => 'ok', itReport: ok, requestResearch: ok, createFloor: async () => 'ok', agencyOpportunities: ok, agencyDecide: async () => 'ok', agencyProposeAction: ok, agencyActionDone: ok,
         },
         () => researching,
       ),
