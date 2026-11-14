@@ -29,6 +29,7 @@ import { renewMinted } from '../keyRenew.ts';
 import { CF_OPS } from '../../shared/cloudflare.ts';
 import { ActionError, applyAction, MODULES, runAction, type ActionCtx } from '../providerActions/index.ts';
 import { renewEntraSecret } from '../providerActions/entra.ts';
+import { renewMailSecret } from '../providerActions/entraMail.ts';
 import { actionOp, autoApplies, type ActionRisk, type ProviderChange } from '../../shared/providerActions.ts';
 import type { CfChange } from '../../shared/cloudflare.ts';
 import { SwarmManagerAsks } from './managerAsks.ts';
@@ -258,21 +259,33 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
   /** A provider's keys (ElevenLabs' is Voice's), the one network call, and the Box API: the keys stay on the server. */
   private actionCtx(provider: string): ActionCtx {
     const voice = provider === 'elevenlabs' && this.voice.secret() ? [{ id: 'voice', label: 'ElevenLabs (Voice)', key: this.voice.secret(), ok: true }] : [];
-    return { keys: [...voice, ...this.providers.keysFor(provider)], http: this.backend.providerHttp, cloudflareApi: this.backend.cloudflareApi, boxes: this.cloud.boxApi(), repo: this.state.repos[0]?.fullName, secretFile: (envFile, name) => envSecretFile(this.cfSecretPath(envFile, name)), saveMinted: async (k) => (await this.providers.add(k.provider, k.value, k.label, '', k.mint.accountId, { expiresAt: k.expiresAt, mint: k.mint, usedBy: 'Made by the office' })).label, cfKeys: this.providers.keysFor('cloudflare'), entra: this.entraStore, saveKey: (k) => this.providers.saveByName(k.provider, k.value, k.label, k.usedBy), savedKey: (provider, label) => this.providers.view().connections.some((c) => c.provider === provider && c.label === label) };
+    return { keys: [...voice, ...this.providers.keysFor(provider)], http: this.backend.providerHttp, cloudflareApi: this.backend.cloudflareApi, boxes: this.cloud.boxApi(), repo: this.state.repos[0]?.fullName, secretFile: (envFile, name) => envSecretFile(this.cfSecretPath(envFile, name)), saveMinted: async (k) => (await this.providers.add(k.provider, k.value, k.label, '', k.mint.accountId, { expiresAt: k.expiresAt, mint: k.mint, usedBy: 'Made by the office' })).label, cfKeys: this.providers.keysFor('cloudflare'), entra: this.entraStore, mail: this.mailStore, saveKey: (k) => this.providers.saveByName(k.provider, k.value, k.label, k.usedBy), savedKey: (provider, label) => this.providers.view().connections.some((c) => c.provider === provider && c.label === label) };
   }
 
   private entraTried = 0;
+  private mailTried = 0;
 
-  /** With the hourly renewals: the Entra secret renewed 30 days before it ends (#621), tried at most once a day; logged and posted, never shown. */
+  /** With the hourly renewals: the Entra secret renewed 30 days before it ends (#621), tried at most once a day; logged and posted, never shown. The mail app's the same way (#668). */
   private async entraRenewTick(now = Date.now()) {
+    if (now - this.mailTried >= 86_400_000) {
+      const m = await renewMailSecret(this.actionCtx('entra'), now);
+      if (m) {
+        this.mailTried = now;
+        this.secretRenewed(m, 'mail', 'the shared mailboxes’ mail app secret', 'The mail app secret ends within 30 days.');
+      }
+    }
     if (now - this.entraTried < 86_400_000) return;
     const r = await renewEntraSecret(this.actionCtx('entra'), now);
     if (!r) return;
     this.entraTried = now;
+    this.secretRenewed(r, 'secret', 'the Entra sign-in secret', 'The Cloudflare Access sign-in secret ends within 30 days.');
+  }
+
+  private secretRenewed(r: { ok: boolean; text: string }, what: string, words: string, why: string) {
     const out = this.itMask(r.text);
-    this.itLog({ kind: 'change', auto: true, by: 'The office (Entra secret renewal)', argv: ['entra', 'secret_renew'], code: r.ok ? 0 : 1, out, why: 'The Cloudflare Access sign-in secret ends within 30 days.' });
+    this.itLog({ kind: 'change', auto: true, by: 'The office (Entra secret renewal)', argv: ['entra', `${what}_renew`], code: r.ok ? 0 : 1, out, why });
     this.itDeskChanged();
-    this.postMessage('office', `🔑 ${r.ok ? 'Renewed' : "Couldn't renew"} the Entra sign-in secret`, undefined, { notice: { details: out } });
+    this.postMessage('office', `🔑 ${r.ok ? 'Renewed' : "Couldn't renew"} ${words}`, undefined, { notice: { details: out } });
   }
 
   /** Where a service token's secret goes (#607): the env file asked for, else one under the office's home (the demo's always is). */

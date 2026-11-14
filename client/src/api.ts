@@ -23,6 +23,7 @@ import type { ChatPage } from '../../shared/chatPage';
 import type { TryThis } from '../../shared/tryIt';
 import type { Checklist } from '../../shared/checklists';
 import type { EarningEntry, FixedCost } from '../../shared/earnings';
+import type { CommsSettings, Lead, MailDraft, MailLabel } from '../../shared/comms';
 
 async function call<T = unknown>(method: string, url: string, body?: unknown, toast = true): Promise<T> {
   // The time-lapse shows a recorded day: nothing in it can be acted on.
@@ -146,6 +147,13 @@ export const api = {
   removeFixedCost: (id: string) => call('DELETE', `/api/earnings/fixed/${id}`),
   decideOpportunity: (slug: string, approve: boolean, route?: 'build' | 'ops') => call<{ text: string }>('POST', `/api/agency/opportunities/${encodeURIComponent(slug)}`, { approve, route }),
   decideAgencyAction: (id: string, approve: boolean) => call('POST', `/api/agency/actions/${encodeURIComponent(id)}`, { approve }),
+  /** Comms (#668): a draft approved (with its edits), edited or discarded; a thread's label; a lead; the mailboxes' settings. */
+  approveDraft: (id: string, edits: { subject?: string; text?: string } = {}) => call<MailDraft>('POST', `/api/comms/drafts/${id}/approve`, edits),
+  editDraft: (id: string, edits: { subject?: string; text?: string }) => call<MailDraft>('POST', `/api/comms/drafts/${id}`, edits),
+  discardDraft: (id: string) => call('DELETE', `/api/comms/drafts/${id}`),
+  labelThread: (id: string, label: MailLabel | null) => call('PUT', `/api/comms/threads/${encodeURIComponent(id)}/label`, { label }),
+  saveLead: (lead: { email: string; name?: string; company?: string; stage?: string; next_step?: string; source?: string }) => call<Lead>('POST', '/api/comms/leads', lead),
+  setCommsSettings: (body: { mailboxes?: { address: string; autoReplies?: boolean; signature?: string }[]; floors?: string[]; dailyOutreach?: number }) => call<CommsSettings>('PUT', '/api/comms/settings', body),
   setEarningsFeed: (repoId: string, url: string) => call('PUT', `/api/earnings/feeds/${encodeURIComponent(repoId)}`, { url }),
   checklistStep: (id: string, step: string, body: { action: 'tick' | 'untick' | 'skip' | 'comment'; reason?: string; text?: string; fileId?: string }) => call<Checklist>('POST', `/api/checklists/${id}/steps/${step}`, body),
   checklistSecret: (id: string, step: string, value: string) => call<Checklist>('POST', `/api/checklists/${id}/steps/${step}/secret`, { value }),

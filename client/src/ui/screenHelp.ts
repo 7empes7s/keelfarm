@@ -76,6 +76,12 @@ export const SCREEN_HELP: Record<ScreenId, ScreenHelp> = {
     actions: ['Tick a step, or mark it not needed.', 'Comment with a photo when something looks different.', 'Duplicate a checklist for another account.'],
     docs: `${HOW}#checklists`,
   },
+  comms: {
+    title: 'Comms',
+    shows: "The shared mailboxes' emails, drafts waiting for your Approve, what was sent, and the lead list.",
+    actions: ['Approve, edit or discard a draft.', 'Label a thread lead, customer, support or spam.', 'Turn on auto-replies for a mailbox.'],
+    docs: `${DOCS}comms.md`,
+  },
   charter: {
     title: 'Charter',
     shows: 'Each floor’s mission, objectives, standards and non-goals, with numbers per objective and where the week went.',

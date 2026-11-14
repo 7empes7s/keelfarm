@@ -10,7 +10,7 @@ import { agencySample } from '../agencySample.ts';
 import type { CreateFloorArgs } from '../ceoAgencyTools.ts';
 import { HttpError } from '../httpError.ts';
 import type { PersistedRepo } from './model.ts';
-import { SwarmEarnings } from './earnings.ts';
+import { SwarmComms } from './comms.ts';
 
 const SCOUT_EVERY_MS = 60 * 60_000;
 const SCOUT_FROM_HOUR = 8;
@@ -30,7 +30,7 @@ function planBody(o: Opportunity, route: PlanRoute) {
   ].join('\n');
 }
 
-export abstract class SwarmAgency extends SwarmEarnings {
+export abstract class SwarmAgency extends SwarmComms {
   protected loadAgencyState(raw: unknown) {
     return loadAgency(raw);
   }

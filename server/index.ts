@@ -536,6 +536,14 @@ app.delete('/api/earnings/fixed/:id', route((req) => swarm.removeFixedCost(Strin
 app.put('/api/earnings/feeds/:repo', route((req) => swarm.setEarningsFeed(repoId(req), req.body?.url)));
 app.post('/api/agency/opportunities/:slug', route((req) => swarm.decideOpportunityByManager(String(req.params.slug), req.body ?? {})));
 app.post('/api/agency/actions/:id', route((req) => swarm.decideActionByManager(String(req.params.id), req.body ?? {})));
+// Comms (#668): a draft approved, edited or discarded; a thread's label; leads; the mailboxes' settings; the suppression list.
+app.post('/api/comms/drafts/:id/approve', route((req) => swarm.approveDraft(String(req.params.id), req.body ?? {})));
+app.post('/api/comms/drafts/:id', route((req) => swarm.editDraft(String(req.params.id), req.body ?? {})));
+app.delete('/api/comms/drafts/:id', route((req) => swarm.discardDraft(String(req.params.id))));
+app.put('/api/comms/threads/:id/label', route((req) => swarm.labelThread(String(req.params.id), req.body?.label)));
+app.post('/api/comms/leads', route((req) => swarm.saveLead(req.body ?? {})));
+app.put('/api/comms/settings', route((req) => swarm.setCommsSettings(req.body ?? {})));
+app.post('/api/comms/suppress', route((req) => swarm.suppressAddress(req.body?.email)));
 // IT monitoring (#525): the checks now, a recommendation's option picked, Not now.
 app.post('/api/it/watch/check', route(() => swarm.itWatchTick()));
 app.post('/api/agent-sdk/check', route(() => swarm.checkAgentSdk()));
