@@ -12,6 +12,7 @@ import { AboutOffice, AgentsSettings, CeoSettings, CompanySettings, PreviewsSett
 import { OpsTab } from './MissionConsole';
 import { ProblemsPage } from './ProblemsPage';
 import { ChecklistsPage } from './ChecklistsPage';
+import { CommsPage } from './CommsPage';
 import { isOpenChecklist } from '../../../shared/checklists';
 import { CharterTab } from './CharterTab';
 import { ToolsTab } from './ToolsSettings';
@@ -81,6 +82,8 @@ export function SectionBody({ id, where, focus = {} }: { id: SectionId; where: W
       return <ProblemsPage />;
     case 'checklists':
       return <ChecklistsPage open={focus.card} />;
+    case 'comms':
+      return <CommsPage />;
     case 'charter':
       return <CharterTab initialRepo={focus.repoId} />;
     case 'map':

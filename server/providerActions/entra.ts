@@ -9,9 +9,9 @@ import { CfError, teamDomain, withKey, writeIdp } from '../cloudflare.ts';
 import { ActionError, expectOk, keyById, withKeys, type ActionCtx, type ActionKey, type ActionPlan, type Call, type EntraCred, type ProviderModule } from './types.ts';
 
 const NAME = 'Microsoft Entra';
-const GRAPH = 'https://graph.microsoft.com/v1.0';
+export const GRAPH = 'https://graph.microsoft.com/v1.0';
 /** Microsoft Graph's own app id, and its delegated permissions Cloudflare's Entra sign-in needs (ids from Graph's permission reference). */
-const GRAPH_APP = '00000003-0000-0000-c000-000000000000';
+export const GRAPH_APP = '00000003-0000-0000-c000-000000000000';
 const ENTRA_SCOPES: Record<string, string> = {
   email: '64a6cdd6-aab1-4aaf-94b8-3cc8405e90d0',
   offline_access: '7427e0e9-2fba-42fe-b0c0-848c9e6a8182',
@@ -25,13 +25,13 @@ const PERM_APPS = 'Application.ReadWrite.All (application permission, admin-cons
 const PERM_CONSENT = 'DelegatedPermissionGrant.ReadWrite.All (application permission, admin-consented)';
 const DAY = 86_400_000;
 /** A new secret lasts 24 months; renewal starts 30 days before it ends. */
-const SECRET_MS = 730 * DAY;
+export const SECRET_MS = 730 * DAY;
 export const RENEW_BEFORE_MS = 30 * DAY;
 
-const renewDue = (c: Pick<EntraCred, 'expiresAt'>, now = Date.now()) => c.expiresAt - now <= RENEW_BEFORE_MS;
+export const renewDue = (c: Pick<EntraCred, 'expiresAt'>, now = Date.now()) => c.expiresAt - now <= RENEW_BEFORE_MS;
 const accessCallback = (team: string) => `https://${team}/cdn-cgi/access/callback`;
 
-type GraphApp = { id: string; appId: string; displayName: string; web?: { redirectUris?: string[]; implicitGrantSettings?: Record<string, unknown> }; requiredResourceAccess?: { resourceAppId: string; resourceAccess: { id: string; type: string }[] }[]; passwordCredentials?: { keyId: string; endDateTime?: string }[] };
+export type GraphApp = { id: string; appId: string; displayName: string; web?: { redirectUris?: string[]; implicitGrantSettings?: Record<string, unknown> }; requiredResourceAccess?: { resourceAppId: string; resourceAccess: { id: string; type: string }[] }[]; passwordCredentials?: { keyId: string; endDateTime?: string }[] };
 type Grant = { id: string; clientId: string; consentType: string; resourceId: string; scope?: string };
 
 /** The app's Graph permissions with every one Cloudflare needs added (others kept). */
@@ -58,11 +58,11 @@ function tenantOf(k: ActionKey): string {
   return t;
 }
 
-/** A Graph token for the admin app: the key ("client id:secret") goes only into http.ts's form. */
-async function graphCall(ctx: ActionCtx, call: Call, k: ActionKey): Promise<{ g: Call; tenant: string }> {
+/** A Graph token (or, #668, Exchange Online's) for the admin app: the key ("client id:secret") goes only into http.ts's form. */
+export async function graphCall(ctx: ActionCtx, call: Call, k: ActionKey, scope = 'https://graph.microsoft.com/.default'): Promise<{ g: Call; tenant: string }> {
   const tenant = tenantOf(k);
   if (!/^[^:]+:.+$/.test(k.key)) throw new ActionError(`"${k.label}" isn't "client id:client secret": paste the admin app's Application (client) ID, a colon, then its secret.`, 'client id:secret');
-  const r = await call({ method: 'POST', url: `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`, auth: 'entra-token', form: { grant_type: 'client_credentials', scope: 'https://graph.microsoft.com/.default' } });
+  const r = await call({ method: 'POST', url: `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`, auth: 'entra-token', form: { grant_type: 'client_credentials', scope } });
   const b = (r.body ?? {}) as { access_token?: unknown; error?: unknown };
   if (r.status === 0) throw new ActionError(`Couldn't reach ${NAME}.`);
   if (r.status >= 400 || typeof b.access_token !== 'string') throw new ActionError(`${NAME} turned the admin app away (${typeof b.error === 'string' ? b.error : r.status}): check its tenant, client ID and secret.`, 'a working admin app credential');
@@ -70,15 +70,15 @@ async function graphCall(ctx: ActionCtx, call: Call, k: ActionKey): Promise<{ g:
   return { g: (req) => ctx.http(token, req), tenant };
 }
 
-const get = <T>(g: Call, path: string, perm = PERM_APPS) => expectOk<T>(g, { method: 'GET', url: `${GRAPH}${path}`, auth: 'bearer' }, perm, 'Microsoft Graph');
-const send = <T>(g: Call, method: 'POST' | 'PATCH', path: string, body: unknown, perm = PERM_APPS) => expectOk<T>(g, { method, url: `${GRAPH}${path}`, auth: 'bearer', body }, perm, 'Microsoft Graph');
-const q = (s: string) => encodeURIComponent(s);
+export const get = <T>(g: Call, path: string, perm = PERM_APPS) => expectOk<T>(g, { method: 'GET', url: `${GRAPH}${path}`, auth: 'bearer' }, perm, 'Microsoft Graph');
+export const send = <T>(g: Call, method: 'POST' | 'PATCH', path: string, body: unknown, perm = PERM_APPS) => expectOk<T>(g, { method, url: `${GRAPH}${path}`, auth: 'bearer', body }, perm, 'Microsoft Graph');
+export const q = (s: string) => encodeURIComponent(s);
 
-async function findApp(g: Call, name: string, stored?: EntraCred): Promise<GraphApp | undefined> {
+export async function findApp(g: Call, name: string, stored?: Pick<EntraCred, 'appObjectId'>): Promise<GraphApp | undefined> {
   const list = (await get<{ value?: GraphApp[] }>(g, `/applications?$filter=${q(`displayName eq '${name.replace(/'/g, "''")}'`)}&$select=id,appId,displayName,web,requiredResourceAccess,passwordCredentials`)).value ?? [];
   return list.find((a) => a.id === stored?.appObjectId) ?? list[0];
 }
-const spOf = async (g: Call, appId: string) => (await get<{ value?: { id: string }[] }>(g, `/servicePrincipals?$filter=${q(`appId eq '${appId}'`)}&$select=id`)).value?.[0];
+export const spOf = async (g: Call, appId: string) => (await get<{ value?: { id: string }[] }>(g, `/servicePrincipals?$filter=${q(`appId eq '${appId}'`)}&$select=id`)).value?.[0];
 async function grantOf(g: Call, clientSp: string, graphSp: string) {
   const list = (await get<{ value?: Grant[] }>(g, `/oauth2PermissionGrants?$filter=${q(`clientId eq '${clientSp}' and resourceId eq '${graphSp}'`)}`, PERM_CONSENT)).value ?? [];
   return list.find((x) => x.consentType === 'AllPrincipals');
@@ -91,7 +91,7 @@ async function addSecret(g: Call, app: GraphApp, now: number) {
   if (!r.keyId || !r.secretText) throw new ActionError("Microsoft Graph made a secret but didn't return it: run entra_app_ensure again.");
   return { keyId: r.keyId, secret: r.secretText, expiresAt: r.endDateTime ? Date.parse(r.endDateTime) : now + SECRET_MS };
 }
-const removeSecret = (g: Call, appObjectId: string, keyId: string) => g({ method: 'POST', url: `${GRAPH}/applications/${appObjectId}/removePassword`, auth: 'bearer', body: { keyId } });
+export const removeSecret = (g: Call, appObjectId: string, keyId: string) => g({ method: 'POST', url: `${GRAPH}/applications/${appObjectId}/removePassword`, auth: 'bearer', body: { keyId } });
 
 const cleanName = (n: unknown) => {
   const s = String(n ?? 'Cloudflare Access').trim() || 'Cloudflare Access';

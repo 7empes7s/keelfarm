@@ -8,6 +8,7 @@ import type { ActionRequest, ActionResponse, ProviderHttp } from '../providerAct
 import type { BoxApi, BoxInfo } from '../box.ts';
 import { registerCeoReply, registerDemo } from './registry.ts';
 import { fakeClipfarm, fakeGoogle } from './gcloud.ts';
+import { fakeExchange, type TokenInfo } from './exchange.ts';
 
 export const DEMO_REPO = 'demo-co/storefront';
 
@@ -22,6 +23,8 @@ export function fakeProviderHttp() {
   const calls: (ActionRequest & { key: string })[] = [];
   const google = fakeGoogle();
   const clipfarm = fakeClipfarm();
+  const exchange = fakeExchange(); // #668
+  const tokens = new Map<string, TokenInfo>();
   const ok = (body: unknown, status = 200): ActionResponse => ({ status, body });
   const denied = (perm: string): ActionResponse => ({ status: 403, body: { message: 'Resource not accessible by personal access token' }, headers: { 'x-accepted-github-permissions': perm } });
   const github = (key: string, req: ActionRequest): ActionResponse => {
@@ -126,8 +129,13 @@ export function fakeProviderHttp() {
     const login = u.match(/^https:\/\/login\.microsoftonline\.com\/([^/]+)\/oauth2\/v2\.0\/token$/);
     if (login && req.auth === 'entra-token') {
       entra.tenants.push(login[1]);
-      return key.includes(':') ? ok({ token_type: 'Bearer', expires_in: 3599, access_token: `graph-token-${/noconsent/i.test(key) ? 'noconsent-' : ''}${++seq}` }) : { status: 401, body: { error: 'invalid_client' } };
+      if (!key.includes(':')) return { status: 401, body: { error: 'invalid_client' } };
+      const token = `graph-token-${/noconsent/i.test(key) ? 'noconsent-' : ''}${/noexo/i.test(key) ? 'noexo-' : ''}${++seq}`;
+      tokens.set(token, { tenant: login[1], client: key.slice(0, key.indexOf(':')) });
+      return ok({ token_type: 'Bearer', expires_in: 3599, access_token: token });
     }
+    const mail = exchange.handle(key, req, tokens.get(key));
+    if (mail) return mail;
     if (u.startsWith('https://graph.microsoft.com/v1.0')) return graph(key, req);
     if (u === 'https://openrouter.ai/api/v1/key') return ok({ data: { label: 'demo', usage: 3.4, limit: 10, limit_remaining: 6.6 } });
     if (u === 'https://openrouter.ai/api/v1/models') return models(['anthropic/claude-sonnet-5.5', 'openai/gpt-5', 'google/gemini-3-flash']);
@@ -141,7 +149,7 @@ export function fakeProviderHttp() {
     if (u === 'https://api.elevenlabs.io/v1/user/subscription') return ok({ tier: 'starter', character_count: 12_480, character_limit: 30_000, next_character_count_reset_unix: 1_765_000_000 });
     return { status: 404, body: { message: 'No such route' } };
   };
-  return { http, calls, world, google: google.world, clipfarm: clipfarm.world };
+  return { http, calls, world, google: google.world, clipfarm: clipfarm.world, exchange };
 }
 
 /** A few Upstash boxes, two of them the office's. */

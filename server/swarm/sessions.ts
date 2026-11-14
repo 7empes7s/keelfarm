@@ -551,7 +551,7 @@ export abstract class SwarmSessions extends SwarmRotation {
         // A session on the test lab (#56) gets its lab_* tools instead of a browser of its own.
         browserTesting: repo.browserTesting && !testLab,
         // Its office server: the lab's tools, declare_files, and it_report to the IT department (#542).
-        office: joinTools(testLab ? this.labTools(a, repo, cwd) : undefined, practice.office, reportOfficeTools({ itReport: (x) => this.itReport(x, { id: a.id, name: a.name }) })),
+        office: joinTools(testLab ? this.labTools(a, repo, cwd) : undefined, practice.office, reportOfficeTools({ itReport: (x) => this.itReport(x, { id: a.id, name: a.name }) }), this.commsToolsFor(a, repo)),
         additionalDirectories: linked ?? (a.host === 'box' ? [] : this.linkedRepos(repo).map((r) => this.backend.mainDir(r.fullName))),
         role: a.role,
         task: a.task,
