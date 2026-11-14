@@ -7,6 +7,7 @@ import { CEO_ID } from '../../../shared/types';
 import { buildGraph } from '../../../shared/memoryMap';
 import { UsageSources } from '../ui/UsageSources';
 import { EarningsCard } from '../ui/EarningsCard';
+import { AgencyCard } from '../ui/AgencyCard';
 import { Icon } from '../ui/Icon';
 import { summaryGrid } from './companyLayout';
 import type { PocketTab } from './pocketData';
@@ -27,6 +28,7 @@ export function CompanySummary({ go, settings, children }: { go: (tab: PocketTab
   return (
     <div className="pk-company-side" ref={measure} style={{ '--pk-side-cols': cols } as CSSProperties}>
       <EarningsCard />
+      <AgencyCard />
       {children}
       <div className="pk-card pk-summary pk-usage">
         <button className="pk-usage-head" onClick={() => settings('ops')} title="Open Mission control">

@@ -2,7 +2,7 @@
 // the one-tap actions on them. Rules and the recommendations table are pure, in shared/setup.ts and shared/useCases.ts.
 import type { AgentCli } from './agents.ts';
 
-export type UseCase = 'web-app' | 'api' | 'game-3d' | 'static-site' | 'cli-library' | 'mobile' | 'design' | 'video' | 'marketing' | 'ops' | 'research';
+export type UseCase = 'web-app' | 'api' | 'game-3d' | 'static-site' | 'cli-library' | 'mobile' | 'design' | 'video' | 'marketing' | 'ops' | 'research' | 'agency';
 
 /** What the office does itself when the manager (or the CEO) taps an action. */
 export type SetupFix =

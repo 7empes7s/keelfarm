@@ -32,6 +32,8 @@ export interface SetupInput {
 
 /** A label inside a sentence: "web app", but "API" and "3D / browser game" keep their capitals. */
 const lower = (label: string) => (label[1] === label[1].toLowerCase() ? label[0].toLowerCase() + label.slice(1) : label);
+/** "agency" → "agencies", "ops" stays "ops". */
+const plural = (s: string) => (s.endsWith('s') ? s : /[^aeiou]y$/.test(s) ? `${s.slice(0, -1)}ies` : `${s}s`);
 
 const CATEGORY: Record<ProviderCategory, string> = { coding: 'coding agent', text: 'text model', audio: 'voice', video: 'video', image: 'image', cloud: 'cloud', signin: 'company sign-in', mcp: 'MCP server' };
 
@@ -74,7 +76,7 @@ export function setupGaps(x: SetupInput): SetupGap[] {
     if (t && !t.on) gaps.push({ id: `skill:${name}`, title: `${name} is switched off`, why: `Builders on ${lower(def.label)} floors use it.`, actions: [{ label: 'Turn it on', fix: { kind: 'skill', id: t.id } }, { label: 'Tools & skills', open: 'tools' }] });
   }
   if (x.company.length && !x.company.includes(x.useCase)) {
-    gaps.push({ id: 'company', title: `The company isn't set up for ${lower(def.label)}s`, why: `Its main use cases are ${x.company.map((u) => lower(caseDef(u).label)).join(', ')}.`, actions: [{ label: `Add ${lower(def.label)}`, fix: { kind: 'companyUseCase' } }, { label: 'Read the guide', open: 'guide' }] });
+    gaps.push({ id: 'company', title: `The company isn't set up for ${plural(lower(def.label))}`, why: `Its main use cases are ${x.company.map((u) => lower(caseDef(u).label)).join(', ')}.`, actions: [{ label: `Add ${lower(def.label)}`, fix: { kind: 'companyUseCase' } }, { label: 'Read the guide', open: 'guide' }] });
   }
   return gaps;
 }

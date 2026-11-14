@@ -22,6 +22,7 @@ import type { Problem } from '../../shared/problems';
 import type { Checklist } from '../../shared/checklists';
 import type { ResearcherView } from '../../shared/research';
 import type { EarningsView } from '../../shared/earnings';
+import type { AgencyView } from '../../shared/agency';
 import type { CommsView } from '../../shared/comms';
 import { DEFAULT_CEO_AWAKE } from '../../shared/ceoAwake';
 import { DEFAULT_CLOUD, EMPTY_CLOUD } from '../../shared/cloud';
@@ -179,6 +180,7 @@ export interface State {
   checklists: Checklist[]; // the CEO's checklists for the manager (#612), newest first
   research: ResearcherView | null; // the Researcher's desk (#664): the job running, the queue, the last brief
   earnings: EarningsView | null; // the office's weekly earnings vs. spend (#666)
+  agency: AgencyView | null; // the agency floors' opportunities and external actions (#667)
   comms: CommsView | null; // the shared mailboxes, drafts waiting for Approve, leads (#668)
   claudeUsage: UsageReading[]; // Claude's latest reading per usage limit (empty until a session reports)
   claudeUsageCheck: UsageCheckError | null; // why the office's idle check couldn't read it (#89), null when it could
@@ -363,6 +365,7 @@ export const useStore = create<State>((set, get) => ({
   checklists: [],
   research: null,
   earnings: null,
+  agency: null,
   comms: null,
   claudeUsage: [],
   claudeUsageCheck: null,

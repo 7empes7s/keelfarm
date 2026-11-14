@@ -107,6 +107,13 @@ export abstract class SwarmContract {
   protected abstract emitCeo(...a: Parameters<Swarm['emitCeo']>): ReturnType<Swarm['emitCeo']>;
   protected abstract enqueueCeo(...a: Parameters<Swarm['enqueueCeo']>): ReturnType<Swarm['enqueueCeo']>;
 
+  // agency.ts
+  protected abstract createFloor(...a: Parameters<Swarm['createFloor']>): ReturnType<Swarm['createFloor']>;
+  protected abstract agencyOpportunities(...a: Parameters<Swarm['agencyOpportunities']>): ReturnType<Swarm['agencyOpportunities']>;
+  protected abstract agencyDecide(...a: Parameters<Swarm['agencyDecide']>): ReturnType<Swarm['agencyDecide']>;
+  protected abstract agencyProposeAction(...a: Parameters<Swarm['agencyProposeAction']>): ReturnType<Swarm['agencyProposeAction']>;
+  protected abstract agencyActionDone(...a: Parameters<Swarm['agencyActionDone']>): ReturnType<Swarm['agencyActionDone']>;
+
   // researcher.ts
   protected abstract requestResearch(...a: Parameters<Swarm['requestResearch']>): ReturnType<Swarm['requestResearch']>;
   protected abstract ensureCeo(...a: Parameters<Swarm['ensureCeo']>): ReturnType<Swarm['ensureCeo']>;

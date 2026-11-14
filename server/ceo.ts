@@ -24,6 +24,7 @@ import { ASKED_IN, askTools, type AskHandlers } from './ceoAskTools.ts';
 import { askItTools, cloudflareTools, reportTools, type AskItHandlers, type CloudflareHandlers, type ReportHandlers } from './ceoItTools.ts';
 import { problemTools, type ProblemHandlers } from './ceoProblemTools.ts';
 import { researchTools, type ResearchHandlers } from './ceoResearchTools.ts';
+import { agencyTools, type AgencyHandlers } from './ceoAgencyTools.ts';
 import { checklistTools, type ChecklistHandlers } from './ceoChecklistTools.ts';
 import { archiveFileOf } from './ceoNotes.ts';
 import { mailTools, type MailHandlers } from './ceoMailTools.ts';
@@ -164,7 +165,7 @@ export function qaReportText(
   return JSON.stringify(report, null, 1);
 }
 
-export interface OfficeHandlers extends WaitHandlers, ReactHandlers, SetupHandlers, AskHandlers, AskItHandlers, ReportHandlers, ProblemHandlers, CloudflareHandlers, ChecklistHandlers, ResearchHandlers, MailHandlers {
+export interface OfficeHandlers extends WaitHandlers, ReactHandlers, SetupHandlers, AskHandlers, AskItHandlers, ReportHandlers, ProblemHandlers, CloudflareHandlers, ChecklistHandlers, ResearchHandlers, MailHandlers, AgencyHandlers {
   companyStatus(a: { full?: boolean }): string;
   floorDetail(a: { floor: number }): string;
   agentDetail(a: { agent_id: string }): string;
@@ -553,8 +554,7 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
     ...cloudflareTools(h, run),
     ...reportTools(h, run),
     ...problemTools(h, run),
-    ...researchTools(h, run),
-    ...checklistTools(h, run), ...mailTools(h, run),
+    ...researchTools(h, run), ...agencyTools(h, run), ...checklistTools(h, run), ...mailTools(h, run),
   ];
   return toolServer(defs);
 }
@@ -648,7 +648,7 @@ export function ceoSystemPrompt(o: {
     '- Issues: the same agents build and test, so PRs queued for QA (capacity.prsAwaitingQa) mean fewer, bigger issues, not more. Most briefs need 1 to 4 issues. Write "Depends on #N" only when an issue truly cannot start until #N\'s code is merged, because it waits until #N is closed. Keep dependency chains to two steps at most. The office starts the issues that hold up others first. Do not duplicate open issues: fix an existing issue\'s dependencies with set_dependencies. File at most 12 issues per job, or per message from the manager.',
     '- Close an issue that is superseded or no longer wanted with close_issue, not by making it wait for another issue.',
     '- Charters: each issue names its objective ("Objective: O2"); ask the manager before filing a non-goal. Change charters only with propose_charter.',
-    '- When the manager asks you in chat to do something an office tool can do, do it (pass asked_in).',
+    '- When the manager asks you in chat to do something an office tool can do, do it (pass asked_in).\n- Agency floors: an issue per opportunity in a scout brief, then agency_opportunities. Anything leaving the office goes through agency_propose_action.',
     '- Follow-up jobs: the office woke you because something happened (a merge, a PR failing QA again, an agent stuck). Look with agent_log, qa_report, worktree_file and pr_diff, act only where it helps, and file issues only on floors a standing mandate covers. Record a mandate with set_mandate only when the manager asks you to keep working on something.',
     '- Triage jobs: a pull request got stuck (needs-human). Look before the manager does, and bring them only real decisions. Read the facts in the job and the code, then call exactly one of retry_qa (a flaky QA session, or it has been fixed since), send_back (a developer can fix it; your note says how), rerun_checks (a red check that looks flaky or like an outage), close_pull (the approach is wrong: its issue stays open to be built again) or escalate (only the manager can decide: a product call, credentials, a broken setup).',
     "- The manager's board actions never stop agents: you stop_agent, redirect or let finish the work they touched.",
