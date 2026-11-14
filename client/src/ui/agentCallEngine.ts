@@ -252,7 +252,7 @@ export function sendHeard(text: string) {
 
 /** The words being said now: shown live, and talking over the voice interrupts it (voiceCall.ts's barge-in rules). */
 function interim(text: string) {
-  useCall.setState({ heard: text });
+  useCall.setState({ heard: text, managerSpeaking: !!text }); // the CEO's lines wait while the manager talks (flush)
   if (!text) return;
   const now = performance.now();
   if (now - activityAt > 1000) {
@@ -498,7 +498,8 @@ function onMic(samples: Float32Array) {
   if (heard >= SILENT_LEVEL && !mic.heard) {
     mic.heard = true;
     traceNote('the mic hears sound');
-    if (useAgentCall.getState().micWhy) useAgentCall.setState({ micWhy: '' });
+    const why = useAgentCall.getState().micWhy;
+    if (why === MIC_QUIET || why === AUDIO_ASLEEP) useAgentCall.setState({ micWhy: '' }); // a switch's words stay (#658)
   }
   useAgentCall.setState({ input: open ? heard : 0 });
   const l = listener();
