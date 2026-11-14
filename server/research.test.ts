@@ -114,6 +114,12 @@ describe('research from the chat', () => {
     expect(await researchJob({ ...base, text: 'How is it going?' })).toBeNull();
   });
 
+  it('a reply to a queued or running research card is ordinary chat, not a plan from a brief (#679)', async () => {
+    const quoted = { id: 3, from: 'office' as const, text: 'running', at: 1, research: { topic: 'X', job: 1, state: 'running' as const } };
+    expect(await researchJob({ ...base, text: 'also look at Y', quoted })).toBeNull();
+    expect(await researchJob({ ...base, text: 'also look at Y', quoted: { ...quoted, research: { ...quoted.research, state: 'queued' as const } } })).toBeNull();
+  });
+
   it('saves the research brief and plans the pick on the only floor', async () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'research-'));
     const quoted: PhoneMessage = { id: 7, from: 'ceo', text: 'I recommend B', at: 0, research: { topic: 'Voice notes' }, artifacts: [{ id: '7-0', title: 'Research: Voice notes', lead: 'Q', markdown: '## Question' }] };
@@ -175,5 +181,6 @@ describe('research for the guide (#496)', () => {
     expect(pastResearch({ ...none, history: [{ at: 4, ceo: { kind: 'chat' } as never }], jobs: [{ at: 5, kind: 'plan' }], messages: [{ at: 6 }] })).toBeUndefined();
     expect(pastResearch({ history: [{ at: 4, ceo: { kind: 'research' } as never }], jobs: [{ at: 9, kind: 'research' }], messages: [{ at: 6, research: { topic: 'x' } }] })).toBe(9);
     expect(pastResearch({ ...none, messages: [{ at: 6, research: { topic: 'x' } }] })).toBe(6);
+    expect(pastResearch({ ...none, messages: [{ at: 6, research: { topic: 'x', job: 1, state: 'queued' } }] })).toBeUndefined(); // still going (#679)
   });
 });

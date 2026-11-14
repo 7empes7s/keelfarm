@@ -5,6 +5,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { researchTopic } from '../shared/chat.ts';
+import { researchInterim } from '../shared/chatSender.ts';
 import type { HistoryEntry } from '../shared/history.ts';
 import type { PhoneMessage } from '../shared/types.ts';
 import type { SessionHandle } from './agentRunner.ts';
@@ -103,7 +104,7 @@ export async function researchJob(o: { text: string; quoted?: PhoneMessage; forw
   const topic = researchTopic(o.text);
   if (topic) return { kind: 'research', topic, messageIds: [o.id], at: Date.now() };
   const r = o.quoted?.research;
-  if (!o.quoted || !r) return null;
+  if (!o.quoted || !r || researchInterim(r)) return null; // a queued or running card has no brief yet: ordinary chat (#679)
   const brief = await saveBrief(path.join(o.dir, `${o.quoted.id}.md`), o.quoted.artifacts ?? []);
   return researchHandoff({ ...r, repoId: r.repoId ?? o.onlyRepo }, o.text, o.forward, brief, [o.id], Date.now());
 }
@@ -131,7 +132,7 @@ export function researchRef(job: CeoJob | null): Pick<PhoneMessage, 'research'> 
  * kept job records and research replies in the chat. Undefined when there was none.
  */
 export function pastResearch(o: { history: readonly Pick<HistoryEntry, 'at' | 'ceo'>[]; jobs: readonly Pick<CeoJobRecord, 'at' | 'kind'>[]; messages: readonly Pick<PhoneMessage, 'at' | 'research'>[] }): number | undefined {
-  const ats = [...o.history.filter((e) => e.ceo?.kind === 'research'), ...o.jobs.filter((j) => j.kind === 'research'), ...o.messages.filter((m) => m.research)].map((x) => x.at);
+  const ats = [...o.history.filter((e) => e.ceo?.kind === 'research'), ...o.jobs.filter((j) => j.kind === 'research'), ...o.messages.filter((m) => m.research && !researchInterim(m.research))].map((x) => x.at);
   return ats.length ? Math.max(...ats) : undefined;
 }
 
