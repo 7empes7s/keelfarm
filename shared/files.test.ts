@@ -12,8 +12,28 @@ describe('attachment validation', () => {
     expect(fileKind('notes.md')).toBe('text');
     expect(fileKind('bundle.zip')).toBe('archive');
     expect(fileKind('image', 'image/png')).toBe('image');
-    expect(fileKind('setup.exe')).toBeNull();
-    expect(fileKind('script.sh', 'text/x-sh')).toBeNull();
+    expect(fileKind('memo.m4a')).toBe('audio');
+    for (const e of ['mp3', 'wav', 'aac', 'ogg', 'opus', 'flac', 'caf']) expect(fileKind(`a.${e}`)).toBe('audio');
+    expect(fileKind('voice', 'audio/x-m4a')).toBe('audio');
+    expect(fileKind('setup.exe')).toBe('file');
+    expect(fileKind('script.sh', 'text/x-sh')).toBe('file');
+    expect(fileKind('odd.xyz')).toBe('file');
+  });
+
+  it('takes any type: audio by its extension, anything unknown as application/octet-stream', () => {
+    expect(attachmentProblem([{ name: 'New Recording.m4a', type: 'audio/x-m4a', size: 181 * 1024 }])).toBeNull();
+    expect(attachmentProblem([{ name: 'odd.xyz', type: '', size: 5 }])).toBeNull();
+    expect(fileType('New Recording.m4a', 'audio/x-m4a')).toBe('audio/mp4');
+    expect(fileType('song.mp3')).toBe('audio/mpeg');
+    expect(fileType('odd.xyz', 'chemical/x-xyz')).toBe('application/octet-stream');
+    expect(fileType('run.exe', 'application/x-msdownload')).toBe('application/octet-stream');
+    expect(fileType('page', 'text/html')).toBe('application/octet-stream');
+    expect(fileType('pic', 'image/svg+xml')).toBe('application/octet-stream');
+    expect(fileType('voice', 'audio/x-m4a')).toBe('audio/x-m4a');
+    expect(inlineType('application/octet-stream')).toBe(false);
+    expect(thumbnailable({ type: 'image/svg+xml', size: 10 })).toBe(false);
+    expect(thumbnailable({ type: 'image/x-icon', size: 10 })).toBe(false);
+    expect(thumbnailable({ type: 'image/png', size: 10 })).toBe(true);
   });
 
   it('refuses too many, too big, empty or the wrong type, with a reason', () => {
@@ -25,7 +45,7 @@ describe('attachment validation', () => {
     expect(attachmentProblem([{ ...f, size: 501 * 1024 * 1024 }])).toMatch(/too big \(501 MB\): files can be at most 500 MB/);
     expect(attachmentProblem([{ ...f, size: MAX_FILE_BYTES + 1 }])).toMatch(/at most 500 MB/);
     expect(attachmentProblem([{ ...f, size: 0 }])).toMatch(/empty/);
-    expect(attachmentProblem([{ name: 'virus.exe', size: 5 }])).toMatch(/can't be attached/);
+    expect(attachmentProblem([{ name: 'virus.exe', size: 0 }])).toMatch(/empty/);
   });
 
   it('cleans names: no folders, control or reserved characters, bounded length', () => {

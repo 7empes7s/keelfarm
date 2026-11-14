@@ -23,12 +23,12 @@ const EMIT_MS = 250;
 const ID = /^c[a-z0-9]{1,24}$/;
 const current = new AsyncLocalStorage<OfficeCall>(); // the office call a handler runs in, for noteMessage
 
-/** A demo thread (server/demoThreads.ts): its project, its messages (one may carry a made-up image) and its flags. */
+/** A demo thread (server/demoThreads.ts): its project, its messages (they may carry a made-up image or other files) and its flags. */
 export interface DemoThread {
   repoId: string | null;
   pinned?: boolean;
   archived?: boolean;
-  messages: (Omit<PhoneMessage, 'id' | 'attachments'> & { image?: { name: string; png: Buffer } })[];
+  messages: (Omit<PhoneMessage, 'id' | 'attachments'> & { image?: { name: string; png: Buffer }; files?: { name: string; type: string; data: Buffer }[] })[];
 }
 
 export class CeoChat {
@@ -231,13 +231,15 @@ export class CeoChat {
       const c = s.list.find((x) => x.id === s.current)!;
       const messages: PhoneMessage[] = [];
       for (const m of t.messages) {
-        // A nearly full disk (the files' guard) leaves the sample photo out rather than stopping the demo booting.
-        const img = m.image;
-        const file = img ? await store.addStream(Readable.from([img.png]), { name: img.name, type: 'image/png', from: 'ceo' }).catch((e: unknown) => (console.warn(`demo chat: left out ${img.name}: ${(e as Error).message}`), null)) : null;
-        const attachments = file ? [file] : undefined;
-        const { image: _, ...rest } = m;
+        // A nearly full disk (the files' guard) leaves the sample files out rather than stopping the demo booting.
+        const { image: img, files: extra, ...rest } = m;
+        const attachments: FileRef[] = [];
+        for (const f of [...(img ? [{ name: img.name, type: 'image/png', data: img.png }] : []), ...(extra ?? [])]) {
+          const file = await store.addStream(Readable.from([f.data]), { name: f.name, type: f.type, from: m.from === 'manager' ? 'manager' : 'ceo' }).catch((e: unknown) => (console.warn(`demo chat: left out ${f.name}: ${(e as Error).message}`), null));
+          if (file) attachments.push(file);
+        }
         const id = seq++;
-        const msg: PhoneMessage = { ...rest, id, ...(attachments && { attachments }), ...(rest.artifacts && { artifacts: rest.artifacts.map((a, i) => ({ ...a, id: `${id}-${i}` })) }) };
+        const msg: PhoneMessage = { ...rest, id, ...(attachments.length > 0 && { attachments }), ...(rest.artifacts && { artifacts: rest.artifacts.map((a, i) => ({ ...a, id: `${id}-${i}` })) }) };
         messages.push(msg);
         touchConversation(s, msg);
       }

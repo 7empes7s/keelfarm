@@ -9,7 +9,7 @@ import { createWriteStream } from 'node:fs';
 import path from 'node:path';
 import { Transform, type Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { diskProblem, expired, expiry, fileKind, fileType, formatSize, isFileId, MAX_FILE_BYTES, sanitizeName, type FileRef, type FileView } from '../shared/files.ts';
+import { diskProblem, expired, expiry, fileType, formatSize, isFileId, MAX_FILE_BYTES, sanitizeName, type FileRef, type FileView } from '../shared/files.ts';
 import { HttpError } from './httpError.ts';
 
 interface StoredFile extends FileRef {
@@ -30,7 +30,7 @@ function inside(child: string, parent: string): boolean {
 
 /**
  * attach_file's checks: an absolute path to a regular file that, with every symlink resolved, is inside one of
- * `roots`, of a kind a message may carry and at most 500 MB. Errors say what to do instead.
+ * `roots`, of any type and at most 500 MB. Errors say what to do instead.
  */
 export async function checkAttachPath(p: string, roots: readonly string[], max = MAX_FILE_BYTES): Promise<{ real: string; name: string; size: number }> {
   if (!path.isAbsolute(p)) throw new Error(`Give an absolute path, not "${p}".`);
@@ -41,7 +41,6 @@ export async function checkAttachPath(p: string, roots: readonly string[], max =
   const st = await fs.stat(real);
   if (!st.isFile()) throw new Error(`${p} is not a file.`);
   const name = sanitizeName(path.basename(p));
-  if (!fileKind(name)) throw new Error(`${name}: that kind of file can't be attached. Documents, slides, spreadsheets, PDFs, images, video, markdown, CSV and zip can.`);
   if (st.size > max) throw new Error(`${name} is ${formatSize(st.size)}; files can be at most ${formatSize(max)}.`);
   if (st.size === 0) throw new Error(`${name} is empty.`);
   return { real, name, size: st.size };
@@ -109,7 +108,6 @@ export class FileStore {
    */
   async addStream(body: Readable, meta: { name: string; type: string; from: FileRef['from']; length?: number }, max = MAX_FILE_BYTES): Promise<FileRef> {
     const name = sanitizeName(meta.name);
-    if (!fileKind(name, meta.type)) throw new HttpError(415, `${name}: that kind of file can't be attached.`);
     await this.checkDisk(meta.length ?? 0);
     const id = crypto.randomBytes(12).toString('hex');
     const part = `${this.pathOf(id)}.part`;
