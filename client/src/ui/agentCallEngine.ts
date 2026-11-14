@@ -397,7 +397,8 @@ function onMic(samples: Float32Array) {
 /** The manager talked and no user_transcript came back (#656): the call says so, once a conversation, never silent. */
 function checkHearing(loud: number) {
   const now = performance.now();
-  if (loud >= TALK_LEVEL) {
+  if (loud >= TALK_LEVEL && useCall.getState().call.phase !== 'speaking') {
+    // not while the voice talks: its own echo is never a turn
     talk.first ||= now;
     talk.last = now;
   }
