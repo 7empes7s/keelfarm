@@ -92,27 +92,55 @@ export function openaiRelay(browser: WebSocket, key: string, log: (line: string)
   });
 }
 
+/** The demo's turns, in order: what the manager says on a test call, one line per turn of speech (#694). */
+export const FAKE_TURNS = ["What's the office doing?", 'Is anything waiting on me?', 'Who is working on the login page?'];
+/** How the demo hears the demo voice's own tone coming back through the mic: garbled, as the live office heard it (#694). */
+export const FAKE_ECHO = 'not hitting me well';
+/** Zero crossings a second below this are the demo voice's ~220 Hz tone (about 440), above it speech (about 1700). */
+const TONE_ZCR = 900;
+
+/** A PCM16 chunk's zero crossings and samples. */
+function crossings(b64: string): { z: number; n: number } {
+  const buf = Buffer.from(b64, 'base64');
+  let z = 0;
+  let prev = 0;
+  for (let i = 0; i + 1 < buf.length; i += 2) {
+    const v = buf.readInt16LE(i);
+    if (i && (v >= 0) !== (prev >= 0)) z++;
+    prev = v;
+  }
+  return { z, n: buf.length / 2 };
+}
+
 /**
- * The demo's OpenAI (no network): the manager talking then half a second of quiet is one turn, its words a fixed line
- * (the demo has no speech to text), sent as a delta at the first sound and a final at the pause, as server VAD does.
+ * The demo's OpenAI (no network): the manager talking then half a second of quiet is one turn, sent as a delta at the
+ * first sound and a final at the pause, as server VAD does. The demo has no speech to text, so a turn of speech is the
+ * next of FAKE_TURNS, and a turn of the demo voice's own tone (its echo through the mic) is FAKE_ECHO: a call that
+ * sends its own voice to the listener posts it, as the live office did (#694).
  */
 export function fakeRelay(browser: WebSocket, log: (line: string) => void) {
   let talking = 0;
+  let turns = 0;
+  const zcr = { z: 0, n: 0 };
   let pause: ReturnType<typeof setTimeout> | null = null;
   browser.on('message', (raw) => {
     const m = sttIn(String(raw));
     if (!m) return;
-    const peak = chunkPeak((JSON.parse(m) as { audio: string }).audio);
-    if (peak < 0.1) return;
+    const audio = (JSON.parse(m) as { audio: string }).audio;
+    if (chunkPeak(audio) < 0.1) return;
+    const c = crossings(audio);
+    zcr.z += c.z;
+    zcr.n += c.n;
     if (!talking++) sendTo(browser, { type: 'delta', text: 'What' });
     if (pause) clearTimeout(pause);
     pause = setTimeout(() => {
       pause = null;
+      const tone = (zcr.z / Math.max(1, zcr.n)) * STT_RATE < TONE_ZCR;
       if (talking >= 3) {
-        sendTo(browser, { type: 'final', text: "What's the office doing?" });
-        log('voice stt (demo): a turn transcribed');
+        sendTo(browser, { type: 'final', text: tone ? FAKE_ECHO : FAKE_TURNS[turns++ % FAKE_TURNS.length] });
+        log(`voice stt (demo): a turn transcribed${tone ? " (the demo voice's own tone)" : ''}`);
       }
-      talking = 0;
+      talking = zcr.z = zcr.n = 0;
     }, 500);
   });
   browser.on('close', () => pause && clearTimeout(pause));

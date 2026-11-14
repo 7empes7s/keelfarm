@@ -113,6 +113,12 @@ describe('barge-in', () => {
     const muted = run([{ type: 'mute' }], speaking).call;
     expect(run([{ type: 'speech', now: 0, text: 'stop' }, { type: 'speech', now: 400, text: 'stop now' }], muted).effects).toEqual([]);
   });
+
+  it("stops the voice at once on the manager's voice energy, never while muted or when it isn't talking (#694)", () => {
+    expect(run([{ type: 'barge' }], speaking)).toMatchObject({ effects: ['stop-voice'], call: { phase: 'listening', reply: null } });
+    expect(run([{ type: 'mute' }, { type: 'barge' }], speaking).effects).toEqual([]);
+    expect(run([{ type: 'barge' }], started).effects).toEqual([]);
+  });
 });
 
 describe('controls', () => {

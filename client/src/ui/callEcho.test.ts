@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { echoOf, micProcessingOff } from './callEcho';
+import { echoOf } from '../../../shared/callHeard';
+import { micProcessingOff } from './callEcho';
 
 // A reply the agent really said on a call, and what the browser's recognition heard of it through the speaker (#682).
 const REPLY = "Sure. QA passed two pull requests this morning, and one is waiting on the CEO's review.";

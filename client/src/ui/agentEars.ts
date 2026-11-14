@@ -17,8 +17,8 @@ const QUIET_MS = 550;
 export interface EarsHooks {
   /** The words being said now ('' once they're sent). */
   interim(text: string): void;
-  /** A finished utterance: exactly once each. */
-  utterance(text: string): void;
+  /** A finished utterance: exactly once each, with the recognizer's confidence when it gave one. */
+  utterance(text: string, confidence?: number): void;
   /** Listening broke for good (a recognition error code, or the relay's reason). */
   failed(why: string): void;
 }
@@ -87,21 +87,25 @@ const FATAL = new Set(['not-allowed', 'service-not-allowed', 'audio-capture', 'n
 const QUICK_MS = 500;
 const QUICK_MAX = 5;
 
-/** The browser's recognition for the whole call, started again whenever it stops by itself (phones do after a quiet). */
-export function browserEars(R: RecognitionClass, h: EarsHooks, lang: string): Ears {
+/**
+ * The browser's recognition for the whole call, started again whenever it stops by itself (phones do after a quiet).
+ * With `track` (the call's echo-cancelled mic, #694) it listens to that where the browser takes one, else its own mic.
+ */
+export function browserEars(R: RecognitionClass, h: EarsHooks, lang: string, track?: MediaStreamTrack): Ears {
   const u = new Utterances();
   let r: Recognition | null = null;
   let stopped = false;
   let quiet: ReturnType<typeof setTimeout> | null = null;
   let quick = 0;
+  let useTrack = true;
   const clearQuiet = () => {
     if (quiet) clearTimeout(quiet);
     quiet = null;
   };
-  const say = (text: string) => {
+  const say = (text: string, confidence?: number) => {
     clearQuiet();
     h.interim('');
-    if (text) h.utterance(text);
+    if (text) h.utterance(text, confidence);
   };
   const begin = () => {
     const cur = new R();
@@ -115,17 +119,21 @@ export function browserEars(R: RecognitionClass, h: EarsHooks, lang: string): Ea
       if (r !== cur) return;
       quick = 0;
       const { send, interim } = u.results(Array.from(e.results, (x) => ({ transcript: x[0]?.transcript ?? '', final: x.isFinal })));
-      if (send) say(send);
+      const sure = Array.from(e.results, (x) => (x.isFinal ? (x[0]?.confidence ?? 0) : 0)).filter((c) => c > 0);
+      if (send) say(send, sure.length ? Math.min(...sure) : undefined);
       if (!interim) return;
       h.interim(interim);
       clearQuiet();
       quiet = setTimeout(() => say(u.flush()), QUIET_MS);
     };
-    cur.onerror = (e) => void (error = e.error);
+    cur.onerror = (e) => {
+      error = e.error;
+      if (withTrack && e.error !== 'no-speech') useTrack = false; // the track didn't work here: its own mic from the next start
+    };
     cur.onend = () => {
       if (r !== cur || stopped) return;
       say(u.flush());
-      if (FATAL.has(error)) return h.failed(error);
+      if (FATAL.has(error) && !withTrack) return h.failed(error); // with the track, once more on its own mic
       quick = performance.now() - at < QUICK_MS ? quick + 1 : 0;
       if (quick >= QUICK_MAX) return h.failed(error || 'audio-capture');
       u.reset();
@@ -135,6 +143,14 @@ export function browserEars(R: RecognitionClass, h: EarsHooks, lang: string): Ea
         h.failed('audio-capture');
       }
     };
+    const withTrack = useTrack && track?.readyState === 'live';
+    if (withTrack) {
+      try {
+        return cur.start(track);
+      } catch {
+        useTrack = false; // this browser's recognition takes no track: its own mic
+      }
+    }
     cur.start();
   };
   begin();

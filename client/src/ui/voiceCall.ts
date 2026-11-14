@@ -86,6 +86,8 @@ export type CallEvent =
   | { type: 'mic-problem'; why: string }
   /** The manager is speaking now; `text` is what was recognised so far ('' for a recording's levels). */
   | { type: 'speech'; now: number; text: string }
+  /** The manager's voice over the voice's own, by its energy (#694): the voice stops at once. */
+  | { type: 'barge' }
   | { type: 'sent' }
   | { type: 'reply'; id: number; sentences: number }
   | { type: 'sentence'; index: number }
@@ -128,6 +130,8 @@ export function callStep(c: Call, ev: CallEvent): CallStep {
       if (!bargesIn(run.last - run.start, ev.text)) return out({ ...c, run });
       return out({ ...c, phase: 'listening', reply: null, run: null }, ['stop-voice']);
     }
+    case 'barge':
+      return live && !c.muted && !c.paused && !c.away && c.phase === 'speaking' ? out({ ...c, phase: 'listening', reply: null, run: null }, ['stop-voice']) : out(c);
     case 'sent':
       return live ? out({ ...c, phase: 'thinking', run: null }) : out(c);
     case 'reply':

@@ -42,5 +42,5 @@ export function installedBrowsers() {
     const file = registry.findExecutable(name)?.executablePath('javascript');
     return !!file && fs.existsSync(file);
   };
-  return { chrome: has('chrome'), chromium: has('chromium-headless-shell'), webkit: has('webkit') };
+  return { chrome: has('chrome'), chromium: has('chromium-headless-shell'), webkit: has('webkit'), firefox: has('firefox') };
 }

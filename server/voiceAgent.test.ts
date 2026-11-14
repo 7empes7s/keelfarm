@@ -191,6 +191,19 @@ describe('the Jarvis voice when ElevenLabs can\'t reach the office (#682)', () =
     expect(swarm.snapshot().messages.filter((m) => m.from === 'manager' && m.text === 'Why is QA so slow this week?')).toHaveLength(1);
   });
 
+  it("never posts nor answers its own greeting heard back, or noise, as the manager's turn (#694)", async () => {
+    const swarm = await office();
+    const { session } = await dial(swarm);
+    const ceo = swarm.snapshot().agents.find((a) => a.role === 'ceo')!.name;
+    const greeting = [{ role: 'assistant', content: `Hi, it's me, ${ceo}. What can I do?` }];
+    const before = swarm.snapshot().messages.length;
+    for (const heard of [`hi it's me ${ceo} what can I do`, 'what can I do', 'men', 'on it']) {
+      expect(await swarm.voiceLlm({ cubefarm_session: session, messages: [...greeting, { role: 'user', content: heard }] }, undefined, true)).toBe('');
+    }
+    expect(swarm.snapshot().messages.length).toBe(before);
+    expect(await swarm.voiceLlm({ cubefarm_session: session, messages: [...greeting, { role: 'user', content: "What's floor 1 doing?" }] }, undefined, true)).toMatch(/^Floor 1/);
+  });
+
   it('keeps filler words out of the chat and the voice (msg 4621)', async () => {
     const swarm = await office();
     const { session } = await dial(swarm);
