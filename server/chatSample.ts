@@ -118,6 +118,10 @@ export function sampleChat(now: number, first = 1, cards?: SampleFloor): PhoneMe
     ].join('\n'), 7.2),
     msg('manager', 'Restart the stuck preview on floor 2', 7, { delivery: 'replied', status: 'failed' }),
     msg('office', "⚠️ The CEO hit a problem while replying to you: floor 2's preview didn't answer.", 6.8),
+    // what the CEO didn't write itself (#679): a background job's report, the Researcher's brief and an IT note
+    msg('ceo', "Nightly review: floors 1 and 2 are on track. Floor 3's QA took two rounds on #41 (the menu cut off at 390 px), so its QA brief now checks phone width first. Nothing needs you.", 6.6, { background: 'Reviewing the company', ceoJob: { job: 41, kind: 'review', model: 'claude-sonnet-5-5', usd: 0.42 } }),
+    msg('ceo', '🔎 Sage\'s research on "Checkout providers for floor 1" · 4 min · $0.62\n\n**Stripe Checkout** fits best: hosted pages, Apple Pay and SCA handled, no card data on our side. Paddle suits a merchant of record but takes 5%. Next: a two-day spike on Stripe test mode. Reply with a pick to plan it.', 6.2, { research: { topic: 'Checkout providers for floor 1', state: 'done', startedAt: now - 10.2 * 60_000, budget: 10, minutes: 4, usd: 0.62 } }),
+    msg('office', '🖥️ IT: ✅ Renew the preview access token: all 3 steps done, health check green.', 6, { origin: 'it', notice: { details: 'token_create preview-access: ok\nservice restarted\nhealth check: 200 OK' } }),
     msg('manager', 'What did the nightly review find?', 3, { delivery: 'read', status: 'working' }),
     msg('manager', 'Is floor 2 on budget this week?', 2, { delivery: 'read', status: 'seen' }),
     msg('manager', "Then draft next week's plan", 1, { delivery: 'sent', status: 'queued' }),

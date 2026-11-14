@@ -84,6 +84,7 @@ describe("the thread's days and groups", () => {
   it('groups messages from the same sender a few minutes apart', () => {
     expect(continuesGroup({ from: 'ceo', at: now }, { from: 'ceo', at: now + 60_000 })).toBe(true);
     expect(continuesGroup({ from: 'ceo', at: now }, { from: 'manager', at: now + 60_000 })).toBe(false);
+    expect(continuesGroup({ from: 'ceo', at: now }, { from: 'ceo', at: now + 60_000, research: { topic: 'x' } })).toBe(false); // #679: another sender
     expect(continuesGroup({ from: 'ceo', at: now }, { from: 'ceo', at: now + 10 * 60_000 })).toBe(false);
     expect(continuesGroup({ from: 'office', at: now }, { from: 'office', at: now })).toBe(false);
     expect(continuesGroup(undefined, { from: 'ceo', at: now })).toBe(false);

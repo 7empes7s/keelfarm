@@ -46,6 +46,7 @@ describe('the Researcher', () => {
     ]);
     expect(i.agentRt.get(CEO_ID)?.session ?? null).toBeNull();
     expect(i.state.messages.at(-1)?.text).toMatch(/stays free to chat/);
+    expect(i.state.messages.at(-1)?.research).toMatchObject({ topic: 'A cozy todo app', state: 'queued' }); // a research card (#679), not a CEO bubble
   });
 
   it('queues request_research and returns at once with its number', async () => {
@@ -62,11 +63,13 @@ describe('the Researcher', () => {
     const repoId = i.state.repos[0].id;
     const job: Job = { id: 4, topic: 'Offline mode', repoId, by: 'ceo', minutes: 20, at: 0, startedAt: Date.now() - 12 * 60_000 };
     i.state.research.job = job;
+    i.state.messages.push({ id: 900, from: 'office', text: 'running', at: 0, research: { topic: 'Offline mode', job: 4, state: 'running' } }); // its interim card (#679)
     await i.deliverBrief(job, BRIEF, { costUsd: 0.42, why: null, partial: false, now: Date.now() });
     const m = i.state.messages.at(-1)!;
     expect(m.from).toBe('ceo');
     expect(m.text).toMatch(/Sage's research on "Offline mode" · 12 min · \$0\.42/);
-    expect(m.research).toEqual({ topic: 'Offline mode', repoId });
+    expect(m.research).toMatchObject({ topic: 'Offline mode', repoId, job: 4, state: 'done', minutes: 12, usd: 0.42 });
+    expect(i.state.messages.filter((x) => x.research?.job === 4)).toEqual([m]); // the brief took its interim card's place
     expect(m.artifacts?.[0].title).toBe('Research: Offline mode');
     expect(m.suggestions).toEqual(['Go with B', 'Dig deeper on A']);
     const done = i.state.research.done.at(-1)!;

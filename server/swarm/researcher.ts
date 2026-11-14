@@ -9,7 +9,8 @@ import path from 'node:path';
 import { ceoModelOn } from '../../shared/ceoRunsOn.ts';
 import { stripHarness } from '../../shared/chat.ts';
 import { finishResearch, loadResearch, nextResearch, queueResearch, RESEARCHER_ID, RESEARCHER_NAME, researcherView, researchStatus, type ResearchRequest } from '../../shared/research.ts';
-import type { AgentStatus, WorldSnapshot } from '../../shared/types.ts';
+import { takeResearchCard, updateResearchCard } from '../../shared/chatSender.ts';
+import type { AgentStatus, ChatResearch, WorldSnapshot } from '../../shared/types.ts';
 import { createOfficeTools, toolServer, type CeoJob, type OfficeHandlers, type OfficeTools } from '../ceo.ts';
 import type { RequestResearchArgs } from '../ceoResearchTools.ts';
 import type { WaitWorld } from '../ceoWaits.ts';
@@ -80,7 +81,16 @@ export abstract class SwarmResearcher extends SwarmChecklists {
   protected override enqueueCeo(job: CeoJob) {
     if (job.kind !== 'research') return super.enqueueCeo(job);
     const r = this.researchFromCeoJob(job);
-    this.postMessage('office', `🔎 ${RESEARCHER_NAME} ${r.ahead ? `will research "${short(r.request.topic)}" next (${r.ahead} ahead)` : `is researching "${short(r.request.topic)}"`}: up to ${r.request.minutes} min. ${this.ceo().name} stays free to chat.`);
+    if (!r.joined) this.researchCard(r.request, r.ahead ? { state: 'queued' } : { state: 'running', startedAt: Date.now() }, `🔎 ${RESEARCHER_NAME} ${r.ahead ? `will research "${short(r.request.topic)}" next (${r.ahead} ahead)` : `is researching "${short(r.request.topic)}"`}: up to ${r.request.minutes} min. ${this.ceo().name} stays free to chat.`);
+  }
+
+  /** A research job's interim card (#679): its new state goes into its card in the chat, else a new card. Never spoken or pushed. */
+  private researchCard(req: ResearchRequest, card: Omit<ChatResearch, 'topic'>, text: string) {
+    const research: ChatResearch = { topic: req.topic, ...(req.repoId && { repoId: req.repoId }), job: req.id, budget: req.minutes, ...card };
+    const m = updateResearchCard(this.state.messages, req.id, { text, research });
+    if (!m) return void this.postMessage('office', text, undefined, { research });
+    this.broadcast({ type: 'ceoChat', message: m });
+    this.save();
   }
 
   private researchFromCeoJob(job: CeoJob) {
@@ -103,7 +113,7 @@ export abstract class SwarmResearcher extends SwarmChecklists {
     const questions = (a.questions ?? []).map((q) => String(q).trim().slice(0, 300)).filter(Boolean).slice(0, 8);
     const minutes = a.deadline_min === undefined ? this.state.settings.researchMin : clampResearchMin(a.deadline_min);
     const r = this.queueResearchJob({ topic, ...(repo && { repoId: repo.id }), ...(questions.length && { questions }), minutes, by: 'ceo', at: Date.now() });
-    if (!r.joined) this.postMessage('office', `🔎 ${this.ceo().name} asked ${RESEARCHER_NAME} to research "${short(topic)}"${repo ? ` for floor ${repo.floor}` : ''}: up to ${minutes} min.`);
+    if (!r.joined) this.researchCard(r.request, r.ahead ? { state: 'queued' } : { state: 'running', startedAt: Date.now() }, `🔎 ${this.ceo().name} asked ${RESEARCHER_NAME} to research "${short(topic)}"${repo ? ` for floor ${repo.floor}` : ''}: up to ${minutes} min.`);
     const back = repo ? `as a plan job for floor ${repo.floor}` : 'as a follow-up';
     return `Queued research #${r.request.id} with ${RESEARCHER_NAME} (${r.ahead ? `${r.ahead} ahead` : 'starting now'}, up to ${r.request.minutes} min). Don't search the web yourself: carry on or end this job. The brief reaches the manager's phone and comes back to you ${back}; wait_for research_done (research ${r.request.id}) holds for it.`;
   }
@@ -135,6 +145,7 @@ export abstract class SwarmResearcher extends SwarmChecklists {
     const floor = repo ? { floor: repo.floor, fullName: repo.fullName, clone: this.backend.mainDir(repo.fullName) } : null;
     Object.assign(a, { status: 'working' as AgentStatus, issueTitle: `Researching "${short(job.topic)}"`, startedAt: Date.now(), endedAt: null, lastError: null });
     this.researchStopped = null;
+    this.researchCard(job, { state: 'running', startedAt: job.startedAt }, `🔎 ${RESEARCHER_NAME} is researching "${short(job.topic)}": up to ${job.minutes} min.`);
     await fs.mkdir(DESK_DIR, { recursive: true }).catch(() => undefined);
     const turns: string[] = [];
     rt.session = this.startOnAccount(
@@ -190,7 +201,11 @@ export abstract class SwarmResearcher extends SwarmChecklists {
     const cost = `$${o.costUsd.toFixed(2)}`;
     const head = `🔎 ${RESEARCHER_NAME}'s research on "${short(job.topic)}" · ${minutes} min · ${cost}${o.partial ? ` · stopped early (${o.why}): a partial brief` : ''}`;
     const body = text.trim() || `Nothing written yet. Ask again with a narrower topic or a bigger budget.`;
-    const m = this.postMessage('ceo', `${head}\n\n${body}`, undefined, { research: { topic: job.topic, ...(job.repoId && { repoId: job.repoId }) } });
+    // the job's interim card gives way: the brief is its card now, at the end of the chat
+    const card = takeResearchCard(this.state.messages, job.id);
+    if (card) this.broadcast({ type: 'ceoChat', removed: [card.id] });
+    const research: ChatResearch = { topic: job.topic, ...(job.repoId && { repoId: job.repoId }), job: job.id, state: o.partial ? 'partial' : 'done', startedAt: job.startedAt, budget: job.minutes, minutes, usd: o.costUsd };
+    const m = this.postMessage('ceo', `${head}\n\n${body}`, undefined, { research });
     const file = await saveBrief(path.join(BRIEF_DIR, `${m.id}.md`), m.artifacts?.length ? m.artifacts : [{ id: `${m.id}-0`, title: `Research: ${short(job.topic)}`, lead: '', markdown: m.text }]);
     const summary = m.text.slice(0, 600);
     finishResearch(this.state.research, { id: job.id, topic: job.topic, by: job.by, ...(job.repoId && { repoId: job.repoId }), file, summary, minutes, costUsd: o.costUsd, partial: o.partial, at: o.now });

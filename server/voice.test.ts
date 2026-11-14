@@ -218,6 +218,7 @@ describe('speaks', () => {
     expect(speaks(msg('ceo'), DEFAULT_VOICE)).toBe(true);
     expect(speaks(msg('office'), DEFAULT_VOICE)).toBe(false);
     expect(speaks(msg('office'), { ...DEFAULT_VOICE, speakOffice: true })).toBe(true);
+    expect(speaks({ ...msg('office'), research: { topic: 'x', job: 1, state: 'running' } }, { ...DEFAULT_VOICE, speakOffice: true })).toBe(false); // #679: no voice for interim research
     expect(speaks(msg('manager'), { ...DEFAULT_VOICE, speakOffice: true })).toBe(false);
   });
 });

@@ -6,6 +6,7 @@ import type { ActionRef } from '../../../shared/ceoActions';
 import type { LiveStep, StepLog } from '../../../shared/ceoStream';
 import { shortDuration } from '../../../shared/ceoSteps';
 import { RESEARCH_PREFIX } from '../../../shared/chat';
+import { chatOrigin } from '../../../shared/chatSender';
 import { CEO_ID, type PhoneMessage } from '../../../shared/types';
 import { matchPicks, pickText, type QuickPicks } from '../../../shared/used';
 import type { IconName } from './icons';
@@ -165,9 +166,10 @@ export function daySeparator(prev: number | undefined, at: number, now: number):
   return new Date(at).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
-/** A message that follows one from the same sender within a few minutes, the same day: drawn as one group. */
-export const continuesGroup = (prev: { from: string; at: number } | undefined, m: { from: string; at: number }) =>
-  !!prev && prev.from === m.from && m.from !== 'office' && m.at - prev.at < GROUP_MS && dayOf(prev.at) === dayOf(m.at);
+/** A message that follows one from the same sender (and origin, #679) within a few minutes, the same day: drawn as one group. */
+type GroupMsg = Pick<PhoneMessage, 'from' | 'at' | 'origin' | 'research' | 'question' | 'background' | 'ceoJob'>;
+export const continuesGroup = (prev: GroupMsg | undefined, m: GroupMsg) =>
+  !!prev && prev.from === m.from && m.from !== 'office' && chatOrigin(prev) === chatOrigin(m) && m.at - prev.at < GROUP_MS && dayOf(prev.at) === dayOf(m.at);
 
 export interface SlashItem {
   key: string;
