@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
-import { agentBody, bearerOk, completionEvents, completionJson, sessionOf, voiceRouteLine } from './voiceAgent.ts';
+import { agentBody, bearerOk, completionJson, sessionOf, streamCompletion, voiceRouteLine } from './voiceAgent.ts';
 
 // The Jarvis voice (#534) in a demo office: its own folder, for the demo's secrets and voice-agent files.
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'cubefarm-voiceagent-'));
@@ -63,6 +63,42 @@ describe('the Jarvis voice: the custom LLM endpoint', () => {
     expect(ask).toHaveBeenCalledWith('Hire two more people on floor 1', undefined, 'voice');
   });
 
+  it('streams a fast answer to small talk, the first sentence out before the model is done (#665)', async () => {
+    const swarm = await office();
+    const { session } = await swarm.startVoiceAgent();
+    const ask = vi.spyOn(swarm, 'messageCeo');
+    const writes: { ev: string; at: number }[] = [];
+    let modelDone = 0;
+    const turn = swarm.voiceTurn({ cubefarm_session: session, messages: said('Hi, how are you?') }, undefined, true);
+    const timed = (async function* () {
+      for await (const p of turn) yield p;
+      modelDone = performance.now();
+    })();
+    await streamCompletion(timed, 'm', () => undefined, (ev) => writes.push({ ev, at: performance.now() }), 0);
+    const words = writes.slice(0, -2).map((w) => JSON.parse(w.ev.slice(6)).choices[0].delta.content as string);
+    expect(words[0]).toBe("I'm doing well, thanks for asking. ");
+    expect(writes[0].at).toBeLessThan(modelDone); // spoken while the model was still writing
+    expect(ask).not.toHaveBeenCalled(); // small talk never wakes the CEO
+    expect(swarm.snapshot().messages.slice(-1)[0]).toMatchObject({ from: 'ceo', voiceCall: true, text: words.join('').trim() });
+  });
+
+  it("puts the office's own timing on each turn of a call's trace and logs each finished turn (#665)", async () => {
+    const swarm = await office();
+    const { session } = await swarm.startVoiceAgent();
+    await swarm.voiceLlm({ cubefarm_session: session, messages: said("What's floor 1 doing?") }, undefined, true);
+    const log = vi.mocked(console.log);
+    const turn = { n: 1, listener: 'browser', speechStart: 100, speechEnd: 900, transcript: 1300, sent: 1300, firstAudio: 2100, playback: 2200, session, s: 1, office: { first: 9, done: 9 } };
+    swarm.voiceTrace({ id: 'call2', mode: 'jarvis', turns: [turn] });
+    swarm.voiceTrace({ id: 'call2', mode: 'jarvis', turns: [turn] }); // the next update: logged once
+    const lines = log.mock.calls.map((c) => String(c[0])).filter((l) => l.startsWith('voice: turn {'));
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain('heard 0.4 s · thinking 0.8 s (office 0.0 s) · voice 0.1 s');
+    expect(lines[0]).not.toContain(session); // the session finds the timing, and is never logged
+    const kept = swarm.voiceTraces().at(-1)!.turns[0];
+    expect(kept.office?.done).toBeGreaterThan(0);
+    expect(kept.office?.done).toBeLessThan(1000); // the office's own clock, not the browser's 9
+  });
+
   it("counts a call's minutes and falls back over the monthly cap", async () => {
     const swarm = await office();
     const { session } = await swarm.startVoiceAgent();
@@ -89,6 +125,8 @@ describe('the Jarvis voice: ElevenLabs plumbing', () => {
     // #656: the call's input format and the events it needs are set, never left to the account's defaults.
     expect(body.conversation_config.asr.user_input_audio_format).toBe('pcm_16000');
     expect(body.conversation_config.tts.agent_output_audio_format).toBe('pcm_16000');
+    expect(body.conversation_config.tts).toMatchObject({ model_id: 'eleven_flash_v2', optimize_streaming_latency: 3 }); // #665: faster first audio
+    expect(body.conversation_config.turn.turn_eagerness).toBe('eager');
     expect(body.conversation_config.conversation.client_events).toEqual(expect.arrayContaining(['conversation_initiation_metadata', 'audio', 'user_transcript', 'agent_response', 'interruption', 'ping']));
     expect(sessionOf({ cubefarm_session: 'abc_1' })).toBe('abc_1');
     expect(sessionOf({ cubefarm_session: 'bad id!' })).toBe('');
@@ -97,9 +135,10 @@ describe('the Jarvis voice: ElevenLabs plumbing', () => {
     expect(bearerOk(undefined, '')).toBe(false);
   });
 
-  it('answers in OpenAI chat completion form, whole or as sentence-by-sentence events', () => {
+  it('answers in OpenAI chat completion form, whole or as sentence-by-sentence events', async () => {
     expect(completionJson('Hi.', 'm', 0).choices[0].message.content).toBe('Hi.');
-    const events = completionEvents('On it. Checking floor 4.', 'm', 0);
+    const events: string[] = [];
+    await streamCompletion((async function* () { yield 'On it. Checking floor 4.'; })(), 'm', () => undefined, (e) => events.push(e), 0);
     const deltas = events.slice(0, -1).map((e) => JSON.parse(e.slice(6)).choices[0].delta.content ?? '');
     expect(deltas.join('')).toBe('On it. Checking floor 4.');
     expect(deltas[0]).toBe('On it. '); // the first words go out at once

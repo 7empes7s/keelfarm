@@ -109,6 +109,25 @@
   align-items: center;
   gap: var(--ds-space-2);
 }
+.vcall-details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  margin: 0;
+  max-width: 100%;
+  font-size: var(--ds-text-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--ds-text-muted);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.vcall-details-who {
+  font-weight: 600;
+  color: var(--ds-text);
+}
+.vcall-card .vcall-details {
+  text-align: left;
+}
 .vcall-why {
   margin: 0;
   color: var(--ds-warn-text);

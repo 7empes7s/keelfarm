@@ -111,3 +111,21 @@ test('the browser listens (#658): interim words show live, a final result is one
   await expect.poll(async () => (await page.evaluate(() => (window as unknown as CallWindow).__swarmCall.trace!.replies)) - before).toBeGreaterThan(0);
   await page.getByRole('button', { name: 'End call' }).click();
 });
+
+test('Call details (#665): who listens and the last turn timed, a fast answer to small talk, at 390 px', async ({ page }) => {
+  await call(page);
+  await expect.poll(() => mode(page)).toBe('live');
+  await expect.poll(() => phase(page), { timeout: 30_000 }).toBe('listening');
+  await page.getByRole('button', { name: 'Call details' }).click();
+  const details = page.getByTestId('call-details');
+  await expect(details).toContainText('Listening: Browser');
+  const mic = (text: string, final: boolean) => page.evaluate(([t, f]) => (window as unknown as CallWindow).__swarmMic.say(t as string, f as boolean), [text, final] as const);
+  await mic('hi how', false);
+  await mic('hi how are you', true);
+  await expect(details).toContainText(/Turn 1: heard \d\.\d s · thinking \d\.\d s/, { timeout: 10_000 });
+  await expect(details).toContainText(/s from your last word to the voice/);
+  await expect(page.locator('.vcall-captions')).toContainText(/doing well/); // the demo's fast model, streamed
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: '.lab/call-details-390.png' });
+  await page.getByRole('button', { name: 'End call' }).click();
+});
