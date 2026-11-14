@@ -10,11 +10,12 @@ import * as it from './it';
 import * as office from './office';
 import * as phone from './phone';
 import * as qa from './qa';
+import * as research from './research';
 import * as settings from './settings';
 import * as world from './world';
 import type { ApplyCtx, Handler, Live } from './types';
 
-export const AREAS = { agents, checklists, company, floors, it, office, phone, qa, settings, world };
+export const AREAS = { agents, checklists, company, floors, it, office, phone, qa, research, settings, world };
 
 export const APPLY: { [K in Live]: Handler<K> } = {
   ...agents.handlers,
@@ -25,6 +26,7 @@ export const APPLY: { [K in Live]: Handler<K> } = {
   ...office.handlers,
   ...phone.handlers,
   ...qa.handlers,
+  ...research.handlers,
   ...settings.handlers,
   ...world.handlers,
 };

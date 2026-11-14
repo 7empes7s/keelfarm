@@ -22,7 +22,8 @@ function useGuide(): GuideItem[] {
   const notifyChannels = useStore((s) => s.notifyChannels);
   const experiments = useStore((s) => s.experiments);
   const ceo = useStore((s) => s.ceo);
-  return useMemo(() => guideItems({ repos, settings, notifyChannels, experiments, ceo, installed: installed() }), [repos, settings, notifyChannels, experiments, ceo]);
+  const research = useStore((s) => s.research);
+  return useMemo(() => guideItems({ repos, settings, notifyChannels, experiments, ceo, research, installed: installed() }), [repos, settings, notifyChannels, experiments, ceo, research]);
 }
 
 function Checklist({ items, onGo, open }: { items: GuideItem[]; onGo?: () => void; open?: boolean }) {

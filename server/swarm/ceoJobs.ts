@@ -345,7 +345,6 @@ export abstract class SwarmCeo extends SwarmCeoLog {
         finished: (result) => this.onCeoFinished(a, this.spend.perTurn(a.id, this.spend.sid(a.id), result)), // its kept session reports a running total (#254)
       },
     );
-    if (job.kind === 'research') this.researchGuard.start(this.state.settings.researchMin, job.topic ?? '', () => rt.session, (note) => { Object.assign(a, { status: 'stopped' as AgentStatus, lastError: note }); this.postMessage('office', `⏱ ${a.name}: ${note}`); });
   }
 
   protected onCeoFinished(a: PersistedAgent, result: SessionResult) {
@@ -363,7 +362,6 @@ export abstract class SwarmCeo extends SwarmCeoLog {
     if (!this.ceoFresh) Object.assign(kept, { turns: kept.turns + result.turns, costUsd: kept.costUsd + result.costUsd, lastEndedAt: a.endedAt }); // a fresh job's session isn't the kept one
     const job = this.state.ceo.job;
     this.state.ceo.job = null;
-    this.researchGuard.clear();
     const preempted = !!job && job === this.ceoPreempted;
     this.ceoPreempted = null;
     const retry = this.retryOnCeoModel(a, job, result, preempted);

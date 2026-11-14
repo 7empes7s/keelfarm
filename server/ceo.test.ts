@@ -172,7 +172,7 @@ describe('office tools', () => {
       sessionHistory: (a) => (calls.push(['session_history', a]), 'history'),
       react: (a) => (calls.push(['react', a]), 'reacted'),
       reply: (a) => (calls.push(['reply', a]), 'answered'),
-      runExperiment: () => '', setFloorSwitches: () => '', setIssuePriority: async () => '', setCeoSetup: () => '', applyCharter: () => '', mergePull: async () => '', applyUpdate: () => '', askIt: () => '', itAnswer: () => '', cloudflare: async () => '', providerAction: async () => '', installKey: async () => '', saveProviderKey: async () => '', itReport: () => '', problemsList: () => '', noteProblem: () => '', checklistCreate: () => '', checklistUpdate: () => '', checklistRead: () => '',
+      runExperiment: () => '', setFloorSwitches: () => '', setIssuePriority: async () => '', setCeoSetup: () => '', applyCharter: () => '', mergePull: async () => '', applyUpdate: () => '', askIt: () => '', itAnswer: () => '', cloudflare: async () => '', providerAction: async () => '', installKey: async () => '', saveProviderKey: async () => '', itReport: () => '', problemsList: () => '', noteProblem: () => '', checklistCreate: () => '', checklistUpdate: () => '', checklistRead: () => '', requestResearch: () => '',
     });
     const [serverSide, clientSide] = InMemoryTransport.createLinkedPair();
     await office.server.instance.connect(serverSide);
@@ -215,7 +215,7 @@ describe('office tools', () => {
       'propose_design', 'provider_action',
       'qa_report',
       'react',
-      'reply',
+      'reply', 'request_research',
       'rerun_checks',
       'resolve_decision',
       'restart_agent',
@@ -719,7 +719,7 @@ describe('follow-ups (#27)', () => {
           closePull: async () => 'ok', escalate: async () => 'ok', attachFile: async () => 'ok', worktreeFile: async () => 'ok', prDiff: async () => 'ok', sendTelegram: async () => 'ok', scanKeys: async () => 'ok', makeDefaultAccount: () => 'ok', editMessage: async () => 'ok',
           restartAgent: ok, stopAgent: ok, messageAgent: async () => 'ok', assignIssue: async () => 'ok', answerAgent: async () => 'ok', askManagerChoice: ok, defineExperiment: ok, sessionHistory: ok, proposeCharter: ok, resolveDecision: ok, proposeDesign: async () => 'ok',
           waitFor: async () => 'ok', askManager: async () => 'ok', consult: async () => 'ok', react: ok, reply: ok, problemsList: ok, noteProblem: ok, checklistCreate: ok, checklistUpdate: ok, checklistRead: ok,
-          runExperiment: ok, setFloorSwitches: ok, setIssuePriority: async () => 'ok', setCeoSetup: ok, applyCharter: ok, mergePull: async () => 'ok', applyUpdate: ok, askIt: ok, itAnswer: ok, cloudflare: async () => 'ok', providerAction: async () => 'ok', installKey: async () => 'ok', saveProviderKey: async () => 'ok', itReport: ok,
+          runExperiment: ok, setFloorSwitches: ok, setIssuePriority: async () => 'ok', setCeoSetup: ok, applyCharter: ok, mergePull: async () => 'ok', applyUpdate: ok, askIt: ok, itAnswer: ok, cloudflare: async () => 'ok', providerAction: async () => 'ok', installKey: async () => 'ok', saveProviderKey: async () => 'ok', itReport: ok, requestResearch: ok,
         },
         () => researching,
       ),

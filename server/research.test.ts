@@ -39,8 +39,9 @@ describe('research prompt', () => {
     expect(jobLabel({ kind: 'research', topic: 'Voice notes', at: 0 }, null)).toBe('Researching "Voice notes"');
   });
 
-  it('asks plan jobs to check the web and cite it', () => {
-    expect(ceoJobPrompt({ kind: 'plan', repoId: 'r1', at: 0 }, floor)).toMatch(/check current docs and how others solve it on the web/);
+  it('asks plan jobs to hand web research to the Researcher, and to cite the brief it brings back (#664)', () => {
+    expect(ceoJobPrompt({ kind: 'plan', repoId: 'r1', at: 0 }, floor)).toMatch(/request_research \(floor 2\) and end this job.*Never search the web yourself/);
+    expect(ceoJobPrompt({ kind: 'plan', repoId: 'r1', brief: '/ceo/research/9.md', at: 0 }, floor)).toContain("The Researcher's brief you asked for: /ceo/research/9.md. Read it first and cite it in the issues.");
   });
 });
 

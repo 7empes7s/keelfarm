@@ -90,13 +90,20 @@ describe('Redo on Opus', () => {
 });
 
 describe('the guide\'s research tick (#496)', () => {
-  it('a research started from the chat is in progress, then kept as done in the snapshot', { timeout: 60_000 }, async () => {
+  it("a research started from the chat runs at the Researcher's desk while the CEO answers chat, then is kept as done (#664)", { timeout: 90_000 }, async () => {
     const { swarm, i, runs, ceo } = await office();
     expect(swarm.snapshot().ceo.researchedAt).toBeNull();
     await swarm.messageCeo('Research: how comparable projects solve our biggest open problem, then propose a plan');
-    await until(() => runs.length === 1 && ceo().status === 'working');
-    expect(swarm.snapshot().ceo).toMatchObject({ job: { kind: 'research' }, researchedAt: null });
-    await until(() => ceo().status === 'done' && !!i.state.ceo.jobs?.length);
-    expect(swarm.snapshot().ceo.researchedAt).toEqual(expect.any(Number));
+    await until(() => runs.length === 1 && !!swarm.snapshot().research?.job);
+    expect(runs[0].prompt).toMatch(/^Research for the manager: "how comparable projects/);
+    expect(swarm.snapshot().ceo).toMatchObject({ job: null, researchedAt: null });
+    // The CEO's chat stays free: a message gets its reply while the research still runs.
+    const { id } = await swarm.messageCeo('How is it going?');
+    await until(() => i.state.messages.some((m) => m.from === 'ceo' && m.id > id && !m.research));
+    expect(swarm.snapshot().research?.job?.topic).toMatch(/^how comparable projects/);
+    expect(ceo().status).toBe('done');
+    await until(() => !!swarm.snapshot().ceo.researchedAt, 60_000);
+    expect(i.state.messages.find((m) => m.research)?.artifacts?.[0].title).toMatch(/^Research: how comparable/);
+    expect(swarm.snapshot().research).toMatchObject({ job: null, last: { topic: expect.stringMatching(/^how comparable/), partial: false } });
   });
 });

@@ -7,8 +7,8 @@ const WAIT_DEFAULT_MIN = 10;
 export const ASK_MAX_MIN = 120;
 export const ASK_DEFAULT_MIN = 30;
 
-export type WaitKind = 'pr_qa' | 'pr_merged' | 'issue_closed' | 'agent_idle' | 'preview_running' | 'usage' | 'it_answer';
-export const WAIT_KINDS: WaitKind[] = ['pr_qa', 'pr_merged', 'issue_closed', 'agent_idle', 'preview_running', 'usage', 'it_answer'];
+export type WaitKind = 'pr_qa' | 'pr_merged' | 'issue_closed' | 'agent_idle' | 'preview_running' | 'usage' | 'research_done' | 'it_answer';
+export const WAIT_KINDS: WaitKind[] = ['pr_qa', 'pr_merged', 'issue_closed', 'agent_idle', 'preview_running', 'usage', 'research_done', 'it_answer'];
 
 export interface WaitCondition {
   kind: WaitKind;
@@ -19,6 +19,7 @@ export interface WaitCondition {
   usage?: 'normal' | 'pacing' | 'paused';
   /** it_answer: ask_it's message id (#663). */
   message?: number;
+  research?: number; // research_done: request_research's number
 }
 
 /** The office as a wait sees it; null: there is no such floor, PR, issue or agent. */
@@ -32,6 +33,8 @@ export interface WaitWorld {
   usage(): 'normal' | 'pacing' | 'paused';
   /** IT's answer to an ask_it by its message id: done once their session ended (#663). */
   itAnswer(message: number): { done: boolean; text: string } | null;
+  /** A research request (#664): its topic, and its brief once done; null: no such request (the Researcher's layer adds it). */
+  research?(id: number): { topic: string; done: { file: string | null; summary: string; partial: boolean } | null } | null;
 }
 
 /** wait_for's timeout in ms: `min` minutes (default WAIT_DEFAULT_MIN), at most `max`. */
@@ -54,6 +57,8 @@ export function waitLabel(c: WaitCondition): string {
       return `Claude's usage to be ${c.usage ?? 'normal'}`;
     case 'it_answer':
       return `IT's answer to message ${c.message}`;
+    case 'research_done':
+      return `research #${c.research}`;
   }
 }
 
@@ -75,6 +80,8 @@ export function waitProblem(c: WaitCondition, w: WaitWorld): string | null {
       return null;
     case 'it_answer':
       return needs('message') ?? (w.itAnswer(c.message!) ? null : `No ask_it has message ${c.message}.`);
+    case 'research_done':
+      return needs('research') ?? (w.research?.(c.research!) ? null : `There is no research #${c.research}.`);
   }
 }
 
@@ -109,6 +116,12 @@ export function waitMet(c: WaitCondition, w: WaitWorld): string | null {
     case 'it_answer': {
       const a = w.itAnswer(c.message!);
       return a?.done ? `IT answered (message ${c.message}): ${a.text || '(nothing)'}` : null;
+    }
+    case 'research_done': {
+      const r = w.research?.(c.research!);
+      const d = r?.done;
+      if (!r) return `Research #${c.research} is no longer kept.`;
+      return d ? `Research #${c.research} "${r.topic}" is done${d.partial ? ' (stopped early: a partial brief)' : ''}.${d.file ? ` Brief: ${d.file} (read it).` : ''} ${d.summary.slice(0, 600)}`.trim() : null;
     }
   }
 }

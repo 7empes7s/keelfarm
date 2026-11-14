@@ -23,6 +23,7 @@ import { setupTools, type SetupHandlers } from './ceoSetupTool.ts';
 import { ASKED_IN, askTools, type AskHandlers } from './ceoAskTools.ts';
 import { askItTools, cloudflareTools, reportTools, type AskItHandlers, type CloudflareHandlers, type ReportHandlers } from './ceoItTools.ts';
 import { problemTools, type ProblemHandlers } from './ceoProblemTools.ts';
+import { researchTools, type ResearchHandlers } from './ceoResearchTools.ts';
 import { checklistTools, type ChecklistHandlers } from './ceoChecklistTools.ts';
 import { archiveFileOf } from './ceoNotes.ts';
 
@@ -162,7 +163,7 @@ export function qaReportText(
   return JSON.stringify(report, null, 1);
 }
 
-export interface OfficeHandlers extends WaitHandlers, ReactHandlers, SetupHandlers, AskHandlers, AskItHandlers, ReportHandlers, ProblemHandlers, CloudflareHandlers, ChecklistHandlers {
+export interface OfficeHandlers extends WaitHandlers, ReactHandlers, SetupHandlers, AskHandlers, AskItHandlers, ReportHandlers, ProblemHandlers, CloudflareHandlers, ChecklistHandlers, ResearchHandlers {
   companyStatus(a: { full?: boolean }): string;
   floorDetail(a: { floor: number }): string;
   agentDetail(a: { agent_id: string }): string;
@@ -551,6 +552,7 @@ export function createOfficeTools(h: OfficeHandlers): OfficeTools {
     ...cloudflareTools(h, run),
     ...reportTools(h, run),
     ...problemTools(h, run),
+    ...researchTools(h, run),
     ...checklistTools(h, run),
   ];
   return toolServer(defs);
@@ -625,7 +627,7 @@ export function ceoSystemPrompt(o: {
     '- Understand each project: what it is, its stack and how far along it is. Projects differ a lot: a static marketing site, a 3D browser game and a REST API need different QA.',
     `- Size each floor's team from its throughput (team, throughput, capacity and spend in company_status: costPerMerge is 7 days' cost per merged PR, wasteToday what sessions without a result cost today): grow it when issues ready to start or PRs waiting for QA keep waiting for free agents, shrink it when agents sit idle with nothing ready. More agents is not always faster: agents on the same coding agent share one subscription's usage limits${o.sessionLimit ? `, at most ${o.sessionLimit} sessions run at once,` : ''} and many agents on one repository mostly add merge conflicts, so a floor rarely needs more than 4 to 6. A floor holds at most ${o.maxAgents}. When the manager asks for a different size, follow that.`,
     "- Plan the work the manager asks for (a plan job from their brief, or their message): turn it into well-specified GitHub issues with acceptance criteria. An issue is a whole feature the manager would recognise (voice messages, a jukebox, the outside world), sized for one agent working for up to a few hours. Agents have large context windows and handle long jobs. Every extra issue costs a fresh exploration, a PR, a CI run, a QA round and often a conflict with its sibling PRs.",
-    '- For a new feature, check current docs and how others solve it on the web before writing issues; cite what you used in the issue.',
+    '- For a new feature, request_research for current docs and how others solve it, never search yourself; cite the brief in the issue.',
     '- Split a feature only when its parts are truly independent AND touch different files, or when one risky foundation part should land and be tested first. Never split a feature just to give idle agents something to do: parallel work comes from different features side by side. Unrelated small fixes are still their own issues.',
     "- Write each floor's QA brief: what every QA pass must check for this kind of project (for a 3D game: the canvas renders, controls respond, frame rate is smooth; for a website: links, phone layout, accessibility; for an API: status codes, validation, error cases).",
     '',
@@ -715,7 +717,7 @@ export function ceoJobPrompt(job: CeoJob, floor: { floor: number; fullName: stri
         '- With charter objectives, end each issue with a line "Objective: O<n>". A part of the brief that is a non-goal or serves no objective: file nothing for it; ask the manager, or propose_charter.',
         `- Read the current code and the ${floor.backlog} open issues first, so you build on what exists and do not duplicate anything.`,
         '- One issue per whole feature. Split a feature only when its parts are independent and touch different files, or a risky foundation part should land first. Only for an empty or nearly empty repository does a skeleton issue come first, with the others depending on it.',
-        '- For a new feature, check current docs and how others solve it on the web before writing issues; cite what you used in the issue.',
+        job.brief && !job.pick ? `- The Researcher's brief you asked for: ${job.brief}. Read it first and cite it in the issues.` : `- For a new feature that needs current docs or prior art from the web: request_research (floor ${floor.floor}) and end this job; the brief comes back to you as this plan. Never search the web yourself.`,
         '- File the issues.',
         '- Make sure the team size fits the work: scale_team when ready issues would keep waiting for free agents.',
         '- Update the floor profile and QA brief if the brief changes what the project is.',

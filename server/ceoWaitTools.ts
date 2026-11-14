@@ -16,6 +16,7 @@ const WAIT_CONDITION = z.object({
   agent_id: z.string().min(1).max(100).optional(),
   usage: z.enum(['normal', 'pacing', 'paused']).optional(),
   message: z.number().int().positive().optional(),
+  research: z.number().int().positive().optional(),
 });
 
 /** The office's side of the waiting tools (part of OfficeHandlers). */
@@ -31,7 +32,7 @@ export function waitTools(h: WaitHandlers, run: Run) {
   return [
     tool(
       'wait_for',
-      "Wait, holding this job, until any of the conditions holds: pr_qa (floor, pr: QA's verdict), pr_merged (floor, pr), issue_closed (floor, issue), agent_idle (agent_id), preview_running (floor), usage (usage: normal, pacing or paused), it_answer (message: ask_it's message id). Returns what happened, or that it timed out. Your session slot is free while you wait.",
+      "Wait, holding this job, until any of the conditions holds: pr_qa (floor, pr: QA's verdict), pr_merged (floor, pr), issue_closed (floor, issue), agent_idle (agent_id), preview_running (floor), usage (usage: normal, pacing or paused), research_done (research: request_research's number), it_answer (message: ask_it's message id). Returns what happened, or that it timed out. Your session slot is free while you wait.",
       {
         conditions: z.array(WAIT_CONDITION).min(1).max(5),
         timeout_min: z.number().int().min(1).max(30).optional().describe('Default 10, at most 30 (or Settings → The CEO)'),

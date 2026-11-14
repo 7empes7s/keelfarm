@@ -95,6 +95,9 @@ export abstract class SwarmContract {
   protected abstract decideFromTelegram(...a: Parameters<Swarm['decideFromTelegram']>): ReturnType<Swarm['decideFromTelegram']>;
   protected abstract emitCeo(...a: Parameters<Swarm['emitCeo']>): ReturnType<Swarm['emitCeo']>;
   protected abstract enqueueCeo(...a: Parameters<Swarm['enqueueCeo']>): ReturnType<Swarm['enqueueCeo']>;
+
+  // researcher.ts
+  protected abstract requestResearch(...a: Parameters<Swarm['requestResearch']>): ReturnType<Swarm['requestResearch']>;
   protected abstract ensureCeo(...a: Parameters<Swarm['ensureCeo']>): ReturnType<Swarm['ensureCeo']>;
   protected abstract floorName(...a: Parameters<Swarm['floorName']>): ReturnType<Swarm['floorName']>;
   protected abstract followup(...a: Parameters<Swarm['followup']>): ReturnType<Swarm['followup']>;
