@@ -41,6 +41,8 @@ describe('the Jarvis voice brain', () => {
     // a yes or no answers a new "Should I…?" each time: two confirmations are never merged
     expect(repeatTurn({ text: 'Yes', at: 1000 }, 'yes', 3000)).toBe(false);
     expect(repeatTurn({ text: 'no thanks', at: 1000 }, 'No thanks.', 3000)).toBe(false);
+    // a sentence that only starts with one of those words is still the same turn sent twice
+    for (const q of ["Okay, what's waiting on me?", 'Please file an issue for the login bug', "Don't merge the review one", 'Stop the preview on floor 4']) expect(repeatTurn({ text: q, at: 1000 }, q, 2000)).toBe(true);
   });
 
   it('answers status, a floor, decisions and server health at once from company data, with no hand-off', () => {

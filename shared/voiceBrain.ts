@@ -174,7 +174,8 @@ const REPEAT_MS = 8000;
 /** Whether `text` repeats the last turn (`last`) within a few seconds: answered again, never forwarded twice. Never a yes or no. */
 export function repeatTurn(last: { text: string; at: number } | undefined, text: string, now: number): boolean {
   const t = norm(text);
-  if (YES.test(t) || NO.test(t)) return false; // a yes or no answers a new "Should I…?" each time
+  const confirm = (YES.test(t) || NO.test(t)) && t.split(' ').length <= 3; // only a whole yes or no, never a sentence starting with one
+  if (confirm) return false; // a yes or no answers a new "Should I…?" each time
   return !!last && now - last.at < REPEAT_MS && norm(last.text) === t;
 }
 
