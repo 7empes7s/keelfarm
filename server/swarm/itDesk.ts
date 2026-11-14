@@ -19,7 +19,8 @@ import type { ItJob } from '../../shared/itDept.ts';
 import { OFFICE_DIR } from '../officeUpdate.ts';
 import { CfError } from '../cloudflare.ts';
 import { envAccessPair, envPathRefusal, envSecretFile } from '../cfSecretFile.ts';
-import type { CloudflareArgs, InstallKeyArgs, ProviderActionArgs, SaveKeyArgs } from '../ceoItTools.ts';
+import type { CloudflareArgs, InstallKeyArgs, ProviderActionArgs, ProviderUpdateArgs, SaveKeyArgs } from '../ceoItTools.ts';
+import { providerStatusText } from '../../shared/providerStatus.ts';
 import { appInstallRefusal, appTarget, INSTALL_TARGETS, installLine, installRefusal, keyPart, maskPasted, renewDue, savedMark, type AppTarget, type KeyInstall } from '../../shared/keyInstall.ts';
 import { appAccess, appSet, appTest, appWhere } from '../appInstall.ts';
 import { readFile } from 'node:fs/promises';
@@ -308,6 +309,7 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
   protected async providerAct(a: ProviderActionArgs, by: string): Promise<string> {
     if (!this.itOn) throw new HttpError(403, OFF);
     try {
+      await this.providers.resolveTenants(a.provider); // #677: an Entra entry without its Tenant ID gets it from the office's domain
       const out = await runAction(this.actionCtx(a.provider), a);
       if ('text' in out) return this.itMask(out.text);
       const { plan } = out;
@@ -563,10 +565,21 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
     if (a.file) return this.saveKeyFile(a, a.file);
     const value = String(a.value ?? '').trim();
     if (!value) throw new HttpError(400, 'Give the pasted value, or file: the id of a file sent in chat.');
-    const c = await this.providers.add(String(a.provider ?? ''), value, a.label ?? '', '', '', a.uses ? { usedBy: a.uses } : {});
+    const c = await this.providers.add(String(a.provider ?? ''), value, a.label ?? '', '', a.account_id ?? '', a.uses ? { usedBy: a.uses } : {});
     const n = this.maskPastedKey(value, c.label);
     const test = c.test ? ` Its test: ${c.test.note}.` : '';
     return this.itMask(`Saved in Settings → Providers as "${c.label}" (id ${c.id}, ends …${c.keyHint}).${test} ${n ? `The chat shows "${savedMark(c.label)}" where it was pasted (${n} message${n === 1 ? '' : 's'}).` : "It wasn't in the chat, so nothing there was masked."} Put it where it's used with install_key.`);
+  }
+
+  /** provider_status (#677): each key's completeness, small. */
+  protected providerStatus(a: { provider?: string }): string {
+    return providerStatusText(this.providers.view().connections, a.provider?.trim().toLowerCase() || undefined);
+  }
+
+  /** provider_update (#677): a key's Tenant ID / Account ID, name or users set without the key; a new Tenant ID tested. */
+  protected async providerUpdate(a: ProviderUpdateArgs): Promise<string> {
+    const c = await this.providers.update(this.findKey(String(a.key ?? '')).id, { ...(a.account_id !== undefined && { accountId: a.account_id }), ...(a.label !== undefined && { label: a.label }), ...(a.uses !== undefined && { usedBy: a.uses }) });
+    return this.itMask(providerStatusText([c]).split('\n')[1] ?? '');
   }
 
   /** save_provider_key's file (#622: a service account's JSON sent in chat): saved as the key, then the file deleted. */
@@ -574,7 +587,7 @@ export abstract class SwarmItDesk extends SwarmManagerAsks {
     const f = this.files.get(id);
     if (!f) throw new HttpError(404, `No file ${id} in the office's files: ask the manager to send it again.`);
     const value = (await readFile(this.files.pathOf(id), 'utf8')).trim();
-    const c = await this.providers.add(String(a.provider ?? ''), value, a.label ?? '', '', '', a.uses ? { usedBy: a.uses } : {});
+    const c = await this.providers.add(String(a.provider ?? ''), value, a.label ?? '', '', a.account_id ?? '', a.uses ? { usedBy: a.uses } : {});
     await this.files.remove(id);
     const test = c.test ? ` Its test: ${c.test.note}.` : '';
     const next = MODULES[c.provider] ? ` Use it with provider_action ${c.provider}.` : " Put it where it's used with install_key.";

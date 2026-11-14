@@ -5,6 +5,7 @@ import { useCallback, useMemo, useState, type CSSProperties, type ReactNode } fr
 import { useStore } from '../store';
 import { CEO_ID } from '../../../shared/types';
 import { buildGraph } from '../../../shared/memoryMap';
+import { needsAttention } from '../../../shared/providerStatus';
 import { UsageSources } from '../ui/UsageSources';
 import { EarningsCard } from '../ui/EarningsCard';
 import { AgencyCard } from '../ui/AgencyCard';
@@ -40,6 +41,7 @@ export function CompanySummary({ go, settings, children }: { go: (tab: PocketTab
           </span>
         </button>
         <UsageSources limit={4} />
+        <ProvidersAttention open={() => settings('providers')} />
       </div>
       <MapCard open={() => settings('map')} style={ceo ? undefined : last} />
       {ceo && (
@@ -57,6 +59,21 @@ export function CompanySummary({ go, settings, children }: { go: (tab: PocketTab
         </div>
       )}
     </div>
+  );
+}
+
+/** "Providers: 2 need attention" (#677): keys lacking a field (Entra's Tenant ID) or a permission, or not working; hidden when none do. */
+function ProvidersAttention({ open }: { open: () => void }) {
+  const connections = useStore((s) => s.providers.connections);
+  const n = useMemo(() => connections.filter(needsAttention).length, [connections]);
+  if (!n) return null;
+  return (
+    <button className="pk-usage-head" onClick={open} title="Open Settings → Providers">
+      <b className="small">
+        <Icon name="key-round" /> Providers: {n} need{n === 1 ? 's' : ''} attention
+      </b>
+      <Icon name="chevron-right" />
+    </button>
   );
 }
 

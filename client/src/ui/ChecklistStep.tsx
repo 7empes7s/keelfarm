@@ -1,8 +1,11 @@
 // One step of a checklist (#612): the tick (done or not), its details in light markdown, values to copy with one tap,
-// the secret field (saved straight to Providers: the step shows only "saved · ends …ab12"), "Not needed" with a
+// the secret field (saved straight to Providers: the step shows only "saved · ends …ab12"; a provider's Account ID
+// beside it, #677: Entra's Tenant ID, addable after the secret was saved), "Not needed" with a
 // reason, and the manager's comments with a photo. Everything goes to the office, which sends the checklist back.
 import { useRef, useState } from 'react';
 import { api } from '../api';
+import { useStore } from '../store';
+import { setupGuide } from '../../../shared/keySetup';
 import { attachmentProblem } from '../../../shared/files';
 import type { Checklist, ChecklistStep } from '../../../shared/checklists';
 import { copyText } from './clipboard';
@@ -36,16 +39,52 @@ function CopyBox({ label, value }: { label: string; value: string }) {
   );
 }
 
+/** The provider's Account ID beside the secret (#677: Entra's Tenant ID), saved on the same Providers entry. */
+function AccountInput({ label, hint, value, onChange }: { label: string; hint: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <label className="cl-secret-label">
+      <span>
+        <Icon name="id-card" /> {label}
+      </span>
+      <input type="text" autoComplete="off" autoCapitalize="off" spellCheck={false} maxLength={64} placeholder={hint} value={value} onChange={(e) => onChange(e.target.value)} />
+    </label>
+  );
+}
+
 function SecretField({ c, s }: { c: Checklist; s: ChecklistStep }) {
   const [value, setValue] = useState('');
+  const [account, setAccount] = useState('');
   const [busy, setBusy] = useState(false);
   const secret = s.secret!;
-  if (secret.saved)
+  const ask = setupGuide(secret.provider).accountId;
+  const conn = useStore((st) => (secret.saved ? st.providers.connections.find((x) => x.id === secret.saved!.connectionId) : undefined));
+  if (secret.saved) {
+    const lacks = ask && conn && !conn.accountId;
     return (
-      <p className="cl-secret-saved">
-        <Icon name="key-round" /> {secret.label} saved · ends …{secret.saved.hint}
-      </p>
+      <>
+        <p className="cl-secret-saved">
+          <Icon name="key-round" /> {secret.label} saved · ends …{secret.saved.hint}
+          {ask && conn?.accountId ? ` · ${ask.label} ${conn.accountId}` : ''}
+        </p>
+        {lacks && (
+          <form
+            className="cl-secret"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!account.trim() || busy) return;
+              setBusy(true);
+              void api.updateProvider(conn.id, { accountId: account }).then(() => setAccount(''), () => undefined).finally(() => setBusy(false));
+            }}
+          >
+            <AccountInput label={ask.label} hint={ask.hint} value={account} onChange={setAccount} />
+            <button type="submit" className="btn btn-small btn-good" disabled={!account.trim() || busy}>
+              <Icon name="save" /> {busy ? 'Saving…' : `Add ${ask.label}`}
+            </button>
+          </form>
+        )}
+      </>
     );
+  }
   return (
     <form
       className="cl-secret"
@@ -53,7 +92,7 @@ function SecretField({ c, s }: { c: Checklist; s: ChecklistStep }) {
         e.preventDefault();
         if (!value.trim() || busy) return;
         setBusy(true);
-        void api.checklistSecret(c.id, s.id, value).then(() => setValue(''), () => undefined).finally(() => setBusy(false));
+        void api.checklistSecret(c.id, s.id, value, account).then(() => (setValue(''), setAccount('')), () => undefined).finally(() => setBusy(false));
       }}
     >
       <label className="cl-secret-label">
@@ -62,6 +101,7 @@ function SecretField({ c, s }: { c: Checklist; s: ChecklistStep }) {
         </span>
         <input type="password" autoComplete="off" spellCheck={false} placeholder={`Paste ${secret.label.toLowerCase()}`} value={value} onChange={(e) => setValue(e.target.value)} />
       </label>
+      {ask && <AccountInput label={ask.label} hint={ask.hint} value={account} onChange={setAccount} />}
       <button type="submit" className="btn btn-small btn-good" disabled={!value.trim() || busy}>
         <Icon name="save" /> {busy ? 'Saving…' : 'Save to Providers'}
       </button>

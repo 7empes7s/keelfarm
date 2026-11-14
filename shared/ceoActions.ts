@@ -80,6 +80,7 @@ const ACTS: Record<string, string> = {
   provider_action: '🔑',
   install_key: '🔑',
   save_provider_key: '🔑',
+  provider_update: '🔑',
   it_report: '🖥️',
   note_problem: '📋',
   checklist_create: '☑️',
@@ -95,7 +96,7 @@ const ACTS: Record<string, string> = {
 };
 
 /** The office tools that aren't cards: reads, and what shows in the chat itself (files, edits, reactions, questions, research handed over). */
-export const NOT_CARDS = new Set(['company_status', 'floor_detail', 'agent_detail', 'agent_log', 'qa_report', 'worktree_file', 'pr_diff', 'session_history', 'it_run', 'consult', 'attach_file', 'keep_file', 'edit_message', 'react', 'reply', 'ask_manager', 'problems', 'checklist_read', 'request_research', 'mail_list', 'mail_read', 'it_answer']);
+export const NOT_CARDS = new Set(['company_status', 'floor_detail', 'agent_detail', 'agent_log', 'qa_report', 'worktree_file', 'pr_diff', 'session_history', 'it_run', 'consult', 'attach_file', 'keep_file', 'edit_message', 'react', 'reply', 'ask_manager', 'problems', 'checklist_read', 'request_research', 'mail_list', 'mail_read', 'it_answer', 'provider_status']);
 
 // Tools whose card opens a console section (with the floor, when the call names one).
 const SECTIONS: Partial<Record<string, ActionSection>> = {
@@ -117,6 +118,7 @@ const SECTIONS: Partial<Record<string, ActionSection>> = {
   provider_action: 'providers',
   install_key: 'ops',
   save_provider_key: 'providers',
+  provider_update: 'providers',
   it_report: 'it-dept',
   note_problem: 'problems',
   checklist_create: 'checklists',

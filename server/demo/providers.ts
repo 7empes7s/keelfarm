@@ -8,6 +8,7 @@ import type { ProbeRequest, ProbeResult } from '../../shared/providers.ts';
 import type { RawKey } from '../../shared/keyScan.ts';
 import { registerCeoReply, registerDemo } from './registry.ts';
 import { demoServiceAccount } from './gcloud.ts';
+import { DEFAULT_DOMAIN } from '../../shared/comms.ts';
 
 const LITELLM = 'LiteLLM litellm.env';
 /** The made-up archive's keys: one live, dead, out of credit or unreachable each, a duplicate, one already saved, one unknown. */
@@ -29,9 +30,24 @@ export const DEMO_FOUND_KEYS: RawKey[] = [
 
 /** The demo's made-up Entra tenant (#621). */
 const DEMO_TENANT = '7e57e57e-0000-4000-8000-00000000c1f0';
+const DEMO_DOMAIN = DEFAULT_DOMAIN;
+
+/** A made-up client-credentials token naming its tenant (#677: the office keeps the `tid` it was issued in). */
+const demoEntraToken = (tid: string) => `e30.${Buffer.from(JSON.stringify({ tid })).toString('base64url')}.demo`;
+
+/**
+ * The Entra admin app's sign-in (#621, #677): the demo tenant by its GUID, or by the Comms domain unless the client id
+ * says "nodomain" (the …Hc85 entry saved from a checklist without its Tenant ID, which the manager or the CEO adds).
+ */
+function demoEntraSignIn(req: Extract<ProbeRequest, { kind: 'form' }>): ProbeResult {
+  const tenant = req.url.split('/')[3] ?? '';
+  const ok = tenant === DEMO_TENANT || (tenant === DEMO_DOMAIN && !/nodomain/.test(req.form.client_id ?? ''));
+  return ok ? { status: 200, body: { token_type: 'Bearer', access_token: demoEntraToken(DEMO_TENANT), expires_in: 3599 } } : { status: 400, body: { error: 'invalid_request' } };
+}
 
 async function demoProbe(req: ProbeRequest): Promise<ProbeResult> {
   if (req.kind === 'command') return { status: /^(npx|node|uvx|docker)$/.test(req.command) ? 200 : 404 };
+  if (req.kind === 'form' && req.url.startsWith('https://login.microsoftonline.com/') && req.form.grant_type === 'client_credentials') return demoEntraSignIn(req);
   if (req.kind === 'form') return { status: 200, body: { access_token: `demo-access-${Date.now().toString(36)}`, refresh_token: req.form.refresh_token ?? 'demo-refresh-token', expires_in: 3600 } };
   const auth = Object.values(req.headers).join(' ');
   if (/\/dns_records/.test(req.url) && /nodns/i.test(auth)) return { status: 403, body: { success: false, errors: [{ code: 10000, message: 'Authentication error' }] } };
@@ -76,6 +92,7 @@ registerDemo('providers', () => ({
       { provider: 'luma', key: 'luma-demo-00005c6d', label: 'Luma' },
       { provider: 'kling', key: 'demo-access:demo-secret-7e8f', label: 'Kling' },
       { provider: 'entra', key: 'demo-admin-client-0001:demo-admin-secret-9a0b', label: 'Microsoft Entra', accountId: DEMO_TENANT }, // #621
+      { provider: 'entra', key: 'demo-mail-client-nodomain:demo-mail-secret-Hc85', label: 'Client id:client secret · Connect the shared mailboxes' }, // #677: saved from a checklist without its Tenant ID
     ],
     mcp: [
       { name: 'github', command: 'npx -y @modelcontextprotocol/server-github', secrets: { GITHUB_PERSONAL_ACCESS_TOKEN: 'demo-gh-token-0000' } },
@@ -83,5 +100,15 @@ registerDemo('providers', () => ({
     ],
   }),
 }));
+
+// #677: the CEO sets a key's Tenant ID itself (no key re-entered), after reading what each key lacks.
+registerCeoReply('keys', async ({ text, use }) => {
+  if (!/\b(tenant|provider status|keys? (need|lack|missing))/i.test(text)) return null;
+  const status = await use('provider_status', { provider: 'entra' });
+  const lacking = status.split('\n').find((l) => /lacks its Tenant ID/.test(l))?.split(' ')[0];
+  if (!lacking) return `Every Entra key has its Tenant ID:\n\n${status}`;
+  const done = await use('provider_update', { key: lacking, account_id: DEMO_TENANT });
+  return `That key had no Tenant ID, so I set it (the key itself stays as it was) and tested it: ${done}`;
+});
 
 registerCeoReply('keys', async ({ text, use }) => (/\bkeys?\b/i.test(text) && /\b(scan|find|found|old|left|retired)\b/i.test(text) ? `Here's what the scan found, tested; you pick what to keep in Settings → Providers.\n\n${await use('scan_keys', {})}` : null));

@@ -1,6 +1,7 @@
 // The demo CEO and checklists (#612): "make me a checklist…" sends the YouTube app steps with checklist_create, "add a
-// step: …" changes the newest one with checklist_update, and the wake-up after the manager ticks steps (or "how is my
-// checklist?") reads it with checklist_read, like the real CEO's tools.
+// step: …" changes the newest one with checklist_update, "a checklist for the mailboxes" an Entra secret with its
+// Tenant ID (#677), and the wake-up after the manager ticks steps (or "how is my checklist?") reads it with
+// checklist_read, like the real CEO's tools.
 import { SAMPLE_STEPS } from '../checklistSample.ts';
 import { registerCeoReply } from './registry.ts';
 
@@ -27,6 +28,11 @@ registerCeoReply('checklists', async ({ text, use }) => {
   if (/\b(how|progress|status|where)\b/i.test(text) && id) {
     const out = await use('checklist_read', { id });
     return `${out.split('\n')[0].replace(/^c\d+ /, '')}. Tap the card to see each step.`;
+  }
+  if (/\b(mail|mailbox|entra)/i.test(text)) {
+    // #677: an Entra secret field asks for the Tenant ID beside it, from the provider's setup
+    const out = await use('checklist_create', { title: 'Connect the shared mailboxes', steps: [{ title: 'Paste the admin app', details: 'Entra → App registrations → **cubefarm admin**: its Application (client) ID, a colon, then a new client secret.', secret: { label: 'client id:client secret', provider: 'entra' } }] });
+    return out.startsWith('Created') ? 'One step: paste the admin app and its Tenant ID into the card, and both go straight to Providers.' : out;
   }
   const out = await use('checklist_create', { title: 'YouTube app · second Google account', steps: SAMPLE_STEPS });
   return out.startsWith('Created') ? 'Here are the steps as a checklist: tick each one as you go, and paste the key into its field (it goes straight to Providers).' : out;
