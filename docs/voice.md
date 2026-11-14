@@ -314,7 +314,10 @@ A Jarvis call that falls back for any reason keeps the CEO's ElevenLabs voice (`
 goes to `POST /api/voice/call-turn`: answered at once from the office's data or the fast model, real work handed to
 the CEO in the background, so a busy or limited CEO never leaves the call silent. Echo (msg 4563): the mic asks for echo cancellation, noise suppression and auto gain, and the trace says if the
 browser didn't apply them; words heard that match what the voice is saying or just said (`ui/callEcho.ts`) are never a
-turn or a barge-in. ElevenLabs calls `<address>/v1/chat/completions` with a bearer token the office made, kept
+turn or a barge-in. The voice speaks as the CEO in the first person, never "I'm asking <name>"; filler words (uh, um, mm, och, a
+hesitant "Well…") are taken out of every spoken line and of the manager's words, with a restarted phrase kept once
+(`shared/fillers.ts`); the same words sent again within 8 s are answered but forwarded to the chat and the CEO once
+(`repeatTurn`), a whole earlier phrase the recognizer repeats is never resent, and each utterance is numbered in the trace. ElevenLabs calls `<address>/v1/chat/completions` with a bearer token the office made, kept
 in `<SWARM_HOME>/voice-agent.json` (mode 600) with the agent's id and the minutes. The office creates the agent
 ("<company> office voice", the CEO's voice, Flash v2) and its secret on your ElevenLabs workspace on the first call,
 and updates it when the voice or address changes. The browser gets only a short-lived signed URL for each conversation,

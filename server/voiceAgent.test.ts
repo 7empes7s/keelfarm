@@ -57,7 +57,7 @@ describe('the Jarvis voice: the custom LLM endpoint', () => {
     const { session } = await dial(swarm);
     const ask = vi.spyOn(swarm, 'messageCeo');
     const ack = await swarm.voiceLlm({ cubefarm_session: session, messages: said('Why is QA so slow this week?') }, undefined, true);
-    expect(ack).toMatch(/^On it. I'm asking /);
+    expect(ack).toMatch(/^On it. I'll look into that/);
     expect(ask).toHaveBeenCalledWith('Why is QA so slow this week?', undefined, 'voice');
     const ceo = swarm.snapshot().ceo;
     expect(ceo.job?.kind === 'chat' || ceo.queue.some((j) => j.kind === 'chat')).toBe(true); // a CEO job for it
@@ -65,7 +65,7 @@ describe('the Jarvis voice: the custom LLM endpoint', () => {
 
     ask.mockClear();
     const question = await swarm.voiceLlm({ cubefarm_session: session, messages: said('Hire two more people on floor 1') }, undefined, true);
-    expect(question).toMatch(/^Should I ask .+ to hire two more people on floor 1\?$/);
+    expect(question).toBe('Should I hire two more people on floor 1?');
     expect(ask).not.toHaveBeenCalled();
     await swarm.voiceLlm({ cubefarm_session: session, messages: said('Yes') }, undefined, true);
     expect(ask).toHaveBeenCalledWith('Hire two more people on floor 1', undefined, 'voice');
@@ -180,13 +180,31 @@ describe('the Jarvis voice when ElevenLabs can\'t reach the office (#682)', () =
     expect(otherEnsure.mock.calls.at(-1)?.[1].llmUrl).toBe('https://other.example.com/v1');
   });
 
+  it('forwards a turn ElevenLabs sends twice to the chat and the CEO once (msgs 4593/4595)', async () => {
+    const swarm = await office();
+    const { session } = await dial(swarm);
+    const ask = vi.spyOn(swarm, 'messageCeo');
+    const first = await swarm.voiceLlm({ cubefarm_session: session, messages: said('Why is QA so slow this week?') }, undefined, true);
+    const again = await swarm.voiceLlm({ cubefarm_session: session, messages: said('Why is QA so slow this week?') }, undefined, true);
+    expect(again).toBe(first);
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(swarm.snapshot().messages.filter((m) => m.from === 'manager' && m.text === 'Why is QA so slow this week?')).toHaveLength(1);
+  });
+
+  it('keeps filler words out of the chat and the voice (msg 4621)', async () => {
+    const swarm = await office();
+    const { session } = await dial(swarm);
+    await swarm.voiceLlm({ cubefarm_session: session, messages: said('Um, uh, what is, uh... what is waiting on me?') }, undefined, true);
+    expect(swarm.snapshot().messages.some((m) => m.from === 'manager' && m.text === 'What is waiting on me?')).toBe(true);
+  });
+
   it('answers a fallback call turn in words within 5 s with every Claude account limited, read aloud in the call (#682)', async () => {
     const swarm = await office();
     vi.spyOn(swarm, 'messageCeo').mockImplementation(() => new Promise(() => undefined)); // limited: the CEO never gets to it
     const t0 = Date.now();
     const r = await swarm.voiceCallTurn('Why is QA so slow this week?');
     expect(Date.now() - t0).toBeLessThan(5000);
-    expect(r.say).toMatch(/^On it. I'm asking /);
+    expect(r.say).toMatch(/^On it. I'll look into that/);
     const last = swarm.snapshot().messages.at(-1)!;
     expect(last).toMatchObject({ from: 'ceo', text: r.say });
     expect(last.silent).toBeFalsy(); // the call reads it aloud, in the CEO's ElevenLabs voice

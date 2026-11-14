@@ -12,7 +12,8 @@ import { redact } from '../../shared/journal.ts';
 import { messageSpeech } from '../../shared/speech.ts';
 import type { WorldSnapshot } from '../../shared/types.ts';
 import { DEFAULT_VOICE_AGENT, addCallSeconds, agentLlmBases, agentWhy, parseUsage, usageMinutes, type AgentUsage, type VoiceAgentView } from '../../shared/voiceAgent.ts';
-import { MARKER, NO_BRAIN, brainTurn, lastUserText, markerSay, type BrainAct, type BrainFacts, type BrainState } from '../../shared/voiceBrain.ts';
+import { cleanHeard, noFillers } from '../../shared/fillers.ts';
+import { MARKER, NO_BRAIN, brainTurn, lastUserText, markerSay, repeatTurn, type BrainAct, type BrainFacts, type BrainState } from '../../shared/voiceBrain.ts';
 import { VOICE_ID } from '../../shared/voices.ts';
 import { HOME_DIR } from '../config.ts';
 import { HttpError } from '../httpError.ts';
@@ -51,6 +52,8 @@ interface AgentSession {
   at: number;
   last: number;
   brain: BrainState;
+  /** The last turn's words, when and what was said back: the same words again soon are answered, never forwarded twice. */
+  lastTurn?: { text: string; at: number; say: string };
 }
 
 /** The conversation ElevenLabs sent, for the fast model: the manager's and the voice's turns (never the CEO markers), the last 8. */
@@ -68,7 +71,7 @@ function factsLine(f: BrainFacts): string {
   const floors = f.floors.map((x) => `Floor ${x.floor} ${x.name}: ${x.open} open issues, ${x.prs} open PRs, ${x.mergedToday} merged today; ${x.agents.map((a) => `${a.name} ${a.doing || a.status}`).join(', ') || 'nobody'}.`);
   const decisions = f.decisions.slice(0, 3).map((d) => `Waiting on the manager: ${d.question}`);
   const it = f.it?.map((c) => `${c.label}: ${c.line}`) ?? [];
-  return [...floors, f.ceoJob ? `The CEO is ${f.ceoJob}.` : 'The CEO is free.', ...decisions, ...it].join('\n').slice(0, 3000);
+  return [...floors, f.ceoJob ? `You are ${f.ceoJob}.` : 'You are free.', ...decisions, ...it].join('\n').slice(0, 3000);
 }
 
 /** "issue #12" → "working on issue 12"; "testing PR #9" → "testing pull request 9". */
@@ -226,7 +229,7 @@ export abstract class SwarmVoiceAgent extends SwarmProblems {
    * and written into the chat so the call reads the answer aloud in the CEO's ElevenLabs voice.
    */
   async voiceCallTurn(text: string): Promise<{ say: string }> {
-    const t = text.trim().slice(0, 4000);
+    const t = cleanHeard(text).slice(0, 4000);
     if (!t) throw new HttpError(400, 'Say something first.');
     this.fallbackSession.last = Date.now();
     let say = '';
@@ -287,11 +290,11 @@ export abstract class SwarmVoiceAgent extends SwarmProblems {
     if (id && !this.agentSessions.has(id)) this.agentSessions.set(id, session);
     session.last = t0;
     const messages = (body as { messages?: unknown } | null)?.messages;
-    const text = lastUserText(messages).trim();
+    const text = cleanHeard(lastUserText(messages));
     console.log(`voice agent: a turn from ElevenLabs (${text.length} characters)`); // never the words: IT sees calls reach the office (#645)
     const mark = MARKER.exec(text);
     if (mark) {
-      yield this.markerWords(mark[1] as 'msg' | 'line', Number(mark[2]));
+      yield noFillers(this.markerWords(mark[1] as 'msg' | 'line', Number(mark[2])));
       return;
     }
     const time = this.timeTurn(id);
@@ -323,6 +326,25 @@ export abstract class SwarmVoiceAgent extends SwarmProblems {
   private async *turnWords(text: string, session: AgentSession, messages: unknown, spoken = true): AsyncGenerator<string> {
     const heard = { voiceCall: true as const };
     const answer = spoken ? heard : {}; // said by the Jarvis voice already, or (#682) for the call to read aloud
+    const last = session.lastTurn;
+    if (repeatTurn(last, text, Date.now())) {
+      console.log('voice agent: the same turn again within seconds: answered, not forwarded twice');
+      yield last!.say;
+      return;
+    }
+    const turnRec = { text, at: Date.now(), say: '' };
+    session.lastTurn = turnRec;
+    for await (const piece of this.turnPieces(text, session, messages, heard, answer)) {
+      const clean = noFillers(piece);
+      if (!clean) continue;
+      const out = clean + (/\s*$/.exec(piece)?.[0] ?? ''); // a streamed sentence keeps its space before the next
+      turnRec.say += out;
+      yield out;
+    }
+  }
+
+  /** A turn's words before fillers are taken out (msg 4621). */
+  private async *turnPieces(text: string, session: AgentSession, messages: unknown, heard: { voiceCall: true }, answer: { voiceCall?: true }): AsyncGenerator<string> {
     const before = session.brain;
     const facts = this.brainFacts();
     const turn = brainTurn(text, before, facts);
@@ -345,7 +367,7 @@ export abstract class SwarmVoiceAgent extends SwarmProblems {
       }
       if (said.length) {
         this.postMessage('manager', text.slice(0, 4000), undefined, heard);
-        this.postMessage('ceo', said.join('').trim(), undefined, answer);
+        this.postMessage('ceo', noFillers(said.join('').trim()), undefined, answer);
         return;
       }
     }
@@ -360,7 +382,7 @@ export abstract class SwarmVoiceAgent extends SwarmProblems {
         say = `That didn't work: ${(err as Error).message}`;
       }
     }
-    if (turn.record) this.postMessage('ceo', say, undefined, answer);
+    if (turn.record) this.postMessage('ceo', noFillers(say), undefined, answer);
     yield say;
   }
 
@@ -375,7 +397,7 @@ export abstract class SwarmVoiceAgent extends SwarmProblems {
     if (kind === 'line') return markerSay(this.voice.talkLine(n) ?? '', false) || 'Still working on it.';
     const m = this.state.messages.find((x) => x.id === n);
     const spoken = m ? messageSpeech(m) : '';
-    if (!m || !spoken) return `${this.ceo().name} answered in the chat.`;
+    if (!m || !spoken) return 'I answered in the chat.';
     return markerSay(spoken, messageSpeech(m, { whole: true }).length > spoken.length + LONGER_BY || !!m.artifacts?.length || !!m.visuals?.length);
   }
 
