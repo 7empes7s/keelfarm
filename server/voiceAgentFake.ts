@@ -3,7 +3,7 @@
 // answers every typed turn (user_message) through the office's own custom LLM, "speaks" a soft tone as PCM 16 kHz
 // for about as long as saying the words would take, and is interrupted by a turn sent while it talks. It is strict about
 // the mic (#656): audio that isn't the user_input_audio_format it announced (SWARM_DEMO_VOICE_IN, default pcm_16000)
-// closes the call as ElevenLabs' ASR would hear only noise, and the manager talking then pausing is heard as a turn.
+// closes the call as ElevenLabs' ASR would hear only noise, and the manager talking then pausing is heard (a fixed reply).
 import type { WebSocket } from 'ws';
 
 export const FAKE_AGENT_PATH = '/ws/voice-agent';
@@ -113,7 +113,7 @@ export function fakeAgent(ws: WebSocket, llm: Llm, firstMessage: () => string, l
         if (pause) clearTimeout(pause);
         pause = setTimeout(() => {
           pause = null;
-          if (mic.talking >= 5) turn(`(the demo heard ${(mic.talking / 10).toFixed(1)} s of you talking)`);
+          if (mic.talking >= 5) heardAudio();
           mic.talking = 0;
         }, 800);
       }
@@ -123,7 +123,15 @@ export function fakeAgent(ws: WebSocket, llm: Llm, firstMessage: () => string, l
     turn(m.text);
   });
 
-  /** The manager's turn: typed (user_message) or heard from the mic. */
+  /** Talking then a pause on the mic: heard as a turn, answered with a fixed line (the demo has no speech to text, and the CEO's chat stays the typed turns'). */
+  function heardAudio() {
+    const secs = (mic.talking / 10).toFixed(1);
+    if (Date.now() < speakingUntil) send({ type: 'interruption', interruption_event: { event_id: event } });
+    send({ type: 'user_transcript', user_transcription_event: { user_transcript: `(${secs} s of you talking)` } });
+    speak('I heard you. The demo has no speech to text, so type to me to ask something.');
+  }
+
+  /** The manager's typed turn (user_message). */
   function turn(text: string) {
     if (Date.now() < speakingUntil) send({ type: 'interruption', interruption_event: { event_id: event } });
     speakingUntil = 0;
