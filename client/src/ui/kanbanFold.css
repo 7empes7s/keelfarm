@@ -101,6 +101,46 @@
   text-align: center;
 }
 
+/* a strip never shrinks below its name and count (#680): under a tall "What's new" or a new issue the panel
+   scrolls instead of squeezing the board into blank squares */
+.kanban-strips {
+  min-height: 18rem;
+}
+.kanban-strips .kcol-shut {
+  min-height: min-content;
+}
+
+/* on a phone, folded columns next to each other share a row as pills (#680); open ones keep the full width */
+.kanban.kanban-pills {
+  display: flex;
+  flex-wrap: wrap;
+}
+.kanban-pills > .kcol {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+.kanban-pills > .kcol-shut {
+  flex: 1 1 auto;
+  border-radius: var(--ds-radius-pill);
+}
+/* the summary fills what a pill's row leaves, never widening the pill itself */
+.kanban-pills .kcol-shut .kcol-summary {
+  width: 0;
+}
+
+/* folded, an empty column steps back and one holding work stands out */
+.kcol-shut.kcol-empty .kcol-head {
+  filter: saturate(0.3);
+}
+.kcol-shut.kcol-empty .kcol-head > .count {
+  border-color: transparent;
+  background: transparent;
+}
+.kcol-shut:not(.kcol-empty) .kcol-head > .count {
+  font-weight: 800;
+  box-shadow: var(--ds-shadow-1);
+}
+
 /* a phone's jump row: each column's name and count, scrolling to it and opening it */
 .kanban-jump {
   position: sticky;
