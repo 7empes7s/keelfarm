@@ -1,0 +1,75 @@
+/* The agency pipeline (#667): the Company page's card under Earnings. */
+.ag-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  min-width: 0;
+}
+.ag-row {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  min-width: 0;
+}
+.ag-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ag-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  min-width: 0;
+  padding: var(--ds-space-2);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-surface-sunken);
+}
+.ag-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.ag-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-1) var(--ds-space-3);
+}
+.ag-earned {
+  color: var(--ds-text);
+  font-weight: 600;
+}
+.ag-target {
+  overflow-wrap: anywhere;
+}
+.ag-draft {
+  margin: 0;
+  padding-left: var(--ds-space-2);
+  border-left: var(--ds-border) solid var(--ds-line-strong);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.ag-decide {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-2);
+}
+.ag-pill {
+  flex: none;
+  padding: 2px var(--ds-space-2);
+  border-radius: var(--ds-radius-sm);
+  border: var(--ds-border) solid var(--ds-line);
+  font-size: var(--ds-text-sm);
+  white-space: nowrap;
+}
+.ag-shortlisted {
+  background: var(--ds-warn-fill);
+}
+.ag-live,
+.ag-done,
+.ag-approved {
+  background: var(--ds-good-fill);
+  color: var(--ds-on-color);
+}

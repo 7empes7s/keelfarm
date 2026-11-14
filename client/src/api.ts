@@ -145,6 +145,8 @@ export const api = {
   removeEarning: (id: string) => call('DELETE', `/api/earnings/entries/${id}`),
   addFixedCost: (body: { label: string; usdPerMonth: number }) => call<FixedCost>('POST', '/api/earnings/fixed', body),
   removeFixedCost: (id: string) => call('DELETE', `/api/earnings/fixed/${id}`),
+  decideOpportunity: (slug: string, approve: boolean, route?: 'build' | 'ops') => call<{ text: string }>('POST', `/api/agency/opportunities/${encodeURIComponent(slug)}`, { approve, route }),
+  decideAgencyAction: (id: string, approve: boolean) => call('POST', `/api/agency/actions/${encodeURIComponent(id)}`, { approve }),
   /** Comms (#668): a draft approved (with its edits), edited or discarded; a thread's label; a lead; the mailboxes' settings. */
   approveDraft: (id: string, edits: { subject?: string; text?: string } = {}) => call<MailDraft>('POST', `/api/comms/drafts/${id}/approve`, edits),
   editDraft: (id: string, edits: { subject?: string; text?: string }) => call<MailDraft>('POST', `/api/comms/drafts/${id}`, edits),

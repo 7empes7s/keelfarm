@@ -61,6 +61,13 @@ describe('setupGaps on fixture floors', () => {
     expect(ids(done({ tools: [] }))).toEqual([]); // not installed: nothing to switch on
     expect(ids(done({ company: ['web-app', 'api'] }))).toEqual([]);
   });
+
+  it("names the company's missing kind in plain plurals", () => {
+    const title = (useCase: SetupInput['useCase']) => setupGaps(done({ useCase, qaBrief: '', company: ['api'] })).find((g) => g.id === 'company')!.title;
+    expect(title('web-app')).toBe("The company isn't set up for web apps");
+    expect(title('agency')).toBe("The company isn't set up for agencies");
+    expect(title('ops')).toBe("The company isn't set up for ops");
+  });
 });
 
 describe('Not now and the notifications', () => {

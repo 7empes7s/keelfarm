@@ -224,6 +224,27 @@ export const USE_CASES: UseCaseDef[] = [
     providers: ['text'],
     why: 'Research reads a lot: a second text model with a long context helps with the reading.',
   },
+  {
+    id: 'agency',
+    label: 'Agency',
+    icon: 'briefcase-business',
+    code: false,
+    blurb: 'Market research and business plans: what to build or sell next',
+    jobs: { build: { ...CLAUDE_BUILD, model: 'sonnet', label: 'Claude Code · Sonnet', why: 'Reads sources and writes plans well, without Opus prices.' }, qa: CODEX_QA, fixes: CLAUDE_FIX, docs: CLAUDE_DOCS },
+    team: 1,
+    qaChecks: [
+      check('Every section is filled in, no placeholders', 'section|placeholder'),
+      check('Each claim and price has a source link', 'source|cite'),
+      check('Revenue estimates show their numbers and assumptions', 'assumption'),
+      check('Nothing posted, sent or signed up for without the manager’s approval', 'approv'),
+    ],
+    preview: null,
+    needsPreview: false,
+    browserLab: false,
+    skills: [],
+    providers: [],
+    why: 'An agency writes documents: QA checks sources and sums, and every external action waits for your approval.',
+  },
 ];
 
 /** What each coding agent is good at, for the guides. */

@@ -83,6 +83,11 @@ const ACTS: Record<string, string> = {
   note_problem: '📋',
   checklist_create: '☑️',
   checklist_update: '☑️',
+  create_floor: '🏗️',
+  agency_opportunities: '💼',
+  agency_decide: '💼',
+  agency_propose_action: '✋',
+  agency_action_done: '💼',
   mail_draft: '✉️',
   mail_send: '✉️',
   lead_update: '🤝',
@@ -120,6 +125,9 @@ const SECTIONS: Partial<Record<string, ActionSection>> = {
   lead_update: 'comms',
   make_default_account: 'accounts',
   apply_update: 'office',
+  create_floor: 'projects',
+  agency_decide: 'projects',
+  agency_action_done: 'projects',
 };
 const DETAILS: Partial<Record<string, 'now' | 'setup'>> = { restart_agent: 'now', stop_agent: 'now', configure_agent: 'setup' };
 

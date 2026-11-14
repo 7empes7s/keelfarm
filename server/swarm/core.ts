@@ -155,7 +155,7 @@ export abstract class SwarmCore extends SwarmContract {
     pong: {},
     officeId: officeId(),
     claudeUsage: [], usageWatch: [],
-    questions: [], decisions: { list: [], digestAt: 0 }, taskAccounts: {}, itDesk: { waiting: [], log: [] }, it: loadIt(undefined), itTickets: { seq: 0, list: [] }, itImprove: { records: [], cards: [], changes: [], reviewWeek: '', reviewedAt: 0 }, problems: { seq: 0, list: [], digestDay: '' }, checklists: { seq: 0, list: [] }, research: emptyResearch(), earnings: { seq: 0, entries: [], fixed: [], feeds: [], spend: {} }, comms: defaultComms(), itWatch: { checks: [], marks: {}, recs: [], digestDay: '', samples: [] },
+    questions: [], decisions: { list: [], digestAt: 0 }, taskAccounts: {}, itDesk: { waiting: [], log: [] }, it: loadIt(undefined), itTickets: { seq: 0, list: [] }, itImprove: { records: [], cards: [], changes: [], reviewWeek: '', reviewedAt: 0 }, problems: { seq: 0, list: [], digestDay: '' }, checklists: { seq: 0, list: [] }, research: emptyResearch(), earnings: { seq: 0, entries: [], fixed: [], feeds: [], spend: {} }, agency: { seq: 0, opportunities: [], actions: [], scoutDay: {} }, comms: defaultComms(), itWatch: { checks: [], marks: {}, recs: [], digestDay: '', samples: [] },
     experiments: loadLab(undefined, Date.now()),
   };
   /** The chat's files store; every change goes out to the tabs as a `files` event. */

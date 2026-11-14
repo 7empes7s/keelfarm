@@ -15,6 +15,7 @@ Each floor has a kind of project (its use case). The office guesses it when a fl
 | [Social & marketing](marketing.md) | Claude Code · Sonnet | Codex | Posts need pictures: an image provider makes them. |
 | [Ops](ops.md) | Claude Code · Opus | Codex | Ops work touches real servers: a cloud provider key, and QA that only dry-runs. |
 | [Research & models](research.md) | Claude Code · Opus | Codex | Research reads a lot: a second text model with a long context helps with the reading. |
+| [Agency](agency.md) | Claude Code · Sonnet | Codex | An agency writes documents: QA checks sources and sums, and every external action waits for your approval. |
 
 ## What each coding agent is good at
 
