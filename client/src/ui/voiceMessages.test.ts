@@ -21,7 +21,7 @@ vi.mock('./sfx', () => ({
   getAudioPrefs: () => ({ muted: false, volume: 1, voice: 1 }),
 }));
 vi.mock('./voiceCallStore', () => ({
-  callOn: () => false, callVoice: (v: unknown) => v, dispatchCall: vi.fn(), useCall: { getState: () => ({ managerSpeaking: false }) },
+  callOn: () => false, callVoice: (v: unknown) => v, callClipQuery: () => '', dispatchCall: vi.fn(), useCall: { getState: () => ({ managerSpeaking: false }) },
 }));
 vi.mock('./voiceClaim', () => ({ wonVoice: () => true }));
 vi.mock('./voiceTap', () => ({ elementPrimed: () => false, voiceElement: () => null, useReplay: { getState: () => ({ loading: null }), setState: vi.fn() } }));

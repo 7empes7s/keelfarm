@@ -12,6 +12,7 @@ import { agentCallWhy, agentOn, callAudio, releaseCallAudio, useAgentCall } from
 import { sendWs } from '../net';
 import { useStore } from '../store';
 import { markBusy } from '../updateGate';
+import { api } from '../api';
 import { sendToCeo } from './chatSend';
 import { CHIME_MS } from './handsFree';
 import { callProvider, listen, micCaps, registerTarget, setCallEars, stopListening, useMic } from './mic';
@@ -110,7 +111,7 @@ const EFFECTS: Record<CallEffect, () => void> = {
     markBusy(TARGET, 'call', false);
     listenChime(false);
     report(sendWs, false, true);
-    useCall.setState({ chatTucked: false, managerSpeaking: false });
+    useCall.setState({ chatTucked: false, managerSpeaking: false, eleven: false });
     useStore.getState().openOverlay({ kind: 'phone', tab: 'chat' }); // the chat comes back, with the call's turns in it
     traceEnd();
   },
@@ -123,12 +124,17 @@ function ownEars(send: (text: string) => void = turn) {
   setCallEars(EARS);
 }
 
-/** The Jarvis voice couldn't take the call: today's voice mode carries it, and the manager hears why. */
+/**
+ * The Jarvis voice couldn't take the call: today's voice mode carries it, and the manager hears why. With an ElevenLabs
+ * key (#682) it keeps the CEO's ElevenLabs voice and each turn is answered at once by the office (never waiting on a CEO job).
+ */
 function ownVoice(why: string) {
-  traceNote(`voice switch: Jarvis → the office's own voice: ${why}`);
+  const eleven = useStore.getState().voiceKeySet;
+  traceNote(`voice switch: Jarvis → the office's own ${eleven ? 'answers in the ElevenLabs voice' : 'voice'}: ${why}`);
   trace({ mode: 'office' });
+  useCall.setState({ eleven });
   ownEars();
-  useStore.getState().pushToast('info', `Using the office's own voice: ${why}`);
+  useStore.getState().pushToast('info', eleven ? `Jarvis couldn't take the call, so the office answers in the same voice: ${why}` : `Using the office's own voice: ${why}`);
   dispatchCall({ type: 'connected', tapToTalk: micReason() });
   soon();
 }
@@ -173,7 +179,13 @@ function turn(text: string) {
   if (!inCall(c) || (c.phase === 'speaking' && !tapping)) return;
   useCall.setState({ heard: text });
   if (cameraWords(text, CEO_ID)) return; // "turn on your camera" (#539): the call goes on listening
-  sendToCeo(text);
+  if (useCall.getState().eleven) {
+    // A fallen-back Jarvis call (#682): spoken words within seconds; the office hands real work to the CEO itself.
+    void api.voiceCallTurn(text).catch((err: Error) => {
+      traceNote(`the office's quick answer failed, the CEO answers: ${err.message}`);
+      sendToCeo(text);
+    });
+  } else sendToCeo(text);
   dispatchCall({ type: 'sent' });
 }
 

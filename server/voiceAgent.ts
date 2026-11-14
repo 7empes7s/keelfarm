@@ -131,3 +131,36 @@ export function voiceRouteLine(method: string, url: string, status: number, ms: 
   if (p === '/api/voice/trace' && status < 300) return null;
   return `voice: ${method} ${p.replace(/^\/api\/voice\/agent\/[^/]+\/end$/, '/api/voice/agent/:session/end')} ${status} (${Math.round(ms)} ms)`;
 }
+
+/** What the reply address answered a request without the agent token (#682): a status, the body's start, a redirect. */
+export interface ReachAnswer {
+  status: number; // 0: no answer
+  body: string;
+  location?: string;
+  error?: string;
+}
+
+/** The body /v1/chat/completions answers without the agent token: proof the request reached a cubefarm office. */
+const OFFICE_401 = 'Not the office voice agent';
+
+/** Which office answered (#682): a short hash of its agent token, safe to show, so a shared address can't pass for another office. */
+export const officeVoiceId = (token: string) => crypto.createHash('sha256').update(`office:${token}`).digest('hex').slice(0, 10);
+
+/** The 401 an office answers without its agent token, naming the office. */
+export const office401 = (token: string) => `${OFFICE_401} (office ${officeVoiceId(token)})`;
+
+/**
+ * Why ElevenLabs can't reach the office's custom LLM at the reply address ('' when it can): only the office's own 401
+ * proves a request got through; a login page, someone else's 404 or no answer at all means a call would hang.
+ */
+export function reachWhy(a: ReachAnswer, office = ''): string {
+  if (a.status === 401 && a.body.includes(OFFICE_401)) {
+    const who = /\(office (\w+)\)/.exec(a.body)?.[1];
+    return office && who && who !== office ? 'it answered as another cubefarm office' : '';
+  }
+  if (!a.status) return `it couldn't be reached (${a.error || 'no answer'})`;
+  if (/cloudflareaccess\.com|cdn-cgi\/access/i.test(a.location ?? '') || /Cloudflare Access/i.test(a.body)) return 'Cloudflare Access is in front of it: add a bypass for /v1/chat/completions';
+  if (a.status === 404) return "it answered 404, so the address leads somewhere else (check the tunnel's route)";
+  if (a.status === 401) return 'it answered 401 but not as the office (something else asks for a login)';
+  return `it answered ${a.status}${a.location ? ` (a redirect to ${a.location.slice(0, 80)})` : ''}, not the office`;
+}

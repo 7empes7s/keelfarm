@@ -21,4 +21,14 @@ describe('utterances from the browser recognition', () => {
     u.reset(); // a new recognition counts from 0
     expect(u.results([{ transcript: 'hello', final: true }]).send).toBe('hello');
   });
+
+  it('never sends an earlier final again in place of a new one (msgs 4626/4629)', () => {
+    const u = new Utterances();
+    expect(u.results([{ transcript: 'ship the login page', final: true }]).send).toBe('ship the login page');
+    // phones repeat a settled phrase at a new index, and replay the last one after a restart
+    expect(u.results([{ transcript: 'ship the login page', final: true }, { transcript: 'Ship the login page.', final: true }]).send).toBe('');
+    u.reset();
+    expect(u.results([{ transcript: 'ship the login page', final: true }]).send).toBe('');
+    expect(u.results([{ transcript: 'ship the login page', final: true }, { transcript: 'and the signup one', final: true }]).send).toBe('and the signup one');
+  });
 });

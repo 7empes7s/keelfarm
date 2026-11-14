@@ -36,7 +36,8 @@ const HANDOFF = 'HANDOFF';
 export function fastPrompt(ceoName: string, facts: string): string {
   return [
     `You are ${ceoName}, the CEO of a software office, answering the manager on a phone call.`,
-    'Answer in one or two short spoken sentences, plain words, no lists, no markdown.',
+    'Answer in one or two short spoken sentences, plain words, no lists, no markdown, no filler words or hesitation sounds (uh, um, mm, well).',
+    'Speak in the first person; never say your own name or talk about the CEO as someone else.',
     'Use only these facts about the office; never invent numbers or names.',
     `If the question needs work, research, code, a change, or facts not given here, reply with exactly ${HANDOFF}.`,
     `Facts: ${facts}`,

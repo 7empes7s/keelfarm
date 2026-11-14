@@ -10,6 +10,8 @@
 import { CEO_ID } from '../../../shared/types';
 import { agentListener, DEFAULT_VOICE_AGENT, LISTENER_WORDS, nextListener, type ListenCaps } from '../../../shared/voiceAgent';
 import { browserEars, relayEars, type Ears } from './agentEars';
+import { echoOf, micProcessingOff } from './callEcho';
+import { cleanHeard } from '../../../shared/fillers';
 import { cameraWords } from './agentCameraStore';
 import { marker, wantsToEnd } from '../../../shared/voiceBrain';
 import { api } from '../api';
@@ -73,7 +75,7 @@ const ACTIVITY_MS = 5_000;
 const NOTE_MS = 8_000;
 
 /** What the probe shows (window.__swarmCall.agent): the mode, the last turn's timing, the events seen. */
-const probe = { session: '', sentAt: 0, firstAudioAt: 0, said: [] as string[], heard: [] as string[], interrupted: 0, mic: { ctx: '', blocks: 0, chunks: 0, peak: 0, track: '' } };
+const probe = { session: '', sentAt: 0, firstAudioAt: 0, said: [] as string[], heard: [] as string[], utterances: 0, interrupted: 0, mic: { ctx: '', blocks: 0, chunks: 0, peak: 0, track: '' } };
 
 const setMode = (mode: AgentMode) => useAgentCall.setState({ mode });
 const mode = () => useAgentCall.getState().mode;
@@ -93,7 +95,9 @@ export async function connectAgent(fallback: (why: string) => void) {
   if (!ctx) return fail(fallback, "This browser can't play the Jarvis voice");
   let start: { session: string; url: string; stt?: boolean };
   try {
-    start = await api.startVoiceAgent();
+    const r = await api.startVoiceAgent();
+    if ('unreachable' in r) return fail(fallback, r.unreachable); // #682: never a call that hangs on "thinking"
+    start = r;
   } catch (err) {
     return fail(fallback, (err as Error).message);
   }
@@ -210,10 +214,12 @@ function onMessage(raw: string) {
     case 'heard':
       traceTranscript();
       if (listener() !== 'elevenlabs') return; // its echo of a user_message the call sent: heard already
+      if (echoOf(ev.text, replies())) return traceNote("ElevenLabs heard the voice's own reply: its echo, not shown");
       probe.heard.push(ev.text);
       turnStep('transcript', 'elevenlabs');
       turnStep('sent', 'elevenlabs'); // the agent has the words already
-      return heard(ev.text);
+      traceNote(`utterance ${++probe.utterances} (elevenlabs)`);
+      return heard(cleanHeard(ev.text) || ev.text);
     case 'interrupted':
       probe.interrupted++;
       droppedUpTo = Math.max(droppedUpTo, ev.event);
@@ -250,17 +256,20 @@ export function sayToAgent(text: string) {
 }
 
 /** An utterance the browser, OpenAI or a clip heard: one user_message, unless it's the voice's own echo while it talks. */
-export function sendHeard(text: string) {
-  if (mode() !== 'live' || !text.trim()) return;
+export function sendHeard(raw: string) {
+  const text = cleanHeard(raw); // no fillers or restarted phrases in the turn, the captions or the chat (msg 4621)
+  if (mode() !== 'live' || !text) return;
   if (useCall.getState().call.phase === 'speaking') return traceNote('words heard while the voice talked, with no barge-in: its echo, dropped');
+  if (echoOf(text, replies())) return traceNote("words heard matching the voice's reply: its echo, dropped");
   traceUtterance();
+  traceNote(`utterance ${++probe.utterances} (${listener()})`);
   turnStep('transcript', listener());
   sayToAgent(text);
 }
 
 /** The words being said now: shown live, and talking over the voice interrupts it (voiceCall.ts's barge-in rules). */
 function interim(text: string) {
-  useCall.setState({ heard: text, managerSpeaking: !!text }); // the CEO's lines wait while the manager talks (flush)
+  useCall.setState({ heard: cleanHeard(text), managerSpeaking: !!text }); // the CEO's lines wait while the manager talks (flush)
   if (!text) return;
   turnHearing(listener());
   const now = performance.now();
@@ -268,8 +277,11 @@ function interim(text: string) {
     activityAt = now;
     send({ type: 'user_activity' });
   }
-  if (useCall.getState().call.phase === 'speaking') dispatchCall({ type: 'speech', now, text });
+  if (useCall.getState().call.phase === 'speaking' && !echoOf(text, replies())) dispatchCall({ type: 'speech', now, text });
 }
+
+/** What the voice is saying now and said last: words heard that match them are its echo (#682). */
+const replies = () => [useAgentCall.getState().saying, ...probe.said.slice(-2)];
 
 /** The listener broke or never heard (`why`): the next one takes over, said once; none left and the call says why. */
 function switchListener(why: string) {
@@ -458,7 +470,10 @@ async function startMic(ctx: AudioContext) {
     throw err;
   }
   trace({ gum: 'ok' });
-  traceTrack(stream.getAudioTracks()[0]);
+  const track = stream.getAudioTracks()[0];
+  traceTrack(track);
+  const off = micProcessingOff(track?.getSettings?.() ?? {});
+  traceNote(off.length ? `the browser didn't apply ${off.join(', ')} to the mic: the voice may hear itself` : 'the mic has echo cancellation, noise suppression and auto gain on');
   if (!ws) {
     for (const t of stream.getTracks()) t.stop(); // hung up while asking
     return;

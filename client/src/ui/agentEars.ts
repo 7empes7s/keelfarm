@@ -28,6 +28,9 @@ export interface Ears {
 }
 
 const words = (t: string) => t.trim().split(/\s+/).filter(Boolean);
+const key = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, '').replace(/\s+/g, ' ').trim();
+/** Settled phrases remembered across restarts: one coming back whole is the recognizer repeating itself (msgs 4626/4629). */
+const RECENT = 5;
 
 /**
  * The browser's results (one recognition's growing list of phrases) as utterances: a settled phrase is sent once, words
@@ -37,6 +40,7 @@ const words = (t: string) => t.trim().split(/\s+/).filter(Boolean);
 export class Utterances {
   private sent = new Map<number, number>(); // phrase index → words of it already sent
   private last: readonly Phrase[] = [];
+  private recent: string[] = []; // the last settled phrases sent, kept through reset()
 
   /** One onresult: the utterance to send now ('' for none) and the words still being said. */
   results(phrases: readonly Phrase[]): { send: string; interim: string } {
@@ -48,8 +52,11 @@ export class Utterances {
       const rest = w.slice(this.sent.get(i) ?? 0);
       if (!rest.length) return;
       if (p.final) {
-        send.push(...rest);
         this.sent.set(i, w.length);
+        const k = key(p.transcript);
+        if (rest.length === w.length && this.recent.includes(k)) return; // a whole earlier phrase again: stale, never resent
+        this.recent = [...this.recent.filter((x) => x !== k), k].slice(-RECENT);
+        send.push(...rest);
       } else interim.push(...rest);
     });
     return { send: send.join(' '), interim: interim.join(' ') };
