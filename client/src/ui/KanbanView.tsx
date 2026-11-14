@@ -16,6 +16,7 @@ import type { Target } from './goTo';
 import { cardPhrase } from './statusPhrase';
 import { FloorBuilds } from './FloorBuilds';
 import { FloorChecklists } from './ChecklistSheet';
+import { KanbanColumnHead } from './KanbanColumnHead';
 import { COLUMN_IDS, foldSummary, isFolded, parseFolds, withFold, type ColumnId, type FoldMap } from './kanbanFold';
 import { useLayout } from '../pocket/mode';
 import { reduceMotion } from './a11y';
@@ -396,14 +397,8 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
     const { cards, total, page, note } = paged(id, all);
     const summary = shut && foldSummary(id, all, total);
     return (
-      <div className={`kcol ${cls} ${shut ? 'kcol-shut' : ''}`} data-tour={`kanban-${id}`} ref={(el) => void (colEls.current[id] = el)}>
-        <button type="button" className="kcol-head" aria-expanded={!shut} aria-controls={`${foldId}-${id}`} onClick={() => fold(id, !shut)}>
-          <span className="kcol-name">{title}</span> <span className="count">{total}</span>
-          {summary && <span className="kcol-summary">{summary}</span>}
-          <span className="kcol-chev" aria-hidden="true">
-            <Icon name="chevron-right" />
-          </span>
-        </button>
+      <div className={`kcol ${cls} ${shut ? 'kcol-shut' : ''} ${total ? '' : 'kcol-empty'}`} data-tour={`kanban-${id}`} ref={(el) => void (colEls.current[id] = el)}>
+        <KanbanColumnHead title={title} name={SHORT[id]} total={total} shut={shut} summary={summary || ''} controls={`${foldId}-${id}`} onToggle={() => fold(id, !shut)} />
         <div className="kcol-fold" id={`${foldId}-${id}`}>
           <div className="kcol-body">
             {note && <p className="muted small kempty">{note}</p>}
@@ -527,7 +522,7 @@ export function KanbanView({ repoId, embedded }: { repoId: string; embedded?: bo
           ))}
         </nav>
       )}
-      <div className={`kanban kanban-5 ${strips ? 'kanban-strips' : ''}`} style={tracks ? { gridTemplateColumns: tracks } : undefined}>
+      <div className={`kanban kanban-5 ${strips ? 'kanban-strips' : ''} ${phone ? 'kanban-pills' : ''}`} style={tracks ? { gridTemplateColumns: tracks } : undefined}>
         {column(
           <>
             <Icon name="clipboard-list" /> Backlog
