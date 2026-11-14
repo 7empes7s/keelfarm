@@ -1,0 +1,195 @@
+/* Comms (#668): the page, thread and draft cards, leads, the thread sheet (ui/CommsPage.tsx). */
+.cm-page,
+.cm-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  min-width: 0;
+}
+.cm-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.cm-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-2);
+}
+.cm-note {
+  display: flex;
+  gap: var(--ds-space-2);
+  align-items: flex-start;
+  margin: 0;
+  padding: var(--ds-space-3);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-warn-fill);
+  color: var(--ds-warn-text);
+}
+.cm-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  width: 100%;
+  min-width: 0;
+  padding: var(--ds-space-3);
+  border: var(--ds-border) solid var(--ds-outline);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface);
+  box-shadow: var(--ds-shadow-1);
+  color: var(--ds-text);
+  font: inherit;
+  text-align: left;
+}
+button.cm-card {
+  min-height: var(--ds-target);
+  cursor: pointer;
+}
+button.cm-card:hover {
+  background: var(--ds-surface-hover);
+}
+.cm-thread {
+  flex-direction: row;
+  align-items: flex-start;
+}
+.cm-thread.unread .cm-who,
+.cm-thread.unread .cm-subject {
+  font-weight: var(--ds-weight-strong);
+}
+.cm-avatar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-sunken);
+  color: var(--ds-text-muted);
+  font-weight: var(--ds-weight-strong);
+}
+.cm-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  flex: 1;
+  min-width: 0;
+}
+.cm-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-2);
+  min-width: 0;
+}
+.cm-tags {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+.cm-who,
+.cm-subject,
+.cm-preview {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cm-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-1);
+  min-width: 0;
+  max-width: 100%;
+  padding: 2px var(--ds-space-2);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-sunken);
+  color: var(--ds-text-muted);
+  font-size: var(--ds-text-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cm-chip.cm-lead,
+.cm-chip.cm-stage-qualified,
+.cm-chip.cm-stage-replied {
+  background: var(--ds-good-fill);
+  color: var(--ds-text);
+}
+.cm-chip.cm-support,
+.cm-chip.cm-stage-contacted {
+  background: var(--ds-warn-fill);
+  color: var(--ds-warn-text);
+}
+.cm-chip.cm-customer,
+.cm-chip.cm-stage-won {
+  background: var(--ds-accent);
+  color: var(--ds-on-color);
+}
+.cm-chip.cm-spam,
+.cm-chip.cm-stage-lost {
+  background: var(--ds-bad-fill);
+  color: var(--ds-danger-text);
+}
+.cm-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-accent);
+}
+.cm-text {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.cm-draft .cm-text {
+  max-height: 14em;
+  overflow: auto;
+}
+.cm-why {
+  margin: 0;
+  color: var(--ds-danger-text);
+}
+.cm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-2);
+}
+.cm-input {
+  width: 100%;
+  min-height: var(--ds-target);
+  font: inherit;
+  font-size: var(--ds-text-md);
+}
+.cm-area {
+  min-height: 12em;
+  resize: vertical;
+}
+.cm-num {
+  width: 7em;
+}
+.cm-stage {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  flex-wrap: wrap;
+}
+.cm-stage select {
+  min-height: var(--ds-target);
+}
+.cm-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-3);
+}
+.cm-msg {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  padding: var(--ds-space-3);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-sunken);
+}
+.cm-msg.out {
+  background: var(--ds-surface-raised);
+  border: var(--ds-border) solid var(--ds-outline);
+}
