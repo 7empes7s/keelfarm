@@ -14,6 +14,7 @@ import type { ItTicket } from '../itTickets.ts';
 import type { ItImproveView } from '../itImprove.ts';
 import type { Problem } from '../problems.ts';
 import type { Checklist } from '../checklists.ts';
+import type { ResearcherView } from '../research.ts';
 import type { HistoryEntry } from '../history.ts';
 import type { OpsView } from '../ops.ts';
 import type { WeatherView } from '../outside.ts';
@@ -68,6 +69,7 @@ export interface WorldSnapshot {
   itImprove?: ItImproveView; // IT's improvements (#543): trends from closed tickets, the review's cards, the changes; absent until the first record
   problems?: Problem[]; // the problems register (#544): work and process problems, newest first; absent while there are none
   checklists?: Checklist[]; // the CEO's checklists for the manager (#612), newest first; absent while there are none
+  research?: ResearcherView; // the Researcher's desk (#664): the job running, the queue, the last brief; absent in a replay
   claudeUsage: UsageReading[]; // the latest reading per limit, for the usage meter (none until a session reports)
   claudeUsageCheck?: UsageCheckError | null; // the office's last idle check failed (#89), null once one reads
   claudeUsageShares?: UsageShares[]; // each bar's floor shares of the office's spend in its window (#334)
@@ -152,6 +154,7 @@ export type ServerEvent =
   | { type: 'problems'; problems: Problem[] }
   /** A checklist created or changed (#612): it replaces the tab's copy by id. */
   | { type: 'checklist'; checklist: Checklist }
+  | { type: 'research'; research: ResearcherView }
   | { type: 'testLab'; testLab: TestLabView }
   | { type: 'claudeUsage'; readings: UsageReading[]; check?: UsageCheckError | null; shares?: UsageShares[] }
   | { type: 'ops'; ops: OpsView }

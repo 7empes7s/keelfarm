@@ -12,6 +12,7 @@ import { Elevator } from './Elevator';
 import { ErrandDirector } from './ErrandDirector';
 import { useCanvasTexture, useInteractable, type Pick as AimPick } from './interact';
 import { ItOffice } from './ItOffice';
+import { ResearchDesk } from './ResearchDesk';
 import { Jukebox } from './Jukebox';
 import { directoryRowAt, directoryRows, DIRECTORY_PX } from './lobbyDirectory';
 import { MapTable } from './MapTable';
@@ -317,6 +318,7 @@ function CeoOffice() {
       {ceo && <ActivityIcon agent={ceo} />}
       <CeoBoard />
       <MapTable />
+      <ResearchDesk />
       <Plant position={[c.maxX - 0.7, 0, c.maxZ - 0.7]} scale={1.1} pot={CEO_ACCENT} />
       <Plant position={[c.minX + 0.6, 0, c.maxZ - 0.6]} scale={0.9} />
     </group>

@@ -124,6 +124,7 @@ export const api = {
   assignIssue: (repoId: string, n: number, agentId: string) => call<{ started: boolean; text: string }>('POST', `${r(repoId)}/issues/${n}/assign`, { agentId }),
   trustIssue: (repoId: string, n: number) => call('POST', `${r(repoId)}/issues/${n}/trust`),
   planFloor: (repoId: string, mission?: string, research = false) => call('POST', `${r(repoId)}/plan`, { mission, research }),
+  stopResearch: () => call('POST', '/api/research/stop'),
   onboardFloor: (repoId: string) => call('POST', `${r(repoId)}/onboard`),
   setCharter: (repoId: string, charter: Charter) => call<RepoView>('PUT', `${r(repoId)}/charter`, { charter }),
   /** Approve the CEO's proposal (edited: as the manager changed it) or dismiss it. */
