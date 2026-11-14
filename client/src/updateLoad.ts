@@ -21,11 +21,23 @@ function loadedFor(): string | null {
   }
 }
 
+// The manager tapped Update office (#673): the new client loads as soon as the office is back on its new commit.
+let reloadPending = false;
+
+/** After Update office: load the new client as soon as it's ready, as if the manager tapped Reload app. */
+export function reloadAfterUpdate() {
+  reloadPending = true;
+}
+
 /** The office came back on `commit`: its client is ready when it's a new one this tab hasn't loaded yet. */
 export function noteCommit(commit: string) {
   const s = useStore.getState();
   const ready = readyAfter(s.updateReady, s.officeCommit, commit, loadedFor());
   if (ready !== s.updateReady) useStore.setState({ updateReady: ready });
+  if (ready && reloadPending) {
+    reloadPending = false;
+    setTimeout(() => loadUpdate({ kind: 'tap' }), 50); // once React has drawn the snapshot, so the sheet check sees it
+  }
 }
 
 function load(commit: string) {
@@ -66,6 +78,15 @@ let installed = false;
 export function installUpdateLoader() {
   if (installed) return;
   installed = true;
+  // QA (#673): `?newVersion` in a demo office shows Reload app, as if the office's new client were ready; once per tab
+  if (new URLSearchParams(location.search).has('newVersion') && loadedFor() !== 'demo') {
+    const stop = useStore.subscribe((s) => {
+      if (!s.demo) return;
+      stop();
+      // after pocket mode's first page, whose own load moment would take it at once
+      setTimeout(() => useStore.getState().updateReady === null && useStore.setState({ updateReady: 'demo' }), 2000);
+    });
+  }
   let hiddenAt = 0;
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') hiddenAt = Date.now();

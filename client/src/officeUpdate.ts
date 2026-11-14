@@ -68,6 +68,13 @@ export const drainDeadline = (u: OfficeUpdateView) => (u.state === 'draining' &&
 /** Update now: there's something to update, a launcher to do it, and it isn't already on its way. */
 export const canUpdateNow = (u: OfficeUpdateView) => u.launcher && u.behind > 0 && (u.state === 'available' || u.state === 'waiting' || u.state === 'settling' || u.state === 'failed');
 
+/**
+ * The header's one Update control (#673): "office" when the office has commits to install (its page reloads once the
+ * office is back), else "reload" when only this tab's client is behind, else none.
+ */
+export const updateControl = (u: OfficeUpdateView | undefined, clientReady: boolean): 'office' | 'reload' | null =>
+  u && canUpdateNow(u) ? 'office' : clientReady ? 'reload' : null;
+
 /** Later: postpone an update that is ready or about to start. */
 export const canPostpone = (u: OfficeUpdateView) => u.launcher && (u.state === 'available' || u.state === 'waiting' || u.state === 'settling' || u.state === 'draining');
 
