@@ -74,6 +74,17 @@ const demoVoice: VoiceApi = {
   // The Jarvis voice (#534): no ElevenLabs agent; calls talk to the office's own fake agent socket (server/voiceAgentFake.ts).
   ensureAgent: async (_key, config) => ({ agentId: 'demo-agent', secretId: 'demo-secret', hash: agentHash({ ...config, llmSecretId: 'demo-secret' }) }),
   agentUrl: async () => FAKE_AGENT_PATH,
+  // The fast answers (#665): small talk gets a short answer streamed word by word (its first sentence well before the
+  // last word); anything else is handed to the CEO, as the real model does with real work.
+  chatStream: async function* (_model, history) {
+    const q = history.at(-1)?.content ?? '';
+    const small = /\b(hello|hi|hey|thanks|thank you|how are you|who are you|good (morning|afternoon|evening))\b/i.test(q);
+    const words = (small ? "I'm doing well, thanks for asking. The office is busy and everyone is working, so ask me anything." : 'HANDOFF').split(/(?<= )/);
+    for (const w of words) {
+      await new Promise((r) => setTimeout(r, 40));
+      yield w;
+    }
+  },
 };
 
 registerDemo('voice', () => ({ voice: demoVoice }));

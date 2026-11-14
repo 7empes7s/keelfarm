@@ -7,6 +7,7 @@ import { probeClip } from './clipProbe.ts';
 import { isV4Voice } from '../shared/voices.ts';
 import { STT_MODEL, synthBody, VoiceApiError, type VoiceApi } from './voice.ts';
 import { agentBody, agentHash } from './voiceAgent.ts';
+import { streamChat } from './voiceFast.ts';
 
 const API = 'https://api.elevenlabs.io';
 const CHECK_TIMEOUT_MS = 10_000;
@@ -136,4 +137,6 @@ export const elevenLabs: VoiceApi = {
     const res = await call(key, `/v1/convai/conversation/get-signed-url?agent_id=${encodeURIComponent(agentId)}`, {}, AbortSignal.timeout(CHECK_TIMEOUT_MS));
     return s(((await res.json()) as { signed_url?: unknown }).signed_url);
   },
+
+  chatStream: streamChat, // the Jarvis voice's fast answers (#665): not ElevenLabs, but the call's voice
 };

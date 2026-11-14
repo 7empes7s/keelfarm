@@ -26,7 +26,7 @@ import { serviceWorkerSource, swVersion } from './pwa.ts';
 import { screenStatus } from './screenReply.ts';
 import { parseSendBackNote } from './sendBack.ts';
 import { handleGateway, upgradeGateway } from './previewGateway.ts';
-import { completionEvents, completionJson, voiceRouteLine } from './voiceAgent.ts';
+import { completionJson, streamCompletion, voiceRouteLine } from './voiceAgent.ts';
 import { FAKE_AGENT_PATH, fakeAgent } from './voiceAgentFake.ts';
 import { fakeRelay, openaiRelay, STT_PATH } from './sttRelay.ts';
 import { PresenceHub } from './presence.ts';
@@ -463,12 +463,14 @@ app.post('/api/voice/agent/:session/end', route((req) => swarm.endVoiceAgent(Str
 app.post(
   '/v1/chat/completions',
   route(async (req, res) => {
-    const text = await swarm.voiceLlm(req.body, req.get('authorization'));
     const model = typeof req.body?.model === 'string' ? req.body.model : 'cubefarm-voice';
-    if (req.body?.stream !== true) return completionJson(text, model);
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    for (const ev of completionEvents(text, model)) res.write(ev);
+    if (req.body?.stream !== true) return completionJson(await swarm.voiceLlm(req.body, req.get('authorization')), model);
+    const start = () => {
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.flushHeaders();
+    };
+    await streamCompletion(swarm.voiceTurn(req.body, req.get('authorization')), model, start, (ev) => res.write(ev));
     res.end();
   }),
 );

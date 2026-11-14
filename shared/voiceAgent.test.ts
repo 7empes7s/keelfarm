@@ -47,4 +47,15 @@ describe('the Jarvis voice minutes and cap', () => {
     expect(voiceAgentSettings(DEFAULT_VOICE_AGENT, { listen: 'elevenlabs' }).listen).toBe('elevenlabs');
     expect(voiceAgentSettings(DEFAULT_VOICE_AGENT, { listen: 'whisper' }).listen).toBeUndefined();
   });
+
+  it('starts with the listener the setting forces, for testing each mode, when the call can use it (#665)', () => {
+    const all = { recognition: true, stream: true, stt: true, recorder: true };
+    expect(agentListener('auto', all)).toBe('browser');
+    expect(agentListener('openai', all)).toBe('openai');
+    expect(agentListener('clip', all)).toBe('clip');
+    expect(agentListener('elevenlabs', all)).toBe('elevenlabs');
+    expect(agentListener('openai', { ...all, stt: false })).toBe('browser'); // no OpenAI key: auto's choice
+    expect(agentListener('browser', { ...all, recognition: false })).toBe('elevenlabs'); // Firefox: auto's choice
+    for (const l of ['auto', 'openai', 'clip'] as const) expect(voiceAgentSettings(DEFAULT_VOICE_AGENT, { listen: l }).listen).toBe(l);
+  });
 });
